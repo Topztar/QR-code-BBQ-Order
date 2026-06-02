@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from django.contrib import admin
-from .models import Customer, Category, MenuItem, Order, OrderItem, PrinterSetting, PrintTemplate, ActionLog
+from .models import Customer, Category, MenuItem, Order, OrderItem, PrinterSetting, PrintTemplate, ActionLog, InventoryTransaction
+from django.utils.html import format_html
 
 @admin.register(Customer)
 class CustomerAdmin(admin.ModelAdmin):
@@ -15,9 +16,16 @@ class CategoryAdmin(admin.ModelAdmin):
 
 @admin.register(MenuItem)
 class MenuItemAdmin(admin.ModelAdmin):
-    list_display = ('name', 'category', 'price', 'is_active')
+    list_display = ('name', 'category', 'price', 'stock_display', 'is_active')
     list_filter = ('category', 'is_active')
     search_fields = ('name',)
+    
+    def stock_display(self, obj):
+        if obj.stock_quantity <= obj.low_stock_threshold:
+            return format_html('<span style="color: #ffcc00; font-weight: bold;">{}</span>', obj.stock_quantity)
+        return obj.stock_quantity
+    stock_display.short_description = "庫存數量"
+
 
 class OrderItemInline(admin.TabularInline):
     model = OrderItem
@@ -46,3 +54,10 @@ class ActionLogAdmin(admin.ModelAdmin):
 
     def has_add_permission(self, request):
         return False
+
+@admin.register(InventoryTransaction)
+class InventoryTransactionAdmin(admin.ModelAdmin):
+    list_display = ('created_at', 'menu_item', 'transaction_type', 'quantity', 'operator')
+    list_filter = ('transaction_type', 'created_at')
+    search_fields = ('menu_item__name',)
+    readonly_fields = ('created_at',)

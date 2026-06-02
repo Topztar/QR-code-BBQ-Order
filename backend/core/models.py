@@ -52,6 +52,10 @@ class MenuItem(models.Model):
     price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="價格")
     photo = models.ImageField(upload_to='menu_photos/', null=True, blank=True, verbose_name="照片")
     is_active = models.BooleanField(default=True, verbose_name="是否上架")
+    
+    # 進銷存欄位
+    stock_quantity = models.IntegerField(default=0, verbose_name="庫存數量")
+    low_stock_threshold = models.IntegerField(default=10, verbose_name="低庫存警示線")
 
     class Meta:
         verbose_name = "餐點"
@@ -157,7 +161,38 @@ class PrintTemplate(models.Model):
     def __str__(self):
         return self.name
 
+
+# --- 進銷存系統 ---
+
+class InventoryTransaction(models.Model):
+    """
+    庫存異動紀錄 (進貨、報廢、訂單扣除)
+    """
+    TRANSACTION_TYPES = (
+        ('IN', '進貨/增加'),
+        ('OUT', '銷貨/扣除'),
+        ('ADJUST', '手動校正'),
+        ('WASTE', '報廢'),
+    )
+    menu_item = models.ForeignKey(MenuItem, on_delete=models.CASCADE, related_name='inventory_transactions', verbose_name="餐點項目")
+    transaction_type = models.CharField(max_length=10, choices=TRANSACTION_TYPES, verbose_name="異動類型")
+    quantity = models.IntegerField(verbose_name="異動數量", help_text="增加為正數，減少(如銷貨、報廢)也填寫正數，系統會依類型處理")
+    order_reference = models.ForeignKey(Order, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="關聯訂單")
+    operator = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="操作人員")
+    remarks = models.CharField(max_length=255, blank=True, verbose_name="備註")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="異動時間")
+
+    class Meta:
+        verbose_name = "庫存異動紀錄"
+        verbose_name_plural = "庫存異動紀錄列表"
+        ordering = ['-created_at']
+
+    def __str__(self):
+        sign = "+" if self.transaction_type in ['IN', 'ADJUST'] and self.quantity >= 0 else "-"
+        return f"[{self.get_transaction_type_display()}] {self.menu_item.name}: {sign}{abs(self.quantity)}"
+
 # --- 操作日誌 ---
+
 
 class ActionLog(models.Model):
     """
