@@ -1,0 +1,153 @@
+{
+  "entities": {
+    "checkout_records": {
+      "title": "CheckoutRecord",
+      "description": "Records of guest payment checkouts and receipt settlements",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Settlement checkout transaction serial key" },
+        "orderId": { "type": "string", "description": "The customer order ID" },
+        "tableNumber": { "type": "string", "description": "Assigned table number" },
+        "subtotal": { "type": "number", "description": "Items base subtotal in TWD" },
+        "discount": { "type": "number", "description": "Discount applied under cashier adjustments" },
+        "serviceCharge": { "type": "number", "description": "Markup service surcharge if applicable" },
+        "total": { "type": "number", "description": "Sum final amount settled" },
+        "amountPaid": { "type": "number", "description": "Physical cash or electronic amount tendered" },
+        "changeProvided": { "type": "number", "description": "Change refunded of cash payments" },
+        "paymentMethod": { "type": "string", "description": "Completed method: cash, credit, linepay" },
+        "staffPin": { "type": "string", "description": "Authorized staff verification 4-digit code" },
+        "checkoutTime": { "type": "string", "format": "date-time", "description": "ISO timestamp checkout complete duration" }
+      },
+      "required": ["id", "orderId", "tableNumber", "subtotal", "total", "amountPaid", "paymentMethod", "checkoutTime"]
+    },
+    "categories": {
+      "title": "Category",
+      "description": "Menu category classification",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "object" },
+        "showOnCustomerPage": { "type": "boolean" },
+        "orderIndex": { "type": "number" }
+      },
+      "required": ["id", "name"]
+    },
+    "menu": {
+      "title": "MenuItem",
+      "description": "Menu item detail entry",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "category": { "type": "string" },
+        "name": { "type": "object" },
+        "price": { "type": "number" },
+        "image": { "type": "string" },
+        "description": { "type": "object" },
+        "available": { "type": "boolean" }
+      },
+      "required": ["id", "category", "name", "price"]
+    },
+    "ingredients": {
+      "title": "Ingredient",
+      "description": "Stock inventory ingredient item",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "object" },
+        "stock": { "type": "number" },
+        "minThreshold": { "type": "number" },
+        "unit": { "type": "string" }
+      },
+      "required": ["id", "name", "stock"]
+    },
+    "tables": {
+      "title": "TableConfig",
+      "description": "Dining tables setup layout and status",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "qrCodeUrl": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "qrCodeUrl"]
+    },
+    "reservations": {
+      "title": "Reservation",
+      "description": "Customer table booking details",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "customerName": { "type": "string" },
+        "phone": { "type": "string" },
+        "guestCount": { "type": "number" },
+        "tableNumber": { "type": "string" },
+        "date": { "type": "string" },
+        "time": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "customerName", "phone", "guestCount", "tableNumber", "date", "time", "status"]
+    },
+    "orders": {
+      "title": "Order",
+      "description": "Customer dining orders placement records",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "tableNumber": { "type": "string" },
+        "subtotal": { "type": "number" },
+        "serviceCharge": { "type": "number" },
+        "total": { "type": "number" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "customerName": { "type": "string" },
+        "paymentMethod": { "type": "string" },
+        "isMember": { "type": "boolean" }
+      },
+      "required": ["id", "tableNumber", "subtotal", "total", "status", "createdAt", "customerName", "paymentMethod"]
+    },
+    "settings_records": {
+      "title": "SettingsRecord",
+      "description": "Generic key-value settings or log list documents",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" }
+      },
+      "required": ["id"]
+    }
+  },
+  "firestore": {
+    "/checkouts/{checkoutId}": {
+      "schema": "checkout_records",
+      "description": "Collection of finalized client order billing payments"
+    },
+    "/categories/{categoryId}": {
+      "schema": "categories",
+      "description": "System menu food categories"
+    },
+    "/menu/{menuId}": {
+      "schema": "menu",
+      "description": "Active dishes menu items listings"
+    },
+    "/ingredients/{ingredientId}": {
+      "schema": "ingredients",
+      "description": "Physical ingredients stock tracking list"
+    },
+    "/tables/{tableId}": {
+      "schema": "tables",
+      "description": "Restaurant seating table maps"
+    },
+    "/reservations/{reservationId}": {
+      "schema": "reservations",
+      "description": "Guest table reservation list logs"
+    },
+    "/orders/{orderId}": {
+      "schema": "orders",
+      "description": "Active customer cart food orders"
+    },
+    "/settings/{settingsId}": {
+      "schema": "settings_records",
+      "description": "Server dynamic state configurations"
+    }
+  }
+}
