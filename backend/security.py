@@ -1,5 +1,6 @@
 from cryptography.fernet import Fernet
 import os
+import sys
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -9,7 +10,11 @@ load_dotenv()
 ENCRYPTION_KEY = os.getenv("SABAY_ENCRYPTION_KEY")
 if not ENCRYPTION_KEY:
     # Generate a persistent key if not exists (simplified for standalone demo)
-    KEY_FILE = os.path.join(os.path.dirname(__file__), "data", ".key")
+    if getattr(sys, 'frozen', False):
+        BASE_DIR = os.path.dirname(sys.executable)
+    else:
+        BASE_DIR = os.path.dirname(__file__)
+    KEY_FILE = os.path.join(BASE_DIR, "data", ".key")
     if os.path.exists(KEY_FILE):
         with open(KEY_FILE, "rb") as f:
             ENCRYPTION_KEY = f.read()

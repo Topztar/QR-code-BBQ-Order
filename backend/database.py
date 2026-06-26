@@ -2,9 +2,17 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 import os
+import sys
 
 # Base directory for data
-DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
+if getattr(sys, 'frozen', False):
+    # Packaged executable: use directory of the executable
+    BASE_DIR = os.path.dirname(sys.executable)
+else:
+    # Standard run: use backend/ directory
+    BASE_DIR = os.path.dirname(__file__)
+
+DATA_DIR = os.path.join(BASE_DIR, "data")
 if not os.path.exists(DATA_DIR):
     os.makedirs(DATA_DIR)
 

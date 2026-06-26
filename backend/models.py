@@ -49,7 +49,10 @@ class Order(Base):
     paymentMethod = Column(String)
     isMember = Column(Boolean, default=False)
     isPaid = Column(Boolean, default=False)
+    discount = Column(Float, default=0.0)
+    guestCount = Column(Integer, nullable=True)
     items = Column(JSON)
+    refundLogs = Column(JSON, nullable=True)
     isFlagged = Column(Boolean, default=False)
     flagReason = Column(String)
     rating = Column(Integer)
@@ -103,6 +106,7 @@ class TableConfig(Base):
     qrCodeUrl = Column(String)
     status = Column(String)
     preservedFor = Column(String)
+    mergedWith = Column(String, default="")
     positionX = Column(Float)
     positionY = Column(Float)
 

@@ -340,6 +340,7 @@ export default function App() {
     }
   };
   useEffect(() => {
+    fetchData();
 
     // 實時監聽訂單
     const ordersQuery = query(collection(db, "orders"), orderBy("createdAt", "desc"));

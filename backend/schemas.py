@@ -32,16 +32,23 @@ class OrderItem(BaseModel):
 class OrderBase(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: Optional[str] = None
-    tableNumber: str
+    tableNumber: Optional[str] = ""
     subtotal: float
     serviceCharge: float
     total: float
-    status: str
-    customerName: str
-    customerAvatar: str
-    paymentMethod: str
-    isMember: bool
+    status: Optional[str] = "pending"
+    customerName: Optional[str] = ""
+    customerAvatar: Optional[str] = ""
+    paymentMethod: Optional[str] = ""
+    isMember: Optional[bool] = False
+    isPaid: Optional[bool] = False
+    discount: Optional[float] = 0.0
+    guestCount: Optional[int] = None
+    rating: Optional[int] = None
+    feedback: Optional[str] = ""
+    flagReason: Optional[str] = ""
     items: List[OrderItem]
+    refundLogs: Optional[List[Any]] = None
     quickNotes: Optional[str] = ""
     isFlagged: Optional[bool] = False
     createdAt: Optional[datetime] = None
@@ -59,5 +66,20 @@ class TableConfigBase(BaseModel):
     id: str
     qrCodeUrl: str
     status: Optional[str] = "available"
+    preservedFor: Optional[str] = ""
+    mergedWith: Optional[str] = ""
     positionX: Optional[float] = 0
     positionY: Optional[float] = 0
+
+class ReservationBase(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    customerName: str
+    phone: str
+    guestCount: int
+    tableNumber: str
+    date: str
+    time: str
+    status: str
+    notes: Optional[str] = ""
+    createdAt: Optional[datetime] = None

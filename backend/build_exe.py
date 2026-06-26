@@ -4,6 +4,8 @@ import os
 def build():
     # Define paths
     script = os.path.join(os.path.dirname(__file__), "main.py")
+    src_data_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src", "data.ts"))
+    dist_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "dist"))
 
     # PyInstaller arguments
     # --onefile: Create a single executable
@@ -15,8 +17,9 @@ def build():
     PyInstaller.__main__.run([
         script,
         '--onefile',
-        '--noconsole',
         '--name=SabayBackend',
+        f'--add-data={src_data_path};src',
+        f'--add-data={dist_path};dist',
         '--hidden-import=uvicorn.logging',
         '--hidden-import=uvicorn.loops',
         '--hidden-import=uvicorn.loops.auto',
@@ -34,4 +37,4 @@ if __name__ == "__main__":
     print("Preparing Windows Standalone Build Script...")
     # Note: This script should be run in a Windows environment for best results.
     # In this Linux sandbox, it serves as the delivery for the user to execute.
-    # build()
+    build()
