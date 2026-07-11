@@ -1,0 +1,6 @@
+{
+  "name": "Sabay Thai BBQ Table Ordering",
+  "description": "A multi-branch hybrid cloud table ordering and kitchen display system (KDS) for Sabay Thai BBQ.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

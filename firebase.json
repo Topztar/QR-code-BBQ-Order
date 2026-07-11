@@ -1,0 +1,6 @@
+{
+  "firestore": {
+    "database": "ai-studio-sabaythaibbqtabl-84418196-9d0c-459c-bced-ddc424dfba07",
+    "rules": "firestore.rules"
+  }
+}
