@@ -116,6 +116,7 @@ let liveMenu: MenuItem[] = INITIAL_MENU.map((item, index) => {
     containsPork,
     containsSeafood,
     isNotSpicy,
+    isSetMeal: !!item.isSetMeal,
     orderIndex: item.orderIndex !== undefined ? item.orderIndex : index
   };
 });
@@ -185,38 +186,7 @@ interface InventoryLog {
   note?: string;
 }
 
-let inventoryLogs: InventoryLog[] = [
-  {
-    id: 'ir-seed-1',
-    timestamp: new Date(Date.now() - 3600000 * 24 * 3).toISOString(), // 3 days ago
-    ingredientId: 'ig-01',
-    ingredientName: '多隆功秘製冬蔭醬',
-    type: 'incoming',
-    quantityChanged: 50,
-    remainingStock: 45,
-    note: '週三採購新鮮底醬進貨',
-  },
-  {
-    id: 'ir-seed-2',
-    timestamp: new Date(Date.now() - 3600000 * 24 * 2).toISOString(), // 2 days ago
-    ingredientId: 'ig-02',
-    ingredientName: '頂級牛肉串',
-    type: 'incoming',
-    quantityChanged: 100,
-    remainingStock: 80,
-    note: '週五宵夜預備食材手工牛肉串採購進庫',
-  },
-  {
-    id: 'ir-seed-3',
-    timestamp: new Date(Date.now() - 3600000 * 24).toISOString(), // 1 day ago
-    ingredientId: 'ig-03',
-    ingredientName: '鮮甜高麗菜',
-    type: 'adjustment',
-    quantityChanged: -2.5,
-    remainingStock: 45,
-    note: '盤點清查：扣除葉面受損與耗損',
-  }
-];
+let inventoryLogs: InventoryLog[] = [];
 
 let liveCategories: Category[] = [
   { id: 'tomyum', name: { zh: '多隆功系列 🍜', en: 'Tom Yum Soups', ko: '똠얌 수프 시리즈', ja: 'トムヤムスープ類', th: 'ชุดต้มยำสุดแซ่บ', vi: 'Dòng súp Tom Yum 🍜' } },
@@ -413,16 +383,7 @@ let liveOrders: Order[] = [];
 let printLogs: { id: string; timestamp: string; content: string; orderId: string; type: 'kitchen' | 'customer' }[] = [];
 
 // In-Memory Push Promo Dispatch Queue
-let promoNotifications: { id: string; timestamp: string; title: string; message: string; badge: string; isRead: boolean }[] = [
-  {
-    id: 'notif-seed-1',
-    timestamp: new Date(Date.now() - 3600000 * 2).toLocaleTimeString(),
-    title: '沙貝招牌推薦 🌟',
-    message: '熱門！特盛大鮮蝦拼盤與泰式手工牛肉串現正熱賣中，會員再享積點優惠！',
-    badge: 'PROMO',
-    isRead: false
-  }
-];
+let promoNotifications: { id: string; timestamp: string; title: string; message: string; badge: string; isRead: boolean }[] = [];
 
 let livePopularItemIds = ['ty-01', 'nd-01', 'sk-02', 'sk-01'];
 
@@ -477,6 +438,30 @@ try {
 async function saveStateToFirestore() {
   if (!firestoreDb) return;
   try {
+    // Helper to recursively remove undefined properties from Firestore payloads
+    const cleanUndefined = (obj: any): any => {
+      if (obj === null || obj === undefined) {
+        return null;
+      }
+      if (obj instanceof Date) {
+        return obj;
+      }
+      if (Array.isArray(obj)) {
+        return obj.map(item => cleanUndefined(item));
+      }
+      if (typeof obj === 'object') {
+        const cleaned: any = {};
+        for (const key of Object.keys(obj)) {
+          const val = obj[key];
+          if (val !== undefined) {
+            cleaned[key] = cleanUndefined(val);
+          }
+        }
+        return cleaned;
+      }
+      return obj;
+    };
+
     // Helper function to safely delete and update a collection with writeBatch
     const syncCollection = async (collName: string, items: any[], idKey: string = 'id', addOrderIndex: boolean = false) => {
       const collRef = collection(firestoreDb, collName);
@@ -495,7 +480,7 @@ async function saveStateToFirestore() {
       // Set live items
       items.forEach((item, index) => {
         const payload = addOrderIndex ? { ...item, orderIndex: index } : item;
-        batch.set(doc(firestoreDb, collName, item[idKey]), payload);
+        batch.set(doc(firestoreDb, collName, item[idKey]), cleanUndefined(payload));
       });
       
       await batch.commit();
@@ -544,13 +529,13 @@ async function saveStateToFirestore() {
     for (const chunk of orderChunks) {
       const batch = writeBatch(firestoreDb);
       chunk.forEach((order) => {
-        batch.set(doc(firestoreDb, 'orders', order.id), order);
+        batch.set(doc(firestoreDb, 'orders', order.id), cleanUndefined(order));
       });
       await batch.commit();
     }
 
     // 7. System Settings
-    await setDoc(doc(firestoreDb, 'settings', 'system'), {
+    await setDoc(doc(firestoreDb, 'settings', 'system'), cleanUndefined({
       liveStaffPin,
       livePrinterIp,
       liveTakeoutSeq,
@@ -567,14 +552,14 @@ async function saveStateToFirestore() {
       livePopularItemIds,
       liveMemberPointsRatio,
       liveMemberRewards
-    });
+    }));
 
     // 8. Logs
-    await setDoc(doc(firestoreDb, 'settings', 'logs'), {
+    await setDoc(doc(firestoreDb, 'settings', 'logs'), cleanUndefined({
       inventoryLogs: inventoryLogs.slice(-100),
       printLogs: printLogs.slice(-100),
       promoNotifications: promoNotifications.slice(-100)
-    });
+    }));
 
     console.log('[Sabay Firebase] ✓ Successfully saved system state to Firestore.');
   } catch (error) {

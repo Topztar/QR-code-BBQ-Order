@@ -650,56 +650,63 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
     });
   }, [menuItems, memberRewards]);
 
+  const getCleanMembersDatabase = (): any[] => {
+    const dbStr = localStorage.getItem('google-members-database');
+    if (!dbStr) return [];
+    try {
+      const db = JSON.parse(dbStr);
+      if (!Array.isArray(db)) return [];
+      return db.filter((m: any) => {
+        const emailLower = m && m.email ? m.email.toLowerCase().trim() : '';
+        return emailLower !== 'topztar@gmail.com' && 
+               emailLower !== 'thai_foodie@gmail.com' && 
+               emailLower !== 'vegan_sabay@gmail.com' && 
+               emailLower !== 'bbq_lover@gmail.com';
+      });
+    } catch (e) {
+      return [];
+    }
+  };
+
+  const saveCleanMembersDatabase = (db: any[]) => {
+    const cleanDb = db.filter((m: any) => {
+      const emailLower = m && m.email ? m.email.toLowerCase().trim() : '';
+      return emailLower !== 'topztar@gmail.com' && 
+             emailLower !== 'thai_foodie@gmail.com' && 
+             emailLower !== 'vegan_sabay@gmail.com' && 
+             emailLower !== 'bbq_lover@gmail.com';
+    });
+    localStorage.setItem('google-members-database', JSON.stringify(cleanDb));
+  };
+
   useEffect(() => {
     const updatePoints = () => {
       if (lineProfile && lineProfile.email) {
-        const dbStr = localStorage.getItem('google-members-database');
+        const db = getCleanMembersDatabase();
         let points = 1500;
         let balance = 2000;
-        if (dbStr) {
-          try {
-            const db = JSON.parse(dbStr);
-            const userIndex = db.findIndex((m: any) => m.email === lineProfile.email);
-            if (userIndex >= 0) {
-              const member = db[userIndex];
-              points = member.points;
-              if (member.balance === undefined) {
-                member.balance = 2000;
-                localStorage.setItem('google-members-database', JSON.stringify(db));
-              }
-              balance = member.balance;
-            } else {
-              const defaultMembers = [...db];
-              defaultMembers.push({
-                email: lineProfile.email,
-                name: lineProfile.displayName,
-                avatar: lineProfile.pictureUrl,
-                points: 1500,
-                balance: 2000,
-                joinedAt: new Date().toISOString().split('T')[0]
-              });
-              localStorage.setItem('google-members-database', JSON.stringify(defaultMembers));
-              points = 1500;
-              balance = 2000;
-            }
-          } catch (e) {
-            console.error('[Points Sync Error]', e);
+        const userIndex = db.findIndex((m: any) => m.email === lineProfile.email);
+        if (userIndex >= 0) {
+          const member = db[userIndex];
+          points = member.points;
+          if (member.balance === undefined) {
+            member.balance = 2000;
           }
+          balance = member.balance;
+          saveCleanMembersDatabase(db);
         } else {
-          const defaultMembers: any[] = [];
-          if (lineProfile && lineProfile.email && !defaultMembers.some(m => m.email === lineProfile.email)) {
-            defaultMembers.push({
-              email: lineProfile.email,
-              name: lineProfile.displayName,
-              avatar: lineProfile.pictureUrl,
-              points: 1500,
-              balance: 2000,
-              joinedAt: new Date().toISOString().split('T')[0]
-            });
-          }
-          localStorage.setItem('google-members-database', JSON.stringify(defaultMembers));
-          points = lineProfile && lineProfile.email ? 1500 : 0;
-          balance = lineProfile && lineProfile.email ? 2000 : 0;
+          const defaultMembers = [...db];
+          defaultMembers.push({
+            email: lineProfile.email,
+            name: lineProfile.displayName,
+            avatar: lineProfile.pictureUrl,
+            points: 1500,
+            balance: 2000,
+            joinedAt: new Date().toISOString().split('T')[0]
+          });
+          saveCleanMembersDatabase(defaultMembers);
+          points = 1500;
+          balance = 2000;
         }
         setUserPoints(points);
         setUserBalance(balance);
@@ -733,17 +740,8 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
       
       if (!isSessionRecorded) {
         count += 1;
-        // Seed default multi-login state for the default mock user so it's instantly active
-        if (email === 'topztar@gmail.com' && count < 2) {
-          count = 3;
-        }
         localStorage.setItem(key, String(count));
         sessionStorage.setItem(sessionKey, 'true');
-      } else {
-        if (email === 'topztar@gmail.com' && count < 2) {
-          count = 3;
-          localStorage.setItem(key, String(count));
-        }
       }
       setLoginCount(count);
       
@@ -759,52 +757,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
   }, [lineProfile]);
 
   const getSimulatedPastOrders = () => {
-    return [
-      {
-        id: 'LM-9882',
-        createdAt: new Date(Date.now() - 3 * 24 * 3600 * 1000).toISOString(),
-        tableNumber: '7',
-        status: 'completed' as const,
-        paymentMethod: 'linepay' as const,
-        total: 570,
-        items: [
-          {
-            menuItemId: 'nd-01',
-            name: { zh: '豪華版海鮮乾拌MAMA麵', en: 'Signature Seafood MAMA Noodles', ko: '호화 해산물 비빔 마마 라면', ja: '豪華シーフード和えMAMA麺', th: 'มาม่าแห้งทะเลรวมมิตรภูเขาไฟ' },
-            price: 390,
-            qty: 1
-          },
-          {
-            menuItemId: 'dr-01',
-            name: { zh: '泰式奶茶 1L 桶裝 (限定)', en: 'Signature Street Thai Milk Tea 1L (Bucket)', ko: '길거리 타이 밀크티 1L 점보 통 (한정)', ja: '極旨本場タイミルクティー1Lバケツ入り (テイクアウト・店内人気)', th: 'ชาเย็นไทยสตรีท 1 ลิตรถังยักษ์' },
-            price: 180,
-            qty: 1
-          }
-        ]
-      },
-      {
-        id: 'LM-9541',
-        createdAt: new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString(),
-        tableNumber: '5',
-        status: 'completed' as const,
-        paymentMethod: 'credit' as const,
-        total: 450,
-        items: [
-          {
-            menuItemId: 'sk-01',
-            name: { zh: '泰式手工牛肉串 / 串', en: 'Handmade Thai Beef Skewer', ko: '수제 태국식 소고기 꼬치', ja: '特製スパイス牛肉串焼き', th: 'เนื้อเสียบไม้ย่างสูตรลับชาววัง Sabay' },
-            price: 90,
-            qty: 3
-          },
-          {
-            menuItemId: 'sw-01',
-            name: { zh: '泰小農芒果甜糯米飯', en: 'Sweet Mango Sticky Rice', ko: '망고 스티키 라이스', ja: 'マンゴースティッキーライス', th: 'ข้าวเหนียวมะม่วง' },
-            price: 180,
-            qty: 1
-          }
-        ]
-      }
-    ];
+    return [];
   };
 
   const handleReorderOrder = (orderItems: any[]) => {
@@ -838,7 +791,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
       return;
     }
     
-    const userEmail = lineProfile.email || 'bbq_lover@gmail.com';
+    const userEmail = lineProfile.email || '';
     
     // Fetch latest points directly from local storage to avoid state delay or stale closure
     let freshPoints = 0;
