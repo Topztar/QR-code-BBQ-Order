@@ -2088,7 +2088,15 @@ function getMappedTableId(inputTableId: string, availableTables: Array<{id: stri
 
 // 4. Place New Order
 app.post('/api/orders', (req, res) => {
-  const { tableNumber, items, customerName, customerAvatar, paymentMethod, isMember, guestCount } = req.body;
+  const { tableNumber, items, customerName, customerAvatar, paymentMethod, isMember, guestCount, clientOrderId } = req.body;
+
+  if (clientOrderId) {
+    const existing = liveOrders.find(o => o.clientOrderId === clientOrderId);
+    if (existing) {
+      console.log(`[Idempotency check] Duplicate order detected for clientOrderId ${clientOrderId}. Returning existing order #${existing.id}`);
+      return res.status(201).json(existing);
+    }
+  }
 
   let mappedTableNumber = String(tableNumber || '1').trim();
   if (liveTables && liveTables.length > 0) {
@@ -2220,6 +2228,7 @@ app.post('/api/orders', (req, res) => {
     isMember: !!isMember,
     isPaid: false,
     guestCount: guestCount ? parseInt(guestCount, 10) : undefined,
+    clientOrderId: clientOrderId || undefined,
   };
 
   liveOrders.push(newOrder);
@@ -2474,6 +2483,12 @@ app.put('/api/orders/:id/checkout', (req, res) => {
     return res.status(404).json({ error: 'Order not found' });
   }
 
+  // Idempotency check: if already paid, return early to prevent duplicate processing/surcharges
+  if (order.isPaid) {
+    console.log(`[Idempotency Check] Order #${id} is already checked out/paid. Returning order without modifications.`);
+    return res.json(order);
+  }
+
   if (paymentMethod !== undefined) {
     order.paymentMethod = paymentMethod;
   }
@@ -2521,6 +2536,12 @@ app.put('/api/orders/:id/pay', (req, res) => {
   const order = liveOrders.find(o => o.id === id);
   if (!order) {
     return res.status(404).json({ error: 'Order not found' });
+  }
+
+  // Idempotency check: if already paid, return early to prevent duplicate drawer triggers or table status updates
+  if (order.isPaid) {
+    console.log(`[Idempotency Check] Order #${id} is already marked as paid. Skipping redundant processing.`);
+    return res.json(order);
   }
 
   const wasPaid = order.isPaid;

@@ -200,6 +200,7 @@ export default function App() {
   const [showContactDetails, setShowContactDetails] = useState(false);
 
   const pollingCycleRef = useRef<number>(0);
+  const activeOrderSubmissionsRef = useRef<Set<string>>(new Set());
 
   // Offline sync queue states
   const [offlineQueue, setOfflineQueue] = useState<QueuedRequest[]>(getOfflineQueue());
@@ -420,12 +421,22 @@ export default function App() {
     items: OrderItem[];
     paymentMethod: 'cash' | 'credit' | 'member' | 'linepay';
     guestCount?: number;
+    clientOrderId?: string;
   }) => {
+    const clientOrderId = orderData.clientOrderId || `client_ord_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    
+    if (activeOrderSubmissionsRef.current.has(clientOrderId)) {
+      console.log(`[Sabay App] Already submitting order with clientOrderId: ${clientOrderId}. Blocking duplicate call.`);
+      return null;
+    }
+    activeOrderSubmissionsRef.current.add(clientOrderId);
+
     const orderPayload = {
       ...orderData,
       customerName: lineProfile ? lineProfile.displayName : undefined,
       customerAvatar: lineProfile ? lineProfile.pictureUrl : undefined,
       isMember: !!lineProfile,
+      clientOrderId,
     };
     const totalAmount = orderData.items.reduce((sum, item) => sum + (item.price * item.qty), 0);
     const tempId = `offline_temp_${Date.now()}`;
@@ -458,6 +469,7 @@ export default function App() {
         safeStorage.setItem('sabay-my-submitted-order-ids', JSON.stringify(updated));
         return updated;
       });
+      activeOrderSubmissionsRef.current.delete(clientOrderId);
       return completedOrder;
     }
 
@@ -471,6 +483,7 @@ export default function App() {
       if (!res.ok) {
         const errorDetail = await res.json();
         console.error('[Sabay Ordering Error]', errorDetail.error);
+        activeOrderSubmissionsRef.current.delete(clientOrderId);
         return null;
       }
 
@@ -483,6 +496,7 @@ export default function App() {
         });
       }
       await fetchData();
+      activeOrderSubmissionsRef.current.delete(clientOrderId);
       return completedOrder;
     } catch (err) {
       console.warn('[Sabay Ordering failed, falling back to cache queue]', err);
@@ -510,6 +524,7 @@ export default function App() {
         safeStorage.setItem('sabay-my-submitted-order-ids', JSON.stringify(updated));
         return updated;
       });
+      activeOrderSubmissionsRef.current.delete(clientOrderId);
       return completedOrder;
     }
   };

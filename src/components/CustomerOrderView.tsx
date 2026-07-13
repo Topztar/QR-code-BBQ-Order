@@ -1,5 +1,5 @@
 import { apiFetch } from "../lib/api";
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { MenuItem, OrderItem, FoodCustomization, Order, Language, Category, TableConfig, CustomAddOn, OrderHistoryUserStatus, OrderHistoryBillStatus } from '../types';
 import { TRANSLATIONS } from '../data';
 import { safeStorage, safeSessionStorage } from '../lib/safeStorage';
@@ -96,6 +96,7 @@ interface CustomerOrderViewProps {
     items: OrderItem[];
     paymentMethod: 'cash' | 'credit' | 'member' | 'linepay';
     guestCount?: number;
+    clientOrderId?: string;
   }) => Promise<Order | null>;
   lineProfile: any;
   activeOrders: Order[];
@@ -187,6 +188,9 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
   const [pincodeError, setPincodeError] = useState(false);
   const [activeSegmentTab, setActiveSegmentTab] = useState<'bestsellers' | 'history'>('bestsellers');
   const [ratingStates, setRatingStates] = useState<Record<string, { rating: number; feedback: string; isSubmitted: boolean; isEditing: boolean }>>({});
+  const [isCheckoutSubmitting, setIsCheckoutSubmitting] = useState(false);
+  const isCheckoutSubmittingRef = useRef(false);
+  const [ratingSubmitting, setRatingSubmitting] = useState<Record<string, boolean>>({});
 
   // Real-time toast notifications for order status changes (preparing -> completed)
   interface ToastNotify {
@@ -239,7 +243,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
 
   useEffect(() => {
     let active = true;
-    const checkHistory = async () => {
+    const checkHistory = async (retries = 3, delay = 1500) => {
       try {
         const tableParam = selectedTable || '';
         const memberNameParam = lineProfile ? encodeURIComponent(lineProfile.displayName) : '';
@@ -247,16 +251,24 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
         if (res.ok && active) {
           const data = await res.json();
           setHistoryCheckResult(data);
+        } else if (!res.ok && retries > 0 && active) {
+          console.warn(`History check failed with status ${res.status}. Retrying in ${delay}ms...`);
+          setTimeout(() => checkHistory(retries - 1, delay * 1.5), delay);
         }
       } catch (err) {
-        console.error('History check error:', err);
+        if (retries > 0 && active) {
+          console.warn(`History check network error: ${err instanceof Error ? err.message : String(err)}. Retrying in ${delay}ms...`);
+          setTimeout(() => checkHistory(retries - 1, delay * 1.5), delay);
+        } else {
+          console.error('History check error after maximum retries:', err);
+        }
       }
     };
     checkHistory();
     return () => {
       active = false;
     };
-  }, [selectedTable, lineProfile, activeOrders]);
+  }, [selectedTable, lineProfile]);
 
   const orderHistoryUserStatus = useMemo<OrderHistoryUserStatus>(() => {
     const isMember = !!lineProfile;
@@ -1066,13 +1078,11 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
   const cartTotal = discountedSubtotal + expressFee;
 
   const handleCheckout = async () => {
-    if (cart.length === 0) return;
+    if (cart.length === 0 || isCheckoutSubmitting || isCheckoutSubmittingRef.current) return;
     if (servicePaused) {
       setOrderError('⚠️ 廚房因訂單極多暫停接單中，本筆訂單無法送出。造成不便敬請見諒，請留意前台恢復通知！');
       return;
     }
-    setOrderError(null);
-    setOrderSentSuccess(null);
 
     const hasTopupItem = cart.some(it => it.id.startsWith('topup-') || (it.menuItemId && it.menuItemId.startsWith('item-topup-')));
     if (hasTopupItem && paymentMethod === 'member') {
@@ -1110,87 +1120,105 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
       targetTableNumber = mappedTableId;
     }
 
-    const actual = await onPlaceOrder({
-      tableNumber: targetTableNumber,
-      items: cart,
-      paymentMethod,
-      guestCount: !targetTableNumber.includes('外帶') ? guestCount : undefined,
-    });
+    // Synchronously lock submission before any async actions
+    isCheckoutSubmittingRef.current = true;
+    setIsCheckoutSubmitting(true);
+    setOrderError(null);
+    setOrderSentSuccess(null);
 
-    if (actual) {
-      setOrderSentSuccess(actual.id);
+    // Generate a single clientOrderId for this specific transaction attempt
+    const checkoutClientOrderId = `client_ord_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
 
-      // Deduct Google Member Balance for normal orders
-      if (paymentMethod === 'member' && lineProfile && lineProfile.email) {
-        const dbStr = localStorage.getItem('google-members-database');
-        if (dbStr) {
-          try {
-            const db = JSON.parse(dbStr);
-            const userIndex = db.findIndex((m: any) => m.email === lineProfile.email);
-            if (userIndex >= 0) {
-              db[userIndex].balance = Math.max(0, db[userIndex].balance - cartTotal);
-              localStorage.setItem('google-members-database', JSON.stringify(db));
-              localStorage.setItem(`google-balance-${lineProfile.email}`, String(db[userIndex].balance));
-              setUserBalance(db[userIndex].balance);
+    try {
+      const actual = await onPlaceOrder({
+        tableNumber: targetTableNumber,
+        items: cart,
+        paymentMethod,
+        guestCount: !targetTableNumber.includes('外帶') ? guestCount : undefined,
+        clientOrderId: checkoutClientOrderId,
+      });
+
+      if (actual) {
+        setOrderSentSuccess(actual.id);
+
+        // Deduct Google Member Balance for normal orders
+        if (paymentMethod === 'member' && lineProfile && lineProfile.email) {
+          const dbStr = localStorage.getItem('google-members-database');
+          if (dbStr) {
+            try {
+              const db = JSON.parse(dbStr);
+              const userIndex = db.findIndex((m: any) => m.email === lineProfile.email);
+              if (userIndex >= 0) {
+                db[userIndex].balance = Math.max(0, db[userIndex].balance - cartTotal);
+                localStorage.setItem('google-members-database', JSON.stringify(db));
+                localStorage.setItem(`google-balance-${lineProfile.email}`, String(db[userIndex].balance));
+                setUserBalance(db[userIndex].balance);
+              }
+            } catch (e) {
+              console.error('[Deduct Balance Error]', e);
             }
-          } catch (e) {
-            console.error('[Deduct Balance Error]', e);
           }
         }
-      }
 
-      // Add purchased top-up values to membership balance
-      const totalTopupAmt = cart
-        .filter(it => it.id.startsWith('topup-') || (it.menuItemId && it.menuItemId.startsWith('item-topup-')))
-        .reduce((sum, it) => sum + (it.price * it.qty), 0);
+        // Add purchased top-up values to membership balance
+        const totalTopupAmt = cart
+          .filter(it => it.id.startsWith('topup-') || (it.menuItemId && it.menuItemId.startsWith('item-topup-')))
+          .reduce((sum, it) => sum + (it.price * it.qty), 0);
 
-      if (totalTopupAmt > 0 && lineProfile && lineProfile.email) {
-        const dbStr = localStorage.getItem('google-members-database');
-        if (dbStr) {
-          try {
-            const db = JSON.parse(dbStr);
-            const userIndex = db.findIndex((m: any) => m.email === lineProfile.email);
-            if (userIndex >= 0) {
-              db[userIndex].balance = (db[userIndex].balance || 0) + totalTopupAmt;
-              localStorage.setItem('google-members-database', JSON.stringify(db));
-              localStorage.setItem(`google-balance-${lineProfile.email}`, String(db[userIndex].balance));
-              setUserBalance(db[userIndex].balance);
-              window.dispatchEvent(new Event('local-points-updated'));
+        if (totalTopupAmt > 0 && lineProfile && lineProfile.email) {
+          const dbStr = localStorage.getItem('google-members-database');
+          if (dbStr) {
+            try {
+              const db = JSON.parse(dbStr);
+              const userIndex = db.findIndex((m: any) => m.email === lineProfile.email);
+              if (userIndex >= 0) {
+                db[userIndex].balance = (db[userIndex].balance || 0) + totalTopupAmt;
+                localStorage.setItem('google-members-database', JSON.stringify(db));
+                localStorage.setItem(`google-balance-${lineProfile.email}`, String(db[userIndex].balance));
+                setUserBalance(db[userIndex].balance);
+                window.dispatchEvent(new Event('local-points-updated'));
+              }
+            } catch (e) {
+              console.error('[Credit Topup Balance Error]', e);
             }
-          } catch (e) {
-            console.error('[Credit Topup Balance Error]', e);
           }
         }
-      }
 
-      // Credit Google Member Points (每20元消費 = 1 point earned from food consumption subtotal value)
-      if (lineProfile && lineProfile.email) {
-        const dbStr = localStorage.getItem('google-members-database');
-        if (dbStr) {
-          try {
-            const db = JSON.parse(dbStr);
-            const userIndex = db.findIndex((m: any) => m.email === lineProfile.email);
-            if (userIndex >= 0) {
-              const pointsEarned = Math.floor(discountedSubtotal / (memberPointsRatio || 20));
-              db[userIndex].points += pointsEarned;
-              localStorage.setItem('google-members-database', JSON.stringify(db));
-              localStorage.setItem(`google-points-${lineProfile.email}`, String(db[userIndex].points));
-              window.dispatchEvent(new Event('local-points-updated'));
+        // Credit Google Member Points (每20元消費 = 1 point earned from food consumption subtotal value)
+        if (lineProfile && lineProfile.email) {
+          const dbStr = localStorage.getItem('google-members-database');
+          if (dbStr) {
+            try {
+              const db = JSON.parse(dbStr);
+              const userIndex = db.findIndex((m: any) => m.email === lineProfile.email);
+              if (userIndex >= 0) {
+                const pointsEarned = Math.floor(discountedSubtotal / (memberPointsRatio || 20));
+                db[userIndex].points += pointsEarned;
+                localStorage.setItem('google-members-database', JSON.stringify(db));
+                localStorage.setItem(`google-points-${lineProfile.email}`, String(db[userIndex].points));
+                window.dispatchEvent(new Event('local-points-updated'));
+              }
+            } catch (e) {
+              console.error('[Add Points Error]', e);
             }
-          } catch (e) {
-            console.error('[Add Points Error]', e);
           }
         }
-      }
 
-      setCart([]);
-      setIsCartOpen(false);
-      // Automatically clear confirmation after 8 seconds
-      setTimeout(() => {
-        setOrderSentSuccess(null);
-      }, 9000);
-    } else {
-      setOrderError('下單失敗：部分配料庫存不足，未能完成點餐！或是材料已用罄。');
+        setCart([]);
+        setIsCartOpen(false);
+        // Automatically clear confirmation after 8 seconds
+        setTimeout(() => {
+          setOrderSentSuccess(null);
+        }, 9000);
+      } else {
+        setOrderError('下單失敗：部分配料庫存不足，未能完成點餐！或是材料已用罄。');
+      }
+    } catch (error) {
+      console.error('[handleCheckout Error]', error);
+      setOrderError('下單時發生未預期的系統錯誤，請再試一次。');
+    } finally {
+      isCheckoutSubmittingRef.current = false;
+      setIsCheckoutSubmitting(false);
     }
   };
 
@@ -3073,18 +3101,22 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
               <div className={`p-3 sm:p-4 border-t shrink-0 ${isSimplifiedMode ? 'bg-amber-50 border-t-2 border-zinc-200' : 'bg-black/30 border-white/10'}`}>
                 <button
                   id="checkout-confirm-btn"
-                  disabled={servicePaused}
+                  disabled={servicePaused || isCheckoutSubmitting}
                   onClick={handleCheckout}
                   className={`w-full font-black px-2 min-[360px]:px-4 rounded-xl transition text-center flex items-center justify-center space-x-1 sm:space-x-1.5 whitespace-nowrap ${
-                    servicePaused
+                    (servicePaused || isCheckoutSubmitting)
                       ? 'bg-zinc-800 text-zinc-500 border border-zinc-700/50 cursor-not-allowed py-3 text-xs opacity-60'
                       : isSimplifiedMode
                         ? 'bg-[#FFA500] hover:bg-amber-400 text-black border-2 border-black font-extrabold text-base py-4 sm:py-4.5 shadow-lg active:scale-95 cursor-pointer'
                         : 'bg-[#E5B453] hover:bg-[#F0C46B] text-[#0F0F0F] py-2.5 sm:py-3.5 text-[10px] min-[360px]:text-[11px] min-[395px]:text-xs sm:text-sm active:scale-95 cursor-pointer'
                   }`}
                 >
-                  <ShoppingCart size={isSimplifiedMode ? 18 : 12} className={isSimplifiedMode ? 'mr-1' : 'sm:size-[15px]'} />
-                  <span>{servicePaused ? '⚠️ 廚房暫停接單中，暫時停用下單 (Kitchen Paused)' : `確認 ${selectedTable.includes('外帶') ? selectedTable : `${selectedTable} 桌`} 並下單 (請至櫃台結帳)`}</span>
+                  {isCheckoutSubmitting ? (
+                    <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></span>
+                  ) : (
+                    <ShoppingCart size={isSimplifiedMode ? 18 : 12} className={isSimplifiedMode ? 'mr-1' : 'sm:size-[15px]'} />
+                  )}
+                  <span>{isCheckoutSubmitting ? '正在傳送訂單中 (Placing Order...)' : (servicePaused ? '⚠️ 廚房暫停接單中，暫時停用下單 (Kitchen Paused)' : `確認 ${selectedTable.includes('外帶') ? selectedTable : `${selectedTable} 桌`} 並下單 (請至櫃台結帳)`)}</span>
                 </button>
               </div>
             )}
@@ -3231,6 +3263,8 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                                     };
 
                                     const handleSubmitRating = async () => {
+                                      if (ratingSubmitting[order.id]) return;
+                                      setRatingSubmitting(prev => ({ ...prev, [order.id]: true }));
                                       try {
                                         const res = await apiFetch(`/api/orders/${order.id}/rate`, {
                                           method: 'PUT',
@@ -3254,6 +3288,8 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                                       } catch (err) {
                                         console.error('Error submitting rating:', err);
                                         showToast('評價傳送失敗，請確認網路連線！', 'error');
+                                      } finally {
+                                        setRatingSubmitting(prev => ({ ...prev, [order.id]: false }));
                                       }
                                     };
 
@@ -3353,10 +3389,22 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
 
                                           <button
                                             type="button"
+                                            disabled={ratingSubmitting[order.id]}
                                             onClick={handleSubmitRating}
-                                            className="w-full py-1.5 bg-[#E5B453] hover:bg-[#F0C46B] text-[#0F0F0F] rounded-lg text-xs font-black transition active:scale-95 shadow cursor-pointer"
+                                            className={`w-full py-1.5 rounded-lg text-xs font-black transition shadow cursor-pointer flex items-center justify-center space-x-1.5 ${
+                                              ratingSubmitting[order.id]
+                                                ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed opacity-60'
+                                                : 'bg-[#E5B453] hover:bg-[#F0C46B] text-[#0F0F0F] active:scale-95'
+                                            }`}
                                           >
-                                            {t('submitRating')}
+                                            {ratingSubmitting[order.id] ? (
+                                              <>
+                                                <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin"></span>
+                                                <span>傳送中...</span>
+                                              </>
+                                            ) : (
+                                              <span>{t('submitRating')}</span>
+                                            )}
                                           </button>
                                         </div>
                                       );
@@ -3518,6 +3566,8 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                                   };
 
                                   const handleSubmitRating = async () => {
+                                    if (ratingSubmitting[pastOrder.id]) return;
+                                    setRatingSubmitting(prev => ({ ...prev, [pastOrder.id]: true }));
                                     try {
                                       const res = await apiFetch(`/api/orders/&{pastOrder.id}/rate`, {
                                         method: 'PUT',
@@ -3549,6 +3599,8 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                                           isEditing: false
                                         }
                                       }));
+                                    } finally {
+                                      setRatingSubmitting(prev => ({ ...prev, [pastOrder.id]: false }));
                                     }
                                   };
 
@@ -3639,10 +3691,22 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
 
                                         <button
                                           type="button"
+                                          disabled={ratingSubmitting[pastOrder.id]}
                                           onClick={handleSubmitRating}
-                                          className="w-full py-1.5 bg-[#E5B453] hover:bg-[#F0C46B] text-[#0F0F0F] rounded-lg text-xs font-black transition active:scale-95 shadow cursor-pointer"
+                                          className={`w-full py-1.5 rounded-lg text-xs font-black transition shadow cursor-pointer flex items-center justify-center space-x-1.5 ${
+                                            ratingSubmitting[pastOrder.id]
+                                              ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed opacity-60'
+                                              : 'bg-[#E5B453] hover:bg-[#F0C46B] text-[#0F0F0F] active:scale-95'
+                                          }`}
                                         >
-                                          {t('submitRating')}
+                                          {ratingSubmitting[pastOrder.id] ? (
+                                            <>
+                                              <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin"></span>
+                                              <span>傳送中...</span>
+                                            </>
+                                          ) : (
+                                            <span>{t('submitRating')}</span>
+                                          )}
                                         </button>
                                       </div>
                                     );

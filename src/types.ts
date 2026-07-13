@@ -73,6 +73,7 @@ export interface Order {
   rating?: number;
   feedback?: string;
   isOfflinePending?: boolean;
+  clientOrderId?: string;
 }
 
 export interface Ingredient {

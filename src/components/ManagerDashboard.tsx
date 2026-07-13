@@ -317,6 +317,9 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     onConfirm: () => void | Promise<void>;
   } | null>(null);
 
+  const [isActionExecuting, setIsActionExecuting] = useState<boolean>(false);
+  const [isCheckoutSubmitting, setIsCheckoutSubmitting] = useState<boolean>(false);
+
   // Points Adjustment Modal details
   const [adjustPointsModal, setAdjustPointsModal] = useState<{
     isOpen: boolean;
@@ -1516,6 +1519,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
 
   const handleCashierCheckoutSubmit = async () => {
     if (!cashierSelectedOrder || !onPayOrder) return;
+    if (isCheckoutSubmitting) return;
     
     if (cashierPaymentMethod === 'cash' && cashierCashReceived < cashierCalculatedTotals.total) {
       alert(`⚠️ 實收現金金額不足！實收 (NT$ ${cashierCashReceived}) 需大於或等於應收總額 (NT$ ${cashierCalculatedTotals.total})。`);
@@ -1555,6 +1559,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
       }
     }
     
+    setIsCheckoutSubmitting(true);
     try {
       const change = cashierPaymentMethod === 'cash' ? (cashierCashReceived - cashierCalculatedTotals.total) : 0;
       
@@ -1669,6 +1674,8 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     } catch (err: any) {
       console.error('[Cashier Checkout processing error]', err);
       alert(`❌ 收銀失敗: ${err?.message || String(err)}`);
+    } finally {
+      setIsCheckoutSubmitting(false);
     }
   };
 
@@ -1787,6 +1794,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
 
   const handleProcessCheckout = async () => {
     if (!selectedOrder || !onPayOrder) return;
+    if (isCheckoutSubmitting) return;
 
     if (selectedOrder.paymentMethod === 'cash' && cashReceivedInput < selectedOrder.total) {
       alert(`⚠️ 實收金額不足！實收 (NT$ ${cashReceivedInput}) 需大於或等於總額 (NT$ ${selectedOrder.total})。`);
@@ -1829,6 +1837,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
       }
     }
 
+    setIsCheckoutSubmitting(true);
     try {
       const change = selectedOrder.paymentMethod === 'cash' ? (cashReceivedInput - selectedOrder.total) : 0;
       
@@ -1877,6 +1886,8 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     } catch (error: any) {
       console.error('Failed to processed checkout to database:', error);
       alert(`⚠️ 資料庫寫入失敗！請確認 Firebase 設定。錯誤: ${error.message || error}`);
+    } finally {
+      setIsCheckoutSubmitting(false);
     }
   };
 
@@ -7703,7 +7714,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
               </div>
               <div className="bg-[#E5B453]/10 text-[#E5B453] px-2.5 py-1 rounded-full font-mono text-[10px] border border-[#E5B453]/20 flex items-center gap-1.5 self-start sm:self-center">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
-                託管網站: sabay--easy-web-order.asia-east1.hosted.app
+                託管網站: sabay-bbq-order.firebaseapp.com
               </div>
             </div>
 
@@ -7732,12 +7743,12 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
               <div className="space-y-1.5 md:col-span-2">
                 <p className="font-bold text-white/40 uppercase tracking-wider text-[9px]">Firebase 主域名生產分發鏈 Deployed Routing Target</p>
                 <div className="bg-[#0e0e0e] border border-white/5 rounded-lg p-2 flex items-center justify-between gap-1 font-mono text-[10.5px]">
-                  <span className="text-zinc-400 truncate">https://sabay--easy-web-order.asia-east1.hosted.app/</span>
+                  <span className="text-zinc-400 truncate">https://sabay-bbq-order.firebaseapp.com/</span>
                   <div className="flex gap-1.5">
                     <button
                       type="button"
                       onClick={() => {
-                        navigator.clipboard.writeText('https://sabay--easy-web-order.asia-east1.hosted.app/');
+                        navigator.clipboard.writeText('https://sabay-bbq-order.firebaseapp.com/');
                         setCopiedTableId('main-logo');
                         setTimeout(() => setCopiedTableId(null), 1500);
                       }}
@@ -7747,7 +7758,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                       {copiedTableId === 'main-logo' ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
                     </button>
                     <a
-                      href="https://sabay--easy-web-order.asia-east1.hosted.app/"
+                      href="https://sabay-bbq-order.firebaseapp.com/"
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-zinc-500 hover:text-white p-1 bg-white/[0.03] hover:bg-white/[0.08] rounded"
@@ -7812,7 +7823,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                     const isTakeout = selectedQrPreviewId === 'takeout';
                     const label = isTakeout ? '🥡 外帶自取顧客專用定位點' : `🥢 內用客席第 ${selectedQrPreviewId} 桌`;
                     const relativePath = isTakeout ? '/?table=takeout' : `/?table=${selectedQrPreviewId}`;
-                    const firebaseProdUrl = `https://sabay--easy-web-order.asia-east1.hosted.app/${isTakeout ? '?table=takeout' : `?table=${selectedQrPreviewId}`}`;
+                    const firebaseProdUrl = `https://sabay-bbq-order.firebaseapp.com/${isTakeout ? '?table=takeout' : `?table=${selectedQrPreviewId}`}`;
                     
                     return (
                       <div className="space-y-2.5">
@@ -7859,8 +7870,8 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                   const label = isTakeout ? 'TAKE-OUT' : `TABLE ${selectedQrPreviewId}`;
                   const labelZh = isTakeout ? '外 帶 自 取 由 此 點 餐' : `第 ${selectedQrPreviewId} 桌 位 內 用 點 餐`;
                   const prodUrl = isTakeout 
-                    ? 'https://sabay--easy-web-order.asia-east1.hosted.app/?table=takeout' 
-                    : `https://sabay--easy-web-order.asia-east1.hosted.app/?table=${selectedQrPreviewId}`;
+                    ? 'https://sabay-bbq-order.firebaseapp.com/?table=takeout' 
+                    : `https://sabay-bbq-order.firebaseapp.com/?table=${selectedQrPreviewId}`;
                   
                   const qrImgUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&color=20-20-20&data=${encodeURIComponent(prodUrl)}`;
 
@@ -7967,8 +7978,8 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                       </ol>
                       <div className="bg-black border border-white/10 p-1 rounded font-mono text-[9px] text-[#E5B453] break-all select-all">
                         {selectedQrPreviewId === 'takeout' 
-                          ? 'https://sabay--easy-web-order.asia-east1.hosted.app/?table=takeout' 
-                          : `https://sabay--easy-web-order.asia-east1.hosted.app/?table=${selectedQrPreviewId}`}
+                          ? 'https://sabay-bbq-order.firebaseapp.com/?table=takeout' 
+                          : `https://sabay-bbq-order.firebaseapp.com/?table=${selectedQrPreviewId}`}
                       </div>
                       <ol start="5" className="list-decimal list-inside text-zinc-400 space-y-0.5 font-sans">
                         <li>點擊 <span className="text-white">【Write】</span>，手機靠貼紙即完成！</li>
@@ -11168,7 +11179,7 @@ ${customerDetails}
                     type="button"
                     onClick={() => {
                       const finalId = tableIdInput.trim() || '6';
-                      setTableQrUrlInput(`https://sabay--easy-web-order.asia-east1.hosted.app/?table=${finalId}`);
+                      setTableQrUrlInput(`https://sabay-bbq-order.firebaseapp.com/?table=${finalId}`);
                     }}
                     className="text-[9.5px] text-[#E5B453] hover:text-amber-300 font-bold bg-[#E5B453]/10 border border-[#E5B453]/35 px-2.5 py-1 rounded-lg transition whitespace-nowrap inline-flex items-center gap-1 active:scale-95 cursor-pointer"
                   >
@@ -11440,20 +11451,33 @@ ${customerDetails}
             <div className="p-4 bg-white/5 border-t border-white/5 flex items-center justify-end space-x-3.5">
               <button
                 type="button"
+                disabled={isCheckoutSubmitting}
                 onClick={() => setShowCheckoutConfirm(false)}
-                className="px-4 py-2 hover:bg-white/5 border border-white/10 rounded-lg font-bold transition active:scale-95 cursor-pointer text-white text-xs"
+                className={`px-4 py-2 border border-white/10 rounded-lg font-bold transition text-white text-xs ${
+                  isCheckoutSubmitting ? 'opacity-40 cursor-not-allowed' : 'hover:bg-white/5 active:scale-95 cursor-pointer'
+                }`}
               >
                 取消
               </button>
               <button
                 type="button"
+                disabled={isCheckoutSubmitting}
                 onClick={async () => {
-                  setShowCheckoutConfirm(false);
-                  await handleCashierCheckoutSubmit();
+                  try {
+                    await handleCashierCheckoutSubmit();
+                    setShowCheckoutConfirm(false);
+                  } catch (e) {
+                    console.error(e);
+                  }
                 }}
-                className="flex-1 py-2 bg-[#E5B453] hover:bg-amber-400 text-slate-900 font-extrabold rounded-lg transition active:scale-95 cursor-pointer shadow-md text-xs text-center font-bold"
+                className={`flex-1 py-2 bg-[#E5B453] text-slate-900 font-extrabold rounded-lg transition text-xs text-center font-bold flex items-center justify-center space-x-1.5 ${
+                  isCheckoutSubmitting ? 'opacity-50 cursor-not-allowed' : 'hover:bg-amber-400 active:scale-95 cursor-pointer shadow-md'
+                }`}
               >
-                🎯 確認結清並放桌
+                {isCheckoutSubmitting && (
+                  <span className="w-3 h-3 border-2 border-slate-900 border-t-transparent rounded-full animate-spin"></span>
+                )}
+                <span>{isCheckoutSubmitting ? '處理中...' : '🎯 確認結清並放桌'}</span>
               </button>
             </div>
           </div>

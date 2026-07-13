@@ -16,6 +16,7 @@
     }
   ],
   "hosting": {
+    "site": "sabay-bbq-order",
     "public": "dist",
     "ignore": [
       "firebase.json",
