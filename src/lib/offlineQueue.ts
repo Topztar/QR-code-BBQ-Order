@@ -131,10 +131,20 @@ export async function processOfflineQueue(onProgress?: (msg: string) => void): P
         }
       } else {
         // Server rejected or had internal error (e.g. 400 Bad Request, 500)
-        // Keep it in the queue, or stop to avoid subsequent dependency failures
         console.error(`[OfflineQueue] Server rejected request for ${item.url}:`, response.status);
         failureCount++;
-        break; // Stop processing further items to maintain sequence integrity
+
+        // If it is a terminal client error (400-499), remove it from the queue so it doesn't block forever
+        if (response.status >= 400 && response.status < 500) {
+          console.warn(`[OfflineQueue] Terminal 4xx response (${response.status}) received. Discarding request from queue.`);
+          const idx = remaining.findIndex(r => r.id === item.id);
+          if (idx > -1) remaining.splice(idx, 1);
+          saveOfflineQueue([...remaining]);
+          window.dispatchEvent(new CustomEvent('offline_queue_changed', { detail: [...remaining] }));
+          continue; // Proceed with the next item in the queue
+        }
+
+        break; // Stop processing further items for 5xx server errors to maintain sequence integrity
       }
     } catch (error) {
       // Network loss / CORS issue / offline timeout
