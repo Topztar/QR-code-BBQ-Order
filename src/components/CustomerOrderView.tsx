@@ -142,6 +142,8 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
   memberPointsRatio = 20,
   memberRewards = [],
 }) => {
+  const t = (key: string) => TRANSLATIONS[key]?.[currentLang] || TRANSLATIONS[key]?.['zh'] || key;
+
   const isTaiwanRestDay = useMemo(() => {
     const dObj = new Date();
     const utcTime = dObj.getTime() + (dObj.getTimezoneOffset() * 60000);
@@ -433,7 +435,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const codeParam = params.get('code') || params.get('promo');
-    if (codeParam && (codeParam.toUpperCase() === 'CHEESE_COMBO' || codeParam.toUpperCase() === 'COMBO10' || codeParam.toUpperCase() === '070718')) {
+    if (codeParam && codeParam.toUpperCase() === 'CHEESE_COMBO') {
       setComboUnlocked(true);
       if (!qrScannedInfo || !qrScannedInfo.includes('特價')) {
         setQrScannedInfo(`🎉 [特價條碼掃描成功] 識別碼『${codeParam}』，已恢復並成功解鎖「乳酪組合折扣 (-NT$10)」餐點！`);
@@ -684,32 +686,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
             console.error('[Points Sync Error]', e);
           }
         } else {
-          const defaultMembers = [
-            {
-              email: 'topztar@gmail.com',
-              name: '沙貝忠實饕客',
-              avatar: 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=150',
-              points: 1500,
-              balance: 1500,
-              joinedAt: '2026-05-15'
-            },
-            {
-              email: 'thai_foodie@gmail.com',
-              name: '曼谷香辣姬',
-              avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=150',
-              points: 2840,
-              balance: 3200,
-              joinedAt: '2026-05-20'
-            },
-            {
-              email: 'vegan_sabay@gmail.com',
-              name: '小農蔬食愛好客',
-              avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150',
-              points: 650,
-              balance: 450,
-              joinedAt: '2026-05-28'
-            }
-          ];
+          const defaultMembers: any[] = [];
           if (lineProfile && lineProfile.email && !defaultMembers.some(m => m.email === lineProfile.email)) {
             defaultMembers.push({
               email: lineProfile.email,
@@ -721,8 +698,8 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
             });
           }
           localStorage.setItem('google-members-database', JSON.stringify(defaultMembers));
-          points = 1500;
-          balance = 2000;
+          points = lineProfile && lineProfile.email ? 1500 : 0;
+          balance = lineProfile && lineProfile.email ? 2000 : 0;
         }
         setUserPoints(points);
         setUserBalance(balance);
@@ -786,7 +763,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
       {
         id: 'LM-9882',
         createdAt: new Date(Date.now() - 3 * 24 * 3600 * 1000).toISOString(),
-        tableNumber: '12',
+        tableNumber: '7',
         status: 'completed' as const,
         paymentMethod: 'linepay' as const,
         total: 570,
@@ -1064,16 +1041,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
 
   const activeCombosAndDiscounts = useMemo(() => {
     if (!promoCombo) return [];
-    const combosList = Array.isArray(promoCombo.combos) ? promoCombo.combos : [
-      {
-        id: 'legacy-default',
-        name: '特惠套餐折抵',
-        enabled: !!promoCombo.enabled,
-        requiredQty: promoCombo.requiredQty || 10,
-        discountAmount: promoCombo.discountAmount || 20,
-        eligibleItemIds: promoCombo.eligibleItemIds || []
-      }
-    ];
+    const combosList = Array.isArray(promoCombo.combos) ? promoCombo.combos : [];
     
     return combosList.map((combo: any) => {
       if (!combo.enabled) return { combo, eligibleCount: 0, discount: 0 };
@@ -1737,7 +1705,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
                   const val = e.currentTarget.value.trim().toUpperCase();
-                  if (val === 'CHEESE_COMBO' || val === '070718' || val === 'COMBO10') {
+                  if (val === 'CHEESE_COMBO') {
                     setComboUnlocked(true);
                     setQrScannedInfo(`🎉 [特價條碼驗證成功] 識別代碼：『${val}』。已為您解鎖並恢復「乳酪組合扣減 -NT$10」自定義特價餐飲服務！`);
                     e.currentTarget.value = '';
@@ -1753,7 +1721,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                 const el = document.getElementById('manual-promo-code-input') as HTMLInputElement;
                 if (el) {
                   const val = el.value.trim().toUpperCase();
-                  if (val === 'CHEESE_COMBO' || val === '070718' || val === 'COMBO10') {
+                  if (val === 'CHEESE_COMBO') {
                     setComboUnlocked(true);
                     setQrScannedInfo(`🎉 [特價條碼驗證成功] 識別代碼：『${val}』。已為您解鎖並恢復「乳酪組合扣減 -NT$10」自定義特價餐飲服務！`);
                     el.value = '';
@@ -1962,7 +1930,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                           🪙 {item.cost} 點
                         </span>
                       </div>
-                      <h5 className="font-extrabold text-xs text-white leading-snug">{item.name[currentLang]}</h5>
+                      <h5 className="font-extrabold text-xs text-white leading-snug">{item.name[currentLang] || item.name['zh'] || item.name['en']}</h5>
                       <span className="text-[10px] text-zinc-500 block">市價 NT$ {item.originalPrice}</span>
                     </div>
                     
@@ -2162,7 +2130,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                           {item.image ? (
                             <img
                               src={item.image}
-                              alt={item.name?.zh || item.name?.[currentLang] || 'dish'}
+                              alt={item.name?.[currentLang] || item.name?.zh || 'dish'}
                               className="w-full h-full object-cover hover:scale-105 transition duration-300"
                               referrerPolicy="no-referrer"
                             />
@@ -2190,7 +2158,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                         <div className="flex-1 p-3 flex flex-col justify-between min-w-0">
                           <div className="space-y-1">
                             <h4 className="font-extrabold text-black text-sm sm:text-base md:text-lg leading-tight font-sans whitespace-normal break-words">
-                              {item.name?.zh || item.name?.[currentLang] || ''}
+                              {item.name?.[currentLang] || item.name?.zh || ''}
                             </h4>
                             
                             <div className="flex items-center space-x-1.5 flex-wrap">
@@ -2285,7 +2253,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
 
                         {item.isSetMeal && (
                           <span className="absolute top-1 left-1 bg-red-500 text-white text-[8px] sm:text-[9px] font-bold px-1 rounded">
-                            套餐
+                            {t('combo')}
                           </span>
                         )}
                       </div>
@@ -2299,11 +2267,11 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                             </h5>
                             {item.isNotSpicy ? (
                               <span className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/35 text-[8px] font-black px-1 rounded-sm leading-none shrink-0 py-0.5">
-                                不辣
+                                {t('notSpicy')}
                               </span>
                             ) : (
                               <span className="bg-rose-500/20 text-rose-400 border border-rose-500/35 text-[8px] font-black px-1 rounded-sm leading-none shrink-0 py-0.5">
-                                辣
+                                {t('spicy')}
                               </span>
                             )}
                           </div>
@@ -2314,7 +2282,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
 
                         <div className="flex items-center text-white/30 text-[9px]">
                           <Clock size={9} className="mr-0.5 text-white/30" />
-                          <span>約 10-15 分鐘</span>
+                          <span>{t('approxTime')}</span>
                         </div>
                       </div>
 
@@ -2334,11 +2302,11 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                             }}
                             className="w-full py-1 bg-white/5 hover:bg-[#E5B453] hover:text-[#0F0F0F] text-white/95 text-[9px] sm:text-[10px] font-bold rounded border border-white/10 transition active:scale-95 cursor-pointer flex items-center justify-center gap-0.5"
                           >
-                            <span>點餐</span>
+                            <span>{t('orderDish')}</span>
                             <ChevronRight size={10} />
                           </button>
                         ) : (
-                          <span className="text-white/40 text-[9px] font-bold font-sans">明日請早</span>
+                          <span className="text-white/40 text-[9px] font-bold font-sans">{t('soldOut')}</span>
                         )}
                       </div>
                     </div>
@@ -3186,7 +3154,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                     : 'text-white/60 hover:text-white hover:bg-white/5'
                 }`}
               >
-                📜 您的即時與歷史訂單 My Orders
+                {t('myOrdersTab')}
               </button>
               <button
                 type="button"
@@ -3197,7 +3165,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                     : 'text-white/60 hover:text-white hover:bg-white/5'
                 }`}
               >
-                🔥 熱銷人氣 Best Sellers
+                {t('bestSellersTab')}
               </button>
             </div>
 
@@ -3213,9 +3181,9 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                       <div className="flex items-center justify-between border-b border-white/5 pb-2">
                         <h6 className="text-xs font-black text-[#E5B453] flex items-center gap-1.5 uppercase tracking-wider">
                           <Clock size={12} className="text-[#E5B453] animate-pulse" />
-                          <span>⏳ 即時製作中 Live Active Queue ({liveQueueOrders.length})</span>
+                          <span>{t('liveActiveQueue')} ({liveQueueOrders.length})</span>
                         </h6>
-                        <span className="text-[10px] text-white/40">一秒自動更新</span>
+                        <span className="text-[10px] text-white/40">{t('autoUpdate')}</span>
                       </div>
 
                       <div className="space-y-3">
@@ -3228,10 +3196,10 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                           };
 
                           const statusLabels = {
-                            pending: { zh: '⏳ 候餐排隊中', en: 'Pending', ko: 'Pending', ja: 'Pending', th: 'Pending' },
-                            preparing: { zh: '🍳 師傅大火製餐中', en: 'Cooking', ko: 'Cooking', ja: 'Cooking', th: 'Cooking' },
-                            completed: { zh: '✅ 餐點已上齊 (待結帳)', en: 'Dished Up', ko: 'Dished Up', ja: 'Dished Up', th: 'Dished Up' },
-                            cancelled: { zh: '❌ 訂單已撤銷', en: 'Cancelled', ko: 'Cancelled', ja: 'Cancelled', th: 'Cancelled' }
+                            pending: { zh: '⏳ 候餐排隊中', en: 'Pending', ko: 'Pending', ja: 'Pending', th: 'Pending', vi: '⏳ Đang chờ xếp món' },
+                            preparing: { zh: '🍳 師傅大火製餐中', en: 'Cooking', ko: 'Cooking', ja: 'Cooking', th: 'Cooking', vi: '🍳 Đầu bếp đang chế biến' },
+                            completed: { zh: '✅ 餐點已上齊 (待結帳)', en: 'Dished Up', ko: 'Dished Up', ja: 'Dished Up', th: 'Dished Up', vi: '✅ Món ăn đã sẵn sàng (Chờ thanh toán)' },
+                            cancelled: { zh: '❌ 訂單已撤銷', en: 'Cancelled', ko: 'Cancelled', ja: 'Cancelled', th: 'Cancelled', vi: '❌ Đơn hàng đã hủy' }
                           };
 
                           return (
@@ -3246,7 +3214,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                                     {order.id}
                                   </span>
                                   <span className="text-xs text-white/40 pl-2">
-                                    {new Date(order.createdAt).toLocaleTimeString()} · 桌次: {order.tableNumber} 桌
+                                    {new Date(order.createdAt).toLocaleTimeString()} · {currentLang === 'vi' ? 'Bàn' : '桌次'}: {order.tableNumber} {currentLang === 'vi' ? '' : '桌'}
                                   </span>
                                 </div>
 
@@ -3260,7 +3228,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                                 {order.items.map((it, idx) => (
                                   <div key={idx} className="flex justify-between font-medium">
                                     <span>
-                                      {it.name?.[currentLang] || it.name?.zh || ''} {it.qty} 份
+                                      {it.name?.[currentLang] || it.name?.zh || ''} {it.qty} {currentLang === 'vi' ? 'phần' : '份'}
                                     </span>
                                     <span className="font-mono text-white/40">NT$ {it.price * it.qty}</span>
                                   </div>
@@ -3268,9 +3236,9 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                               </div>
 
                               <div className="flex justify-between items-center pt-2.5 border-t border-white/5 text-xs">
-                                <span className="text-white/45 font-semibold uppercase">付費: {order.paymentMethod.toUpperCase()}</span>
+                                <span className="text-white/45 font-semibold uppercase">{t('payMethod')}: {order.paymentMethod.toUpperCase()}</span>
                                 <span className="text-white/80 font-bold text-sm">
-                                  應付總額: <strong className="text-[#E5B453] font-mono text-base font-bold">NT$ {order.total}</strong>
+                                  {t('payableTotal')}: <strong className="text-[#E5B453] font-mono text-base font-bold">NT$ {order.total}</strong>
                                 </span>
                               </div>
 
@@ -3342,7 +3310,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                                           <div className="flex items-center justify-between">
                                             <span className="text-[11px] font-bold text-[#00C300] flex items-center gap-1.5">
                                               <Check size={11} className="text-[#00C300]" />
-                                              <span>感謝您的寶貴評價！ Thank you!</span>
+                                              <span>{t('thankYouRating')}</span>
                                             </span>
                                             <button
                                               onClick={() => {
@@ -3357,7 +3325,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                                               }}
                                               className="text-[10px] text-[#E5B453] hover:underline cursor-pointer"
                                             >
-                                              修改評價 Edit
+                                              {t('editRatingBtn')}
                                             </button>
                                           </div>
                                           <div className="flex items-center gap-1">
@@ -3368,7 +3336,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                                                 className={star <= currentRating ? "fill-amber-400 text-amber-400" : "text-zinc-650"}
                                               />
                                             ))}
-                                            <span className="text-xs font-mono font-bold text-white pl-1.5">{currentRating} 顆星</span>
+                                            <span className="text-xs font-mono font-bold text-white pl-1.5">{currentRating} {t('pointsStarCount')}</span>
                                           </div>
                                           {currentFeedback && (
                                             <p className="text-xs text-zinc-400 bg-white/5 px-2 py-1.5 rounded italic">
@@ -3384,12 +3352,12 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                                         <div className="bg-white/5 border border-white/10 rounded-xl p-3 space-y-2.5">
                                           <div className="flex items-center justify-between">
                                             <span className="text-[11px] text-[#E5B453] font-bold uppercase tracking-wider">
-                                              ✏️ 留下您的用餐評價 Rate Experience
+                                              {t('rateExperience')}
                                             </span>
                                           </div>
                                           
                                           <div className="flex flex-col gap-1">
-                                            <span className="text-[10px] text-zinc-400">點選星星進行評分 Select stars:</span>
+                                            <span className="text-[10px] text-zinc-400">{t('selectStars')}</span>
                                             <div className="flex items-center gap-1.5 pt-0.5">
                                               {[1, 2, 3, 4, 5].map((star) => (
                                                 <button
@@ -3405,17 +3373,26 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                                                 </button>
                                               ))}
                                               <span className="text-xs font-mono font-bold text-thai-gold pl-2">
-                                                {currentRating === 5 ? '🤩 完美超棒' : currentRating === 4 ? '😊 很滿意' : currentRating === 3 ? '😐 普通' : currentRating === 2 ? '☹️ 待加強' : '😡 極差'} ({currentRating} / 5)
+                                                {(() => {
+    const ratingDesc = {
+      5: { zh: '🤩 完美超棒', en: 'Perfect', ko: '완벽함', ja: '最高', th: 'ยอดเยี่ยม', vi: 'Tuyệt vời' },
+      4: { zh: '很滿意', en: 'Very Satisfied', ko: '매우 만족', ja: '大満足', th: 'พึงพอใจมาก', vi: 'Rất hài lòng' },
+      3: { zh: '普通', en: 'Average', ko: '보통', ja: '普通', th: 'ปานกลาง', vi: 'Bình thường' },
+      2: { zh: '待加強', en: 'Could Be Better', ko: '개선 필요', ja: '改善希望', th: 'ควรปรับปรุง', vi: 'Cần cải thiện' },
+      1: { zh: '極差', en: 'Very Bad', ko: '매우 불만족', ja: '非常に不満', th: 'แย่มาก', vi: 'Rất tệ' },
+    };
+    return (ratingDesc[currentRating]?.[currentLang] || ratingDesc[currentRating]?.['zh'] || '') + " (" + currentRating + " / 5)";
+  })()}
                                               </span>
                                             </div>
                                           </div>
 
                                           <div className="space-y-1 bg-transparent">
-                                            <span className="text-[10px] text-zinc-400">寫下您的寶貴建議 (選填) Optional Feedback:</span>
+                                            <span className="text-[10px] text-zinc-400">{t('feedbackOptional')}</span>
                                             <textarea
                                               value={currentFeedback}
                                               onChange={(e) => handleFeedbackChange(e.target.value)}
-                                              placeholder="餐點口味如何？服務品質滿意嗎？期待您的真實回饋..."
+                                              placeholder={t('feedbackPlaceholder')}
                                               rows={2}
                                               className="w-full bg-black/40 text-xs border border-white/10 rounded-lg p-2 focus:border-[#E5B453] focus:ring-1 focus:ring-[#E5B453] outline-none text-white resize-none"
                                             />
@@ -3426,7 +3403,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                                             onClick={handleSubmitRating}
                                             className="w-full py-1.5 bg-[#E5B453] hover:bg-[#F0C46B] text-[#0F0F0F] rounded-lg text-xs font-black transition active:scale-95 shadow cursor-pointer"
                                           >
-                                            送出評價 Submit Rating
+                                            {t('submitRating')}
                                           </button>
                                         </div>
                                       );
@@ -3449,7 +3426,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                                         className="w-full py-2 bg-[#E5B453]/10 hover:bg-[#E5B453]/20 border border-[#E5B453]/20 text-[#E5B453] rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
                                       >
                                         <Star size={12} className="fill-current animate-pulse" />
-                                        <span>評價此筆訂單 Rate Order</span>
+                                        <span>{t('rateOrderBtn')}</span>
                                       </button>
                                     );
                                   })()}
@@ -3484,7 +3461,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                         </span>
                       </div>
                       <p className="text-xs text-white/70 leading-relaxed font-sans">
-                        歡迎再度光臨沙貝炭烤！系統已為您加載歷史消費與餐點足跡。點擊下方 <strong className="text-[#E5B453]">「快速再點一次」</strong> 即可一鍵加入購物車快速重啟美味！
+                        {t('welcomeBackNotice')}
                       </p>
                     </div>
                   )}
@@ -3497,7 +3474,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                     ];
 
                     if (pastOrdersList.length === 0) {
-                      return <p className="text-xs text-white/40 text-center py-6 font-sans">尚無歷史消費紀錄 No past records found.</p>;
+                      return <p className="text-xs text-white/40 text-center py-6 font-sans">{t('noPastRecords')}</p>;
                     }
 
                     return (
@@ -3515,11 +3492,11 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                                 <span className="text-[11px] text-white/40 font-mono">
                                   {pastOrder.createdAt.includes('T') 
                                     ? pastOrder.createdAt.split('T')[0] 
-                                    : pastOrder.createdAt} • 桌號: {pastOrder.tableNumber} 桌
+                                    : pastOrder.createdAt} • {currentLang === 'vi' ? 'Bàn' : '桌號'}: {pastOrder.tableNumber} {currentLang === 'vi' ? '' : '桌'}
                                 </span>
                               </div>
                               <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#E5B453]/10 border border-[#E5B453]/25 text-[#E5B453]">
-                                歷史消費紀錄 Past
+                                {t('pastRecordLabel')}
                               </span>
                             </div>
 
@@ -3540,7 +3517,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                             {/* Pricing & Reorder */}
                             <div className="flex items-center justify-between pt-3 border-t border-white/5">
                               <div className="text-xs text-white/55">
-                                消費總金額: <strong className="text-[#E5B453] text-[13px] font-mono font-bold">NT$ {pastOrder.total}</strong>
+                                {t('totalPastSpend')} <strong className="text-[#E5B453] text-[13px] font-mono font-bold">NT$ {pastOrder.total}</strong>
                               </div>
                               <button
                                 type="button"
@@ -3548,7 +3525,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                                 className="flex items-center space-x-1.5 bg-[#E5B453] hover:bg-[#F0C46B] text-[#0F0F0F] text-xs font-black px-3.5 py-2 rounded-xl cursor-pointer transition active:scale-95 shadow-md shadow-[#E5B453]/10"
                               >
                                 <ShoppingCart size={12} />
-                                <span>快速再點一次 Reorder</span>
+                                <span>{t('reorderBtn')}</span>
                               </button>
                             </div>
 
@@ -3628,7 +3605,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                                         <div className="flex items-center justify-between">
                                           <span className="text-[11px] font-bold text-[#00C300] flex items-center gap-1.5">
                                             <Check size={11} className="text-[#00C300]" />
-                                            <span>感謝您的寶貴評價！ Thank you!</span>
+                                            <span>{t('thankYouRating')}</span>
                                           </span>
                                           <button
                                             onClick={() => {
@@ -3643,7 +3620,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                                             }}
                                             className="text-[10px] text-[#E5B453] hover:underline cursor-pointer"
                                           >
-                                            修改評價 Edit
+                                            {t('editRatingBtn')}
                                           </button>
                                         </div>
                                         <div className="flex items-center gap-1">
@@ -3654,7 +3631,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                                               className={star <= currentRating ? "fill-amber-400 text-amber-400" : "text-zinc-650"}
                                             />
                                           ))}
-                                          <span className="text-xs font-mono font-bold text-white pl-1.5">{currentRating} 顆星</span>
+                                          <span className="text-xs font-mono font-bold text-white pl-1.5">{currentRating} {t('pointsStarCount')}</span>
                                         </div>
                                         {currentFeedback && (
                                           <p className="text-xs text-zinc-400 bg-white/5 px-2 py-1.5 rounded italic">
@@ -3670,12 +3647,12 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                                       <div className="bg-white/5 border border-white/10 rounded-xl p-3 space-y-2.5">
                                         <div className="flex items-center justify-between">
                                           <span className="text-[11px] text-[#E5B453] font-bold uppercase tracking-wider">
-                                            ✏️ 留下您的用餐評價 Rate Experience
+                                            {t('rateExperience')}
                                           </span>
                                         </div>
                                         
                                         <div className="flex flex-col gap-1">
-                                          <span className="text-[10px] text-zinc-400">點選星星進行評分 Select stars:</span>
+                                          <span className="text-[10px] text-zinc-400">{t('selectStars')}</span>
                                           <div className="flex items-center gap-1.5 pt-0.5">
                                             {[1, 2, 3, 4, 5].map((star) => (
                                               <button
@@ -3697,11 +3674,11 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                                         </div>
 
                                         <div className="space-y-1 bg-transparent">
-                                          <span className="text-[10px] text-zinc-400">寫下您的寶貴建議 (選填) Optional Feedback:</span>
+                                          <span className="text-[10px] text-zinc-400">{t('feedbackOptional')}</span>
                                           <textarea
                                             value={currentFeedback}
                                             onChange={(e) => handleFeedbackChange(e.target.value)}
-                                            placeholder="餐點口味如何？服務品質滿意嗎？"
+                                            placeholder={t('feedbackPlaceholder')}
                                             rows={2}
                                             className="w-full bg-black/40 text-xs border border-white/10 rounded-lg p-2 focus:border-[#E5B453] focus:ring-1 focus:ring-[#E5B453] outline-none text-white resize-none"
                                           />
@@ -3712,7 +3689,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                                           onClick={handleSubmitRating}
                                           className="w-full py-1.5 bg-[#E5B453] hover:bg-[#F0C46B] text-[#0F0F0F] rounded-lg text-xs font-black transition active:scale-95 shadow cursor-pointer"
                                         >
-                                          送出評價 Submit Rating
+                                          {t('submitRating')}
                                         </button>
                                       </div>
                                     );
@@ -3735,7 +3712,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                                       className="w-full py-2 bg-[#E5B453]/10 hover:bg-[#E5B453]/20 border border-[#E5B453]/20 text-[#E5B453] rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
                                     >
                                       <Star size={12} className="fill-current animate-pulse" />
-                                      <span>評價此筆訂單 Rate Order</span>
+                                      <span>{t('rateOrderBtn')}</span>
                                     </button>
                                   );
                                 })()}
@@ -3754,7 +3731,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                 <div className="flex items-center justify-between border-b border-white/5 pb-2">
                   <h6 className="text-xs font-black text-[#E5B453] flex items-center gap-1.5 uppercase tracking-wider">
                     <Flame size={14} className="text-[#E5B453] fill-amber-500 shrink-0" />
-                    <span>🔥 熱銷人氣精選 Best Sellers</span>
+                    <span>{t('bestSellersTab')}</span>
                   </h6>
                 </div>
 
@@ -3816,7 +3793,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                               </h6>
                               <div className="flex items-center gap-1.5 py-0.5">
                                 <span className="bg-amber-500/10 text-[#E5B453] text-[9px] px-1.5 py-0.5 rounded border border-[#E5B453]/20 font-sans font-black select-none">
-                                  📈 {idx === 0 ? '98%' : idx === 1 ? '94%' : idx === 2 ? '91%' : '88%'} 點購率 (Order Rate)
+                                  📈 {idx === 0 ? '98%' : idx === 1 ? '94%' : idx === 2 ? '91%' : '88%'} {currentLang === 'vi' ? 'Tỷ lệ đặt' : '點購率 (Order Rate)'}
                                 </span>
                               </div>
                               <p className="text-white/45 text-[9px] sm:text-xs leading-snug line-clamp-1">
@@ -3870,7 +3847,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
             <div className="flex items-center justify-between">
               <h5 className="font-bold text-white flex items-center space-x-1.5 font-serif tracking-wide text-sm sm:text-base">
                 <Sparkles size={16} className="text-[#E5B453]" />
-                <span>今日熱銷人氣餐點 Top Best-Sellers</span>
+                <span>{t('todayBestSellersHeader')}</span>
               </h5>
               <span className="text-xs text-[#E5B453] bg-[#E5B453]/10 border border-[#E5B453]/20 px-2 py-0.5 rounded font-bold animate-pulse">
                 HOT 🔥
@@ -3878,7 +3855,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
             </div>
 
             <p className="text-xs text-white/50">
-              沙貝宵夜場首選人氣絕品，點擊餐點即可看詳情與調整客製，或直接快速加入購物車！
+              {t('todayBestSellersDesc')}
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -3897,7 +3874,8 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                   en: ['🔥 Top Choice', '🌟 Chef Special', '👍 Highly Rated', '🍺 Midnight Best'],
                   ja: ['🔥 一番人気', '🌟 看板メニュー', '👍 大好評', '🍺 夜食定番'],
                   ko: ['🔥 최고 인기', '🌟 시그니처', '👍 극찬 요리', '🍺 야식 추천'],
-                  th: ['🔥 เมนูฮิต', '🌟 จานเด็ด', '👍 แนะนำ', '🍺 ยอดนิยม']
+                  th: ['🔥 เมนูฮิต', '🌟 จานเด็ด', '👍 แนะนำ', '🍺 ยอดนิยม'],
+                  vi: ['🔥 Yêu thích nhất', '🌟 Đặc sản của quán', '👍 Đánh giá cao', '🍺 Đồ nhắm đêm tuyệt vời']
                 };
 
                 return popularItems.map((item, idx) => {
@@ -3958,7 +3936,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                               onClick={() => setSelectedDetailItem(item)}
                               className="bg-white/5 hover:bg-white/10 text-white/80 font-black text-[10px] px-2.5 py-1.5 rounded-lg cursor-pointer transition active:scale-95 border border-white/10"
                             >
-                              {isOpen ? '詳情/調整' : '點擊瀏覽'}
+                              {isOpen ? t('detailsOrAdjust') : t('clickToBrowse')}
                             </button>
                             {isOpen && (
                               <button
@@ -3966,7 +3944,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                                 onClick={() => handleQuickAddToCart(item)}
                                 className="bg-[#E5B453] hover:bg-[#F0C46B] text-[#0F0F0F] font-black text-[10px] px-2.5 py-1.5 rounded-lg cursor-pointer transition active:scale-95 shadow-md shadow-[#E5B453]/10"
                               >
-                                直接加點
+                                {t('quickAddCart')}
                               </button>
                             )}
                           </div>

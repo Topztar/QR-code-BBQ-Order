@@ -11,14 +11,14 @@ import { Language, MenuItem, Ingredient, Order, OrderStatus, OrderItem, Category
 import { getOfflineQueue, addRequestToQueue, clearOfflineQueue, processOfflineQueue, QueuedRequest } from './lib/offlineQueue';
 import { safeStorage } from './lib/safeStorage';
 
-import { TRANSLATIONS } from './data';
+import { TRANSLATIONS, INITIAL_MENU } from './data';
 import { LanguageSelector } from './components/LanguageSelector';
 import { GoogleLoginMock } from './components/GoogleLoginMock';
 import { CustomerOrderView } from './components/CustomerOrderView';
 import { KitchenDisplaySystem } from './components/KitchenDisplaySystem';
 import { ManagerDashboard } from './components/ManagerDashboard';
 import { StaffLoginGate } from './components/StaffLoginGate';
-import { ChefHat, Smartphone, BarChart3, HelpCircle, UtensilsCrossed, Sparkles, LogOut, Lock, Phone, MapPin, Eye, EyeOff, Coins } from 'lucide-react';
+import { ChefHat, Smartphone, BarChart3, HelpCircle, UtensilsCrossed, Sparkles, LogOut, Lock, Phone, MapPin, Eye, EyeOff, Coins, Monitor } from 'lucide-react';
 
 interface AnalyticsData {
   totalRevenue: number;
@@ -33,7 +33,7 @@ export default function App() {
   const [lang, setLang] = useState<Language>('zh');
   const [activeTab, setActiveTab] = useState<'customer' | 'kitchen' | 'admin' | 'cashier'>('customer');
   const [lineProfile, setLineProfile] = useState<any>(null);
-  const [adminSubTab, setAdminSubTab] = useState<'stats' | 'orders' | 'inventory' | 'menu' | 'members' | 'cashier' | 'printer' | 'options' | 'eod' | undefined>(undefined);
+  const [adminSubTab, setAdminSubTab] = useState<'stats' | 'orders' | 'inventory' | 'menu' | 'members' | 'cashier' | 'printer' | 'options' | 'eod' | 'terminal' | undefined>(undefined);
 
   // Secure staff role gating
   const [isStaff, setIsStaff] = useState<boolean>(false);
@@ -97,11 +97,64 @@ export default function App() {
     setCurrentPath(path);
   };
 
+  // Helper to enrich menu items with missing translations
+  const enrichMenuItems = (items: MenuItem[]): MenuItem[] => {
+    if (!Array.isArray(items)) return [];
+    return items.map(item => {
+      const defaultItem = INITIAL_MENU.find(x => x.id === item.id);
+      if (defaultItem) {
+        const name = { ...defaultItem.name, ...item.name };
+        const description = { ...defaultItem.description, ...item.description };
+        return { ...item, name, description };
+      }
+      return item;
+    });
+  };
+
+  // Helper to enrich categories with missing translations
+  const enrichCategories = (cats: Category[]): Category[] => {
+    if (!Array.isArray(cats)) return [];
+    const defaultCats: { [key: string]: any } = {
+      tomyum: { zh: '多隆功系列 🍜', en: 'Tom Yum Soups', ko: '똠얌 수프 시리즈', ja: 'トムヤムスープ類', th: 'ชุดต้มยำสุดแซ่บ', vi: 'Dòng súp Tom Yum 🍜' },
+      noodles: { zh: '單人熱麵食 🥢', en: 'Single Noodles', ko: '단품 매운 면 요리', ja: 'お一人様用麺類', th: 'บะหมี่และก๋วยเตี๋ยวจานเดี่ยว', vi: 'Mì tô phục vụ đơn 🥢' },
+      combos: { zh: '主廚精選套餐 🍱', en: 'Signature Meals', ko: '시그니처 세트 요리', ja: '主理人お得セット', th: 'เซตเมนูยอดนิยม Sabay', vi: 'Set ăn Signature 🍱' },
+      veggies: { zh: '小農鮮蔬菜 🥬', en: 'Fresh Veggies', ko: '신선한 채소 구い', ja: '地元新鮮野菜焼き', th: 'ผักสดฟาร์มย่าง', vi: 'Rau củ tươi sạch 🥬' },
+      skewers: { zh: '原味碳烤肉類 🍢', en: 'Charcoal BBQ Skewers', ko: '오리지널 숯불 꼬치', ja: 'タイ風肉串炭火焼き', th: 'บาร์บีคิวเสียบไม้ย่าง', vi: 'Xiên nướng than 🍢' },
+      seafood: { zh: '招牌泰式海鮮 🦐', en: 'Thai Seafood BBQ', ko: '시그니처 태국식 해산물 구이', ja: '本格タイ風炭火焼きシーフード', th: 'อาหารทะเลเผาสูตรเด็ด', vi: 'Hải sản nướng Thái Lan 🦐' },
+      sweets: { zh: '泰式特色甜品 🍰', en: 'Desserts & Sweets', ko: '태국식 달콤 디저트', ja: 'タイ風特製デザート', th: 'ขนมหวานและพุดดิ้งสูตรพิเศษ', vi: 'Tráng miệng kiểu Thái 🍰' },
+      drinks: { zh: '泰特色沁涼飲品 🍹', en: 'Thai Cold Drinks', ko: '태국식 야외 청涼 飲料', ja: 'タイ風さわやかドリンク', th: 'เครื่องดื่มดับร้อนรสสดชื่น', vi: 'Đồ uống lạnh kiểu Thái 🍹' }
+    };
+    return cats.map(cat => {
+      const defaultCat = defaultCats[cat.id];
+      if (defaultCat) {
+        const name = { ...defaultCat, ...cat.name };
+        return { ...cat, name };
+      }
+      return cat;
+    });
+  };
+
   // Core synchronized application state
-  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const [menuItems, setMenuItemsRaw] = useState<MenuItem[]>([]);
+  const setMenuItems = (val: MenuItem[] | ((prev: MenuItem[]) => MenuItem[])) => {
+    if (typeof val === 'function') {
+      setMenuItemsRaw(prev => enrichMenuItems(val(prev)));
+    } else {
+      setMenuItemsRaw(enrichMenuItems(val));
+    }
+  };
+
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
+
+  const [categories, setCategoriesRaw] = useState<Category[]>([]);
+  const setCategories = (val: Category[] | ((prev: Category[]) => Category[])) => {
+    if (typeof val === 'function') {
+      setCategoriesRaw(prev => enrichCategories(val(prev)));
+    } else {
+      setCategoriesRaw(enrichCategories(val));
+    }
+  };
   const [tables, setTables] = useState<TableConfig[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [minSpend, setMinSpend] = useState<number>(200);
@@ -1510,6 +1563,20 @@ export default function App() {
       {/* Mobile Sticky Tab selectors, only shown to logged-in staff on staff login path */}
       {isAtStaffPath && isStaff && (
         <div className="lg:hidden bg-[#121212] border-b border-white/10 p-2 flex justify-around sticky top-18 z-30 shadow-md" id="mobile-tab-selector">
+          <button
+            id="m-tab-btn-terminal"
+            onClick={() => {
+              setActiveTab('admin');
+              setAdminSubTab('terminal');
+            }}
+            className={`flex-1 py-1.5 text-center text-[10px] font-bold transition flex flex-col items-center gap-1 cursor-pointer ${
+              activeTab === 'admin' && adminSubTab === 'terminal' ? 'text-[#E5B453]' : 'text-white/40'
+            }`}
+          >
+            <Monitor size={15} />
+            <span>點餐終端</span>
+          </button>
+
           <button
             id="m-tab-btn-cashier"
             onClick={() => {

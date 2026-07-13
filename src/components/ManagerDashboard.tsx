@@ -2,7 +2,7 @@ import { apiFetch } from "../lib/api";
 import React, { useState, useEffect, useMemo } from 'react';
 import { Ingredient, Promotion, Language, Category, TableConfig, Order, OrderStatus, Reservation } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
-import { TrendingUp, Package, Users, AlertTriangle, Play, RefreshCw, Layers, Sparkles, Send, Coins, KeyRound, Lock, Unlock, QrCode, Trash2, Plus, Edit, Download, Calendar, Eye, FileText, ShoppingBag, ShoppingCart, Copy, Check, ExternalLink, Minus, Flame, Printer, ArrowUp, ArrowDown } from 'lucide-react';
+import { TrendingUp, Package, Users, AlertTriangle, Play, RefreshCw, Layers, Sparkles, Send, Coins, KeyRound, Lock, Unlock, QrCode, Trash2, Plus, Edit, Download, Calendar, Eye, FileText, ShoppingBag, ShoppingCart, Copy, Check, ExternalLink, Minus, Flame, Printer, ArrowUp, ArrowDown, Maximize2, Minimize2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { db, auth } from '../lib/firebase';
 import { safeStorage } from '../lib/safeStorage';
 import { collection, doc, setDoc } from 'firebase/firestore';
@@ -230,6 +230,21 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
 
   const [terminalCart, setTerminalCart] = useState<any[]>([]);
   const [terminalTable, setTerminalTable] = useState("1");
+  const [terminalCategory, setTerminalCategory] = useState<string>("all");
+  const [isTerminalFullScreen, setIsTerminalFullScreen] = useState(false);
+  const [terminalPage, setTerminalPage] = useState(1);
+  const [terminalCartPage, setTerminalCartPage] = useState(1);
+
+  useEffect(() => {
+    setTerminalPage(1);
+  }, [terminalCategory]);
+
+  useEffect(() => {
+    const totalCartPages = Math.max(1, Math.ceil(terminalCart.length / 5));
+    if (terminalCartPage > totalCartPages) {
+      setTerminalCartPage(totalCartPages);
+    }
+  }, [terminalCart.length, terminalCartPage]);
   useEffect(() => {
     if (defaultSubTab) {
       setActiveSubTab(defaultSubTab);
@@ -821,16 +836,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     if (promoStr !== prevPromoComboRef.current) {
       setTempPromoCombo(promoCombo);
       if (promoCombo) {
-        setTempPromoCombos(promoCombo.combos || [
-          {
-            id: 'default-combo-1',
-            name: '限時特惠套餐折抵',
-            enabled: promoCombo.enabled ?? true,
-            requiredQty: promoCombo.requiredQty ?? 10,
-            discountAmount: promoCombo.discountAmount ?? 20,
-            eligibleItemIds: promoCombo.eligibleItemIds ?? []
-          }
-        ]);
+        setTempPromoCombos(promoCombo.combos || []);
       }
       prevPromoComboRef.current = promoStr;
     }
@@ -1197,6 +1203,47 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   const [cashierListFilter, setCashierListFilter] = useState<'all' | 'completed' | 'dinein' | 'takeout'>('all');
   const [isAdjustingDiscount, setIsAdjustingDiscount] = useState<boolean>(false);
   const [isAdjustingSurcharge, setIsAdjustingSurcharge] = useState<boolean>(false);
+
+  // Auto-scaling width and fit screen boundary state & logic
+  const [cashierPanelWidth, setCashierPanelWidth] = useState<number>(48);
+  const [isCashierWidthAuto, setIsCashierWidthAuto] = useState<boolean>(true);
+
+  useEffect(() => {
+    if (!isCashierWidthAuto) return;
+    const handleResize = () => {
+      const w = window.innerWidth;
+      if (w < 1280) {
+        setCashierPanelWidth(100);
+      } else if (w < 1600) {
+        setCashierPanelWidth(48);
+      } else if (w < 1920) {
+        setCashierPanelWidth(46);
+      } else {
+        setCashierPanelWidth(40);
+      }
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [isCashierWidthAuto]);
+
+  const getPanelWidthClass = (w: number) => {
+    if (w <= 35) return 'xl:w-[35%]';
+    if (w <= 40) return 'xl:w-[40%]';
+    if (w <= 45) return 'xl:w-[45%]';
+    if (w <= 48) return 'xl:w-[48%]';
+    if (w <= 50) return 'xl:w-[50%]';
+    if (w <= 55) return 'xl:w-[55%]';
+    if (w <= 60) return 'xl:w-[60%]';
+    if (w <= 65) return 'xl:w-[65%]';
+    if (w <= 70) return 'xl:w-[70%]';
+    if (w <= 75) return 'xl:w-[75%]';
+    if (w <= 80) return 'xl:w-[80%]';
+    if (w <= 85) return 'xl:w-[85%]';
+    if (w <= 90) return 'xl:w-[90%]';
+    if (w <= 95) return 'xl:w-[95%]';
+    return 'xl:w-[100%]';
+  };
 
   const filteredCashierOrders = useMemo(() => {
     switch (cashierListFilter) {
@@ -1598,9 +1645,36 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
         isCashier: true
       });
 
+      // Cash drawer interlock linkage
+      if (billPrinter.cashDrawerEnabled) {
+        apiFetch('/api/printer/open-drawer', { method: 'POST' })
+          .then(res => res.json())
+          .then(data => {
+            console.log('[Cash Drawer Interlock Success]', data.log);
+          })
+          .catch(e => console.error('[Cash Drawer Interlock Error]', e));
+      }
+
     } catch (err: any) {
       console.error('[Cashier Checkout processing error]', err);
       alert(`❌ 收銀失敗: ${err?.message || String(err)}`);
+    }
+  };
+
+  const handleManualOpenDrawer = async () => {
+    try {
+      const res = await apiFetch('/api/printer/open-drawer', {
+        method: 'POST'
+      });
+      if (res.ok) {
+        const data = await res.json();
+        alert(`✓ 🔓 實體收銀箱抽屜已成功彈開！\n\n【OPOS / POS.NET 硬體通訊埠訊號模擬】:\n${data.log || '無通訊日誌'}`);
+      } else {
+        alert('⚠️ 開啟收銀箱失敗，請確認印表機線路與系統 USB 埠設定。');
+      }
+    } catch (e: any) {
+      console.error('[Manual open cash drawer error]', e);
+      alert(`❌ 連線或操作錯誤: ${e?.message || String(e)}`);
     }
   };
 
@@ -1914,7 +1988,11 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     printAddress: '台北市信義區泰式一番街8號',
     printTimeEnabled: true,
     headerPrefix: '★★★ 顧客結帳明細單 ★★★',
-    footerSuffix: '謝謝光臨，歡迎再度光臨！'
+    footerSuffix: '謝謝光臨，歡迎再度光臨！',
+    cashDrawerEnabled: true,
+    cashDrawerDriver: 'OPOS', // 'OPOS' | 'POS_NET' | 'ESC_POS_RAW'
+    cashDrawerOposName: 'CashDrawer1',
+    cashDrawerEscPosCommand: '1B700019FA'
   });
 
   const [printerSaveSuccess, setPrinterSaveSuccess] = useState<string | null>(null);
@@ -2057,11 +2135,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
         setMembersList([]);
       }
     } else {
-      const defaultMembers = [
-        { email: 'topztar@gmail.com', name: '沙貝忠實饕客', avatar: 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=150', points: 1500, joinedAt: '2026-05-15' },
-        { email: 'thai_foodie@gmail.com', name: '曼谷香辣姬', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=150', points: 2840, joinedAt: '2026-05-20' },
-        { email: 'vegan_sabay@gmail.com', name: '小農蔬食愛好客', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150', points: 650, joinedAt: '2026-05-28' }
-      ];
+      const defaultMembers: any[] = [];
       localStorage.setItem('google-members-database', JSON.stringify(defaultMembers));
       setMembersList(defaultMembers);
     }
@@ -2699,7 +2773,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   return (
     <div className="space-y-6 text-white" id="manager-dashboard-container">
       {/* 1. Dynamic Tab Switcher */}
-      {activeSubTab !== 'eod' && activeSubTab !== 'cashier' && (
+      {activeSubTab !== 'eod' && activeSubTab !== 'cashier' && activeSubTab !== 'terminal' && (
         <div className="flex flex-wrap gap-2 border-b border-white/10 pb-4" id="admin-subtabs-nav">
           {[
             { id: 'stats', label: '📊 營運數據分析', desc: '全店每日銷售分析、客流量時段與菜品排行' },
@@ -2709,7 +2783,6 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
             { id: 'members', label: '⚙️ 會員、桌席與系統', desc: 'Google 會員統計、桌席二維碼、員工PIN變更' },
             { id: 'printer', label: '🖨️ 印表機與硬體', desc: '分離雙機：廚房印表機、帳單印表機寬度與連線' },
             { id: 'options', label: '🧩 客製選項管理器', desc: '設定全店客製選項規則 (例如：加河粉、熟度、辣度)' }
-            , { id: 'terminal', label: '🖥️ 螢幕點餐終端', desc: '管理員直接錄入點餐訂單 (支援離線自主模式)' }
           ].map((tab) => (
             <button
               key={tab.id}
@@ -2732,7 +2805,6 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
           ))}
         </div>
       )}
-
       {/* ==================== TAB 1: OPERATIONAL ANALYTICS ==================== */}
       {activeSubTab === 'stats' && (
         <div className="space-y-6 animate-fadeIn" id="subtab-section-stats">
@@ -3031,12 +3103,12 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                           <div className="flex items-center space-x-2 truncate">
                             <img
                               src={item.image}
-                              alt={item.name[currentLang]}
+                              alt={item.name[currentLang] || item.name['zh'] || item.name['en']}
                               className="w-8 h-8 object-cover rounded bg-black flex-shrink-0"
                               referrerPolicy="no-referrer"
                             />
                             <div className="truncate">
-                              <p className="font-bold text-white truncate">{item.name[currentLang]}</p>
+                              <p className="font-bold text-white truncate">{item.name[currentLang] || item.name['zh'] || item.name['en']}</p>
                               <p className="text-[9px] text-zinc-400 font-mono">ID: {item.id} • NT$ {item.price}</p>
                             </div>
                           </div>
@@ -3110,12 +3182,12 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                         <div className="flex items-center space-x-2 truncate">
                           <img
                             src={item.image}
-                            alt={item.name[currentLang]}
+                            alt={item.name[currentLang] || item.name['zh'] || item.name['en']}
                             className="w-8 h-8 object-cover rounded bg-black flex-shrink-0"
                             referrerPolicy="no-referrer"
                           />
                           <div className="truncate">
-                            <p className="font-bold text-white truncate">{item.name[currentLang]}</p>
+                            <p className="font-bold text-white truncate">{item.name[currentLang] || item.name['zh'] || item.name['en']}</p>
                             <p className="text-[10px] text-zinc-400 font-mono">Category: {item.category}</p>
                           </div>
                         </div>
@@ -3215,14 +3287,27 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
       {activeSubTab === 'cashier' && (
         <div className="space-y-6 animate-fadeIn" id="subtab-section-cashier">
           {/* Top Banner Alert */}
-          <div className="bg-gradient-to-r from-[#E5B453]/15 via-transparent to-transparent border-l-4 border-[#E5B453] p-4 rounded-r-xl">
-            <h4 className="font-bold text-sm text-[#E5B453] flex items-center gap-1.5">
-              <Coins size={18} />
-              <span>櫃檯收銀結帳系統 (Cashier Registry Console)</span>
-            </h4>
-            <p className="text-xs text-white/60 mt-1 max-w-3xl font-sans">
-              此功能為櫃檯員工專用，在此操作已出餐之桌席或外帶單進行收銀結帳。支援員工手動設定「折扣減折」與「加成服務費」，設定完畢後可點擊確認完成結帳，變更將同步更新於系統銷售帳目，並即時自動備份至 Cloud Firestore 雲端資料庫。
-            </p>
+          <div className="bg-gradient-to-r from-[#E5B453]/15 via-transparent to-transparent border-l-4 border-[#E5B453] p-4 rounded-r-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex-1">
+              <h4 className="font-bold text-sm text-[#E5B453] flex items-center gap-1.5">
+                <Coins size={18} />
+                <span>櫃檯收銀結帳系統 (Cashier Registry Console)</span>
+              </h4>
+              <p className="text-xs text-white/60 mt-1 max-w-3xl font-sans">
+                此功能為櫃檯員工專用，在此操作已出餐之桌席或外帶單進行收銀結帳。支援員工手動設定「折扣減折」與「加成服務費」，設定完畢後可點擊確認完成結帳，變更將同步更新於系統銷售帳目，並即時自動備份至 Cloud Firestore 雲端資料庫。
+              </p>
+            </div>
+            <div className="shrink-0">
+              <button
+                type="button"
+                id="cashier-trigger-drawer-btn"
+                onClick={handleManualOpenDrawer}
+                className="w-full md:w-auto px-4 py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-extrabold rounded-xl transition duration-150 flex items-center justify-center gap-2 cursor-pointer shadow-md active:scale-95 text-xs tracking-wider"
+              >
+                <Unlock size={14} className="animate-pulse" />
+                <span>⚡ 開啟現金抽屜 Open Cash Drawer</span>
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6" id="cashier-workspace-grid">
@@ -3431,7 +3516,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
             {cashierSelectedOrder && (
               <div className="fixed inset-0 z-50 flex flex-col xl:flex-row items-center justify-center p-4 xl:p-6 bg-black/90 backdrop-blur-md gap-6 overflow-y-auto" id="cashier-checkout-details-panel">
                 {/* SELECTOR 1: LEFT SUB-PANEL (Order Details & Ticket Items) */}
-                <div className="bg-[#121212] border border-white/15 rounded-2xl p-6 w-full xl:w-[48%] max-h-[92vh] flex flex-col relative shadow-2xl animate-scaleUp overflow-y-auto min-w-0" id="cashier-checkout-left-subpanel">
+                <div className={`bg-[#121212] border border-white/15 rounded-2xl p-6 w-full ${getPanelWidthClass(cashierPanelWidth)} max-h-[92vh] flex flex-col relative shadow-2xl animate-scaleUp overflow-y-auto min-w-0`} id="cashier-checkout-left-subpanel">
                   {/* Top Close button icon */}
                   <button
                     type="button"
@@ -3441,6 +3526,77 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                   >
                     ✕
                   </button>
+
+                  {/* Width Auto-Scaling Controls (div:nth-of-type(1)) */}
+                  <div className="bg-[#181818] border border-white/10 rounded-xl p-4 mb-4 space-y-3 text-left" id="cashier-width-scaler-control">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-[#E5B453] flex items-center gap-1.5">
+                        <Maximize2 size={14} className="text-[#E5B453]" />
+                        <span>🖥️ 收銀視窗寬度自適應 / 縮放功能 Panel Width Customizer</span>
+                      </span>
+                      <span className="text-[10px] text-zinc-400 font-mono">
+                        當前寬度: {cashierPanelWidth}% {isCashierWidthAuto ? '(自動適應中)' : '(手動微調中)'}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+                      {/* Left: Auto Mode and Slider */}
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setIsCashierWidthAuto(!isCashierWidthAuto)}
+                          className={`text-[11px] px-3 py-1.5 rounded-lg border font-bold h-8 flex items-center gap-1 cursor-pointer transition active:scale-95 ${
+                            isCashierWidthAuto
+                              ? 'bg-emerald-600/20 text-emerald-400 border-emerald-500/30'
+                              : 'bg-zinc-800 text-zinc-300 border-white/5 hover:bg-white/5'
+                          }`}
+                        >
+                          {isCashierWidthAuto ? '🟢 自動適應邊界 ON' : '⚪ 手動微調模式'}
+                        </button>
+
+                        <div className="flex-1 flex items-center gap-2">
+                          <input
+                            type="range"
+                            min="35"
+                            max="100"
+                            step="1"
+                            disabled={isCashierWidthAuto}
+                            value={cashierPanelWidth}
+                            onChange={(e) => setCashierPanelWidth(Number(e.target.value))}
+                            className={`w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-[#E5B453] ${isCashierWidthAuto ? 'opacity-40 cursor-not-allowed' : ''}`}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Right: Quick Preset Buttons */}
+                      <div className="flex items-center gap-1.5 justify-end flex-wrap">
+                        <span className="text-[10px] text-zinc-500 shrink-0">快速比例:</span>
+                        {[
+                          { val: 40, label: '窄版' },
+                          { val: 48, label: '標準' },
+                          { val: 65, label: '寬版' },
+                          { val: 80, label: '極寬' },
+                          { val: 95, label: '全螢幕' }
+                        ].map((btn) => (
+                          <button
+                            key={btn.val}
+                            type="button"
+                            onClick={() => {
+                              setIsCashierWidthAuto(false);
+                              setCashierPanelWidth(btn.val);
+                            }}
+                            className={`text-[10px] px-2 py-1 rounded border transition active:scale-95 cursor-pointer ${
+                              !isCashierWidthAuto && cashierPanelWidth === btn.val
+                                ? 'bg-[#E5B453] text-zinc-950 font-black border-[#E5B453]'
+                                : 'bg-black/20 text-zinc-400 border-transparent hover:border-white/10'
+                            }`}
+                          >
+                            {btn.label} ({btn.val}%)
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
 
                   <div className="flex-1 flex flex-col justify-between min-h-0" id="cashier-active-register-area">
                     {/* Upper content scrollable */}
@@ -4020,7 +4176,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                 </div>
 
                 {/* SELECTOR 2: RIGHT SUB-PANEL (Payment Gate, Touch Keyboard & Action Trigger) */}
-                <div className="bg-[#121212] border border-white/15 rounded-2xl p-6 w-full xl:w-[48%] max-h-[92vh] flex flex-col relative shadow-2xl animate-scaleUp overflow-y-auto min-w-0" id="cashier-checkout-right-subpanel">
+                <div className={`bg-[#121212] border border-white/15 rounded-2xl p-6 w-full ${getPanelWidthClass(cashierPanelWidth)} max-h-[92vh] flex flex-col relative shadow-2xl animate-scaleUp overflow-y-auto min-w-0`} id="cashier-checkout-right-subpanel">
                   <div className="flex-1 flex flex-col justify-between min-h-0" id="cashier-active-payment-area">
                     <div className="flex-1 overflow-y-auto space-y-4 text-left pr-2">
 
@@ -8171,6 +8327,103 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                     />
                   </div>
 
+                  {/* 現金收銀抽屜連動設定 Cash Drawer Interlock Setup */}
+                  <div className="bg-zinc-950 p-4 rounded-xl border border-white/5 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-rose-400">🔓</span>
+                        <span className="font-bold text-xs text-white">連動開啟現金收銀抽屜 Interlock Drawer</span>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={billPrinter.cashDrawerEnabled}
+                          onChange={(e) => setBillPrinter({ ...billPrinter, cashDrawerEnabled: e.target.checked })}
+                          className="sr-only peer"
+                        />
+                        <div className="w-9 h-5 bg-zinc-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-zinc-400 after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-rose-600 peer-checked:after:bg-white"></div>
+                      </label>
+                    </div>
+
+                    {billPrinter.cashDrawerEnabled && (
+                      <div className="space-y-3 pt-2 border-t border-white/5 text-[11px] animate-fadeIn">
+                        <div>
+                          <label className="text-zinc-400 block mb-1">硬體驅動連動技術 Driver Layer</label>
+                          <select
+                            value={billPrinter.cashDrawerDriver}
+                            onChange={(e) => setBillPrinter({ ...billPrinter, cashDrawerDriver: e.target.value as any })}
+                            className="w-full bg-zinc-900 border border-white/10 rounded-lg p-2 text-white font-sans"
+                          >
+                            <option value="OPOS">UPOS / OPOS 控制驅動標準 (EPSON/Star 零售大廠標準)</option>
+                            <option value="POS_NET">POS for .NET 類別庫 (Microsoft 點對點標準)</option>
+                            <option value="ESC_POS_RAW">ESC/POS 直通 RAW 指令 (winspool.drv / 脈衝指令)</option>
+                          </select>
+                        </div>
+
+                        {(billPrinter.cashDrawerDriver === 'OPOS' || billPrinter.cashDrawerDriver === 'POS_NET') && (
+                          <div>
+                            <label className="text-zinc-400 block mb-1">OPOS 宣告之設備編號 (Logical Device Name / ID)</label>
+                            <input
+                              type="text"
+                              value={billPrinter.cashDrawerOposName}
+                              onChange={(e) => setBillPrinter({ ...billPrinter, cashDrawerOposName: e.target.value })}
+                              className="w-full bg-zinc-900 border border-white/10 rounded-lg p-2 text-white font-mono"
+                              placeholder="例如: CashDrawer1, Epson_Drawer_Pin2"
+                            />
+                          </div>
+                        )}
+
+                        {billPrinter.cashDrawerDriver === 'ESC_POS_RAW' && (
+                          <div>
+                            <label className="text-zinc-400 block mb-1">ESC/POS 脈衝開鎖指令 (HEX 16進制碼)</label>
+                            <input
+                              type="text"
+                              value={billPrinter.cashDrawerEscPosCommand}
+                              onChange={(e) => setBillPrinter({ ...billPrinter, cashDrawerEscPosCommand: e.target.value.toUpperCase().replace(/\s/g, '') })}
+                              className="w-full bg-zinc-900 border border-white/10 rounded-lg p-2 text-white font-mono"
+                              placeholder="例如: 1B700019FA"
+                            />
+                            <div className="flex gap-1.5 mt-2">
+                              <button
+                                type="button"
+                                onClick={() => setBillPrinter({ ...billPrinter, cashDrawerEscPosCommand: '1B700019FA' })}
+                                className={`px-2 py-1 rounded text-[10px] border transition ${
+                                  billPrinter.cashDrawerEscPosCommand === '1B700019FA'
+                                    ? 'bg-rose-500/25 border-rose-500/50 text-rose-300'
+                                    : 'bg-zinc-900 border-white/5 text-zinc-400 hover:text-white'
+                                }`}
+                              >
+                                引腳 2 預設 (1B 70 00 19 FA)
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setBillPrinter({ ...billPrinter, cashDrawerEscPosCommand: '1B700119FA' })}
+                                className={`px-2 py-1 rounded text-[10px] border transition ${
+                                  billPrinter.cashDrawerEscPosCommand === '1B700119FA'
+                                    ? 'bg-rose-500/25 border-rose-500/50 text-rose-300'
+                                    : 'bg-zinc-900 border-white/5 text-zinc-400 hover:text-white'
+                                }`}
+                              >
+                                引腳 5 預設 (1B 70 01 19 FA)
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="pt-1.5">
+                          <button
+                            type="button"
+                            onClick={handleManualOpenDrawer}
+                            className="w-full py-1.5 bg-rose-500/10 hover:bg-rose-500/20 active:scale-95 border border-rose-500/30 text-rose-300 font-extrabold rounded-lg text-[10px] transition cursor-pointer flex items-center justify-center gap-1.5"
+                          >
+                            <Unlock size={10} className="text-rose-400" />
+                            <span>測試開啟現金抽屜 (Direct Open Test)</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   <div className="pt-2">
                     <button
                       type="button"
@@ -8770,16 +9023,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                 type="button"
                 onClick={() => {
                   if (promoCombo) {
-                    setTempPromoCombos(promoCombo.combos || [
-                      {
-                        id: 'default-combo-1',
-                        name: '限時特惠套餐折抵',
-                        enabled: promoCombo.enabled ?? true,
-                        requiredQty: promoCombo.requiredQty ?? 10,
-                        discountAmount: promoCombo.discountAmount ?? 20,
-                        eligibleItemIds: promoCombo.eligibleItemIds ?? []
-                      }
-                    ]);
+                    setTempPromoCombos(promoCombo.combos || []);
                   }
                   setPromoComboSaveError(null);
                   setPromoComboSaveSuccess(null);
@@ -9186,121 +9430,250 @@ ${ingredientLines || '  (尚無庫存異動記錄)'}
           </div>
         );
       })()}
-      {activeSubTab === 'terminal' && (
-        <div className="space-y-6 animate-fadeIn" id="subtab-section-terminal">
-          <div className="bg-[#121212] border border-white/10 rounded-2xl p-6 shadow-2xl relative overflow-hidden">
-             <div className="flex justify-between items-center mb-6">
-                <div className="space-y-1">
-                   <h3 className="text-xl font-black text-[#E5B453] flex items-center gap-2">
-                      <ShoppingBag size={22} />
-                      管理員快速點餐終端 (Resilient Terminal)
-                   </h3>
-                   <p className="text-xs text-white/40">具備獨立運作能力。離線時訂單將存入本地事務隊列，恢復連線後自動對賬。</p>
-                </div>
-                <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border ${navigator.onLine ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-rose-500/10 border-rose-500/20 text-rose-400'}`}>
-                   <div className={`w-2 h-2 rounded-full ${navigator.onLine ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500 animate-bounce'}`} />
-                   <span className="text-[10px] font-bold uppercase tracking-widest">{navigator.onLine ? 'Online' : 'OFFLINE - Local Auth Mode'}</span>
-                </div>
-             </div>
+      {activeSubTab === 'terminal' && (() => {
+         const filteredMenuItems = menuItems.filter(item => item.available && (terminalCategory === 'all' || item.category === terminalCategory));
+         const itemsPerPage = 20;
+         const totalPages = Math.max(1, Math.ceil(filteredMenuItems.length / itemsPerPage));
+         const currentPage = Math.min(terminalPage, totalPages);
+         const startIndex = (currentPage - 1) * itemsPerPage;
+         const paginatedItems = filteredMenuItems.slice(startIndex, startIndex + itemsPerPage);
 
-             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                {/* 1. 選單選購區 */}
-                <div className="space-y-4">
-                   <div className="flex items-center justify-between border-b border-white/5 pb-2">
-                      <h4 className="text-xs font-bold text-white/60 uppercase tracking-tighter">菜單 Menu</h4>
-                      <select
-                        value={terminalTable}
-                        onChange={(e) => setTerminalTable(e.target.value)}
-                        className="bg-black/40 border border-white/10 rounded px-2 py-1 text-[10px] text-[#E5B453] font-bold outline-none"
-                      >
-                         {tables.map(t => <option key={t.id} value={t.id}>桌號: {t.id}</option>)}
-                         <option value="takeout">外帶 Takeout</option>
-                      </select>
-                   </div>
-                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
-                      {menuItems.filter(item => item.available).map(item => (
-                         <button
-                            key={item.id}
-                            onClick={() => {
-                               setTerminalCart(prev => {
-                                  const existing = prev.find(i => i.menuItemId === item.id);
-                                  if (existing) {
-                                     return prev.map(i => i.menuItemId === item.id ? { ...i, qty: i.qty + 1 } : i);
-                                  }
-                                  return [...prev, {
-                                     id: `term-${Date.now()}`,
-                                     menuItemId: item.id,
-                                     name: item.name,
-                                     price: item.price,
-                                     qty: 1,
-                                     customization: { sweetness: 2, spiciness: 0, notes: "" }
-                                  }];
-                               });
-                            }}
-                            className="bg-white/5 hover:bg-white/10 border border-white/5 p-3 rounded-xl transition-all text-left space-y-2 group active:scale-95"
-                         >
-                            <div className="text-xs font-bold text-white group-hover:text-[#E5B453] line-clamp-1">{item.name.zh}</div>
-                            <div className="text-[10px] font-mono text-white/40 font-black">$ {item.price}</div>
-                         </button>
-                      ))}
-                   </div>
-                </div>
+         const cartItemsPerPage = 5;
+         const totalCartPages = Math.max(1, Math.ceil(terminalCart.length / cartItemsPerPage));
+         const currentCartPage = Math.min(terminalCartPage, totalCartPages);
+         const cartStartIndex = (currentCartPage - 1) * cartItemsPerPage;
+         const paginatedCartItems = terminalCart.slice(cartStartIndex, cartStartIndex + cartItemsPerPage);
 
-                {/* 2. 訂單預覽與送出 */}
-                <div className="bg-black/20 rounded-xl p-5 border border-white/5 flex flex-col h-full">
-                   <h4 className="text-xs font-bold text-white/60 uppercase tracking-tighter border-b border-white/5 pb-2 mb-4">點餐籃 Cart</h4>
-                   <div className="flex-1 overflow-y-auto space-y-2 mb-4">
-                      {terminalCart.length === 0 ? (
-                         <div className="flex flex-col items-center justify-center py-12 text-white/10">
-                            <ShoppingCart size={32} className="mb-2 opacity-30" />
-                            <p className="text-[10px]">請從左側點選菜品</p>
-                         </div>
-                      ) : (
-                         terminalCart.map(item => (
-                            <div key={item.id} className="flex items-center justify-between bg-white/5 p-2 rounded-lg text-xs">
-                               <span className="font-bold">{item.name.zh}</span>
-                               <div className="flex items-center gap-3">
-                                  <span className="text-white/40">x{item.qty}</span>
-                                  <span className="font-mono text-[#E5B453]">${item.price * item.qty}</span>
-                                  <button onClick={() => setTerminalCart(prev => prev.filter(i => i.id !== item.id))} className="text-rose-500 hover:text-rose-400">
-                                     <Trash2 size={12} />
-                                  </button>
-                               </div>
-                            </div>
-                         ))
-                      )}
-                   </div>
+         return (
+            <div className={isTerminalFullScreen ? "fixed inset-0 z-50 bg-[#0c0c0c] p-6 flex flex-col h-screen w-screen overflow-hidden animate-fadeIn" : "space-y-6 animate-fadeIn"} id="subtab-section-terminal">
+              <div className={`bg-[#121212] border border-white/10 rounded-2xl p-6 shadow-2xl relative ${isTerminalFullScreen ? 'h-full flex flex-col overflow-hidden' : 'overflow-hidden'}`}>
+                 <div className="flex justify-between items-center mb-6 shrink-0">
+                    <div className="space-y-1">
+                       <h3 className="text-xl font-black text-[#E5B453] flex items-center gap-2">
+                          <ShoppingBag size={22} />
+                          管理員快速點餐終端 (Resilient Terminal)
+                       </h3>
+                       <p className="text-xs text-white/40">具備獨立運作能力。離線時訂單將存入本地事務隊列，恢復連線後自動對賬。</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                       <button
+                          onClick={() => setIsTerminalFullScreen(prev => !prev)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-xs font-bold text-white transition-all cursor-pointer active:scale-95"
+                       >
+                          {isTerminalFullScreen ? (
+                             <>
+                                <Minimize2 size={14} className="text-[#E5B453]" />
+                                <span>退出全螢幕 Exit</span>
+                             </>
+                          ) : (
+                             <>
+                                <Maximize2 size={14} className="text-[#E5B453]" />
+                                <span>全螢幕 Fullscreen</span>
+                             </>
+                          )}
+                       </button>
+                       <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border ${navigator.onLine ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-rose-500/10 border-rose-500/20 text-rose-400'}`}>
+                          <div className={`w-2 h-2 rounded-full ${navigator.onLine ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500 animate-bounce'}`} />
+                          <span className="text-[10px] font-bold uppercase tracking-widest">{navigator.onLine ? 'Online' : 'OFFLINE - Local Auth Mode'}</span>
+                       </div>
+                    </div>
+                 </div>
 
-                   <div className="border-t border-white/5 pt-4 space-y-3">
-                      <div className="flex justify-between text-sm font-black">
-                         <span>總計 Total</span>
-                         <span className="text-[#E5B453] font-mono">${terminalCart.reduce((s, i) => s + (i.price * i.qty), 0)}</span>
-                      </div>
-                      <button
-                         onClick={async () => {
-                            if (!onPlaceOrder) return;
-                            const success = await onPlaceOrder({
-                               tableNumber: terminalTable,
-                               items: terminalCart,
-                               paymentMethod: 'cash',
-                               guestCount: 1
-                            });
-                            if (success) {
-                               setTerminalCart([]);
-                               alert('訂單已送出' + (navigator.onLine ? '' : ' (進入離線事務隊列)'));
-                            }
-                         }}
-                         className={`w-full py-3 bg-[#E5B453] text-black font-black text-sm rounded-xl transition-all active:scale-95 ${terminalCart.length === 0 ? 'opacity-50 grayscale cursor-not-allowed' : 'hover:bg-amber-400 cursor-pointer'}`}
-                         disabled={terminalCart.length === 0}
-                      >
-                         🚀 {navigator.onLine ? '即時送出訂單' : '存入離線事務隊列 (Offline Submit)'}
-                      </button>
-                   </div>
-                </div>
-             </div>
-          </div>
-        </div>
-      )}
+                 <div className={`grid grid-cols-[26%_74%] ${isTerminalFullScreen ? 'h-full flex-1 min-h-0' : 'h-[650px]'} gap-8`}>
+                    {/* 1. 訂單預覽與送出 (Cart on the Left) */}
+                    <div className="bg-black/20 rounded-xl p-5 border border-white/5 flex flex-col h-full min-h-0 justify-between">
+                       <div className="flex flex-col flex-1 min-h-0">
+                          <h4 className="text-xs font-bold text-white/60 uppercase tracking-tighter border-b border-white/5 pb-2 mb-4 shrink-0">點餐籃 Cart</h4>
+                          <div className="flex-1 overflow-y-auto space-y-2 mb-4 min-h-0 custom-scrollbar">
+                             {terminalCart.length === 0 ? (
+                                <div className="flex flex-col items-center justify-center py-12 text-white/10">
+                                   <ShoppingCart size={32} className="mb-2 opacity-30" />
+                                   <p className="text-[10px]">請從右側點選菜品</p>
+                                </div>
+                             ) : (
+                                paginatedCartItems.map(item => (
+                                   <div key={item.id} className="flex items-center justify-between bg-white/5 p-2 rounded-lg text-xs">
+                                      <span className="font-bold text-white">{item.name.zh}</span>
+                                      <div className="flex items-center gap-3">
+                                         <span className="text-white/40">x{item.qty}</span>
+                                         <span className="font-mono text-[#E5B453]">${item.price * item.qty}</span>
+                                         <button onClick={() => setTerminalCart(prev => prev.filter(i => i.id !== item.id))} className="text-rose-500 hover:text-rose-400 cursor-pointer">
+                                            <Trash2 size={12} />
+                                         </button>
+                                      </div>
+                                   </div>
+                                ))
+                             )}
+                          </div>
+                       </div>
+
+                       <div className="border-t border-white/5 pt-4 space-y-4 shrink-0">
+                          <div className="flex justify-between text-sm font-black text-white">
+                             <span>總計 Total</span>
+                             <span className="text-[#E5B453] font-mono">${terminalCart.reduce((s, i) => s + (i.price * i.qty), 0)}</span>
+                          </div>
+                          <button
+                             onClick={async () => {
+                                if (!onPlaceOrder) return;
+                                const success = await onPlaceOrder({
+                                   tableNumber: terminalTable,
+                                   items: terminalCart,
+                                   paymentMethod: 'cash',
+                                   guestCount: 1
+                                });
+                                if (success) {
+                                   setTerminalCart([]);
+                                   alert('訂單已送出' + (navigator.onLine ? '' : ' (進入離線事務隊列)'));
+                                }
+                             }}
+                             className={`w-full py-3 bg-[#E5B453] text-black font-black text-sm rounded-xl transition-all active:scale-95 ${terminalCart.length === 0 ? 'opacity-50 grayscale cursor-not-allowed' : 'hover:bg-amber-400 cursor-pointer'}`}
+                             disabled={terminalCart.length === 0}
+                          >
+                             🚀 {navigator.onLine ? '即時送出訂單' : '存入離線事務隊列 (Offline Submit)'}
+                          </button>
+
+                          {/* Pagination under the Cart container as well for seamless dual control */}
+                          <div className="flex items-center justify-between gap-3 pt-3 border-t border-white/5">
+                             <button
+                                onClick={() => setTerminalCartPage(p => Math.max(1, p - 1))}
+                                disabled={currentCartPage === 1 || terminalCart.length === 0}
+                                className="flex-1 py-2 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-white font-bold text-xs disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer flex items-center justify-center gap-1 active:scale-95"
+                             >
+                                <ChevronLeft size={16} className="text-[#E5B453]" />
+                                <span>上一頁 Prev</span>
+                             </button>
+                             <span className="text-xs font-bold font-mono text-white/80 bg-white/5 px-3 py-1.5 rounded-full border border-white/5">
+                                {currentCartPage} / {totalCartPages}
+                             </span>
+                             <button
+                                onClick={() => setTerminalCartPage(p => Math.min(totalCartPages, p + 1))}
+                                disabled={currentCartPage === totalCartPages || terminalCart.length === 0}
+                                className="flex-1 py-2 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-white font-bold text-xs disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer flex items-center justify-center gap-1 active:scale-95"
+                              >
+                                <span>下一頁 Next</span>
+                                <ChevronRight size={16} className="text-[#E5B453]" />
+                             </button>
+                          </div>
+                       </div>
+                    </div>
+
+                    {/* 2. 選單選購區 (Menu on the Right) */}
+                    <div className="space-y-4 flex flex-col justify-between h-full min-h-0">
+                       <div className="space-y-4 flex flex-col flex-1 min-h-0">
+                          <div className="flex items-center justify-between border-b border-white/5 pb-2 shrink-0">
+                             <div className="flex items-center gap-2">
+                                <h4 className="text-xs font-bold text-white/60 uppercase tracking-tighter">菜單 Menu</h4>
+                                <span className="text-[10px] font-mono text-white/30">
+                                   ({categories.find(c => c.id === terminalCategory)?.name[currentLang] || categories.find(c => c.id === terminalCategory)?.name['zh'] || '全部 All'})
+                                </span>
+                             </div>
+                             <select
+                               value={terminalTable}
+                               onChange={(e) => setTerminalTable(e.target.value)}
+                               className="bg-black/40 border border-white/10 rounded px-2 py-1 text-[10px] text-[#E5B453] font-bold outline-none cursor-pointer"
+                             >
+                                {tables.map(t => <option key={t.id} value={t.id}>桌號: {t.id}</option>)}
+                                <option value="takeout">外帶 Takeout</option>
+                             </select>
+                          </div>
+
+                          {/* 菜色分類標籤控制 Categories Panel */}
+                          <div className="flex border border-[#008ec4] bg-[#008ec4] rounded-lg overflow-hidden shrink-0" id="terminal-categories-panel">
+                             <button
+                                id="btn-term-cat-all"
+                                onClick={() => setTerminalCategory('all')}
+                                className={`flex-1 py-3 text-center text-xs font-black transition-all cursor-pointer outline-none border-r border-white/10 last:border-r-0 ${
+                                   terminalCategory === 'all'
+                                      ? 'bg-[#8ac249] text-white font-extrabold'
+                                      : 'bg-[#008ec4] text-white hover:bg-[#007cb3]'
+                                }`}
+                             >
+                                全部 All
+                             </button>
+                             {categories.map(cat => (
+                                <button
+                                   key={cat.id}
+                                   id={`btn-term-cat-${cat.id}`}
+                                   onClick={() => setTerminalCategory(cat.id)}
+                                   className={`flex-1 py-3 text-center text-xs font-black transition-all cursor-pointer outline-none border-r border-white/10 last:border-r-0 ${
+                                      terminalCategory === cat.id
+                                         ? 'bg-[#8ac249] text-white font-extrabold'
+                                         : 'bg-[#008ec4] text-white hover:bg-[#007cb3]'
+                                   }`}
+                                >
+                                   {cat.name[currentLang] || cat.name['zh'] || cat.id}
+                                </button>
+                             ))}
+                          </div>
+
+                          <div className="flex-1 flex flex-col justify-between min-h-0">
+                             <div className="grid grid-cols-5 gap-3 overflow-y-auto pr-2 custom-scrollbar flex-1 py-2">
+                                {paginatedItems.map(item => (
+                                   <button
+                                      key={item.id}
+                                      onClick={() => {
+                                         setTerminalCart(prev => {
+                                            const existing = prev.find(i => i.menuItemId === item.id);
+                                            if (existing) {
+                                               return prev.map(i => i.menuItemId === item.id ? { ...i, qty: i.qty + 1 } : i);
+                                            }
+                                            return [...prev, {
+                                               id: `term-${Date.now()}`,
+                                               menuItemId: item.id,
+                                               name: item.name,
+                                               price: item.price,
+                                               qty: 1,
+                                               customization: { sweetness: 2, spiciness: 0, notes: "" }
+                                            }];
+                                         });
+                                      }}
+                                      className="bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl p-3.5 text-left flex flex-col justify-between transition-all cursor-pointer w-full h-full min-h-[100px] aspect-[1.3/1] shadow-lg hover:border-[#E5B453]/40 active:scale-95 group"
+                                   >
+                                      <div className="text-[clamp(10px,1.15vw,14px)] font-black text-white group-hover:text-[#E5B453] leading-snug tracking-tight whitespace-normal break-words overflow-hidden" style={{ wordBreak: 'break-word' }}>
+                                         {item.name.zh}
+                                      </div>
+                                      <div className="text-[clamp(9px,1vw,12px)] font-mono font-black text-[#E5B453] text-right shrink-0 mt-1">
+                                         $ {item.price}
+                                      </div>
+                                   </button>
+                                ))}
+                                {paginatedItems.length === 0 && (
+                                   <div className="col-span-full flex flex-col items-center justify-center py-12 text-white/20">
+                                      無可用菜品 No items available
+                                   </div>
+                                )}
+                             </div>
+
+                             {/* Pagination Controls */}
+                             <div className="flex items-center justify-between gap-4 pt-3 border-t border-white/5 shrink-0">
+                                <button
+                                   onClick={() => setTerminalPage(p => Math.max(1, p - 1))}
+                                   disabled={currentPage === 1}
+                                   className="px-6 py-2.5 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-white font-bold text-xs disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer flex items-center gap-2 active:scale-95"
+                                >
+                                   <ChevronLeft size={16} className="text-[#E5B453]" />
+                                   <span>上一頁 Prev Page</span>
+                                </button>
+                                <span className="text-xs font-bold font-mono text-white/80 bg-white/5 px-4 py-2 rounded-full border border-white/5">
+                                   頁次 {currentPage} / {totalPages}
+                                </span>
+                                <button
+                                   onClick={() => setTerminalPage(p => Math.min(totalPages, p + 1))}
+                                   disabled={currentPage === totalPages}
+                                   className="px-6 py-2.5 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-white font-bold text-xs disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer flex items-center gap-2 active:scale-95"
+                                >
+                                   <span>下一頁 Next Page</span>
+                                   <ChevronRight size={16} className="text-[#E5B453]" />
+                                </button>
+                             </div>
+                          </div>
+                       </div>
+                    </div>
+                 </div>
+              </div>
+            </div>
+         );
+      })()}
 
 
 

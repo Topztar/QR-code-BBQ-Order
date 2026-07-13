@@ -1,7 +1,41 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Global Safety Net
     match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Checkouts collection
+    match /checkouts/{checkoutId} {
+      allow read, write: if true;
+    }
+
+    // Connection test collection
+    match /test/{id} {
+      allow read, write: if true;
+    }
+
+    // Server-managed operational collections
+    match /categories/{id} {
+      allow read, write: if true;
+    }
+    match /menu/{id} {
+      allow read, write: if true;
+    }
+    match /ingredients/{id} {
+      allow read, write: if true;
+    }
+    match /tables/{id} {
+      allow read, write: if true;
+    }
+    match /reservations/{id} {
+      allow read, write: if true;
+    }
+    match /orders/{id} {
+      allow read, write: if true;
+    }
+    match /settings/{id} {
       allow read, write: if true;
     }
   }

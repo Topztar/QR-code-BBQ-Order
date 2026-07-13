@@ -219,15 +219,17 @@ let inventoryLogs: InventoryLog[] = [
 ];
 
 let liveCategories: Category[] = [
-  { id: 'tomyum', name: { zh: '多隆功系列 🍜', en: 'Tom Yum Soups', ko: '똠얌 수프 시리즈', ja: 'トムヤムスープ類', th: 'ชุดต้มยำสุดแซ่บ' } },
-  { id: 'noodles', name: { zh: '單人熱麵食 🥢', en: 'Single Noodles', ko: '단품 매운 면 요리', ja: 'お一人様用麺類', th: 'บะหมี่และก๋วยเตี๋ยวจานเดี่ยว' } },
-  { id: 'combos', name: { zh: '主廚精選套餐 🍱', en: 'Signature Meals', ko: '시그니처 세트 요리', ja: '主理人お得セット', th: 'เซตเมนูยอดนิยม Sabay' } },
-  { id: 'veggies', name: { zh: '小農鮮蔬菜 🥬', en: 'Fresh Veggies', ko: '신선한 채소 구이', ja: '地元新鮮野菜焼き', th: 'ผักสดฟาร์มย่าง' } },
-  { id: 'skewers', name: { zh: '原味碳烤肉類 🍢', en: 'Charcoal BBQ Skewers', ko: '오리지널 숯불 꼬치', ja: 'タイ風肉串炭火焼き', th: 'บาร์บีคิวเสียบไม้ย่าง' } },
-  { id: 'seafood', name: { zh: '招牌泰式海鮮 🦐', en: 'Thai Seafood BBQ', ko: '시그니처 태국식 해산물 구이', ja: '本格タイ風炭火焼きシーフード', th: 'อาหารทะเลเผาสูตรเด็ด' } },
-  { id: 'sweets', name: { zh: '泰式特色甜品 🍰', en: 'Desserts & Sweets', ko: '태국식 달콤 디저트', ja: 'タイ風特製デザート', th: 'ขนมหวานและพุดดิ้งสูตรพิเศษ' } },
-  { id: 'drinks', name: { zh: '泰特色沁涼飲品 🍹', en: 'Thai Cold Drinks', ko: '태국식 야외 청涼 飲料', ja: 'タイ風さわやかドリンク', th: 'เครื่องดื่มดับร้อนรสสดชื่น' } },
+  { id: 'tomyum', name: { zh: '多隆功系列 🍜', en: 'Tom Yum Soups', ko: '똠얌 수프 시리즈', ja: 'トムヤムスープ類', th: 'ชุดต้มยำสุดแซ่บ', vi: 'Dòng súp Tom Yum 🍜' } },
+  { id: 'noodles', name: { zh: '單人熱麵食 🥢', en: 'Single Noodles', ko: '단품 매운 면 요리', ja: 'お一人様用麺類', th: 'บะหมี่และก๋วยเตี๋ยวจานเดี่ยว', vi: 'Mì tô phục vụ đơn 🥢' } },
+  { id: 'combos', name: { zh: '主廚精選套餐 🍱', en: 'Signature Meals', ko: '시그니처 세트 요리', ja: '主理人お得セット', th: 'เซตเมนูยอดนิยม Sabay', vi: 'Set ăn Signature 🍱' } },
+  { id: 'veggies', name: { zh: '小農鮮蔬菜 🥬', en: 'Fresh Veggies', ko: '신선한 채소 구이', ja: '地元新鮮野菜焼き', th: 'ผักสดฟาร์มย่าง', vi: 'Rau củ tươi sạch 🥬' } },
+  { id: 'skewers', name: { zh: '原味碳烤肉類 🍢', en: 'Charcoal BBQ Skewers', ko: '오리지널 숯불 꼬치', ja: 'タイ風肉串炭火焼き', th: 'บาร์บีคิวเสียบไม้ย่าง', vi: 'Xiên nướng than 🍢' } },
+  { id: 'seafood', name: { zh: '招牌泰式海鮮 🦐', en: 'Thai Seafood BBQ', ko: '시그니처 태국식 해산물 구이', ja: '本格タイ風炭火焼きシーフード', th: 'อาหารทะเลเผาสูตรเด็ด', vi: 'Hải sản nướng Thái Lan 🦐' } },
+  { id: 'sweets', name: { zh: '泰式特色甜品 🍰', en: 'Desserts & Sweets', ko: '태국식 달콤 디저트', ja: 'タイ風特製デザート', th: 'ขนมหวานและพุดดิ้งสูตรพิเศษ', vi: 'Tráng miệng kiểu Thái 🍰' } },
+  { id: 'drinks', name: { zh: '泰特色沁涼飲品 🍹', en: 'Thai Cold Drinks', ko: '태국식 야외 청涼 飲料', ja: 'タイ風さわやかドリンク', th: 'เครื่องดื่มดับร้อนรสสดชื่น', vi: 'Đồ uống lạnh kiểu Thái 🍹' } },
 ].map((cat, idx) => ({ ...cat, orderIndex: idx }));
+
+const defaultCategories = [...liveCategories];
 
 let liveStaffPin = '888888';
 
@@ -236,40 +238,15 @@ let livePrinterIp = '10.0.0.124';
 let liveTables: TableConfig[] = [
   { id: '1', qrCodeUrl: '/?table=1', status: 'available', positionX: 10, positionY: 15 },
   { id: '2', qrCodeUrl: '//?table=2', status: 'available', positionX: 35, positionY: 15 },
-  { id: '3', qrCodeUrl: '/?table=3', status: 'preserved', preservedFor: '張經理 (預約 18:30)', positionX: 60, positionY: 15 },
+  { id: '3', qrCodeUrl: '/?table=3', status: 'available', preservedFor: '', positionX: 60, positionY: 15 },
   { id: '5', qrCodeUrl: '/?table=5', status: 'available', positionX: 10, positionY: 45 },
   { id: '6', qrCodeUrl: '/?table=6', status: 'available', positionX: 35, positionY: 45 },
   { id: '8', qrCodeUrl: '/?table=8', status: 'available', positionX: 60, positionY: 45 },
-  { id: '10', qrCodeUrl: '/?table=10', status: 'available', positionX: 10, positionY: 75 },
-  { id: '12', qrCodeUrl: '/?table=12', status: 'available', positionX: 35, positionY: 75 },
+  { id: '4', qrCodeUrl: '/?table=4', status: 'available', positionX: 10, positionY: 75 },
+  { id: '7', qrCodeUrl: '/?table=7', status: 'available', positionX: 35, positionY: 75 },
 ];
 
-let liveReservations: Reservation[] = [
-  {
-    id: 'res-1',
-    customerName: '張經理',
-    phone: '0912-345-678',
-    guestCount: 4,
-    tableNumber: '3',
-    date: new Date().toISOString().split('T')[0],
-    time: '18:30',
-    status: 'pending',
-    notes: '預約靠窗桌席，保留至18:45',
-    createdAt: new Date().toISOString()
-  },
-  {
-    id: 'res-2',
-    customerName: '陳小姐',
-    phone: '0987-654-321',
-    guestCount: 2,
-    tableNumber: '5',
-    date: new Date().toISOString().split('T')[0],
-    time: '19:00',
-    status: 'pending',
-    notes: '需要嬰兒椅 / 不要牛肉',
-    createdAt: new Date().toISOString()
-  }
-];
+let liveReservations: Reservation[] = [];
 
 let liveTakeoutSeq = 0;
 let lastTakeoutDate = new Date().toDateString();
@@ -294,16 +271,7 @@ let livePromoCombo = {
   discountAmount: 20,
   eligibleItemIds: [] as string[]
 };
-let livePromoCombos: any[] = [
-  {
-    id: 'default-combo-1',
-    name: '限時特惠套餐折抵',
-    enabled: true,
-    requiredQty: 10,
-    discountAmount: 20,
-    eligibleItemIds: [] as string[]
-  }
-];
+let livePromoCombos: any[] = [];
 let livePrinterSettings = {
   kitchen: {
     connectionType: 'IP',
@@ -329,7 +297,11 @@ let livePrinterSettings = {
     printAddress: '台北市信義區泰式一番街8號',
     printTimeEnabled: true,
     headerPrefix: '★★★ 顧客結帳明細單 ★★★',
-    footerSuffix: '謝謝光臨，歡迎再度光臨！'
+    footerSuffix: '謝謝光臨，歡迎再度光臨！',
+    cashDrawerEnabled: true,
+    cashDrawerDriver: 'OPOS', // 'OPOS' | 'POS_NET' | 'ESC_POS_RAW'
+    cashDrawerOposName: 'CashDrawer1',
+    cashDrawerEscPosCommand: '1B700019FA' // ESC p 0 25 250 in Hex
   }
 };
 
@@ -435,164 +407,7 @@ function isStoreOpen(timestamp?: number): boolean {
   return open;
 }
 
-
-
-// Generate robust rich historical order data representing the past few days to feed Recharts beautifully on load
-let liveOrders: Order[] = [
-  {
-    id: 'LM-1001',
-    tableNumber: '6',
-    items: [
-      {
-        id: 'item-1',
-        menuItemId: 'ty-01',
-        name: { zh: '曼谷冬蔭功海鮮湯', en: 'Bangkok Tom Yum Seafood Soup', ko: '방콕 똠얌꿍 해물탕', ja: 'バンコトトムヤムクン海鮮スープ', th: 'ต้มยำกุ้งทะเลบางกอก' },
-        price: 260,
-        qty: 1,
-        customization: { sweetness: 2, spiciness: 2, notes: '' }
-      },
-      {
-        id: 'item-2',
-        menuItemId: 'sk-01',
-        name: { zh: '泰式手工牛肉串 / 串', en: 'Handmade Thai Beef Skewer', ko: '수제 태국식 소고기 꼬치', ja: '特製スパイス牛肉串焼き', th: 'เนื้อเสียบไม้ย่างสูตรลับชาววัง Sabay' },
-        price: 90,
-        qty: 3,
-        customization: { sweetness: 1, spiciness: 1, notes: '醬料分開' }
-      }
-    ],
-    subtotal: 530,
-    serviceCharge: 53,
-    total: 583,
-    status: 'completed',
-    createdAt: new Date(Date.now() - 3 * 3600 * 1000).toISOString(), // 3 hours ago
-    customerName: '李美莉 (Emily)',
-    customerAvatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=150',
-    paymentMethod: 'member',
-    isMember: true,
-  },
-  {
-    id: 'LM-1002',
-    tableNumber: '3',
-    items: [
-      {
-        id: 'item-3',
-        menuItemId: 'nd-01',
-        name: { zh: '豪華版海鮮乾拌MAMA麵', en: 'Signature Spicy Seafood Mama Noodles', ko: '호화 해산물 비빔 마마 라면', ja: '豪華シーフード和えMAMA麺', th: 'มาม่าแห้งทะเลรวมมิตรภูเขาไฟ' },
-        price: 390,
-        qty: 2,
-        customization: { sweetness: 2, spiciness: 3, notes: '多蔥花' }
-      },
-      {
-        id: 'item-4',
-        menuItemId: 'dr-01',
-        name: { zh: '泰式奶茶 1L 桶裝 (限定)', en: 'Signature Street Thai Milk Tea 1L (Bucket)', ko: '길거리 타이 밀크티 1L 점보 통 (한정)', ja: '極旨本場タイミルクティー1Lバケツ入り (テイクアウト・店内人気)', th: 'ชาเย็นไทยสตรีท 1 ลิตรถังยักษ์' },
-        price: 180,
-        qty: 1,
-        customization: { sweetness: 2, spiciness: 0, notes: '微冰' }
-      }
-    ],
-    subtotal: 960,
-    serviceCharge: 96,
-    total: 1056,
-    status: 'completed',
-    createdAt: new Date(Date.now() - 8 * 3600 * 1000).toISOString(), // 8 hours ago
-    customerName: '陳健國',
-    customerAvatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150',
-    paymentMethod: 'credit',
-    isMember: false,
-  },
-  {
-    id: 'LM-1003',
-    tableNumber: '12',
-    items: [
-      {
-        id: 'item-5',
-        menuItemId: 'cb-01',
-        name: { zh: 'A套餐 $660 人氣招牌盤', en: 'Sabay $660 Signature Set A', ko: 'A세트 $660 인기 클래식 플레이트', ja: 'Aセット $660 定番人気盛り合わせ', th: 'ชุดอิ่มฟิน A $660 ยอดฮิตซิกเนเจอร์' },
-        price: 660,
-        qty: 1,
-        customization: { sweetness: 2, spiciness: 1, notes: '' }
-      }
-    ],
-    subtotal: 660,
-    serviceCharge: 0,
-    total: 660,
-    status: 'preparing',
-    createdAt: new Date(Date.now() - 15 * 60 * 1000).toISOString(), // 15 mins ago
-    customerName: 'Somchai Jaidee',
-    customerAvatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=150',
-    paymentMethod: 'cash',
-    isMember: true,
-  },
-  {
-    id: 'LM-1004',
-    tableNumber: '5',
-    items: [
-      {
-        id: 'item-6',
-        menuItemId: 'vg-01',
-        name: { zh: '脆脆高麗菜 / 份', en: 'Crispy Cabbage', ko: '아삭 양배추 구이', ja: 'あつあつキャベツ焼き', th: 'กะหล่ำปลีย่างน้ำปลาหอม' },
-        price: 80,
-        qty: 2,
-        customization: { sweetness: 2, spiciness: 2, notes: '' }
-      },
-      {
-        id: 'item-7',
-        menuItemId: 'sk-02',
-        name: { zh: '爆汁金針菇豬肉 / 串', en: 'Enoki Mushroom & Pork Wrap', ko: '팽이버섯 삼겹살 꼬치', ja: '金針菇えのき豚肉巻き', th: 'หมูสามชั้นพันเห็ดเข็มทองย่างสะเด็ด' },
-        price: 90,
-        qty: 4,
-        customization: { sweetness: 1, spiciness: 2, notes: '烤焦一點' }
-      }
-    ],
-    subtotal: 520,
-    serviceCharge: 52,
-    total: 572,
-    status: 'pending',
-    createdAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(), // 5 mins ago
-    customerName: '佐藤 健 (Ken)',
-    customerAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150',
-    paymentMethod: 'member',
-    isMember: true,
-  },
-];
-
-// Add older mock orders to feed historical graphs beautifully
-const baseTime = Date.now();
-for (let i = 1; i <= 10; i++) {
-  const table = (i % 8) + 1;
-  const daysAgo = Math.floor(i / 3);
-  const hourShift = (i * 4) % 12 + 11; // shifts peak sales between 11:00 and 23:00
-  const orderDate = new Date(baseTime - daysAgo * 24 * 3600 * 1000);
-  orderDate.setHours(hourShift, Math.floor(Math.random() * 60), 0, 0);
-
-  const sub = 180 + (i * 90);
-  const service = Math.round(sub * 0.1);
-  const val: Order = {
-    id: `LM-099${i}`,
-    tableNumber: String(table),
-    items: [
-      {
-        id: `old-${i}-1`,
-        menuItemId: i % 2 === 0 ? 'sk-01' : 'vg-01',
-        name: i % 2 === 0 ? { zh: '泰式手工牛肉串 / 串', en: 'Handmade Thai Beef Skewer', ko: '수제 소고기', ja: '特製スパイス牛肉串焼き', th: 'เนื้อเสียบไม้ย่าง' } : { zh: '脆脆高麗菜', en: 'Crispy Cabbage', ko: '아삭 양배추', ja: 'キャベツ', th: 'กะหล่ำปลี' },
-        price: i % 2 === 0 ? 90 : 80,
-        qty: 3,
-        customization: { sweetness: 1, spiciness: 1, notes: '' }
-      }
-    ],
-    subtotal: sub,
-    serviceCharge: service,
-    total: sub + service,
-    status: 'completed',
-    createdAt: orderDate.toISOString(),
-    customerName: ['泰國遊客', '張文欣', '阿福', '林大為', '小智'][i % 5],
-    customerAvatar: `https://images.unsplash.com/photo-${1500000000000 + i * 5000}?auto=format&fit=crop&q=80&w=150`,
-    paymentMethod: i % 3 === 0 ? 'cash' : (i % 3 === 1 ? 'credit' : 'member'),
-    isMember: i % 2 === 0
-  };
-  liveOrders.unshift(val);
-}
+let liveOrders: Order[] = [];
 
 // In-Memory Print Queues for Virtual LAN Printer
 let printLogs: { id: string; timestamp: string; content: string; orderId: string; type: 'kitchen' | 'customer' }[] = [];
@@ -702,6 +517,26 @@ async function saveStateToFirestore() {
     await syncCollection('reservations', liveReservations, 'id', false);
 
     // 6. Orders
+    const orderCollRef = collection(firestoreDb, 'orders');
+    const orderSnapshot = await getDocs(orderCollRef);
+    const liveOrderIds = new Set(liveOrders.map(o => o.id));
+    
+    // Delete orders no longer in live state in batches of 400
+    const deletedDocRefs: any[] = [];
+    orderSnapshot.forEach((snapDoc: any) => {
+      if (!liveOrderIds.has(snapDoc.id)) {
+        deletedDocRefs.push(snapDoc.ref);
+      }
+    });
+    
+    for (let i = 0; i < deletedDocRefs.length; i += 400) {
+      const batch = writeBatch(firestoreDb);
+      const chunk = deletedDocRefs.slice(i, i + 400);
+      chunk.forEach(ref => batch.delete(ref));
+      await batch.commit();
+    }
+
+    // Set live orders in batches of 400
     const orderChunks: Order[][] = [];
     for (let i = 0; i < liveOrders.length; i += 400) {
       orderChunks.push(liveOrders.slice(i, i + 400));
@@ -806,6 +641,13 @@ async function loadStateFromFirestore(): Promise<boolean> {
         const idxB = b.orderIndex !== undefined ? b.orderIndex : 9999;
         return idxA - idxB;
       });
+      // Enrich with missing translations from defaults (like 'vi')
+      cats.forEach((cat) => {
+        const defCat = defaultCategories.find(c => c.id === cat.id);
+        if (defCat) {
+          cat.name = { ...defCat.name, ...cat.name };
+        }
+      });
       liveCategories = cats;
       console.log(`[Sabay Firebase] Loaded ${liveCategories.length} categories.`);
     } else {
@@ -825,6 +667,14 @@ async function loadStateFromFirestore(): Promise<boolean> {
         return idxA - idxB;
       });
       sanitizeMenu(menu);
+      // Enrich with missing translations from INITIAL_MENU
+      menu.forEach((item) => {
+        const defItem = INITIAL_MENU.find(i => i.id === item.id);
+        if (defItem) {
+          item.name = { ...defItem.name, ...item.name };
+          item.description = { ...defItem.description, ...item.description };
+        }
+      });
       liveMenu = menu;
       console.log(`[Sabay Firebase] Loaded ${liveMenu.length} menu items.`);
     } else {
@@ -1069,7 +919,7 @@ function loadStateFromDisk() {
           liveServicePaused = !!parsed.liveServicePaused;
         }
         if (Array.isArray(parsed.liveOrders)) {
-          liveOrders = parsed.liveOrders;
+          liveOrders = parsed.liveOrders.filter((o: any) => o && !o.id.startsWith('LM-100') && !o.id.startsWith('LM-099'));
         }
         if (Array.isArray(parsed.inventoryLogs)) {
           inventoryLogs = parsed.inventoryLogs;
@@ -1090,18 +940,9 @@ function loadStateFromDisk() {
           livePromoCombo = parsed.livePromoCombo;
         }
         if (Array.isArray(parsed.livePromoCombos)) {
-          livePromoCombos = parsed.livePromoCombos;
-        } else if (parsed.livePromoCombo) {
-          livePromoCombos = [
-            {
-              id: 'legacy-combo-1',
-              name: '限時特惠套餐折抵',
-              enabled: !!parsed.livePromoCombo.enabled,
-              requiredQty: parsed.livePromoCombo.requiredQty || 10,
-              discountAmount: parsed.livePromoCombo.discountAmount || 20,
-              eligibleItemIds: parsed.livePromoCombo.eligibleItemIds || []
-            }
-          ];
+          livePromoCombos = parsed.livePromoCombos.filter((c: any) => c && c.id !== 'default-combo-1' && c.id !== 'legacy-combo-1' && c.id !== 'legacy-default');
+        } else {
+          livePromoCombos = [];
         }
         if (Array.isArray(parsed.livePopularItemIds)) {
           livePopularItemIds = parsed.livePopularItemIds;
@@ -1272,8 +1113,87 @@ app.put('/api/printer/config', (req, res) => {
   res.json({ ip: livePrinterIp });
 });
 
+// Helper function to simulate hardware cash drawer trigger (OPOS / POS for .NET / Win32 RAW Direct Write)
+function triggerCashDrawerOpen(settings: any): { success: boolean; log: string } {
+  const driver = settings.cashDrawerDriver || 'OPOS';
+  const drawerName = settings.cashDrawerOposName || 'CashDrawer1';
+  const rawCommandHex = settings.cashDrawerEscPosCommand || '1B700019FA';
+  const port = settings.usbPort || 'USB002';
+  
+  let log = '';
+  
+  if (driver === 'OPOS') {
+    log += `[OPOS Cash Drawer] 正在初始化 OPOS Control OLE Control Instance...\n`;
+    log += `[OPOS Cash Drawer] 取得設備名稱: '${drawerName}' (UPOS v1.14 相容)\n`;
+    log += `[OPOS Cash Drawer] 1. claimDevice(timeout: 1000ms) -> 獨佔性宣告成功 (Claimed)\n`;
+    log += `[OPOS Cash Drawer] 2. deviceEnabled = true -> 設備成功啟用 (Enabled)\n`;
+    log += `[OPOS Cash Drawer] 3. openDrawer() -> 成功發送電脈衝訊號 1B 70 00 19 FA (引腳 2 脈衝)\n`;
+    log += `[OPOS Cash Drawer] 4. releaseDevice() -> 釋放設備控制權 (Released)\n`;
+  } else if (driver === 'POS_NET') {
+    log += `[POS for .NET] 載入 Microsoft.PointOfService.PosExplorer 模組...\n`;
+    log += `[POS for .NET] PosExplorer.GetDevice("CashDrawer", "${drawerName}") -> 找到裝置\n`;
+    log += `[POS for .NET] 宣告 Claim(1000) -> 啟用 DeviceEnabled = true -> 開啟 OpenDrawer()\n`;
+    log += `[POS for .NET] 電磁閥線圈已接收到 24V 激勵電流，收銀箱彈開！\n`;
+  } else {
+    log += `[ESC/POS Raw Win32] 呼叫 Windows 系統 Print Spooler (winspool.drv) RAW 通道...\n`;
+    log += `[ESC/POS Raw Win32] OpenPrinter('${port}', PrinterHandle, nil) -> 取得驅動控制代碼: 0x${Math.floor(Math.random() * 999999).toString(16).toUpperCase()}\n`;
+    log += `[ESC/POS Raw Win32] StartDocPrinter(PrinterHandle, 1, DocInfo { pDocName: "Direct 2 Printer/Drawer Kick", pDataType: "RAW" }) -> 起始文件排程\n`;
+    log += `[ESC/POS Raw Win32] StartPagePrinter(PrinterHandle) -> 頁面直通模式\n`;
+    log += `[ESC/POS Raw Win32] WritePrinter(PrinterHandle, RawBytes: [${rawCommandHex.match(/.{1,2}/g)?.join(' ') || ''}], count: ${rawCommandHex.length / 2}, dwBytesWritten) -> 成功直通寫入印表機\n`;
+    log += `[ESC/POS Raw Win32] EndPagePrinter -> EndDocPrinter -> ClosePrinter(PrinterHandle)\n`;
+    log += `[ESC/POS Raw Win32] ESC/POS 脈衝開鎖信號傳輸成功！\n`;
+  }
+  
+  return {
+    success: true,
+    log: log.trim()
+  };
+}
+
+// POST endpoint to manually open cash drawer from the frontend
+app.post('/api/printer/open-drawer', (req, res) => {
+  const settings = livePrinterSettings.bill;
+  const result = triggerCashDrawerOpen(settings);
+  
+  printLogs.push({
+    id: `pr-${Date.now()}-manual-drawer`,
+    timestamp: new Date().toLocaleTimeString(),
+    content: `========================================\n         SABAY BBQ 手動開啟收銀抽屜\n========================================\n觸發方式: 櫃檯員工手動點擊觸發\n實體埠口: ${settings.usbPort || 'USB002'}\n執行日誌:\n${result.log}\n========================================`,
+    orderId: 'MANUAL-TRIGGER',
+    type: 'customer'
+  });
+  
+  res.json({ success: true, log: result.log });
+});
+
 // Generate and trigger virtual test print receipt
 app.post('/api/printer/test', (req, res) => {
+  let drawerNote = '';
+  if (livePrinterSettings.bill.cashDrawerEnabled) {
+    const drawerRes = triggerCashDrawerOpen(livePrinterSettings.bill);
+    drawerNote = `
+----------------------------------------
+現金收銀抽屜連動: 啟用 🟢
+觸發驅動: ${livePrinterSettings.bill.cashDrawerDriver}
+實體埠口: ${livePrinterSettings.bill.usbPort || 'USB002'}
+執行日誌:
+${drawerRes.log}
+`;
+    
+    printLogs.push({
+      id: `pr-${Date.now()}-drawer-test`,
+      timestamp: new Date().toLocaleTimeString(),
+      content: `========================================\n         SABAY BBQ 收銀箱測試開啟\n========================================\n觸發方式: 測試列印連動觸發\n執行日誌:\n${drawerRes.log}\n========================================`,
+      orderId: 'TEST-PAGE',
+      type: 'customer'
+    });
+  } else {
+    drawerNote = `
+----------------------------------------
+現金收銀抽屜連動: 未啟用 ❌
+`;
+  }
+
   const testTicket = `
 ========================================
        沙貝燒烤 (印表機網卡連線測試頁)
@@ -1287,9 +1207,7 @@ app.post('/api/printer/test', (req, res) => {
 字型測試 / Font Test:
 1. 繁體中文 🇹🇼 - 測試正常 (沙貝沙貝)
 2. English 🇺🇸 - OK (Sawatdee!)
-3. 泰文 🇹🇭 - ลาบหมูย่างส้มตำ
-----------------------------------------
-虛擬光學讀取測試正常
+3. 泰文 🇹🇭 - ลาบหมูย่างส้มตำ${drawerNote}
 ========================================
   `;
   printLogs.push({
@@ -2620,6 +2538,7 @@ app.put('/api/orders/:id/pay', (req, res) => {
     return res.status(404).json({ error: 'Order not found' });
   }
 
+  const wasPaid = order.isPaid;
   order.isPaid = isPaid !== undefined ? !!isPaid : true;
 
   // Auto-complete KDS kitchen status if still pending/preparing when paid
@@ -2636,8 +2555,23 @@ app.put('/api/orders/:id/pay', (req, res) => {
     }
   }
 
+  // Interlock cash drawer trigger: when transition from unpaid to paid, and cash drawer is enabled
+  let drawerLog = '';
+  if (order.isPaid && !wasPaid && livePrinterSettings.bill.cashDrawerEnabled) {
+    const drawerRes = triggerCashDrawerOpen(livePrinterSettings.bill);
+    drawerLog = drawerRes.log;
+
+    printLogs.push({
+      id: `pr-${Date.now()}-drawer-checkout`,
+      timestamp: new Date().toLocaleTimeString(),
+      content: `========================================\n         SABAY BBQ 結帳自動開啟收銀抽屜\n========================================\n觸發來源: 訂單 [${order.id}] 結帳完成\n實體埠口: ${livePrinterSettings.bill.usbPort || 'USB002'}\n執行日誌:\n${drawerLog}\n========================================`,
+      orderId: order.id,
+      type: 'customer'
+    });
+  }
+
   saveStateToDisk();
-  res.json(order);
+  res.json({ ...order, drawerLog });
 });
 
 // 7.1.5 Toggle single order item completed state

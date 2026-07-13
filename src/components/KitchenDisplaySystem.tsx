@@ -1,6 +1,7 @@
 import { apiFetch } from "../lib/api";
 import React, { useState, useEffect, useRef } from 'react';
 import { Order, OrderStatus, Language, TableConfig, MenuItem, Category, Ingredient } from '../types';
+import { TRANSLATIONS } from '../data';
 import { safeStorage } from '../lib/safeStorage';
 import { ChefHat, Printer, Trash2, Check, Flame, Ban, RefreshCw, Volume2, Wifi, Edit, Save, Settings, X, Clock, AlertTriangle, TrendingUp, Calendar, Info, Mic, Flag, Eye, Search, Timer, Download } from 'lucide-react';
 import { ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
@@ -53,6 +54,11 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
   onToggleServicePause,
   onToggleOrderItemComplete,
 }) => {
+  // Translation helper
+  const t = (key: string): string => {
+    return TRANSLATIONS[key]?.[currentLang] || TRANSLATIONS[key]?.zh || key;
+  };
+
   const [filterStatus, setFilterStatus] = useState<'all' | 'active'>('active');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [isMergedView, setIsMergedView] = useState<boolean>(false);
@@ -549,9 +555,31 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
 
   const getUrgencyText = (createdAt: string) => {
     const diffMins = Math.floor((Date.now() - new Date(createdAt).getTime()) / 60000);
-    if (diffMins < 5) return { text: '剛剛下單 Fresh', style: 'bg-emerald-500/10 text-[#00C300] border-emerald-500/20' };
-    if (diffMins < 15) return { text: `延遲 ${diffMins} 分鐘`, style: 'bg-amber-500/10 text-amber-400 border-amber-500/20 font-bold animate-pulse' };
-    return { text: `嚴重超時 ${diffMins} 分!`, style: 'bg-red-500/10 text-red-400 border-red-500/20 uppercase font-black tracking-wider animate-bounce' };
+    if (diffMins < 5) {
+      const text = currentLang === 'zh' ? '剛剛下單 Fresh' : 
+                   currentLang === 'en' ? 'Just Ordered Fresh' : 
+                   currentLang === 'ko' ? '방금 주문 Fresh' : 
+                   currentLang === 'ja' ? '注文直後 Fresh' : 
+                   currentLang === 'th' ? 'สั่งซื้อเมื่อครู่ Fresh' : 
+                   'Vừa gọi món Fresh';
+      return { text, style: 'bg-emerald-500/10 text-[#00C300] border-emerald-500/20' };
+    }
+    if (diffMins < 15) {
+      const text = currentLang === 'zh' ? `延遲 ${diffMins} 分鐘` : 
+                   currentLang === 'en' ? `Delayed ${diffMins} mins` : 
+                   currentLang === 'ko' ? `지연 ${diffMins}분` : 
+                   currentLang === 'ja' ? `遅延 ${diffMins} 分` : 
+                   currentLang === 'th' ? `ล่าช้า ${diffMins} นาที` : 
+                   `Trễ ${diffMins} phút`;
+      return { text, style: 'bg-amber-500/10 text-amber-400 border-amber-500/20 font-bold animate-pulse' };
+    }
+    const text = currentLang === 'zh' ? `嚴重超時 ${diffMins} 分!` : 
+                 currentLang === 'en' ? `Severely Overdue ${diffMins} mins!` : 
+                 currentLang === 'ko' ? `심각한 시간 초과 ${diffMins}분!` : 
+                 currentLang === 'ja' ? `深刻な超過 ${diffMins} 分!` : 
+                 currentLang === 'th' ? `เกินเวลาอย่างมาก ${diffMins} นาที!` : 
+                 `Quá hạn nghiêm trọng ${diffMins} phút!`;
+    return { text, style: 'bg-red-500/10 text-red-400 border-red-500/20 uppercase font-black tracking-wider animate-bounce' };
   };
 
   const getElapsedTime = (createdAt: string) => {
@@ -1008,7 +1036,7 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
                     filterStatus === 'active' ? 'bg-[#E5B453] text-[#0F0F0F]' : 'text-white/40 hover:text-white'
                   }`}
                 >
-                  未完成 (備餐中)
+                  {currentLang === 'zh' ? '未完成 (備餐中)' : currentLang === 'en' ? 'Active (Preparing)' : currentLang === 'ko' ? '미완료 (준비 중)' : currentLang === 'ja' ? '未完了 (準備中)' : currentLang === 'th' ? 'ยังไม่เสร็จ (กำลังปรุง)' : 'Chưa xong (Đang chuẩn bị)'}
                 </button>
                 <button
                   id="kds-filter-all"
@@ -1017,7 +1045,7 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
                     filterStatus === 'all' ? 'bg-[#E5B453] text-[#0F0F0F]' : 'text-white/40 hover:text-white'
                   }`}
                 >
-                  全部歷史票
+                  {currentLang === 'zh' ? '全部歷史票' : currentLang === 'en' ? 'All History Tickets' : currentLang === 'ko' ? '전체 내역서' : currentLang === 'ja' ? '全履歴伝票' : currentLang === 'th' ? 'ประวัติทั้งหมด' : 'Tất cả phiếu lịch sử'}
                 </button>
               </div>
             </div>
@@ -1026,7 +1054,7 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
           {/* Bottom Row: Secondary KDS workspace configure helper */}
           <div className="flex flex-wrap items-center gap-2.5 text-xs text-white/60 pt-0.5">
             <span className="text-[10px] font-bold text-[#E5B453]/70 uppercase tracking-wider mr-1.5 font-sans">
-              工作台配置 Panel Config:
+              {currentLang === 'zh' ? '工作台配置 Panel Config:' : 'Workspace Configuration:'}
             </span>
 
             {/* View Mode Toggle Tabs */}
@@ -1039,7 +1067,7 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
                 }`}
                 title="時間直欄訂單票長視圖"
               >
-                標準訂單票卡
+                {currentLang === 'zh' ? '標準訂單票卡' : currentLang === 'en' ? 'Standard Tickets' : currentLang === 'ko' ? '일반 주문서' : currentLang === 'ja' ? '標準伝票' : currentLang === 'th' ? 'บัตรออเดอร์ทั่วไป' : 'Phiếu gọi món chuẩn'}
               </button>
               <button
                 id="kds-view-merged-toggle"
@@ -1050,7 +1078,7 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
                 title="合併相同品項與計量進行批次製作"
               >
                 <ChefHat size={11} className={isMergedView ? 'animate-bounce' : ''} />
-                <span>合併相似菜色</span>
+                <span>{currentLang === 'zh' ? '合併相似菜色' : currentLang === 'en' ? 'Merged View' : currentLang === 'ko' ? '메뉴 병합 보기' : currentLang === 'ja' ? 'メニュー統合表示' : currentLang === 'th' ? 'รวมเมนูที่เหมือนกัน' : 'Gộp món giống nhau'}</span>
               </button>
             </div>
 
@@ -1076,7 +1104,7 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
                 title={autoScrollEnabled ? "關閉新訂單自動滾動置頂輔助" : "開啟新訂單自動滾動置頂輔助"}
               >
                 <RefreshCw size={11} className={autoScrollEnabled ? 'animate-spin' : ''} />
-                <span>{autoScrollEnabled ? '自動滾動: 開' : '自動滾動: 關'}</span>
+                <span>{autoScrollEnabled ? (currentLang === 'zh' ? '自動滾動: 開' : currentLang === 'en' ? 'Auto-Scroll: ON' : currentLang === 'ko' ? '자동 스크롤: 켜짐' : currentLang === 'ja' ? '自動スクロール: 有効' : currentLang === 'th' ? 'เลื่อนอัตโนมัติ: เปิด' : 'Tự động cuộn: Bật') : (currentLang === 'zh' ? '自動滾動: 關' : currentLang === 'en' ? 'Auto-Scroll: OFF' : currentLang === 'ko' ? '자동 스크롤: 꺼짐' : currentLang === 'ja' ? '자동스크ロール: 無効' : currentLang === 'th' ? 'เลื่อนอัตโนมัติ: ปิด' : 'Tự động cuộn: Tắt')}</span>
               </button>
               
               <button
@@ -1086,7 +1114,7 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
                 className="px-2 py-1 hover:bg-white/5 border border-white/10 hover:border-white/20 rounded-lg text-[10px] font-extrabold text-[#E5B453] hover:text-amber-300 transition cursor-pointer flex items-center gap-1 active:scale-95"
                 title="手動立即滾置頂部 (Manual scroll back to top)"
               >
-                <span>置頂 ⬆️</span>
+                <span>{currentLang === 'zh' ? '置頂 ⬆️' : currentLang === 'en' ? 'Top ⬆️' : currentLang === 'ko' ? '맨 위로 ⬆️' : currentLang === 'ja' ? 'トップ ⬆️' : currentLang === 'th' ? 'ขึ้นบนสุด ⬆️' : 'Lên đầu ⬆️'}</span>
               </button>
             </div>
 
@@ -1112,7 +1140,7 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
                 title={hideOlderCompleted ? "點擊關閉「隱藏 30 分鐘前已完成訂單」" : "點擊開啟「自動隱藏 30 分鐘前已完成訂單」以維持 KDS 介面清爽"}
               >
                 <Clock size={11} className={hideOlderCompleted ? 'text-rose-400 animate-pulse' : ''} />
-                <span>{hideOlderCompleted ? '自動隱藏已完成 >30m' : '自動隱藏已完成 >30m (關)'}</span>
+                <span>{hideOlderCompleted ? (currentLang === 'zh' ? '自動隱藏已完成 >30m' : currentLang === 'en' ? 'Auto-Hide Done >30m' : currentLang === 'ko' ? '완료 건 숨김 >30분' : currentLang === 'ja' ? '30分超の完了件を隠す' : currentLang === 'th' ? 'ซ่อนรายการเสร็จสิ้น >30นาที' : 'Tự động ản đã xong >30ph') : (currentLang === 'zh' ? '自動隱藏已完成 >30m (關)' : currentLang === 'en' ? 'Auto-Hide Done >30m (OFF)' : currentLang === 'ko' ? '완료 건 숨김 >30분 (꺼짐)' : currentLang === 'ja' ? '30分超の完了件を隠す (無効)' : currentLang === 'th' ? 'ซ่อนรายการเสร็จสิ้น >30นาที (ปิด)' : 'Tự động ẩn đã xong >30ph (Tắt)')}</span>
               </button>
             </div>
 
@@ -1130,7 +1158,7 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
                 title={ttsEnabled ? "關閉新訂單語音自動播報" : "開啟新訂單語音自動播報"}
               >
                 <Volume2 size={12} className={ttsEnabled ? 'animate-pulse' : ''} />
-                <span>{ttsEnabled ? '語音廣播: 開' : '語音廣播: 關'}</span>
+                <span>{ttsEnabled ? (currentLang === 'zh' ? '語音廣播: 開' : currentLang === 'en' ? 'Voice Readout: ON' : currentLang === 'ko' ? '음성 방송: 켜짐' : currentLang === 'ja' ? '音声読み上げ: 有効' : currentLang === 'th' ? 'ประกาศเสียง: เปิด' : 'Phát thanh giọng nói: Bật') : (currentLang === 'zh' ? '語音廣播: 關' : currentLang === 'en' ? 'Voice Readout: OFF' : currentLang === 'ko' ? '음성 방송: 꺼짐' : currentLang === 'ja' ? '音声読み上げ: 無効' : currentLang === 'th' ? 'ประกาศเสียง: ปิด' : 'Phát thanh giọng nói: Tắt')}</span>
               </button>
               {ttsEnabled && (
                 <button
@@ -1140,7 +1168,7 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
                   className="px-2 py-1 hover:bg-white/5 border border-[#E5B453]/20 hover:border-[#E5B453]/40 rounded-lg text-[10px] font-bold text-[#E5B453] hover:text-white transition cursor-pointer"
                   title="測試播放音量"
                 >
-                  測試 (Test)
+                  {currentLang === 'zh' ? '測試 (Test)' : 'Test'}
                 </button>
               )}
             </div>
@@ -1455,7 +1483,11 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
                         ) : (
                           <div className="flex items-center space-x-1.5">
                             <span className="font-bold text-base text-white font-serif">
-                              {order.tableNumber} {order.tableNumber.includes('外帶') ? '' : '桌'}
+                              {order.tableNumber.includes('外帶') 
+                                ? `${t('takeoutLabel')}${order.tableNumber.replace('外帶', '')}` 
+                                : currentLang === 'en' 
+                                  ? `${t('tableLabel')} ${order.tableNumber}` 
+                                  : `${order.tableNumber} ${t('tableLabel')}`}
                             </span>
                             <button
                               type="button"
@@ -1473,18 +1505,18 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
                       </div>
                       <div className="flex flex-wrap items-center gap-1.5 mt-1">
                         <span className="text-[10px] text-white/40 font-mono">
-                          下單: {new Date(order.createdAt).toLocaleTimeString()}
+                          {currentLang === 'zh' ? '下單' : 'Order'}: {new Date(order.createdAt).toLocaleTimeString()}
                         </span>
                         {lateCheck.isLate && (
                           <span className="inline-flex items-center gap-1 bg-red-500/15 text-red-400 border border-red-500/35 text-[9px] font-black px-1.5 py-0.5 rounded shadow-[0_0_8px_rgba(239,68,68,0.2)] animate-pulse" title={`等待已有 ${Math.floor(lateCheck.currentWaitMins)}分鐘，大於該單餐點平均客製工時 1.5 倍（平均: ${lateCheck.avgPrepMins.toFixed(1)}m, 超時極限: ${lateCheck.limitMins.toFixed(1)}m`}>
                             <Timer size={10} />
-                            <span>🚨 製作溢時 ({Math.floor(lateCheck.currentWaitMins)}m / 限制 {Math.floor(lateCheck.limitMins)}m)</span>
+                            <span>🚨 {currentLang === 'zh' ? '製作溢時' : 'Prep Overdue'} ({Math.floor(lateCheck.currentWaitMins)}m / {currentLang === 'zh' ? '限制' : 'Limit'} {Math.floor(lateCheck.limitMins)}m)</span>
                           </span>
                         )}
                         {isCloseToClosing(order.createdAt, operatingHours) && (
                           <span className="inline-flex items-center gap-1 bg-red-500/20 text-red-400 border border-red-500/30 text-[10px] font-black px-1.5 py-0.5 rounded shadow-[0_0_8px_rgba(239,68,68,0.2)] animate-pulse" title="訂單於結業前 30 分鐘內進入，請優先且速配餐">
                             <span className="w-1.5 h-1.5 rounded-full bg-red-450 animate-ping mr-0.5" />
-                            <span>⚠️ 即將關店，加速出餐</span>
+                            <span>{t('closingSoonRushAlert')}</span>
                           </span>
                         )}
                         <button
@@ -1494,7 +1526,7 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
                           title="單一訂單細節快速檢視 (Quick View Details)"
                         >
                           <Eye size={10} />
-                          <span>快速檢視 View</span>
+                          <span>{t('quickViewBtn')}</span>
                         </button>
                         <button
                           type="button"
@@ -1539,7 +1571,7 @@ ${specLines}
                           title="熱感出單前預覽虛擬收據 Print Preview and Cue"
                         >
                           <Printer size={10} className="text-[#E5B453]" />
-                          <span>列印預覽 Print</span>
+                          <span>{t('printPreviewBtn')}</span>
                         </button>
                       </div>
                     </div>
@@ -1550,7 +1582,7 @@ ${specLines}
                         <span className={`text-[9px] font-bold tracking-wider block font-sans uppercase ${
                           order.status === 'pending' ? 'text-[#E5B453]' : 'text-sky-450'
                         }`}>
-                          {order.status === 'pending' ? '⏱️ 待辦等候 Wait' : '🍳 製作中 Prep'}
+                          {order.status === 'pending' ? t('pendingWaitState') : t('prepState')}
                         </span>
                         <span className={`inline-flex items-center gap-1 text-[11px] font-black font-mono px-1.5 py-0.5 rounded border mt-0.5 ${elapsed.style}`}>
                           <Clock size={10} className={elapsed.mins > 15 ? "animate-pulse" : ""} />
@@ -2042,7 +2074,7 @@ ${specLines}
                           : 'bg-transparent text-zinc-400 border-white/10 hover:text-white'
                       }`}
                     >
-                      {cat.name.zh}
+                      {cat.name[currentLang] || cat.name.zh || cat.id}
                     </button>
                   ))}
                 </div>

@@ -1,6 +1,6 @@
 // Types for Sabay BBQ Web Ordering App
 
-export type Language = 'zh' | 'en' | 'ko' | 'ja' | 'th';
+export type Language = 'zh' | 'en' | 'ko' | 'ja' | 'th' | 'vi';
 
 export interface CustomAddOn {
   id: string;
@@ -20,10 +20,10 @@ export interface FoodCustomization {
 export interface MenuItem {
   id: string;
   category: string;
-  name: { [key in Language]: string };
+  name: { [key in Language]?: string };
   price: number;
   image: string;
-  description: { [key in Language]: string };
+  description: { [key in Language]?: string };
   available: boolean;
   isSetMeal?: boolean;
   requiredSaucesOption?: boolean; // needs dipping options
@@ -41,7 +41,7 @@ export interface MenuItem {
 export interface OrderItem {
   id: string; // instance id
   menuItemId: string;
-  name: { [key in Language]: string };
+  name: { [key in Language]?: string };
   price: number;
   qty: number;
   customization: FoodCustomization;
@@ -77,7 +77,7 @@ export interface Order {
 
 export interface Ingredient {
   id: string;
-  name: { [key in Language]: string };
+  name: { [key in Language]?: string };
   stock: number;
   minThreshold: number; // triggers alerts
   unit: string;
@@ -91,16 +91,16 @@ export interface IngredientCost {
 
 export interface Promotion {
   id: string;
-  title: { [key in Language]: string };
+  title: { [key in Language]?: string };
   code: string;
   discountRate: number; // e.g. 0.9 for 10% off
-  description: { [key in Language]: string };
+  description: { [key in Language]?: string };
   active: boolean;
 }
 
 export interface Category {
   id: string;
-  name: { [key in Language]: string };
+  name: { [key in Language]?: string };
   showOnCustomerPage?: boolean;
   orderIndex?: number;
 }

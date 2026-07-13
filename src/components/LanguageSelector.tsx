@@ -67,6 +67,15 @@ const renderFlag = (code: Language) => {
           <circle cx="1.725" cy="1" r="0.225" fill="#0047a0"/>
         </svg>
       );
+    case 'vi':
+      return (
+        <svg viewBox="0 0 3 2" className="w-5 h-3.5 rounded-sm object-cover shadow-sm bg-white shrink-0">
+          <rect width="3" height="2" fill="#da251d"/>
+          <g transform="translate(1.5, 1.0) scale(0.4)">
+            <polygon points="0,-1 0.225,-0.309 0.951,-0.309 0.363,0.118 0.588,0.809 0,0.382 -0.588,0.809 -0.363,0.118 -0.951,-0.309 -0.225,-0.309" fill="#ffff00"/>
+          </g>
+        </svg>
+      );
     default:
       return null;
   }
@@ -85,6 +94,7 @@ export const LanguageSelector: React.FC<LanguageSelectorProps> = ({
     { code: 'th', name: 'ไทย', short: 'TH' },
     { code: 'ja', name: '日本語', short: 'JP' },
     { code: 'ko', name: '한국어', short: 'KR' },
+    { code: 'vi', name: 'Tiếng Việt', short: 'VN' },
   ];
 
   const currentOption = options.find((opt) => opt.code === currentLang) || options[0];
