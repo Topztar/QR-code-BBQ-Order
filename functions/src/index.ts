@@ -364,7 +364,7 @@ post('/ingredients/restock', async (req, res) => {
 // 27. Clear Print Logs
 post('/print-logs/clear', async (req, res) => {
   try {
-    await db.collection('settings').doc('logs').update({ printLogs: [] });
+    await db.collection('settings').doc('logs').set({ printLogs: [] }, { merge: true });
     res.json({ success: true });
   } catch (error) {
     res.status(500).send(error);
@@ -377,7 +377,7 @@ post('/print-logs/clear', async (req, res) => {
 post('/settings/service-pause', async (req, res) => {
   const { servicePaused } = req.body;
   try {
-    await db.collection('settings').doc('system').update({ liveServicePaused: !!servicePaused });
+    await db.collection('settings').doc('system').set({ liveServicePaused: !!servicePaused }, { merge: true });
     res.json({ success: true });
   } catch (error) {
     res.status(500).send(error);
@@ -388,7 +388,7 @@ post('/settings/service-pause', async (req, res) => {
 post('/settings/min-spend', async (req, res) => {
   const { minSpend } = req.body;
   try {
-    await db.collection('settings').doc('system').update({ liveMinSpendPerPerson: Number(minSpend) });
+    await db.collection('settings').doc('system').set({ liveMinSpendPerPerson: Number(minSpend) }, { merge: true });
     res.json({ success: true });
   } catch (error) {
     res.status(500).send(error);
@@ -399,10 +399,10 @@ post('/settings/min-spend', async (req, res) => {
 post('/settings/operating-hours', async (req, res) => {
   const { slots, restDays } = req.body;
   try {
-    await db.collection('settings').doc('system').update({
+    await db.collection('settings').doc('system').set({
       liveOperatingHours: slots,
       liveRestDays: restDays
-    });
+    }, { merge: true });
     res.json({ success: true });
   } catch (error) {
     res.status(500).send(error);
@@ -413,7 +413,7 @@ post('/settings/operating-hours', async (req, res) => {
 post('/settings/customer-notice', async (req, res) => {
   const { notice } = req.body;
   try {
-    await db.collection('settings').doc('system').update({ liveCustomerNotice: String(notice) });
+    await db.collection('settings').doc('system').set({ liveCustomerNotice: String(notice) }, { merge: true });
     res.json({ success: true });
   } catch (error) {
     res.status(500).send(error);
@@ -424,7 +424,7 @@ post('/settings/customer-notice', async (req, res) => {
 post('/settings/popular-item-ids', async (req, res) => {
   const { ids } = req.body;
   try {
-    await db.collection('settings').doc('system').update({ livePopularItemIds: ids });
+    await db.collection('settings').doc('system').set({ livePopularItemIds: ids }, { merge: true });
     res.json({ success: true });
   } catch (error) {
     res.status(500).send(error);
@@ -435,7 +435,7 @@ post('/settings/popular-item-ids', async (req, res) => {
 post('/printer/config', async (req, res) => {
   const { ip } = req.body;
   try {
-    await db.collection('settings').doc('system').update({ livePrinterIp: String(ip) });
+    await db.collection('settings').doc('system').set({ livePrinterIp: String(ip) }, { merge: true });
     res.json({ success: true });
   } catch (error) {
     res.status(500).send(error);
@@ -489,7 +489,7 @@ put('/staff/pin', async (req, res) => {
     if (!/^\d{6}$/.test(newPin)) {
       return res.status(400).json({ error: '新金鑰必須為 6 位數字！' });
     }
-    await systemRef.update({ liveStaffPin: newPin });
+    await systemRef.set({ liveStaffPin: newPin }, { merge: true });
     return res.json({ success: true, message: '員工解鎖金鑰已成功變更！' });
   } catch (error) {
     console.error('Error updating PIN:', error);
@@ -513,7 +513,7 @@ post('/printer/pin', async (req, res) => {
     if (!/^\d{6}$/.test(newPin)) {
       return res.status(400).json({ error: '新金鑰必須為 6 位數字！' });
     }
-    await systemRef.update({ liveStaffPin: newPin });
+    await systemRef.set({ liveStaffPin: newPin }, { merge: true });
     return res.json({ success: true, message: '員工解鎖金鑰已成功變更！' });
   } catch (error) {
     console.error('Error updating PIN via printer/pin:', error);
@@ -522,4 +522,434 @@ post('/printer/pin', async (req, res) => {
 });
 
 // Export Express App as Cloud Function
+
+// --- Missing Settings APIs ---
+
+// 38. Save Promo Combo
+post('/promo-combo', async (req, res) => {
+  const data = req.body;
+  try {
+    await db.collection('settings').doc('system').set({ livePromoCombo: data, livePromoCombos: data.combos }, { merge: true });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).send(error);
+  }
+});
+
+// 39. Save Members Config
+post('/settings/members-config', async (req, res) => {
+  const { pointsRatio, rewards } = req.body;
+  try {
+    await db.collection('settings').doc('system').set({
+      liveMemberPointsRatio: pointsRatio,
+      liveMemberRewards: rewards
+    }, { merge: true });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).send(error);
+  }
+});
+
+// 40. Printer Settings (PUT)
+put('/printer/settings', async (req, res) => {
+  const { kitchen, bill } = req.body;
+  try {
+    const systemDoc = await db.collection('settings').doc('system').get();
+    let currentSettings = systemDoc.data()?.livePrinterSettings || {};
+    if (kitchen) {
+      currentSettings.kitchen = { ...currentSettings.kitchen, ...kitchen };
+    }
+    if (bill) {
+      currentSettings.bill = { ...currentSettings.bill, ...bill };
+    }
+    await db.collection('settings').doc('system').set({ livePrinterSettings: currentSettings }, { merge: true });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).send(error);
+  }
+});
+
+// 41. Option Rules (POST)
+post('/option-rules', async (req, res) => {
+  const { name, category, price } = req.body;
+  const newRule = {
+    id: `rule-${Date.now()}`,
+    name: name || '新選項',
+    category: category || '加配料',
+    price: Number(price) || 0
+  };
+  try {
+    const systemDoc = await db.collection('settings').doc('system').get();
+    let rules = systemDoc.data()?.liveOptionRules || [];
+    rules.push(newRule);
+    await db.collection('settings').doc('system').set({ liveOptionRules: rules }, { merge: true });
+    res.status(201).json(newRule);
+  } catch (error) {
+    res.status(500).send(error);
+  }
+});
+
+// 42. Option Rules (DELETE)
+del('/option-rules/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const systemDoc = await db.collection('settings').doc('system').get();
+    let rules = systemDoc.data()?.liveOptionRules || [];
+    rules = rules.filter((r: any) => r.id !== id);
+    await db.collection('settings').doc('system').set({ liveOptionRules: rules }, { merge: true });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).send(error);
+  }
+});
+
+// 43. Admin clear test data
+post('/admin/clear-test-data', async (req, res) => {
+  const { pin } = req.body;
+  try {
+    const systemDoc = await db.collection('settings').doc('system').get();
+    const liveStaffPin = systemDoc.data()?.liveStaffPin || '888888';
+    if (!pin || pin !== liveStaffPin) {
+      return res.status(403).json({ error: '安全校對碼 (員工解鎖 PIN 碼) 不正確，無法授權清空！' });
+    }
+
+    // Using batch for quick deletion is ideal but for simplicity we skip batching everything here if it's too much.
+    // Assuming this clears orders, print-logs, inventoryLogs, promoNotifications.
+    // For simplicity, we just clear the settings/logs which contains transient data
+    await db.collection('settings').doc('logs').set({ printLogs: [], inventoryLogs: [], promoNotifications: [] }, { merge: true });
+
+    // Deleting all orders
+    const ordersSnapshot = await db.collection('orders').get();
+    const batch = db.batch();
+    ordersSnapshot.docs.forEach((doc) => {
+      batch.delete(doc.ref);
+    });
+    await batch.commit();
+
+    await db.collection('settings').doc('system').set({ liveTakeoutSeq: 0 }, { merge: true });
+
+    res.json({ success: true, message: '已成功清除系統內所有測試用歷史單據、庫存記錄及虛擬出單日誌！' });
+  } catch (error) {
+    res.status(500).send(error);
+  }
+});
+
+// --- Missing Menu APIs ---
+post('/menu', async (req, res) => {
+  const data = req.body;
+  const newItem = {
+    id: `dish-${Date.now()}`,
+    ...data,
+    orderIndex: data.orderIndex || 999
+  };
+  try {
+    await db.collection('menu').doc(newItem.id).set(newItem);
+    res.status(201).json(newItem);
+  } catch (error) {
+    res.status(500).send(error);
+  }
+});
+
+put('/menu/reorder', async (req, res) => {
+  const { order } = req.body;
+  if (!Array.isArray(order)) return res.status(400).json({ error: 'Invalid order parameter' });
+  try {
+    const batch = db.batch();
+    order.forEach((id: string, index: number) => {
+      const ref = db.collection('menu').doc(id);
+      batch.update(ref, { orderIndex: index });
+    });
+    await batch.commit();
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).send(error);
+  }
+});
+
+put('/menu/:id', async (req, res) => {
+  const id = req.params.id as string;
+  const updates = req.body;
+  try {
+    await db.collection('menu').doc(id).update(updates);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).send(error);
+  }
+});
+
+del('/menu/:id', async (req, res) => {
+  const id = req.params.id as string;
+  try {
+    await db.collection('menu').doc(id).delete();
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).send(error);
+  }
+});
+
+// --- Missing Category APIs ---
+post('/categories', async (req, res) => {
+  const data = req.body;
+  try {
+    await db.collection('categories').doc(data.id).set(data);
+    res.status(201).json(data);
+  } catch (error) {
+    res.status(500).send(error);
+  }
+});
+
+put('/categories/reorder', async (req, res) => {
+  const { order } = req.body;
+  if (!Array.isArray(order)) return res.status(400).json({ error: 'Invalid order parameter' });
+  try {
+    const batch = db.batch();
+    order.forEach((id: string, index: number) => {
+      const ref = db.collection('categories').doc(id);
+      batch.update(ref, { orderIndex: index });
+    });
+    await batch.commit();
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).send(error);
+  }
+});
+
+put('/categories/:id', async (req, res) => {
+  const id = req.params.id as string;
+  const updates = req.body;
+  try {
+    await db.collection('categories').doc(id).update(updates);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).send(error);
+  }
+});
+
+del('/categories/:id', async (req, res) => {
+  const id = req.params.id as string;
+  try {
+    await db.collection('categories').doc(id).delete();
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).send(error);
+  }
+});
+
+// --- Missing Tables APIs ---
+post('/tables', async (req, res) => {
+  const data = req.body;
+  try {
+    await db.collection('tables').doc(data.id).set(data);
+    res.status(201).json(data);
+  } catch (error) {
+    res.status(500).send(error);
+  }
+});
+
+put('/tables/:id', async (req, res) => {
+  const id = req.params.id as string;
+  const updates = req.body;
+  try {
+    await db.collection('tables').doc(id).update(updates);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).send(error);
+  }
+});
+
+del('/tables/:id', async (req, res) => {
+  const id = req.params.id as string;
+  try {
+    await db.collection('tables').doc(id).delete();
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).send(error);
+  }
+});
+
+// --- Missing Reservations APIs ---
+post('/reservations', async (req, res) => {
+  const data = req.body;
+  const newReservation = {
+    id: 'res-' + Math.random().toString(36).substring(2, 11),
+    ...data,
+    createdAt: new Date().toISOString()
+  };
+  try {
+    await db.collection('reservations').doc(newReservation.id).set(newReservation);
+    // sync table status if pending
+    if (newReservation.status === 'pending') {
+      const tableRef = db.collection('tables').doc(newReservation.tableNumber);
+      await tableRef.update({ status: 'preserved', preservedFor: `${newReservation.customerName} (${newReservation.time})` });
+    }
+    res.status(201).json(newReservation);
+  } catch (error) {
+    res.status(500).send(error);
+  }
+});
+
+put('/reservations/:id', async (req, res) => {
+  const id = req.params.id as string;
+  const updates = req.body;
+  try {
+    await db.collection('reservations').doc(id).update(updates);
+
+    // Also sync table status if status changed
+    if (updates.status) {
+      const doc = await db.collection('reservations').doc(id).get();
+      const resData = doc.data();
+      if (resData && resData.tableNumber) {
+        const tableRef = db.collection('tables').doc(resData.tableNumber);
+        if (updates.status === 'seated') {
+          await tableRef.update({ status: 'in_use', preservedFor: '' });
+        } else if (updates.status === 'pending') {
+           await tableRef.update({ status: 'preserved', preservedFor: `${resData.customerName} (${resData.time})` });
+        } else if (updates.status === 'cancelled') {
+           await tableRef.update({ status: 'available', preservedFor: '' });
+        }
+      }
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).send(error);
+  }
+});
+
+del('/reservations/:id', async (req, res) => {
+  const id = req.params.id as string;
+  try {
+    await db.collection('reservations').doc(id).delete();
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).send(error);
+  }
+});
+
+// --- Missing Ingredients APIs ---
+post('/ingredients', async (req, res) => {
+  const data = req.body;
+  const finalName = {
+    zh: data.name.zh,
+    en: data.name.en || data.name.zh,
+    ko: data.name.ko || data.name.zh,
+    ja: data.name.ja || data.name.zh,
+    th: data.name.th || data.name.zh,
+  };
+  const newIngredient = {
+    id: data.id,
+    name: finalName,
+    stock: Math.round(Number(data.stock || 0) * 100) / 100,
+    minThreshold: Number(data.minThreshold) || 0,
+    unit: data.unit || 'kg',
+  };
+  try {
+    await db.collection('ingredients').doc(newIngredient.id).set(newIngredient);
+    res.status(201).json(newIngredient);
+  } catch (error) {
+    res.status(500).send(error);
+  }
+});
+
+// --- Additional Order & Other APIs ---
+put('/orders/:id/pay', async (req, res) => {
+  const id = req.params.id as string;
+  const { isPaid } = req.body;
+  try {
+    await db.collection('orders').doc(id).update({ isPaid });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).send(error);
+  }
+});
+
+put('/orders/:id/rate', async (req, res) => {
+  const id = req.params.id as string;
+  const { rating, feedback } = req.body;
+  try {
+    await db.collection('orders').doc(id).update({ rating, feedback });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).send(error);
+  }
+});
+
+put('/orders/:id/items/:itemId/complete', async (req, res) => {
+  const { id, itemId } = req.params;
+  const { isCompleted } = req.body;
+  try {
+    // Requires reading the whole order to update the specific item
+    const orderDoc = await db.collection('orders').doc(id as string).get();
+    const order = orderDoc.data();
+    if (order && order.items) {
+      const items = order.items.map((it: any) => it.id === itemId ? { ...it, isCompleted } : it);
+      const allCompleted = items.every((it: any) => it.isCompleted);
+      let status = order.status;
+      if (allCompleted) {
+         status = 'completed';
+      } else if (status === 'completed') {
+         status = 'preparing';
+      }
+      await db.collection('orders').doc(id as string).update({ items, status });
+    }
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).send(error);
+  }
+});
+
+post('/send-promo-push', async (req, res) => {
+  const data = req.body;
+  const newNotif = {
+    id: `notif-${Date.now()}`,
+    timestamp: new Date().toLocaleTimeString(),
+    title: data.title || '沙貝限時優惠 🇹🇭',
+    message: data.message || '老闆瘋了！即刻點餐全單享特別折扣！',
+    badge: data.badge || 'PROMO',
+    isRead: false
+  };
+  try {
+    const logsDoc = await db.collection('settings').doc('logs').get();
+    let notifs = logsDoc.data()?.promoNotifications || [];
+    notifs.push(newNotif);
+    await db.collection('settings').doc('logs').set({ promoNotifications: notifs }, { merge: true });
+    res.status(201).json(newNotif);
+  } catch (error) {
+    res.status(500).send(error);
+  }
+});
+
+post('/takeout/scan', async (req, res) => {
+  try {
+    const systemDoc = await db.collection('settings').doc('system').get();
+    let seq = systemDoc.data()?.liveTakeoutSeq || 0;
+    let lastDate = systemDoc.data()?.lastTakeoutDate || '';
+    const today = new Date().toDateString();
+
+    if (today !== lastDate) {
+      seq = 0;
+      lastDate = today;
+    }
+    seq++;
+    const assigned = `外帶 #${seq}`;
+
+    await db.collection('settings').doc('system').set({ liveTakeoutSeq: seq, lastTakeoutDate: lastDate }, { merge: true });
+    res.json({ success: true, tableNumber: assigned, sequence: seq });
+  } catch (error) {
+    res.status(500).send(error);
+  }
+});
+
+get('/takeout/status', async (req, res) => {
+  try {
+    const systemDoc = await db.collection('settings').doc('system').get();
+    res.json({
+      sequence: systemDoc.data()?.liveTakeoutSeq || 0,
+      lastResetDate: systemDoc.data()?.lastTakeoutDate || ''
+    });
+  } catch (error) {
+    res.status(500).send(error);
+  }
+});
+
 export const api = functions.https.onRequest(app);
