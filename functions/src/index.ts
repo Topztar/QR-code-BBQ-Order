@@ -65,6 +65,118 @@ get('/ingredients', async (req, res) => {
   }
 });
 
+// --- Write APIs (POST/PUT/DELETE) ---
+// 1. Create Menu
+post('/menu', async (req, res) => {
+  try {
+    const data = req.body;
+    const docRef = await db.collection('menu').add(data);
+    res.json({ id: docRef.id });
+  } catch (error) {
+    console.error('Error creating menu:', error);
+    res.status(500).send(error);
+  }
+});
+
+// 2. Update Menu
+put('/menu/:id', async (req, res) => {
+  try {
+    const id = req.params.id as string;
+    const data = req.body;
+    await db.collection('menu').doc(id).set(data, { merge: true });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error updating menu:', error);
+    res.status(500).send(error);
+  }
+});
+
+// 3. Delete Menu
+del('/menu/:id', async (req, res) => {
+  try {
+    const id = req.params.id as string;
+    await db.collection('menu').doc(id).delete();
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting menu:', error);
+    res.status(500).send(error);
+  }
+});
+
+// 4. Create Category
+post('/categories', async (req, res) => {
+  try {
+    const data = req.body;
+    const docRef = await db.collection('categories').add(data);
+    res.json({ id: docRef.id });
+  } catch (error) {
+    console.error('Error creating category:', error);
+    res.status(500).send(error);
+  }
+});
+
+// 5. Update Category
+put('/categories/:id', async (req, res) => {
+  try {
+    const id = req.params.id as string;
+    const data = req.body;
+    await db.collection('categories').doc(id).set(data, { merge: true });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error updating category:', error);
+    res.status(500).send(error);
+  }
+});
+
+// 6. Delete Category
+del('/categories/:id', async (req, res) => {
+  try {
+    const id = req.params.id as string;
+    await db.collection('categories').doc(id).delete();
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting category:', error);
+    res.status(500).send(error);
+  }
+});
+
+// 7. Create Ingredient
+post('/ingredients', async (req, res) => {
+  try {
+    const data = req.body;
+    const docRef = await db.collection('ingredients').add(data);
+    res.json({ id: docRef.id });
+  } catch (error) {
+    console.error('Error creating ingredient:', error);
+    res.status(500).send(error);
+  }
+});
+
+// 8. Update Ingredient
+put('/ingredients/:id', async (req, res) => {
+  try {
+    const id = req.params.id as string;
+    const data = req.body;
+    await db.collection('ingredients').doc(id).set(data, { merge: true });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error updating ingredient:', error);
+    res.status(500).send(error);
+  }
+});
+
+// 9. Delete Ingredient
+del('/ingredients/:id', async (req, res) => {
+  try {
+    const id = req.params.id as string;
+    await db.collection('ingredients').doc(id).delete();
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting ingredient:', error);
+    res.status(500).send(error);
+  }
+});
+
 // 4. Get Tables
 get('/tables', async (req, res) => {
   try {
@@ -389,7 +501,7 @@ post('/settings/min-spend', async (req, res) => {
   const { minSpend } = req.body;
   try {
     await db.collection('settings').doc('system').set({ liveMinSpendPerPerson: Number(minSpend) }, { merge: true });
-    res.json({ success: true });
+    res.json({ success: true, minSpend: Number(minSpend) });
   } catch (error) {
     res.status(500).send(error);
   }
@@ -403,7 +515,9 @@ post('/settings/operating-hours', async (req, res) => {
       liveOperatingHours: slots,
       liveRestDays: restDays
     }, { merge: true });
-    res.json({ success: true });
+    const systemDoc = await db.collection('settings').doc('system').get();
+    const servicePaused = systemDoc.data()?.liveServicePaused || false;
+    res.json({ success: true, slots, restDays, isOpen: !servicePaused });
   } catch (error) {
     res.status(500).send(error);
   }
@@ -414,7 +528,7 @@ post('/settings/customer-notice', async (req, res) => {
   const { notice } = req.body;
   try {
     await db.collection('settings').doc('system').set({ liveCustomerNotice: String(notice) }, { merge: true });
-    res.json({ success: true });
+    res.json({ success: true, notice: String(notice) });
   } catch (error) {
     res.status(500).send(error);
   }
@@ -422,10 +536,11 @@ post('/settings/customer-notice', async (req, res) => {
 
 // 32. Save Popular Item IDs
 post('/settings/popular-item-ids', async (req, res) => {
-  const { ids } = req.body;
+  const { popularItemIds, ids } = req.body;
+  const targetIds = popularItemIds || ids || [];
   try {
-    await db.collection('settings').doc('system').set({ livePopularItemIds: ids }, { merge: true });
-    res.json({ success: true });
+    await db.collection('settings').doc('system').set({ livePopularItemIds: targetIds }, { merge: true });
+    res.json({ success: true, popularItemIds: targetIds });
   } catch (error) {
     res.status(500).send(error);
   }
@@ -463,7 +578,7 @@ post('/staff/pin/verify', async (req, res) => {
   try {
     const systemDoc = await db.collection('settings').doc('system').get();
     const liveStaffPin = systemDoc.data()?.liveStaffPin || '888888';
-    if (pin === liveStaffPin) {
+    if (String(pin) === String(liveStaffPin)) {
       return res.json({ success: true, access_token: 'mock-jwt-token-for-staff' });
     }
     return res.status(400).json({ success: false, error: '解鎖金鑰錯誤！' });
@@ -483,7 +598,7 @@ put('/staff/pin', async (req, res) => {
     const systemRef = db.collection('settings').doc('system');
     const systemDoc = await systemRef.get();
     const liveStaffPin = systemDoc.data()?.liveStaffPin || '888888';
-    if (currentPin !== liveStaffPin) {
+    if (String(currentPin) !== String(liveStaffPin)) {
       return res.status(400).json({ error: '目前金鑰輸入錯誤！' });
     }
     if (!/^\d{6}$/.test(newPin)) {
@@ -507,7 +622,7 @@ post('/printer/pin', async (req, res) => {
     const systemRef = db.collection('settings').doc('system');
     const systemDoc = await systemRef.get();
     const liveStaffPin = systemDoc.data()?.liveStaffPin || '888888';
-    if (currentPin !== liveStaffPin) {
+    if (String(currentPin) !== String(liveStaffPin)) {
       return res.status(400).json({ error: '目前解鎖金鑰輸入錯誤！' });
     }
     if (!/^\d{6}$/.test(newPin)) {
@@ -607,29 +722,49 @@ del('/option-rules/:id', async (req, res) => {
 post('/admin/clear-test-data', async (req, res) => {
   const { pin } = req.body;
   try {
-    const systemDoc = await db.collection('settings').doc('system').get();
+    const systemRef = db.collection('settings').doc('system');
+    const systemDoc = await systemRef.get();
     const liveStaffPin = systemDoc.data()?.liveStaffPin || '888888';
-    if (!pin || pin !== liveStaffPin) {
+    if (!pin || String(pin) !== String(liveStaffPin)) {
       return res.status(403).json({ error: '安全校對碼 (員工解鎖 PIN 碼) 不正確，無法授權清空！' });
     }
 
-    // Using batch for quick deletion is ideal but for simplicity we skip batching everything here if it's too much.
-    // Assuming this clears orders, print-logs, inventoryLogs, promoNotifications.
-    // For simplicity, we just clear the settings/logs which contains transient data
+    // 1. Clear system logs (print logs, inventory logs, promo notifications)
     await db.collection('settings').doc('logs').set({ printLogs: [], inventoryLogs: [], promoNotifications: [] }, { merge: true });
 
-    // Deleting all orders
+    // 2. Delete all orders
     const ordersSnapshot = await db.collection('orders').get();
-    const batch = db.batch();
+    const batchOrders = db.batch();
     ordersSnapshot.docs.forEach((doc) => {
-      batch.delete(doc.ref);
+      batchOrders.delete(doc.ref);
     });
-    await batch.commit();
+    await batchOrders.commit();
 
-    await db.collection('settings').doc('system').set({ liveTakeoutSeq: 0 }, { merge: true });
+    // 3. Delete all reservations
+    const reservationsSnapshot = await db.collection('reservations').get();
+    const batchReservations = db.batch();
+    reservationsSnapshot.docs.forEach((doc) => {
+      batchReservations.delete(doc.ref);
+    });
+    await batchReservations.commit();
 
-    res.json({ success: true, message: '已成功清除系統內所有測試用歷史單據、庫存記錄及虛擬出單日誌！' });
+    // 4. Reset tables status to available and clear preservedFor
+    const tablesSnapshot = await db.collection('tables').get();
+    const batchTables = db.batch();
+    tablesSnapshot.docs.forEach((doc) => {
+      batchTables.update(doc.ref, { status: 'available', preservedFor: '' });
+    });
+    await batchTables.commit();
+
+    // 5. Reset takeout sequence and reset staff pin to default 888888
+    await systemRef.set({ 
+      liveTakeoutSeq: 0, 
+      liveStaffPin: '888888' 
+    }, { merge: true });
+
+    res.json({ success: true, message: '已成功清除系統內所有測試單據、顧客預約、桌位佔用，並將登入密碼重設為預設值 888888！' });
   } catch (error) {
+    console.error('Error clearing test data:', error);
     res.status(500).send(error);
   }
 });

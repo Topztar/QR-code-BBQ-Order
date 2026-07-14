@@ -774,20 +774,13 @@ const PERSISTENCE_FILE_PATH = path.join(process.cwd(), 'persisted_state.json');
 let isStateLoadedSuccessfully = false;
 
 function saveStateToDisk() {
-  if (!isStateLoadedSuccessfully && fs.existsSync(PERSISTENCE_FILE_PATH)) {
-    console.warn('[Sabay Warning] Skipping saveStateToDisk because initial state was not loaded successfully yet! Prevents wiping actual custom state.');
-    return;
-  }
-  
-  // Keep orderIndex properties perfectly synchronized with current array order in-memory before saving
-  liveCategories.forEach((cat, index) => {
-    cat.orderIndex = index;
-  });
-  liveMenu.forEach((item, index) => {
-    item.orderIndex = index;
-  });
-
+  // 將目前的系統狀態寫入專案根目錄的 persisted_state.json，供開發預覽使用
   try {
+    // 重新排序 menu 以確保 orderIndex 正確
+    liveMenu.forEach((item, index) => {
+      item.orderIndex = index;
+    });
+
     const dataToSave = {
       liveMenu,
       liveIngredients,
@@ -813,18 +806,19 @@ function saveStateToDisk() {
       livePromoCombos,
       livePopularItemIds,
       liveMemberPointsRatio,
-      liveMemberRewards
+      liveMemberRewards,
     };
-    fs.writeFileSync(PERSISTENCE_FILE_PATH, JSON.stringify(dataToSave, null, 2), 'utf-8');
-    console.log('✓ System State fully saved to codebase disk:', PERSISTENCE_FILE_PATH);
-  } catch (error) {
-    console.error('Failed to save state to disk:', error);
-  }
+    fs.writeFileSync(PERSISTENCE_FILE_PATH, JSON.stringify(dataToSave, null, 2), "utf-8");
+    console.log("✓ System State fully saved to codebase disk:", PERSISTENCE_FILE_PATH);
 
-  if (firestoreDb) {
-    saveStateToFirestore().catch(err => {
-      console.error('[Sabay Firebase] Async Firestore save failed:', err);
-    });
+    // 同步寫入 Firestore（非阻塞）
+    if (firestoreDb) {
+      saveStateToFirestore().catch(err => {
+        console.error("[Sabay Firebase] Async Firestore save failed:", err);
+      });
+    }
+  } catch (error) {
+    console.error("Failed to save state to disk:", error);
   }
 }
 
