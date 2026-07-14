@@ -497,5 +497,29 @@ put('/staff/pin', async (req, res) => {
   }
 });
 
+// 37. Update Printer PIN (POST compatibility endpoint for ManagerDashboard)
+post('/printer/pin', async (req, res) => {
+  const { currentPin, newPin } = req.body;
+  if (!currentPin || !newPin) {
+    return res.status(400).json({ error: '請輸入目前金鑰與新解鎖金鑰' });
+  }
+  try {
+    const systemRef = db.collection('settings').doc('system');
+    const systemDoc = await systemRef.get();
+    const liveStaffPin = systemDoc.data()?.liveStaffPin || '888888';
+    if (currentPin !== liveStaffPin) {
+      return res.status(400).json({ error: '目前解鎖金鑰輸入錯誤！' });
+    }
+    if (!/^\d{6}$/.test(newPin)) {
+      return res.status(400).json({ error: '新金鑰必須為 6 位數字！' });
+    }
+    await systemRef.update({ liveStaffPin: newPin });
+    return res.json({ success: true, message: '員工解鎖金鑰已成功變更！' });
+  } catch (error) {
+    console.error('Error updating PIN via printer/pin:', error);
+    res.status(500).send(error);
+  }
+});
+
 // Export Express App as Cloud Function
 export const api = functions.https.onRequest(app);
