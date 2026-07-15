@@ -1,42 +1,83 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Global Safety Net
+    
+    // Helper function to check if the user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Helper function to check if the user is an admin
+    // This utilizes custom claims (token.admin == true), which is the standard, most secure method
+    function isAdmin() {
+      return isAuthenticated() && request.auth.token.admin == true;
+    }
+
+    // Global Safety Net: Default deny all
     match /{document=**} {
       allow read, write: if false;
     }
 
-    // Checkouts collection
-    match /checkouts/{checkoutId} {
-      allow read, write: if true;
-    }
-
-    // Connection test collection
-    match /test/{id} {
-      allow read, write: if true;
-    }
-
-    // Server-managed operational collections
-    match /categories/{id} {
-      allow read, write: if true;
-    }
+    // 1. menu (菜單): 任何人都可以讀取，但只有管理員可以寫入
     match /menu/{id} {
-      allow read, write: if true;
+      allow read: if true;
+      allow write: if isAdmin();
     }
-    match /ingredients/{id} {
-      allow read, write: if true;
-    }
-    match /tables/{id} {
-      allow read, write: if true;
-    }
-    match /reservations/{id} {
-      allow read, write: if true;
-    }
+
+    // 2. orders (訂單): 只有已登入的使用者可以創建，且使用者只能讀取與修改自己的訂單（比對 auth.uid）
     match /orders/{id} {
-      allow read, write: if true;
+      // 創建：必須已登入，且寫入的資料中指定的 userId 必須是當前登入者
+      allow create: if isAuthenticated() && 
+        (!("userId" in request.resource.data) || request.resource.data.userId == request.auth.uid);
+      
+      // 讀取與修改：必須是訂單的擁有者（比對 userId），或是管理員
+      allow read, update: if isAuthenticated() && 
+        (resource.data.userId == request.auth.uid || isAdmin());
+      
+      // 刪除：只有管理員可以執行
+      allow delete: if isAdmin();
     }
+
+    // 3. settings (設定): 只能由管理員讀寫
+    // (系統後端使用 Admin SDK 會自動繞過規則限制，因此規則中僅需對管理員進行授權)
     match /settings/{id} {
-      allow read, write: if true;
+      allow read, write: if isAdmin();
+    }
+
+    // 4. categories (分類): 任何人都可以讀取，但只有管理員可以寫入
+    match /categories/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // 5. ingredients (原料/庫存): 任何人都可以讀取 (用以即時更新前台庫存售罄狀態)，但只有管理員可以寫入
+    match /ingredients/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // 6. tables (桌位): 任何人都可以讀取，但只有管理員可以寫入
+    match /tables/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // 7. reservations (預約): 任何人都可以創建，但只有管理員或預約擁有者可以讀寫
+    match /reservations/{id} {
+      allow create: if true;
+      allow read, update: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow delete: if isAdmin();
+    }
+
+    // 8. checkouts (收銀結帳紀錄): 僅限管理員讀寫
+    match /checkouts/{id} {
+      allow read, write: if isAdmin();
+    }
+
+    // 9. test (測試連線用): 任何人都可以讀取，但只有管理員可以寫入 (避免連線測試時產生無謂的權限錯誤)
+    match /test/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
     }
   }
 }
