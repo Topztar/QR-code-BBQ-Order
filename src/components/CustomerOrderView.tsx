@@ -3758,7 +3758,9 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                       const cat = categories.find(c => c.id === item.category);
                       return !cat || cat.showOnCustomerPage !== false;
                     };
-                    let popularItems = displayedMenuItems.filter(item => popularItemIds.includes(item.id) && isVisibleItem(item));
+                    let popularItems = popularItemIds
+                      .map(id => displayedMenuItems.find(item => item.id === id))
+                      .filter((item): item is typeof displayedMenuItems[0] => !!item && isVisibleItem(item));
                     if (popularItems.length === 0) {
                       popularItems = displayedMenuItems.filter(isVisibleItem).slice(0, 4);
                     }
@@ -3881,7 +3883,9 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                   const cat = categories.find(c => c.id === item.category);
                   return !cat || cat.showOnCustomerPage !== false;
                 };
-                let popularItems = displayedMenuItems.filter(item => popularItemIds.includes(item.id) && isVisibleItem(item));
+                let popularItems = popularItemIds
+                  .map(id => displayedMenuItems.find(item => item.id === id))
+                  .filter((item): item is typeof displayedMenuItems[0] => !!item && isVisibleItem(item));
                 if (popularItems.length === 0) {
                   popularItems = displayedMenuItems.filter(isVisibleItem).slice(0, 4);
                 }

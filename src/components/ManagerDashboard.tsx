@@ -7743,12 +7743,12 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
               <div className="space-y-1.5 md:col-span-2">
                 <p className="font-bold text-white/40 uppercase tracking-wider text-[9px]">Firebase 主域名生產分發鏈 Deployed Routing Target</p>
                 <div className="bg-[#0e0e0e] border border-white/5 rounded-lg p-2 flex items-center justify-between gap-1 font-mono text-[10.5px]">
-                  <span className="text-zinc-400 truncate">https://sabay-bbq-order.firebaseapp.com/</span>
+                  <span className="text-zinc-400 truncate">https://sabay-bbq-order.web.app/</span>
                   <div className="flex gap-1.5">
                     <button
                       type="button"
                       onClick={() => {
-                        navigator.clipboard.writeText('https://sabay-bbq-order.firebaseapp.com/');
+                        navigator.clipboard.writeText('https://sabay-bbq-order.web.app/');
                         setCopiedTableId('main-logo');
                         setTimeout(() => setCopiedTableId(null), 1500);
                       }}
@@ -7758,7 +7758,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                       {copiedTableId === 'main-logo' ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
                     </button>
                     <a
-                      href="https://sabay-bbq-order.firebaseapp.com/"
+                      href="https://sabay-bbq-order.web.app/"
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-zinc-500 hover:text-white p-1 bg-white/[0.03] hover:bg-white/[0.08] rounded"
@@ -7823,7 +7823,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                     const isTakeout = selectedQrPreviewId === 'takeout';
                     const label = isTakeout ? '🥡 外帶自取顧客專用定位點' : `🥢 內用客席第 ${selectedQrPreviewId} 桌`;
                     const relativePath = isTakeout ? '/?table=takeout' : `/?table=${selectedQrPreviewId}`;
-                    const firebaseProdUrl = `https://sabay-bbq-order.firebaseapp.com/${isTakeout ? '?table=takeout' : `?table=${selectedQrPreviewId}`}`;
+                    const firebaseProdUrl = `https://sabay-bbq-order.web.app/${isTakeout ? '?table=takeout' : `?table=${selectedQrPreviewId}`}`;
                     
                     return (
                       <div className="space-y-2.5">
@@ -7870,8 +7870,8 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                   const label = isTakeout ? 'TAKE-OUT' : `TABLE ${selectedQrPreviewId}`;
                   const labelZh = isTakeout ? '外 帶 自 取 由 此 點 餐' : `第 ${selectedQrPreviewId} 桌 位 內 用 點 餐`;
                   const prodUrl = isTakeout 
-                    ? 'https://sabay-bbq-order.firebaseapp.com/?table=takeout' 
-                    : `https://sabay-bbq-order.firebaseapp.com/?table=${selectedQrPreviewId}`;
+                    ? 'https://sabay-bbq-order.web.app/?table=takeout' 
+                    : `https://sabay-bbq-order.web.app/?table=${selectedQrPreviewId}`;
                   
                   const qrImgUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&color=20-20-20&data=${encodeURIComponent(prodUrl)}`;
 
@@ -7978,8 +7978,8 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                       </ol>
                       <div className="bg-black border border-white/10 p-1 rounded font-mono text-[9px] text-[#E5B453] break-all select-all">
                         {selectedQrPreviewId === 'takeout' 
-                          ? 'https://sabay-bbq-order.firebaseapp.com/?table=takeout' 
-                          : `https://sabay-bbq-order.firebaseapp.com/?table=${selectedQrPreviewId}`}
+                          ? 'https://sabay-bbq-order.web.app/?table=takeout' 
+                          : `https://sabay-bbq-order.web.app/?table=${selectedQrPreviewId}`}
                       </div>
                       <ol start="5" className="list-decimal list-inside text-zinc-400 space-y-0.5 font-sans">
                         <li>點擊 <span className="text-white">【Write】</span>，手機靠貼紙即完成！</li>
@@ -11179,7 +11179,7 @@ ${customerDetails}
                     type="button"
                     onClick={() => {
                       const finalId = tableIdInput.trim() || '6';
-                      setTableQrUrlInput(`https://sabay-bbq-order.firebaseapp.com/?table=${finalId}`);
+                      setTableQrUrlInput(`https://sabay-bbq-order.web.app/?table=${finalId}`);
                     }}
                     className="text-[9.5px] text-[#E5B453] hover:text-amber-300 font-bold bg-[#E5B453]/10 border border-[#E5B453]/35 px-2.5 py-1 rounded-lg transition whitespace-nowrap inline-flex items-center gap-1 active:scale-95 cursor-pointer"
                   >
