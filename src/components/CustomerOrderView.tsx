@@ -2927,10 +2927,10 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                     </label>
                     <div className="grid grid-cols-2 gap-2">
                       {[
-                        { code: 'cash', label: '現金支付', spec: '現場免加額/有優惠' },
-                        { code: 'credit', label: '信用卡支付', spec: '均含服務加收10%' },
-                        { code: 'linepay', label: 'TWQR支付', spec: '預設服務費10%' },
-                        { code: 'member', label: '會員儲值支付', spec: '扣抵會員帳戶餘額' }
+                        { code: 'cash', label: t('payCash'), spec: t('payCashDesc') },
+                        { code: 'credit', label: t('payCredit'), spec: t('payCreditDesc') },
+                        { code: 'linepay', label: t('payLinepay'), spec: t('payLinepayDesc') },
+                        { code: 'member', label: t('payMember'), spec: t('payMemberDesc') }
                       ].map((pm) => {
                         const isSelected = paymentMethod === pm.code;
                         return (

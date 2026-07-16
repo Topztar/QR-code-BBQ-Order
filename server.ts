@@ -189,7 +189,7 @@ interface InventoryLog {
 let inventoryLogs: InventoryLog[] = [];
 
 let liveCategories: Category[] = [
-  { id: 'tomyum', name: { zh: '多隆功系列 🍜', en: 'Tom Yum Soups', ko: '똠얌 수프 시리즈', ja: 'トムヤムスープ類', th: 'ชุดต้มยำสุดแซ่บ', vi: 'Dòng súp Tom Yum 🍜' } },
+  { id: 'tomyum', name: { zh: '冬蔭功系列 🍜', en: 'Tom Yum Soups', ko: '똠얌 수프 시리즈', ja: 'トムヤムスープ類', th: 'ชุดต้มยำสุดแซ่บ', vi: 'Dòng súp Tom Yum 🍜' } },
   { id: 'noodles', name: { zh: '單人熱麵食 🥢', en: 'Single Noodles', ko: '단품 매운 면 요리', ja: 'お一人様用麺類', th: 'บะหมี่และก๋วยเตี๋ยวจานเดี่ยว', vi: 'Mì tô phục vụ đơn 🥢' } },
   { id: 'combos', name: { zh: '主廚精選套餐 🍱', en: 'Signature Meals', ko: '시그니처 세트 요리', ja: '主理人お得セット', th: 'เซตเมนูยอดนิยม Sabay', vi: 'Set ăn Signature 🍱' } },
   { id: 'veggies', name: { zh: '小農鮮蔬菜 🥬', en: 'Fresh Veggies', ko: '신선한 채소 구이', ja: '地元新鮮野菜焼き', th: 'ผักสดฟาร์มย่าง', vi: 'Rau củ tươi sạch 🥬' } },

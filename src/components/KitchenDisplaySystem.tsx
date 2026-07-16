@@ -754,12 +754,12 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
           }
         }
 
-        const key = item.name.zh;
+        const key = item.menuItemId || item.id || 'unknown';
         const elapsedMins = Math.floor((Date.now() - new Date(order.createdAt).getTime()) / 60000);
 
         if (!mergedMap[key]) {
           mergedMap[key] = {
-            id: item.id || key,
+            id: key,
             name: item.name,
             totalQty: 0,
             orderItems: [],
@@ -1239,10 +1239,10 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
                   <div className="p-4 border-b border-white/5 flex items-center justify-between bg-zinc-900/60 shrink-0 gap-3">
                     <div className="flex-1">
                       <h4 className="font-extrabold text-[#E5B453] text-[15px] font-serif tracking-wide">
-                        {dish.name.zh}
+                        {dish.name[currentLang] || dish.name.zh || ''}
                       </h4>
                       <p className="text-[10px] text-white/40 uppercase tracking-widest mt-0.5">
-                        {dish.name.en || 'Dishes Combo'}
+                        {currentLang === 'zh' ? (dish.name.en || 'Dishes Combo') : (dish.name.zh || '')}
                       </p>
                     </div>
                     
@@ -1288,19 +1288,19 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
                               {/* customization specifications */}
                               <div className="flex flex-wrap gap-1">
                                 <span className="bg-white/5 text-white/70 border border-white/10 text-[9px] font-medium px-1 rounded">
-                                  甜: {oi.customization.sweetness === 0 ? '無糖' : (oi.customization.sweetness === 1 ? '三分' : (oi.customization.sweetness === 2 ? '半糖' : '正常'))}
+                                  {t('sweet')}: {oi.customization.sweetness === 0 ? t('sugarFree') : (oi.customization.sweetness === 1 ? t('sweet30') : (oi.customization.sweetness === 2 ? t('sweet50') : t('sweet100')))}
                                 </span>
                                 <span className="bg-[#FF4D4D]/5 text-[#FF4D4D] border border-[#FF4D4D]/10 text-[9px] font-medium px-1 rounded">
-                                  辣: {oi.customization.spiciness === 0 ? '不辣' : (oi.customization.spiciness === 1 ? '小辣' : (oi.customization.spiciness === 2 ? '中辣' : '泰大辣'))}
+                                  {t('spicyPrefix')}: {oi.customization.spiciness === 0 ? t('notSpicy') : (oi.customization.spiciness === 1 ? t('mildSpicy') : (oi.customization.spiciness === 2 ? t('mediumSpicy') : t('thaiSpicy')))}
                                 </span>
                                 {oi.customization.noodleType && (
                                   <span className="bg-[#E5B453]/5 text-[#E5B453] border border-[#E5B453]/10 text-[9px] font-medium px-1 rounded">
-                                    麵: {oi.customization.noodleType === 'rice-noodle' ? '河粉' : (oi.customization.noodleType === 'vermicelli' ? '米線' : '無')}
+                                    {t('noodlePrefix')}: {oi.customization.noodleType === 'rice-noodle' ? t('riceNoodle') : (oi.customization.noodleType === 'vermicelli' ? t('vermicelli') : t('noNoodle'))}
                                   </span>
                                 )}
                                 {oi.customization.soupBase === 'coconut-milk' && (
                                   <span className="bg-amber-500/5 text-amber-500 border border-amber-500/10 text-[9px] font-medium px-1 rounded">
-                                    椰奶(+50)
+                                    {t('coconutMilkAdd')}
                                   </span>
                                 )}
                                 {oi.customization.selectedAddOns?.map((addOn: any) => (
@@ -1312,7 +1312,7 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
 
                               {oi.customization.notes && (
                                 <p className="text-[10px] text-[#FF4D4D] bg-[#FF4D4D]/5 border border-[#FF4D4D]/10 px-2 py-1.5 rounded mt-1 font-sans">
-                                  📌 備註：{oi.customization.notes}
+                                  📌 {t('notesLabel')}：{oi.customization.notes}
                                 </p>
                               )}
                             </div>
@@ -1340,7 +1340,7 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
                   {/* Card bottom footer summary */}
                   <div className="p-3 bg-black/10 border-t border-white/5 flex items-center justify-between text-[10px] text-white/30 shrink-0">
                     <span>共有 {dish.orderItems.length} 個桌號點購此品項</span>
-                    <span className="font-mono">{dish.name.zh}</span>
+                    <span className="font-mono">{dish.name[currentLang] || dish.name.zh || ''}</span>
                   </div>
                 </div>
               );
@@ -1533,13 +1533,14 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
                           onClick={() => {
                             const specLines = order.items.map(it => {
                               const spec = [
-                                it.customization.spiciness === 0 ? '不辣 (Non-Spicy)' : (it.customization.spiciness === 1 ? '小辣 (Mild)' : (it.customization.spiciness === 2 ? '中辣 (Med)' : '泰辣 (Hot)')),
-                                it.customization.sweetness === 0 ? '無糖 (0%)' : (it.customization.sweetness === 1 ? '微糖 (30%)' : (it.customization.sweetness === 2 ? '半糖 (50%)' : '正常 (100%)')),
-                                it.customization.noodleType === 'rice-noodle' ? '河粉' : (it.customization.noodleType === 'vermicelli' ? '米線' : ''),
-                                it.customization.soupBase === 'coconut-milk' ? '加椰奶(+50)' : '',
-                                it.customization.notes ? `備註: ${it.customization.notes}` : ''
+                                it.customization.spiciness === 0 ? t('notSpicy') : (it.customization.spiciness === 1 ? t('mildSpicy') : (it.customization.spiciness === 2 ? t('mediumSpicy') : t('thaiSpicy'))),
+                                it.customization.sweetness === 0 ? t('sugarFree') : (it.customization.sweetness === 1 ? t('sweet30') : (it.customization.sweetness === 2 ? t('sweet50') : t('sweet100'))),
+                                it.customization.noodleType === 'rice-noodle' ? t('riceNoodle') : (it.customization.noodleType === 'vermicelli' ? t('vermicelli') : ''),
+                                it.customization.soupBase === 'coconut-milk' ? t('coconutMilkAdd') : '',
+                                it.customization.notes ? `${t('notesLabel')}: ${it.customization.notes}` : ''
                               ].filter(Boolean).join('/');
-                              return `[ ] ${it.name.zh} x ${it.qty}份\n    【 ${spec} 】`;
+                              const itName = it.name[currentLang] || it.name.zh || '';
+                              return `[ ] ${itName} x ${it.qty} ${t('qtyPortion')}\n    【 ${spec} 】`;
                             }).join('\n');
                             const ticketStr = `
 ========================================
@@ -1639,12 +1640,12 @@ ${specLines}
                           <div 
                             key={idx} 
                             className={`flex items-center justify-between border-b border-dashed border-white/5 pb-2.5 transition-all duration-200 gap-3 ${
-                              isMatch ? 'opacity-100' : 'opacity-20 scale-[0.98]'
+                                  isMatch ? 'opacity-100' : 'opacity-20 scale-[0.98]'
                             } ${it.isCompleted ? 'bg-emerald-950/15 px-2.5 py-1.5 rounded-lg border border-emerald-500/20' : ''}`}
                           >
                             <div className={`text-left flex-1 min-w-0 ${it.isCompleted ? 'opacity-40' : ''}`}>
                               <span className={`font-bold text-white text-sm block ${it.isCompleted ? 'line-through text-zinc-400' : ''}`}>
-                                {it.name.zh} <strong className="text-[#E5B453] font-mono text-base">x {it.qty}</strong> 份
+                                 {it.name[currentLang] || it.name.zh || ''} <strong className="text-[#E5B453] font-mono text-base">x {it.qty}</strong> {t('qtyPortion')}
                                 {!isMatch && (
                                   <span className="ml-1.5 inline-block text-[9px] bg-zinc-800 text-zinc-500 font-medium px-1 rounded select-none">
                                     非選定分區
@@ -1655,19 +1656,19 @@ ${specLines}
                               {/* customize modifiers indicator */}
                               <div className="flex flex-wrap gap-1 mt-1.5">
                                 <span className="bg-white/5 text-white/85 border border-white/15 text-[10px] font-semibold px-1 rounded font-sans">
-                                  甜: {it.customization.sweetness === 0 ? '無糖' : (it.customization.sweetness === 1 ? '三分' : (it.customization.sweetness === 2 ? '半糖' : '正常'))}
+                                  {t('sweet')}: {it.customization.sweetness === 0 ? t('sugarFree') : (it.customization.sweetness === 1 ? t('sweet30') : (it.customization.sweetness === 2 ? t('sweet50') : t('sweet100')))}
                                 </span>
                                 <span className="bg-[#FF4D4D]/10 text-[#FF4D4D] border border-[#FF4D4D]/20 text-[10px] font-semibold px-1 rounded font-mono">
-                                  辣: {it.customization.spiciness === 0 ? '不辣' : (it.customization.spiciness === 1 ? '小辣' : (it.customization.spiciness === 2 ? '中辣' : '泰大辣'))}
+                                  {t('spicyPrefix')}: {it.customization.spiciness === 0 ? t('notSpicy') : (it.customization.spiciness === 1 ? t('mildSpicy') : (it.customization.spiciness === 2 ? t('mediumSpicy') : t('thaiSpicy')))}
                                 </span>
                                 {it.customization.noodleType && (
                                   <span className="bg-[#E5B453]/10 text-[#E5B453] border border-[#E5B453]/20 text-[10px] font-semibold px-1 rounded font-sans">
-                                    麵: {it.customization.noodleType === 'rice-noodle' ? '河粉' : (it.customization.noodleType === 'vermicelli' ? '米線' : '無')}
+                                    {t('noodlePrefix')}: {it.customization.noodleType === 'rice-noodle' ? t('riceNoodle') : (it.customization.noodleType === 'vermicelli' ? t('vermicelli') : t('noNoodle'))}
                                   </span>
                                 )}
                                 {it.customization.soupBase === 'coconut-milk' && (
                                   <span className="bg-amber-500/10 text-amber-500 border border-amber-500/20 text-[10px] font-semibold px-1 rounded font-mono">
-                                    椰奶(+50)
+                                    {t('coconutMilkAdd')}
                                   </span>
                                 )}
                                 {it.customization.selectedAddOns?.map((addOn) => (
@@ -1679,7 +1680,7 @@ ${specLines}
                               
                               {it.customization.notes && (
                                 <p className="text-xs text-[#FF4D4D] bg-[#FF4D4D]/5 border border-[#FF4D4D]/15 p-2.5 rounded-xl font-sans mt-2.5">
-                                  📌 備註：{it.customization.notes}
+                                  📌 {t('notesLabel')}：{it.customization.notes}
                                 </p>
                               )}
                             </div>
@@ -2648,8 +2649,8 @@ ${specLines}
                 
                 <div className="space-y-3">
                   {quickViewOrder.items.map((it, idx) => {
-                    const sweetnessText = it.customization.sweetness === 0 ? '無糖 (0% Sweet - NO SUGAR)' : (it.customization.sweetness === 1 ? '三分 (30% Sweet - LESS SUGAR)' : (it.customization.sweetness === 2 ? '半糖 (50% Sweet - HALF SUGAR)' : '正常甜 (100% Sweet - NORMAL)'));
-                    const spicinessText = it.customization.spiciness === 0 ? '不辣 (Non-Spicy 🙏)' : (it.customization.spiciness === 1 ? '小辣 (Mild 🌶️)' : (it.customization.spiciness === 2 ? '中辣 (Medium 🌶️🌶️)' : '泰大辣 (Sabay Thai 🔥🔥🔥)'));
+                    const sweetnessText = it.customization.sweetness === 0 ? t('sugarFree') : (it.customization.sweetness === 1 ? t('sweet30') : (it.customization.sweetness === 2 ? t('sweet50') : t('sweet100')));
+                    const spicinessText = it.customization.spiciness === 0 ? t('notSpicy') : (it.customization.spiciness === 1 ? t('mildSpicy') : (it.customization.spiciness === 2 ? t('mediumSpicy') : t('thaiSpicy')));
                     
                     return (
                       <div key={idx} className={`border rounded-xl p-4 space-y-3 transition ${
@@ -2661,14 +2662,14 @@ ${specLines}
                         <div className="flex items-center justify-between gap-3 flex-wrap">
                           <div className={it.isCompleted ? 'opacity-40 line-through' : ''}>
                             <span className="font-extrabold text-lg text-white block">
-                              {it.name.zh}
+                              {it.name[currentLang] || it.name.zh || ''}
                             </span>
-                            <span className="text-xs text-zinc-400 font-medium block mt-0.5 font-mono">{it.name.en}</span>
+                            <span className="text-xs text-zinc-400 font-medium block mt-0.5 font-mono">{currentLang === 'zh' ? (it.name.en || '') : (it.name.zh || '')}</span>
                           </div>
                           
                           <div className="flex items-center gap-2">
                             <span className="bg-[#E5B453] text-[#0F0F0F] rounded-lg px-4 py-1.5 text-lg font-black font-mono">
-                              x {it.qty} 份
+                              x {it.qty} {t('qtyPortion')}
                             </span>
 
                             <button
@@ -2704,7 +2705,7 @@ ${specLines}
                               ? 'bg-zinc-900 border-zinc-800 text-zinc-400'
                               : 'bg-white/5 border-white/10 text-white'
                           }`}>
-                            <span className="text-[10px] text-zinc-500 font-bold block uppercase mb-1">甜度 Sweetness</span>
+                            <span className="text-[10px] text-zinc-500 font-bold block uppercase mb-1">{t('sweetness')} Sweetness</span>
                             <span className="font-extrabold text-xs">{sweetnessText}</span>
                           </div>
 
@@ -2716,16 +2717,16 @@ ${specLines}
                                 ? 'bg-red-500/10 border-red-500/30 text-red-400 font-black'
                                 : 'bg-amber-500/10 border-amber-500/25 text-amber-400 font-bold'
                           }`}>
-                            <span className="text-[10px] text-zinc-500 font-bold block uppercase mb-1">辣度 Spiciness</span>
+                            <span className="text-[10px] text-zinc-500 font-bold block uppercase mb-1">{t('spiciness')} Spiciness</span>
                             <span className="text-xs">{spicinessText}</span>
                           </div>
 
                           {/* Noodle Type */}
                           {it.customization.noodleType && (
                             <div className="p-2.5 bg-white/5 border border-white/10 rounded-lg text-xs text-white">
-                              <span className="text-[10px] text-zinc-500 font-bold block uppercase mb-1">麵體 Noodle Type</span>
+                              <span className="text-[10px] text-zinc-500 font-bold block uppercase mb-1">{t('noodleOption')} Noodle Type</span>
                               <span className="font-extrabold">
-                                {it.customization.noodleType === 'rice-noodle' ? '🍜 河粉 (Rice Noodle)' : (it.customization.noodleType === 'vermicelli' ? '🍜 米線 (Vermicelli)' : '無 None')}
+                                {it.customization.noodleType === 'rice-noodle' ? `🍜 ${t('riceNoodle')} (Rice Noodle)` : (it.customization.noodleType === 'vermicelli' ? `🍜 ${t('vermicelli')} (Vermicelli)` : t('noNoodle'))}
                               </span>
                             </div>
                           )}
@@ -2733,9 +2734,9 @@ ${specLines}
                           {/* Soup Base */}
                           {it.customization.soupBase && (
                             <div className="p-2.5 bg-white/5 border border-white/10 rounded-lg text-xs text-white">
-                              <span className="text-[10px] text-zinc-500 font-bold block uppercase mb-1">湯頭 Soup Base</span>
+                              <span className="text-[10px] text-zinc-500 font-bold block uppercase mb-1">{t('soupBaseLabel')} Soup Base</span>
                               <span className="font-extrabold">
-                                {it.customization.soupBase === 'coconut-milk' ? '🥥 椰奶 (+50 Coconut Milk)' : '湯底 Tom Yum'}
+                                {it.customization.soupBase === 'coconut-milk' ? `🥥 ${t('coconutMilkAdd')}` : '冬蔭功 Tom Yum'}
                               </span>
                             </div>
                           )}
@@ -2743,11 +2744,11 @@ ${specLines}
                           {/* Add-ons List */}
                           {it.customization.selectedAddOns && it.customization.selectedAddOns.length > 0 && (
                             <div className="col-span-1 sm:col-span-2 p-2.5 bg-amber-500/5 border border-amber-500/15 rounded-lg text-xs text-amber-300">
-                              <span className="text-[10px] text-amber-500/70 font-bold block uppercase mb-1">加購配料 Add-ons</span>
+                              <span className="text-[10px] text-amber-500/70 font-bold block uppercase mb-1">{t('addOnsLabel')} Add-ons</span>
                               <div className="flex flex-wrap gap-1.5">
                                 {it.customization.selectedAddOns.map((addOn) => (
                                   <span key={addOn.id} className="bg-amber-500/15 text-amber-250 border border-amber-500/30 font-bold px-2 py-0.5 rounded text-xs">
-                                    ＋ {addOn.name} (數量: {addOn.qty || 1})
+                                    ＋ {addOn.name} x{addOn.qty || 1}
                                   </span>
                                 ))}
                               </div>
@@ -2782,13 +2783,14 @@ ${specLines}
                   onClick={() => {
                     const specLines = quickViewOrder.items.map(it => {
                       const spec = [
-                        it.customization.spiciness === 0 ? '不辣 (Non-Spicy)' : (it.customization.spiciness === 1 ? '小辣 (Mild)' : (it.customization.spiciness === 2 ? '中辣 (Med)' : '泰辣 (Hot)')),
-                        it.customization.sweetness === 0 ? '無糖 (0%)' : (it.customization.sweetness === 1 ? '微糖 (30%)' : (it.customization.sweetness === 2 ? '半糖 (50%)' : '正常 (100%)')),
-                        it.customization.noodleType === 'rice-noodle' ? '河粉' : (it.customization.noodleType === 'vermicelli' ? '米線' : ''),
-                        it.customization.soupBase === 'coconut-milk' ? '加椰奶(+50)' : '',
-                        it.customization.notes ? `備註: ${it.customization.notes}` : ''
+                        it.customization.spiciness === 0 ? t('notSpicy') : (it.customization.spiciness === 1 ? t('mildSpicy') : (it.customization.spiciness === 2 ? t('mediumSpicy') : t('thaiSpicy'))),
+                        it.customization.sweetness === 0 ? t('sugarFree') : (it.customization.sweetness === 1 ? t('sweet30') : (it.customization.sweetness === 2 ? t('sweet50') : t('sweet100'))),
+                        it.customization.noodleType === 'rice-noodle' ? t('riceNoodle') : (it.customization.noodleType === 'vermicelli' ? t('vermicelli') : ''),
+                        it.customization.soupBase === 'coconut-milk' ? t('coconutMilkAdd') : '',
+                        it.customization.notes ? `${t('notesLabel')}: ${it.customization.notes}` : ''
                       ].filter(Boolean).join('/');
-                      return `[ ] ${it.name.zh} x ${it.qty}份\n    【 ${spec} 】`;
+                      const itName = it.name[currentLang] || it.name.zh || '';
+                      return `[ ] ${itName} x ${it.qty} ${t('qtyPortion')}\n    【 ${spec} 】`;
                     }).join('\n');
                     const ticketStr = `
 ========================================

@@ -115,7 +115,7 @@ export default function App() {
   const enrichCategories = (cats: Category[]): Category[] => {
     if (!Array.isArray(cats)) return [];
     const defaultCats: { [key: string]: any } = {
-      tomyum: { zh: '多隆功系列 🍜', en: 'Tom Yum Soups', ko: '똠얌 수프 시리즈', ja: 'トムヤムスープ類', th: 'ชุดต้มยำสุดแซ่บ', vi: 'Dòng súp Tom Yum 🍜' },
+      tomyum: { zh: '冬蔭功系列 🍜', en: 'Tom Yum Soups', ko: '똠얌 수프 시리즈', ja: 'トムヤムスープ類', th: 'ชุดต้มยำสุดแซ่บ', vi: 'Dòng súp Tom Yum 🍜' },
       noodles: { zh: '單人熱麵食 🥢', en: 'Single Noodles', ko: '단품 매운 면 요리', ja: 'お一人様用麺類', th: 'บะหมี่และก๋วยเตี๋ยวจานเดี่ยว', vi: 'Mì tô phục vụ đơn 🥢' },
       combos: { zh: '主廚精選套餐 🍱', en: 'Signature Meals', ko: '시그니처 세트 요리', ja: '主理人お得セット', th: 'เซตเมนูยอดนิยม Sabay', vi: 'Set ăn Signature 🍱' },
       veggies: { zh: '小農鮮蔬菜 🥬', en: 'Fresh Veggies', ko: '신선한 채소 구い', ja: '地元新鮮野菜焼き', th: 'ผักสดฟาร์มย่าง', vi: 'Rau củ tươi sạch 🥬' },

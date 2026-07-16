@@ -1967,6 +1967,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   const [catNameTh, setCatNameTh] = useState('');
   const [catNameJa, setCatNameJa] = useState('');
   const [catNameKo, setCatNameKo] = useState('');
+  const [catNameVi, setCatNameVi] = useState('');
   const [catError, setCatError] = useState<string | null>(null);
   const [catShowOnCustomer, setCatShowOnCustomer] = useState<boolean>(true);
 
@@ -2536,6 +2537,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     setCatNameTh('');
     setCatNameJa('');
     setCatNameKo('');
+    setCatNameVi('');
     setCatError(null);
     setCatShowOnCustomer(true);
     setIsCatFormOpen(true);
@@ -2549,6 +2551,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     setCatNameTh(cat.name?.th || '');
     setCatNameJa(cat.name?.ja || '');
     setCatNameKo(cat.name?.ko || '');
+    setCatNameVi(cat.name?.vi || '');
     setCatError(null);
     setCatShowOnCustomer(cat.showOnCustomerPage !== false);
     setIsCatFormOpen(true);
@@ -2571,6 +2574,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
       th: catNameTh || catNameZh,
       ja: catNameJa || catNameZh,
       ko: catNameKo || catNameZh,
+      vi: catNameVi || catNameZh,
     };
     if (editingCategory) {
       if (onEditCategory) {
@@ -2802,8 +2806,8 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   const recipeCompositionMap: { [key: string]: { name: string; qty: string }[] } = {
     'ty-01': [{ name: '大鮮蝦', qty: '3 只 / pcs' }, { name: '頂級椰奶罐', qty: '0.1 罐 / can' }],
     'ty-02': [{ name: '大鮮蝦', qty: '2 只 / pcs' }, { name: '頂級牛肉串面料', qty: '1 串 / skewer' }, { name: '頂級椰奶罐', qty: '0.1 罐' }],
-    'nd-01': [{ name: '大鮮蝦', qty: '4 只' }, { name: '多隆功泡麵 / 米線', qty: '1 包 / pack' }],
-    'nd-02': [{ name: '大鮮蝦', qty: '2 只' }, { name: '多隆功泡麵 / 米線', qty: '1 包' }],
+    'nd-01': [{ name: '大鮮蝦', qty: '4 只' }, { name: '冬蔭功泡麵 / 米線', qty: '1 包 / pack' }],
+    'nd-02': [{ name: '大鮮蝦', qty: '2 只' }, { name: '冬蔭功泡麵 / 米線', qty: '1 包' }],
     'cb-01': [{ name: '頂級牛肉串', qty: '1 串' }, { name: '爆香豬五花 / 金針', qty: '1 份' }, { name: '泰手標紅茶原料', qty: '0.35 升' }]
   };
 
@@ -11125,7 +11129,7 @@ ${customerDetails}
                 <label className="text-zinc-400">英文對應 Name En</label>
                 <input type="text" value={catNameEn} onChange={(e) => setCatNameEn(e.target.value)} className="w-full bg-[#1e1e1e] border border-white/10 rounded px-2.5 py-1.5 text-white" />
               </div>
-              <div className="grid grid-cols-3 gap-2.5 text-[11px]">
+              <div className="grid grid-cols-4 gap-2.5 text-[11px]">
                 <div className="space-y-1">
                   <label className="text-zinc-500">泰文 Name Th</label>
                   <input type="text" value={catNameTh} onChange={(e) => setCatNameTh(e.target.value)} className="w-full bg-[#1e1e1e] border border-white/10 rounded px-2 py-1 text-white" />
@@ -11137,6 +11141,10 @@ ${customerDetails}
                 <div className="space-y-1">
                   <label className="text-zinc-500">韓文 Name Ko</label>
                   <input type="text" value={catNameKo} onChange={(e) => setCatNameKo(e.target.value)} className="w-full bg-[#1e1e1e] border border-white/10 rounded px-2 py-1 text-white" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-zinc-500">越文 Name Vi</label>
+                  <input type="text" value={catNameVi} onChange={(e) => setCatNameVi(e.target.value)} className="w-full bg-[#1e1e1e] border border-white/10 rounded px-2 py-1 text-white" />
                 </div>
               </div>
             </div>
