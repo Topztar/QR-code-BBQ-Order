@@ -9,7 +9,8 @@
     "start": "node dist/server.cjs",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "db:upload": "tsx upload-state.ts"
+    "db:upload": "tsx upload-state.ts",
+    "db:download": "tsx download-state.ts"
   },
   "devDependencies": {
     "firebase-tools": "^13.12.0"
