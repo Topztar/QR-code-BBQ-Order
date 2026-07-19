@@ -7,7 +7,7 @@ import { initializeApp as initializeClientApp, getApps as getClientApps } from '
 import { getFirestore as getClientFirestore, collection, doc, getDoc, getDocs, setDoc, writeBatch } from 'firebase/firestore';
 import { createServer as createViteServer } from 'vite';
 import { Order, Ingredient, MenuItem, OrderItem, Category, TableConfig, OperatingHourSlot, Reservation, Language } from './src/types';
-import { INITIAL_MENU, INITIAL_INGREDIENTS, INGREDIENT_RECIPE_MAP } from './src/data';
+import { INITIAL_MENU, INITIAL_INGREDIENTS, INITIAL_CATEGORIES, INGREDIENT_RECIPE_MAP } from './src/data';
 import { GoogleGenAI, Type } from '@google/genai';
 
 function getGeminiClient(): GoogleGenAI | null {
@@ -188,16 +188,7 @@ interface InventoryLog {
 
 let inventoryLogs: InventoryLog[] = [];
 
-let liveCategories: Category[] = [
-  { id: 'tomyum', name: { zh: '冬蔭功系列 🍜', en: 'Tom Yum Soups', ko: '똠얌 수프 시리즈', ja: 'トムヤムスープ類', th: 'ชุดต้มยำสุดแซ่บ', vi: 'Dòng súp Tom Yum 🍜' } },
-  { id: 'noodles', name: { zh: '單人熱麵食 🥢', en: 'Single Noodles', ko: '단품 매운 면 요리', ja: 'お一人様用麺類', th: 'บะหมี่และก๋วยเตี๋ยวจานเดี่ยว', vi: 'Mì tô phục vụ đơn 🥢' } },
-  { id: 'combos', name: { zh: '主廚精選套餐 🍱', en: 'Signature Meals', ko: '시그니처 세트 요리', ja: '主理人お得セット', th: 'เซตเมนูยอดนิยม Sabay', vi: 'Set ăn Signature 🍱' } },
-  { id: 'veggies', name: { zh: '小農鮮蔬菜 🥬', en: 'Fresh Veggies', ko: '신선한 채소 구이', ja: '地元新鮮野菜焼き', th: 'ผักสดฟาร์มย่าง', vi: 'Rau củ tươi sạch 🥬' } },
-  { id: 'skewers', name: { zh: '原味碳烤肉類 🍢', en: 'Charcoal BBQ Skewers', ko: '오리지널 숯불 꼬치', ja: 'タイ風肉串炭火焼き', th: 'บาร์บีคิวเสียบไม้ย่าง', vi: 'Xiên nướng than 🍢' } },
-  { id: 'seafood', name: { zh: '招牌泰式海鮮 🦐', en: 'Thai Seafood BBQ', ko: '시그니처 태국식 해산물 구이', ja: '本格タイ風炭火焼きシーフード', th: 'อาหารทะเลเผาสูตรเด็ด', vi: 'Hải sản nướng Thái Lan 🦐' } },
-  { id: 'sweets', name: { zh: '泰式特色甜品 🍰', en: 'Desserts & Sweets', ko: '태국식 달콤 디저트', ja: 'タイ風特製デザート', th: 'ขนมหวานและพุดดิ้งสูตรพิเศษ', vi: 'Tráng miệng kiểu Thái 🍰' } },
-  { id: 'drinks', name: { zh: '泰特色沁涼飲品 🍹', en: 'Thai Cold Drinks', ko: '태국식 야외 청涼 飲料', ja: 'タイ風さわやかドリンク', th: 'เครื่องดื่มดับร้อนรสสดชื่น', vi: 'Đồ uống lạnh kiểu Thái 🍹' } },
-].map((cat, idx) => ({ ...cat, orderIndex: idx }));
+let liveCategories: Category[] = [...INITIAL_CATEGORIES];
 
 const defaultCategories = [...liveCategories];
 
@@ -220,7 +211,7 @@ let liveReservations: Reservation[] = [];
 
 let liveTakeoutSeq = 0;
 let lastTakeoutDate = new Date().toDateString();
-let liveMinSpendPerPerson = 200; // default minimum spend NT$ 200 per guest
+let liveMinSpendPerPerson = 500; // default minimum spend NT$ 200 per guest
 
 let liveOperatingHours: OperatingHourSlot[] = [
   { id: 'oh-1', name: '午餐時段 Lunch Session', start: '11:00', end: '14:30', days: [0, 1, 2, 3, 4, 5, 6], isActive: true },
@@ -229,12 +220,31 @@ let liveOperatingHours: OperatingHourSlot[] = [
 
 let liveRestDays: string[] = []; // Store public holidays as "YYYY-MM-DD"
 
-let liveCustomerNotice = '📣 歡迎來到沙貝泰式炭烤！我們提供正宗的泰南冬蔭功 and 頂級碳烤串燒。內用低消每人 200 元，用餐限時 60 分鐘。祝您用餐愉快！Sabay Thai BBQ wishes you a delicious meal!';
+let liveCustomerNotice = "📣 歡迎來到沙貝泰式炭烤！我們提供正宗的泰南冬蔭功&頂級碳烤串燒。最後點餐為23:30。內用低消每人 500 元，未達低消用餐限時 60 分鐘。祝您用餐愉快！Sabay Thai BBQ wishes you a delicious meal!";
 
 let liveServicePaused = false; // Kitchen Service Pause toggle for high order volumes
 
 
-let liveOptionRules: any[] = [];
+let liveOptionRules: any[] = [
+  {
+    "id": "rule-1784360566576",
+    "name": "加河粉",
+    "category": "加配料",
+    "price": 20
+  },
+  {
+    "id": "rule-1784360574891",
+    "name": "加米線",
+    "category": "加配料",
+    "price": 20
+  },
+  {
+    "id": "rule-1784360613823",
+    "name": "升級套餐(烤蔬菜+泰奶一杯)",
+    "category": "加配料",
+    "price": 140
+  }
+];
 let livePromoCombo = {
   enabled: true,
   requiredQty: 10,
@@ -243,35 +253,35 @@ let livePromoCombo = {
 };
 let livePromoCombos: any[] = [];
 let livePrinterSettings = {
-  kitchen: {
-    connectionType: 'IP',
-    ip: '192.168.1.101',
-    usbPort: 'USB001',
-    width: '80mm',
-    fontSizeFactor: 1.0,
-    restaurantName: '沙貝燒烤 泰式廚房',
-    printTelephone: '02-1234-5678',
-    printAddress: '台北市信義區泰式一番街8號',
-    printTimeEnabled: true,
-    headerPrefix: '★★★ 廚房工作備餐單 ★★★',
-    footerSuffix: '請主廚盡速配餐出餐！'
+  "bill": {
+    "cashDrawerOposName": "CashDrawer1",
+    "usbPort": "USB002",
+    "cashDrawerDriver": "OPOS",
+    "printAddress": "桃園市大園區高鐵北路二段198號1樓",
+    "ip": "192.168.1.102",
+    "cashDrawerEscPosCommand": "1B700019FA",
+    "restaurantName": "沙貝燒烤 SABAY BBQ",
+    "fontSizeFactor": 0.8,
+    "connectionType": "USB",
+    "footerSuffix": "謝謝光臨，歡迎再度光臨！",
+    "headerPrefix": "★★★ 顧客結帳明細單 ★★★",
+    "cashDrawerEnabled": true,
+    "printTelephone": "0966626408",
+    "printTimeEnabled": true,
+    "width": "58mm"
   },
-  bill: {
-    connectionType: 'USB',
-    ip: '192.168.1.102',
-    usbPort: 'USB002',
-    width: '58mm',
-    fontSizeFactor: 0.8,
-    restaurantName: '沙貝燒烤 SABAY BBQ',
-    printTelephone: '02-1234-5678',
-    printAddress: '台北市信義區泰式一番街8號',
-    printTimeEnabled: true,
-    headerPrefix: '★★★ 顧客結帳明細單 ★★★',
-    footerSuffix: '謝謝光臨，歡迎再度光臨！',
-    cashDrawerEnabled: true,
-    cashDrawerDriver: 'OPOS', // 'OPOS' | 'POS_NET' | 'ESC_POS_RAW'
-    cashDrawerOposName: 'CashDrawer1',
-    cashDrawerEscPosCommand: '1B700019FA' // ESC p 0 25 250 in Hex
+  "kitchen": {
+    "printTelephone": "0966626408",
+    "printTimeEnabled": true,
+    "width": "80mm",
+    "footerSuffix": "請主廚盡速配餐出餐！",
+    "restaurantName": "沙貝燒烤 泰式廚房",
+    "fontSizeFactor": 1,
+    "connectionType": "IP",
+    "printAddress": "桃園市大園區高鐵北路二段198號1樓",
+    "ip": "192.168.1.101",
+    "usbPort": "USB001",
+    "headerPrefix": "★★★ 廚房工作備餐單 ★★★"
   }
 };
 
@@ -385,7 +395,16 @@ let printLogs: { id: string; timestamp: string; content: string; orderId: string
 // In-Memory Push Promo Dispatch Queue
 let promoNotifications: { id: string; timestamp: string; title: string; message: string; badge: string; isRead: boolean }[] = [];
 
-let livePopularItemIds = ['ty-01', 'nd-01', 'sk-02', 'sk-01'];
+let livePopularItemIds = [
+  "ty-01",
+  "nd-01",
+  "sk-02",
+  "sk-01",
+  "dish-2605122152569",
+  "dish-2509281752083",
+  "dish-2509271759269",
+  "dish-2207122341013"
+];
 
 let liveMemberPointsRatio = 20; // default points ratio: 每20元新增1點
 let liveMemberRewards = [

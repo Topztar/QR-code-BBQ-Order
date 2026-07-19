@@ -11,7 +11,7 @@ import { Language, MenuItem, Ingredient, Order, OrderStatus, OrderItem, Category
 import { getOfflineQueue, addRequestToQueue, clearOfflineQueue, processOfflineQueue, QueuedRequest } from './lib/offlineQueue';
 import { safeStorage } from './lib/safeStorage';
 
-import { TRANSLATIONS, INITIAL_MENU } from './data';
+import { TRANSLATIONS, INITIAL_MENU, INITIAL_CATEGORIES } from './data';
 import { LanguageSelector } from './components/LanguageSelector';
 import { GoogleLoginMock } from './components/GoogleLoginMock';
 import { CustomerOrderView } from './components/CustomerOrderView';
@@ -114,20 +114,10 @@ export default function App() {
   // Helper to enrich categories with missing translations
   const enrichCategories = (cats: Category[]): Category[] => {
     if (!Array.isArray(cats)) return [];
-    const defaultCats: { [key: string]: any } = {
-      tomyum: { zh: '冬蔭功系列 🍜', en: 'Tom Yum Soups', ko: '똠얌 수프 시리즈', ja: 'トムヤムスープ類', th: 'ชุดต้มยำสุดแซ่บ', vi: 'Dòng súp Tom Yum 🍜' },
-      noodles: { zh: '單人熱麵食 🥢', en: 'Single Noodles', ko: '단품 매운 면 요리', ja: 'お一人様用麺類', th: 'บะหมี่และก๋วยเตี๋ยวจานเดี่ยว', vi: 'Mì tô phục vụ đơn 🥢' },
-      combos: { zh: '主廚精選套餐 🍱', en: 'Signature Meals', ko: '시그니처 세트 요리', ja: '主理人お得セット', th: 'เซตเมนูยอดนิยม Sabay', vi: 'Set ăn Signature 🍱' },
-      veggies: { zh: '小農鮮蔬菜 🥬', en: 'Fresh Veggies', ko: '신선한 채소 구い', ja: '地元新鮮野菜焼き', th: 'ผักสดฟาร์มย่าง', vi: 'Rau củ tươi sạch 🥬' },
-      skewers: { zh: '原味碳烤肉類 🍢', en: 'Charcoal BBQ Skewers', ko: '오리지널 숯불 꼬치', ja: 'タイ風肉串炭火焼き', th: 'บาร์บีคิวเสียบไม้ย่าง', vi: 'Xiên nướng than 🍢' },
-      seafood: { zh: '招牌泰式海鮮 🦐', en: 'Thai Seafood BBQ', ko: '시그니처 태국식 해산물 구이', ja: '本格タイ風炭火焼きシーフード', th: 'อาหารทะเลเผาสูตรเด็ด', vi: 'Hải sản nướng Thái Lan 🦐' },
-      sweets: { zh: '泰式特色甜品 🍰', en: 'Desserts & Sweets', ko: '태국식 달콤 디저트', ja: 'タイ風特製デザート', th: 'ขนมหวานและพุดดิ้งสูตรพิเศษ', vi: 'Tráng miệng kiểu Thái 🍰' },
-      drinks: { zh: '泰特色沁涼飲品 🍹', en: 'Thai Cold Drinks', ko: '태국식 야외 청涼 飲料', ja: 'タイ風さわやかドリンク', th: 'เครื่องดื่มดับร้อนรสสดชื่น', vi: 'Đồ uống lạnh kiểu Thái 🍹' }
-    };
     return cats.map(cat => {
-      const defaultCat = defaultCats[cat.id];
+      const defaultCat = INITIAL_CATEGORIES.find(c => c.id === cat.id);
       if (defaultCat) {
-        const name = { ...defaultCat, ...cat.name };
+        const name = { ...defaultCat.name, ...cat.name };
         return { ...cat, name };
       }
       return cat;
