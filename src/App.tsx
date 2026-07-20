@@ -30,7 +30,20 @@ interface AnalyticsData {
 }
 
 export default function App() {
-  const [lang, setLang] = useState<Language>('zh');
+  const [lang, setLang] = useState<Language>(() => {
+    try {
+      const stored = safeStorage.getItem('sabay-language');
+      return (stored as Language) || 'zh';
+    } catch {
+      return 'zh';
+    }
+  });
+
+  const handleLanguageChange = (newLang: Language) => {
+    setLang(newLang);
+    safeStorage.setItem('sabay-language', newLang);
+  };
+
   const [activeTab, setActiveTab] = useState<'customer' | 'kitchen' | 'admin' | 'cashier'>('customer');
   const [lineProfile, setLineProfile] = useState<any>(null);
   const [adminSubTab, setAdminSubTab] = useState<'stats' | 'orders' | 'inventory' | 'menu' | 'members' | 'cashier' | 'printer' | 'options' | 'eod' | 'terminal' | undefined>(undefined);
@@ -1507,7 +1520,7 @@ export default function App() {
                   }}
                 />
               )}
-              <LanguageSelector currentLang={lang} onLanguageChange={(l) => setLang(l)} />
+              <LanguageSelector currentLang={lang} onLanguageChange={handleLanguageChange} />
             </div>
           </div>
         </div>

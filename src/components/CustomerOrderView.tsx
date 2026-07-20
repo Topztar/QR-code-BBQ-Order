@@ -1,6 +1,7 @@
 import { apiFetch } from "../lib/api";
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { MenuItem, OrderItem, FoodCustomization, Order, Language, Category, TableConfig, CustomAddOn, OrderHistoryUserStatus, OrderHistoryBillStatus } from '../types';
+import { getLocalizedText } from '../utils/i18n';
 import { TRANSLATIONS } from '../data';
 import { safeStorage, safeSessionStorage } from '../lib/safeStorage';
 import { ShoppingCart, Clock, Check, AlertTriangle, ChevronRight, HelpCircle, X, Sparkles, BellRing, QrCode, Coins, Plus, Minus, Star, MessageSquare, Flame, ArrowUp } from 'lucide-react';
@@ -851,11 +852,11 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
       id: cartId,
       menuItemId: reward.menuItemId,
       name: {
-        zh: `🎁 點數兌換：${reward.name?.zh || '免費餐點'}`,
-        en: `🎁 Points Redeemed: ${reward.name?.en || 'Complimentary Item'}`,
-        ko: `🎁 포인트 교환: ${reward.name?.ko || reward.name?.en || '컴플리멘터리'}`,
-        ja: `🎁 ポイント引き換え: ${reward.name?.ja || reward.name?.zh || '無料メニュー'}`,
-        th: `🎁 แลกคะแนน: ${reward.name?.th || reward.name?.en || 'เมนูฟรี'}`
+        zh: `🎁 點數兌換：${getLocalizedText(reward.name, 'zh') || '免費餐點'}`,
+        en: `🎁 Points Redeemed: ${getLocalizedText(reward.name, 'en') || 'Complimentary Item'}`,
+        ko: `🎁 포인트 교환: ${getLocalizedText(reward.name, 'ko') || getLocalizedText(reward.name, 'en') || '컴플리멘터리'}`,
+        ja: `🎁 ポイント引き換え: ${getLocalizedText(reward.name, 'ja') || getLocalizedText(reward.name, 'zh') || '無料メニュー'}`,
+        th: `🎁 แลกคะแนน: ${getLocalizedText(reward.name, 'th') || getLocalizedText(reward.name, 'en') || 'เมนูฟรี'}`
       },
       price: 0,
       qty: 1,
@@ -878,9 +879,9 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
     setHoverCartItem(redeemedOrderItem);
     setIsHoverCartOpen(true);
     setIsCartOpen(false);
-    showToast(`🎉 兌換成功！已扣除 ${reward.cost} 點，並將『${reward.name?.zh || '商品'}』作為點數賀禮存入購物車！`, 'success');
+    showToast(`🎉 兌換成功！已扣除 ${reward.cost} 點，並將『${getLocalizedText(reward.name, 'zh') || '商品'}』作為點數賀禮存入購物車！`, 'success');
     
-    setRedeemMessage(`🎉 兌換成功！已扣除 ${reward.cost} 點，並將『${reward.name?.zh || '商品'}』作為點數賀禮存入購物車！`);
+    setRedeemMessage(`🎉 兌換成功！已扣除 ${reward.cost} 點，並將『${getLocalizedText(reward.name, 'zh') || '商品'}』作為點數賀禮存入購物車！`);
     setTimeout(() => {
       setRedeemMessage(null);
     }, 6000);
@@ -1911,7 +1912,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                           🪙 {item.cost} 點
                         </span>
                       </div>
-                      <h5 className="font-extrabold text-xs text-white leading-snug">{item.name[currentLang] || item.name['zh'] || item.name['en']}</h5>
+                      <h5 className="font-extrabold text-xs text-white leading-snug">{getLocalizedText(item.name, currentLang)}</h5>
                       <span className="text-[10px] text-zinc-500 block">市價 NT$ {item.originalPrice}</span>
                     </div>
                     
@@ -2027,7 +2028,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                     </span>
                   )
                 )}
-                <span>{cat.name[currentLang] || cat.name['zh'] || cat.id}</span>
+                <span>{(getLocalizedText(cat.name, currentLang) || cat.id)}</span>
               </button>
             );
           })}
@@ -2067,7 +2068,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                 <h3 className={`text-sm sm:text-base font-black font-display tracking-widest ${
                   isSimplifiedMode ? 'text-black' : 'text-[#E5B453]'
                 }`}>
-                  {cat.name[currentLang] || cat.name['zh'] || cat.id}
+                  {(getLocalizedText(cat.name, currentLang) || cat.id)}
                 </h3>
                 <span className={`text-[10px] font-mono ${isSimplifiedMode ? 'text-zinc-500' : 'text-white/45'}`}>
                   ({sortedItemsInCat.length})
@@ -2111,7 +2112,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                           {item.image ? (
                             <img
                               src={item.image}
-                              alt={item.name?.[currentLang] || item.name?.zh || 'dish'}
+                              alt={getLocalizedText(item.name, currentLang) || 'dish'}
                               className="w-full h-full object-cover hover:scale-105 transition duration-300"
                               referrerPolicy="no-referrer"
                             />
@@ -2139,7 +2140,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                         <div className="flex-1 p-3 flex flex-col justify-between min-w-0">
                           <div className="space-y-1">
                             <h4 className="font-extrabold text-black text-sm sm:text-base md:text-lg leading-tight font-sans whitespace-normal break-words">
-                              {item.name?.[currentLang] || item.name?.zh || ''}
+                              {getLocalizedText(item.name, currentLang) || ''}
                             </h4>
                             
                             <div className="flex items-center space-x-1.5 flex-wrap">
@@ -2212,7 +2213,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                         {item.image ? (
                           <img
                             src={item.image}
-                            alt={item.name?.[currentLang] || item.name?.zh || 'dish'}
+                            alt={getLocalizedText(item.name, currentLang) || 'dish'}
                             className="w-full h-full object-cover hover:scale-105 transition duration-500"
                             referrerPolicy="no-referrer"
                           />
@@ -2244,7 +2245,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                         <div className="space-y-1">
                           <div className="flex items-center space-x-1.5 flex-wrap gap-1">
                             <h5 className="font-bold text-white text-xs sm:text-sm leading-tight font-serif tracking-wide truncate">
-                              {item.name?.[currentLang] || item.name?.zh || ''}
+                              {getLocalizedText(item.name, currentLang) || ''}
                             </h5>
                             {item.isNotSpicy ? (
                               <span className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/35 text-[8px] font-black px-1 rounded-sm leading-none shrink-0 py-0.5">
@@ -2371,7 +2372,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
             }`}>
               <div className="flex items-start justify-between gap-1.5">
                 <span className={`font-black text-sm sm:text-base ${isSimplifiedMode ? 'text-black' : 'text-zinc-100'}`}>
-                  {hoverCartItem.name?.[currentLang] || hoverCartItem.name?.zh || ''}
+                  {getLocalizedText(hoverCartItem.name, currentLang) || ''}
                 </span>
                 <span className={`font-mono text-xs font-bold leading-none px-2.5 py-1 rounded shrink-0 ${
                   isSimplifiedMode ? 'bg-[#FFA500] text-black font-extrabold border border-black' : 'bg-[#E5B453]/20 text-[#E5B453]'
@@ -2404,7 +2405,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                 )}
                 {hoverCartItem.customization.selectedAddOns && hoverCartItem.customization.selectedAddOns.map((addOn, index) => (
                   <span key={index} className={`text-[10px] px-1.5 py-0.5 rounded ${isSimplifiedMode ? 'bg-[#FFA500]/10 text-black font-bold' : 'bg-[#E5B453]/10 border border-[#E5B453]/15 text-[#E5B453]'}`}>
-                    ＋{addOn.name}
+                    ＋{getLocalizedText(addOn.name, currentLang)}
                   </span>
                 ))}
               </div>
@@ -2464,7 +2465,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                 <>
                   <img
                     src={selectedDetailItem.image}
-                    alt={selectedDetailItem?.name?.[currentLang] || selectedDetailItem?.name?.zh || 'dish'}
+                    alt={getLocalizedText(selectedDetailItem?.name, currentLang) || 'dish'}
                     className="w-full h-full object-cover opacity-90 group-hover:scale-102 transition duration-500"
                     referrerPolicy="no-referrer"
                   />
@@ -2491,7 +2492,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
               <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/95 via-black/55 to-transparent p-5 text-left">
                 <div className="flex items-center gap-2 flex-wrap">
                   <h4 className={`font-serif tracking-wide ${isSimplifiedMode ? 'text-white text-xl font-black' : 'text-white text-lg font-bold'}`}>
-                    {selectedDetailItem?.name?.[currentLang] || selectedDetailItem?.name?.zh || ''}
+                    {getLocalizedText(selectedDetailItem?.name, currentLang) || ''}
                   </h4>
                   {selectedDetailItem.isNotSpicy ? (
                     <span className="bg-emerald-500/95 text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded flex items-center gap-0.5 select-none shrink-0">
@@ -2627,7 +2628,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                             }`}>
                               {isSelected && <Check size={11} className="text-black stroke-[4]" />}
                             </div>
-                            <span className={`text-xs leading-tight ${isSimplifiedMode ? 'font-black' : ''}`}>{addOn.name}</span>
+                            <span className={`text-xs leading-tight ${isSimplifiedMode ? 'font-black' : ''}`}>{getLocalizedText(addOn.name, currentLang)}</span>
                           </div>
                           <span className={`font-mono text-[11px] font-bold shrink-0 ml-1 ${isSimplifiedMode ? 'text-amber-800 font-black' : 'text-amber-400'}`}>+${addOn.price}</span>
                         </button>
@@ -2695,7 +2696,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                             return (
                               <div key={ing.id} className="flex items-center justify-between bg-black/45 p-2 rounded border border-white/5">
                                 <div className="text-white/80 shrink-0">
-                                  <span className="font-bold">{ing.name.zh}</span>
+                                  <span className="font-bold">{getLocalizedText(ing.name, 'zh')}</span>
                                   <span className="text-[10px] text-zinc-500 ml-1">({ing.stock} {ing.unit})</span>
                                 </div>
                                 <div className="flex items-center space-x-1.5 ml-2">
@@ -2838,7 +2839,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                       isSimplifiedMode ? 'bg-[#FFF9EE] border-zinc-300 text-black' : 'bg-white/5 border-white/5'
                     }`}>
                       <div className="text-left space-y-1">
-                        <h6 className={`font-bold text-sm leading-snug ${isSimplifiedMode ? 'text-black text-base font-black' : 'text-white'}`}>{item.name?.[currentLang] || item.name?.zh || ''}</h6>
+                        <h6 className={`font-bold text-sm leading-snug ${isSimplifiedMode ? 'text-black text-base font-black' : 'text-white'}`}>{getLocalizedText(item.name, currentLang) || ''}</h6>
                         <div className="flex flex-wrap gap-1">
                           {item.customization.noodleType && (
                             <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono border ${
@@ -2865,7 +2866,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                             <span key={addOn.id} className={`text-[10px] px-1.5 py-0.5 rounded font-mono border ${
                               isSimplifiedMode ? 'bg-[#FFA500]/15 text-black border-[#FFA500] font-extrabold' : 'bg-[#E5B453]/15 text-[#E5B453] border-[#E5B453]/15'
                             }`}>
-                              +{addOn.name}(+${addOn.price})
+                              +{getLocalizedText(addOn.name, currentLang)}(+${addOn.price})
                             </span>
                           ))}
                         </div>
@@ -3213,7 +3214,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                                 {order.items.map((it, idx) => (
                                   <div key={idx} className="flex justify-between font-medium">
                                     <span>
-                                      {it.name?.[currentLang] || it.name?.zh || ''} {it.qty} {currentLang === 'vi' ? 'phần' : '份'}
+                                      {getLocalizedText(it.name, currentLang) || ''} {it.qty} {currentLang === 'vi' ? 'phần' : '份'}
                                     </span>
                                     <span className="font-mono text-white/40">NT$ {it.price * it.qty}</span>
                                   </div>
@@ -3507,7 +3508,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                                 <div key={iIdx} className="flex justify-between text-xs text-white/80 font-sans">
                                   <span className="flex items-center space-x-1">
                                     <span className="text-[#E5B453]">•</span>
-                                    <span>{it.name?.[currentLang] || it.name?.zh || it.name || ''}</span>
+                                    <span>{getLocalizedText(it.name, currentLang) || ''}</span>
                                     <strong className="text-[#E5B453] bg-white/5 px-1.5 py-0.2 rounded text-[10px]">x {it.qty}</strong>
                                   </span>
                                   <span className="font-mono text-white/40">NT$ {it.price * it.qty}</span>
@@ -3787,7 +3788,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                             {item.image ? (
                               <img
                                 src={item.image}
-                                alt={item.name?.[currentLang] || item.name?.zh || 'dish'}
+                                alt={getLocalizedText(item.name, currentLang) || 'dish'}
                                 className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
                                 referrerPolicy="no-referrer"
                               />
@@ -3808,7 +3809,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                                 className="font-bold text-white text-xs sm:text-sm hover:text-[#E5B453] cursor-pointer transition truncate flex items-center gap-1"
                               >
                                 <Flame size={12} className="text-[#E5B453] fill-amber-500 shrink-0" />
-                                <span>{item.name?.[currentLang] || item.name?.zh || ''}</span>
+                                <span>{getLocalizedText(item.name, currentLang) || ''}</span>
                               </h6>
                               <div className="flex items-center gap-1.5 py-0.5">
                                 <span className="bg-amber-500/10 text-[#E5B453] text-[9px] px-1.5 py-0.5 rounded border border-[#E5B453]/20 font-sans font-black select-none">
@@ -3913,7 +3914,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                         {item.image ? (
                           <img
                             src={item.image}
-                            alt={item.name?.[currentLang] || item.name?.zh || 'dish'}
+                            alt={getLocalizedText(item.name, currentLang) || 'dish'}
                             className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
                             referrerPolicy="no-referrer"
                           />
@@ -3934,7 +3935,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                             className="font-bold text-white text-sm hover:text-[#E5B453] cursor-pointer transition line-clamp-1 flex items-center gap-1"
                           >
                             <Flame size={14} className="text-[#E5B453] fill-amber-500 shrink-0" />
-                            <span>{item.name?.[currentLang] || item.name?.zh || ''}</span>
+                            <span>{getLocalizedText(item.name, currentLang) || ''}</span>
                           </h6>
                           <div className="flex items-center gap-1.5 py-0.5">
                             <span className="bg-amber-500/10 text-[#E5B453] text-[9px] px-1.5 py-0.5 rounded border border-[#E5B453]/20 font-sans font-black select-none">

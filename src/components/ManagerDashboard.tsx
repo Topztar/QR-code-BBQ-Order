@@ -1,6 +1,7 @@
 import { apiFetch } from "../lib/api";
 import React, { useState, useEffect, useMemo } from 'react';
 import { Ingredient, Promotion, Language, Category, TableConfig, Order, OrderStatus, Reservation } from '../types';
+import { getLocalizedText } from '../utils/i18n';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
 import { TrendingUp, Package, Users, AlertTriangle, Play, RefreshCw, Layers, Sparkles, Send, Coins, KeyRound, Lock, Unlock, QrCode, Trash2, Plus, Edit, Download, Calendar, Eye, FileText, ShoppingBag, ShoppingCart, Copy, Check, ExternalLink, Minus, Flame, Printer, ArrowUp, ArrowDown, Maximize2, Minimize2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { db, auth } from '../lib/firebase';
@@ -749,7 +750,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
           }
 
           const customizationStr = customizationDetails.length > 0 ? ` [${customizationDetails.join('; ')}]` : '';
-          return `${it.name.zh} x${it.qty}${customizationStr}`;
+          return `${getLocalizedText(it.name, 'zh')} x${it.qty}${customizationStr}`;
         }).join(' | ');
 
         return [
@@ -1063,7 +1064,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
         alert('❌ 找不到該餐點資料！');
         return;
       }
-      itemName = dish.name.zh || dish.name;
+      itemName = getLocalizedText(dish.name, 'zh') || dish.name;
       unitPrice = dish.price;
 
       const existing = updatedItems.find((it: any) => it.menuItemId === dish.id);
@@ -2515,7 +2516,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     return analytics.categorySales.map((item) => {
       const foundCat = categories.find((c) => c.id === item.category);
       return {
-        name: foundCat ? foundCat.name[currentLang] || foundCat.name['zh'] : item.category,
+        name: foundCat ? getLocalizedText(foundCat.name, currentLang) : item.category,
         '營業額 NT$': item.revenue,
       };
     });
@@ -2546,7 +2547,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   const triggerEditCatMode = (cat: Category) => {
     setEditingCategory(cat);
     setCatId(cat.id);
-    setCatNameZh(cat.name?.zh || '');
+    setCatNameZh(getLocalizedText(cat.name, 'zh') || '');
     setCatNameEn(cat.name?.en || '');
     setCatNameTh(cat.name?.th || '');
     setCatNameJa(cat.name?.ja || '');
@@ -2746,7 +2747,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
 
   const triggerEditMenuItemMode = (item: any) => {
     setEditingItem(item);
-    setItemNameZh(item.name.zh || '');
+    setItemNameZh(getLocalizedText(item.name, 'zh') || '');
     setItemNameEn(item.name.en || '');
     setItemCategory(item.category || 'skewers');
     setItemPrice(item.price !== undefined ? item.price : 100);
@@ -3144,12 +3145,12 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                           <div className="flex items-center space-x-2 truncate">
                             <img
                               src={item.image}
-                              alt={item.name[currentLang] || item.name['zh'] || item.name['en']}
+                              alt={getLocalizedText(item.name, currentLang)}
                               className="w-8 h-8 object-cover rounded bg-black flex-shrink-0"
                               referrerPolicy="no-referrer"
                             />
                             <div className="truncate">
-                              <p className="font-bold text-white truncate">{item.name[currentLang] || item.name['zh'] || item.name['en']}</p>
+                              <p className="font-bold text-white truncate">{getLocalizedText(item.name, currentLang)}</p>
                               <p className="text-[9px] text-zinc-400 font-mono">ID: {item.id} • NT$ {item.price}</p>
                             </div>
                           </div>
@@ -3223,12 +3224,12 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                         <div className="flex items-center space-x-2 truncate">
                           <img
                             src={item.image}
-                            alt={item.name[currentLang] || item.name['zh'] || item.name['en']}
+                            alt={getLocalizedText(item.name, currentLang)}
                             className="w-8 h-8 object-cover rounded bg-black flex-shrink-0"
                             referrerPolicy="no-referrer"
                           />
                           <div className="truncate">
-                            <p className="font-bold text-white truncate">{item.name[currentLang] || item.name['zh'] || item.name['en']}</p>
+                            <p className="font-bold text-white truncate">{getLocalizedText(item.name, currentLang)}</p>
                             <p className="text-[10px] text-zinc-400 font-mono">Category: {item.category}</p>
                           </div>
                         </div>
@@ -3529,7 +3530,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                               <div className="mt-3 text-[11px] text-zinc-400 border-t border-white/5 pt-2.5">
                                 <p className="truncate text-left text-zinc-300">
                                   {(order.items || []).map(it => {
-                                    const pName = it.name ? (typeof it.name === 'object' ? (it.name.zh || it.name.en || '未命名') : it.name) : '未命名';
+                                    const pName = it.name ? (typeof it.name === 'object' ? ((getLocalizedText(it.name, currentLang) || '未命名')) : it.name) : '未命名';
                                     return `${pName} x${it.qty || 0}`;
                                   }).join(', ')}
                                 </p>
@@ -3913,7 +3914,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                               )}
                               <div className="space-y-1.5">
                                 {(ord.items || []).map((it) => {
-                                  const pName = it.name ? (typeof it.name === 'object' ? (it.name.zh || it.name.en || '未命名') : it.name) : '未命名';
+                                  const pName = it.name ? (typeof it.name === 'object' ? ((getLocalizedText(it.name, currentLang) || '未命名')) : it.name) : '未命名';
                                   return (
                                     <div key={it.id} className="pt-1.5 flex justify-between items-center text-zinc-300 font-sans">
                                       <div className="text-left space-y-0.5">
@@ -3985,7 +3986,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                             <option value="">-- 🔎 選擇加點品項 (Add Dish) --</option>
                             {menuItems && menuItems.filter(item => item.isAvailable !== false).map((item) => (
                               <option key={item.id} value={item.id}>
-                                {item.name.zh} (+NT$ {item.price})
+                                {getLocalizedText(item.name, 'zh')} (+NT$ {item.price})
                               </option>
                             ))}
                           </select>
@@ -6270,7 +6271,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                 <h5 className="font-bold text-xs text-rose-400 uppercase tracking-wider">下列原料項目已低於安全防線！</h5>
                 <p className="text-white/70 text-[11px] leading-tight">
                   建議立即辦理原料進貨或利用手動庫存調整以確保正常配餐原料消耗：
-                  {analytics.stockWarnings.map(ig => `【${ig.name.zh} 剩餘 ${ig.stock} ${ig.unit}】`).join('、')}
+                  {analytics.stockWarnings.map(ig => `【${getLocalizedText(ig.name, 'zh')} 剩餘 ${ig.stock} ${ig.unit}】`).join('、')}
                 </p>
               </div>
             </div>
@@ -6318,7 +6319,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                               {isWarning && (
                                 <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping inline-block shrink-0" />
                               )}
-                              <span>{ig.name.zh}</span>
+                              <span>{getLocalizedText(ig.name, 'zh')}</span>
                             </div>
                           </td>
                           <td className={`py-3 px-3 font-mono font-bold text-sm ${isWarning ? 'text-rose-400 font-extrabold' : 'text-zinc-100'}`}>
@@ -6383,7 +6384,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                       <div className="flex items-start justify-between gap-3 font-sans">
                         <div className="space-y-1">
                           <p className="font-extrabold text-white text-sm sm:text-base flex items-center gap-1.5 flex-wrap">
-                            <span>{ig.name.zh}</span>
+                            <span>{getLocalizedText(ig.name, 'zh')}</span>
                             {isWarning && (
                               <span className="text-[9px] bg-rose-500/15 text-rose-450 border border-rose-500/20 px-2 py-0.5 rounded font-black animate-pulse text-rose-400">
                                 ⚠️ 低於水位
@@ -6462,7 +6463,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                       className="w-full bg-black border border-white/10 rounded-lg px-2.5 py-2 outline-none text-white focus:border-[#E5B453]"
                     >
                       <option value="">請選擇要盤調的原料...</option>
-                      {ingredients.map(ig => <option key={ig.id} value={ig.id}>{ig.name.zh} ({ig.stock} {ig.unit})</option>)}
+                      {ingredients.map(ig => <option key={ig.id} value={ig.id}>{getLocalizedText(ig.name, 'zh')} ({ig.stock} {ig.unit})</option>)}
                     </select>
                   </div>
                   <div className="space-y-1">
@@ -6824,7 +6825,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                             {item.image ? (
                               <img
                                 src={item.image}
-                                alt={item.name.zh}
+                                alt={getLocalizedText(item.name, 'zh')}
                                 className="w-10 h-10 object-cover rounded-lg bg-black flex-shrink-0 border border-white/10"
                                 referrerPolicy="no-referrer"
                               />
@@ -6834,7 +6835,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                               </div>
                             )}
                             <div className="space-y-0.5 truncate">
-                              <p className="font-bold text-white text-[13px] truncate">{item.name.zh}</p>
+                              <p className="font-bold text-white text-[13px] truncate">{getLocalizedText(item.name, 'zh')}</p>
                               {item.name.en && <p className="text-[10px] text-zinc-500 truncate">{item.name.en}</p>}
                             </div>
                           </div>
@@ -6904,7 +6905,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                                   setConfirmActionModal({
                                     isOpen: true,
                                     title: '🚨 刪除餐點品項確認',
-                                    message: `您確定要永久刪除餐點 [${item.name.zh}] 嗎？刪除後，線上顧客與員工點餐畫面中將不再顯示此餐點，且此操作無法復原。`,
+                                    message: `您確定要永久刪除餐點 [${getLocalizedText(item.name, 'zh')}] 嗎？刪除後，線上顧客與員工點餐畫面中將不再顯示此餐點，且此操作無法復原。`,
                                     actionLabel: '確定刪除 Delete',
                                     onConfirm: async () => {
                                       await onDeleteMenuItem(item.id);
@@ -7003,7 +7004,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                           >
                             {catIndex + 1}
                           </span>
-                          <span className="text-xs sm:text-sm font-black text-white truncate">{cat.name.zh}</span>
+                          <span className="text-xs sm:text-sm font-black text-white truncate">{getLocalizedText(cat.name, 'zh')}</span>
                         </div>
                         
                         {/* 菜色分類排序 (Category Sorting Controls) */}
@@ -7063,7 +7064,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                           setConfirmActionModal({
                             isOpen: true,
                             title: '🧩 刪除餐點分類標籤確定',
-                            message: `⚠️ 安全確定：您確定要刪除 [${cat.name.zh}] 分類標籤嗎？刪除後，線上顧客與員工點餐畫面中此分類的所有餐點將不再顯示。`,
+                            message: `⚠️ 安全確定：您確定要刪除 [${getLocalizedText(cat.name, 'zh')}] 分類標籤嗎？刪除後，線上顧客與員工點餐畫面中此分類的所有餐點將不再顯示。`,
                             actionLabel: '確定刪除 Delete',
                             onConfirm: async () => {
                               await onDeleteCategory(cat.id);
@@ -7355,7 +7356,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                               >
                                 {menuItems.map(item => (
                                   <option key={item.id} value={item.id}>
-                                    {item.name?.zh || item.name} (NT$ {item.price})
+                                    {getLocalizedText(item.name, 'zh') || item.name} (NT$ {item.price})
                                   </option>
                                 ))}
                               </select>
@@ -8930,7 +8931,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                                 className="rounded border-zinc-700 bg-zinc-900 text-[#E5B453] focus:ring-0 w-3.5 h-3.5 cursor-pointer"
                               />
                               <div className="flex flex-col text-left truncate">
-                                <span className="text-[10px] truncate">{item.name?.zh || item.name}</span>
+                                <span className="text-[10px] truncate">{getLocalizedText(item.name, 'zh') || item.name}</span>
                                 <span className="text-[8px] text-zinc-500 font-mono">NT$ {item.price} • {item.category}</span>
                               </div>
                             </label>
@@ -8983,7 +8984,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                                 className="w-full bg-zinc-900 border border-white/10 rounded-lg p-2 text-xs text-white"
                               >
                                 {categories.map(cat => (
-                                  <option key={cat.id} value={cat.id}>{cat.name?.zh || cat.name}</option>
+                                  <option key={cat.id} value={cat.id}>{getLocalizedText(cat.name, 'zh') || cat.name}</option>
                                 ))}
                               </select>
                             </div>
@@ -9080,7 +9081,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
         const itemQuants: { [name: string]: { zh: string; qty: number } } = {};
         paidOrders.forEach(o => {
           o.items.forEach(it => {
-            const label = it.name.zh;
+            const label = getLocalizedText(it.name, 'zh');
             if (!itemQuants[label]) {
               itemQuants[label] = { zh: label, qty: 0 };
             }
@@ -9099,7 +9100,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
             const recipe = recipeCompositionMap[it.id];
             if (recipe) {
               recipe.forEach(rec => {
-                const ingObj = ingredients.find(ig => ig.name.zh === rec.name || ig.id === rec.name);
+                const ingObj = ingredients.find(ig => getLocalizedText(ig.name, 'zh') === rec.name || ig.id === rec.name);
                 if (ingObj) {
                   const match = rec.qty.match(/([\d\.]+)/);
                   const amountPerItem = match ? parseFloat(match[1]) : 1;
@@ -9145,7 +9146,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
           const lines = Object.entries(itemQuants).map(([lbl, val]) => `  • ${lbl.padEnd(16)} x${val.qty}`).join('\n');
           const ingredientLines = ingredients.map(ig => {
             const consumption = calculatedDeductions[ig.id] || 0;
-            return `  • ${ig.name.zh.padEnd(12)}: 剩餘 ${ig.stock} ${ig.unit} (今日已扣減 ${consumption} ${ig.unit})`;
+            return `  • ${getLocalizedText(ig.name, 'zh').padEnd(12)}: 剩餘 ${ig.stock} ${ig.unit} (今日已扣減 ${consumption} ${ig.unit})`;
           }).join('\n');
 
           const receiptBody = `
@@ -9315,7 +9316,7 @@ ${ingredientLines || '  (尚無庫存異動記錄)'}
                         const isWarning = ig.stock - consumption <= ig.minThreshold;
                         return (
                           <div key={ig.id} className="flex justify-between items-center border-b border-white/5 pb-1">
-                            <span>{ig.name.zh}</span>
+                            <span>{getLocalizedText(ig.name, 'zh')}</span>
                             <div className="text-right font-mono text-[11px]">
                               <span className="text-zinc-500">今日應扣: </span>
                               <span className="text-amber-400 font-bold pr-2">{consumption} {ig.unit}</span>
@@ -9384,7 +9385,7 @@ ${ingredientLines || '  (尚無庫存異動記錄)'}
                       const lines = Object.entries(itemQuants).map(([lbl, val]) => `  • ${lbl.padEnd(16)} x${val.qty}`).join('\n');
                       const ingredientLines = ingredients.map(ig => {
                         const consumption = calculatedDeductions[ig.id] || 0;
-                        return `  • ${ig.name.zh.padEnd(12)}: 剩餘 ${ig.stock} ${ig.unit} (今日已扣減 ${consumption} ${ig.unit})`;
+                        return `  • ${getLocalizedText(ig.name, 'zh').padEnd(12)}: 剩餘 ${ig.stock} ${ig.unit} (今日已扣減 ${consumption} ${ig.unit})`;
                       }).join('\n');
 
                       const receiptBody = `
@@ -9513,7 +9514,7 @@ ${ingredientLines || '  (尚無庫存異動記錄)'}
                              ) : (
                                 paginatedCartItems.map(item => (
                                    <div key={item.id} className="flex items-center justify-between bg-white/5 p-2 rounded-lg text-xs">
-                                      <span className="font-bold text-white">{item.name.zh}</span>
+                                      <span className="font-bold text-white">{getLocalizedText(item.name, 'zh')}</span>
                                       <div className="flex items-center gap-3">
                                          <span className="text-white/40">x{item.qty}</span>
                                          <span className="font-mono text-[#E5B453]">${item.price * item.qty}</span>
@@ -9584,7 +9585,7 @@ ${ingredientLines || '  (尚無庫存異動記錄)'}
                              <div className="flex items-center gap-2">
                                 <h4 className="text-xs font-bold text-white/60 uppercase tracking-tighter">菜單 Menu</h4>
                                 <span className="text-[10px] font-mono text-white/30">
-                                   ({categories.find(c => c.id === terminalCategory)?.name[currentLang] || categories.find(c => c.id === terminalCategory)?.name['zh'] || '全部 All'})
+                                   ({getLocalizedText(categories.find(c => c.id === terminalCategory)?.name, currentLang) || '全部 All'})
                                 </span>
                              </div>
                              <select
@@ -9621,7 +9622,7 @@ ${ingredientLines || '  (尚無庫存異動記錄)'}
                                          : 'bg-[#008ec4] text-white hover:bg-[#007cb3]'
                                    }`}
                                 >
-                                   {cat.name[currentLang] || cat.name['zh'] || cat.id}
+                                   {getLocalizedText(cat.name, currentLang) || cat.id}
                                 </button>
                              ))}
                           </div>
@@ -9650,7 +9651,7 @@ ${ingredientLines || '  (尚無庫存異動記錄)'}
                                       className="bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl p-3.5 text-left flex flex-col justify-between transition-all cursor-pointer w-full h-full min-h-[100px] aspect-[1.3/1] shadow-lg hover:border-[#E5B453]/40 active:scale-95 group"
                                    >
                                       <div className="text-[clamp(10px,1.15vw,14px)] font-black text-white group-hover:text-[#E5B453] leading-snug tracking-tight whitespace-normal break-words overflow-hidden" style={{ wordBreak: 'break-word' }}>
-                                         {item.name.zh}
+                                         {getLocalizedText(item.name, 'zh')}
                                       </div>
                                       <div className="text-[clamp(9px,1vw,12px)] font-mono font-black text-[#E5B453] text-right shrink-0 mt-1">
                                          $ {item.price}
@@ -9906,7 +9907,7 @@ ${ingredientLines || '  (尚無庫存異動記錄)'}
                             it.customization.soupBase === 'coconut-milk' ? '加椰奶(+50)' : '',
                             it.customization.notes ? `備註: ${it.customization.notes}` : ''
                           ].filter(Boolean).join('/');
-                          const pName = it.name ? (typeof it.name === 'object' ? (it.name.zh || it.name.en || '未命名') : it.name) : '未命名';
+                          const pName = it.name ? (typeof it.name === 'object' ? ((getLocalizedText(it.name, currentLang) || '未命名')) : it.name) : '未命名';
                           return `[ ] ${pName} x ${it.qty}份\n    【 ${spec} 】`;
                         }).join('\n');
                         const kitchenStr = `
@@ -9942,7 +9943,7 @@ ${specLines}
                       type="button"
                       onClick={() => {
                         const customerDetails = selectedOrder.items.map(it => {
-                          const pName = it.name ? (typeof it.name === 'object' ? (it.name.zh || it.name.en || '未命名') : it.name) : '未命名';
+                          const pName = it.name ? (typeof it.name === 'object' ? ((getLocalizedText(it.name, currentLang) || '未命名')) : it.name) : '未命名';
                           return `  ${pName.padEnd(16)} x${it.qty || 0}  $${(it.price || 0) * (it.qty || 0)}`;
                         }).join('\n');
                         const customerStr = `
@@ -10049,7 +10050,7 @@ ${customerDetails}
                         <select id="modal-append-item-select" className="bg-[#1e1e1e] border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white flex-1 cursor-pointer outline-none">
                           {menuItems.map((item: any) => (
                             <option key={item.id} value={item.id}>
-                              {item.name.zh || item.name} (NT$ {item.price})
+                              {getLocalizedText(item.name, 'zh') || item.name} (NT$ {item.price})
                             </option>
                           ))}
                         </select>
@@ -10277,7 +10278,7 @@ ${customerDetails}
                               it.customization.soupBase === 'coconut-milk' ? '加椰奶(+50)' : '',
                               it.customization.notes ? `備註: ${it.customization.notes}` : ''
                             ].filter(Boolean).join('/');
-                            const pName = it.name ? (typeof it.name === 'object' ? (it.name.zh || it.name.en || '未命名') : it.name) : '未命名';
+                            const pName = it.name ? (typeof it.name === 'object' ? ((getLocalizedText(it.name, currentLang) || '未命名')) : it.name) : '未命名';
                             return `[ ] ${pName} x ${it.qty || 0}份\n    【 ${spec} 】`;
                           }).join('\n');
                           const kitchenStr = `
@@ -10313,7 +10314,7 @@ ${specLines}
                         type="button"
                         onClick={() => {
                           const customerDetails = selectedOrder.items.map(it => {
-                            const pName = it.name ? (typeof it.name === 'object' ? (it.name.zh || it.name.en || '未命名') : it.name) : '未命名';
+                            const pName = it.name ? (typeof it.name === 'object' ? ((getLocalizedText(it.name, currentLang) || '未命名')) : it.name) : '未命名';
                             return `  ${pName.padEnd(16)} x${it.qty || 0}  $${(it.price || 0) * (it.qty || 0)}`;
                           }).join('\n');
                           const customerStr = `
@@ -10418,7 +10419,7 @@ ${customerDetails}
                         <select id="paid-modal-append-item-select" className="bg-[#1c1c1c] border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white flex-1 cursor-pointer outline-none">
                           {menuItems.map((item: any) => (
                             <option key={item.id} value={item.id}>
-                              {item.name.zh || item.name} (NT$ {item.price})
+                              {getLocalizedText(item.name, 'zh') || item.name} (NT$ {item.price})
                             </option>
                           ))}
                         </select>
@@ -10512,7 +10513,7 @@ ${customerDetails}
                               it.customization.soupBase === 'coconut-milk' ? '加椰奶(+50)' : '',
                               it.customization.notes ? `備註: ${it.customization.notes}` : ''
                             ].filter(Boolean).join('/');
-                            const pName = it.name ? (typeof it.name === 'object' ? (it.name.zh || it.name.en || '未命名') : it.name) : '未命名';
+                            const pName = it.name ? (typeof it.name === 'object' ? ((getLocalizedText(it.name, currentLang) || '未命名')) : it.name) : '未命名';
                             return `[ ] ${pName} x ${it.qty}份\n    【 ${spec} 】`;
                           }).join('\n');
                           const kitchenStr = `
@@ -10548,7 +10549,7 @@ ${specLines}
                         type="button"
                         onClick={() => {
                           const customerDetails = selectedOrder.items.map(it => {
-                            const pName = it.name ? (typeof it.name === 'object' ? (it.name.zh || it.name.en || '未命名') : it.name) : '未命名';
+                            const pName = it.name ? (typeof it.name === 'object' ? ((getLocalizedText(it.name, currentLang) || '未命名')) : it.name) : '未命名';
                             return `  ${pName.padEnd(16)} x${it.qty}  $${it.price * it.qty}`;
                           }).join('\n');
                           const customerStr = `
@@ -10629,7 +10630,7 @@ ${customerDetails}
                 <span className="font-bold text-white text-sm">
                   {paidModDetails.isAddingNew ? '追加餐點: ' : ''}
                   {typeof paidModDetails.item?.name === 'object'
-                    ? (paidModDetails.item.name.zh || paidModDetails.item.name.en || '')
+                    ? getLocalizedText(paidModDetails.item?.name, currentLang)
                     : (paidModDetails.item?.name || '')}
                 </span>
                 <span className="font-mono bg-white/5 border border-white/15 px-2 py-0.5 rounded text-white font-bold text-[10px]">
@@ -10999,7 +11000,7 @@ ${customerDetails}
                         return (
                           <div key={rec.ingredientId} className="flex items-center justify-between bg-white/5 px-2.5 py-1.5 rounded-lg border border-white/10 text-[11px]">
                             <span className="font-bold text-white/90">
-                              {ing ? `${ing.name.zh} (${ing.id})` : `未知材料 (${rec.ingredientId})`}
+                              {ing ? `${getLocalizedText(ing.name, 'zh')} (${ing.id})` : `未知材料 (${rec.ingredientId})`}
                             </span>
                             <div className="flex items-center space-x-2.5">
                               <span className="font-mono text-emerald-400 font-bold">
@@ -11031,7 +11032,7 @@ ${customerDetails}
                       <option value="">選擇要連動的原料...</option>
                       {ingredients.map(ing => (
                         <option key={ing.id} value={ing.id}>
-                          {ing.name.zh} (目前庫存: {ing.stock} {ing.unit})
+                          {getLocalizedText(ing.name, 'zh')} (目前庫存: {ing.stock} {ing.unit})
                         </option>
                       ))}
                     </select>
@@ -11299,7 +11300,7 @@ ${customerDetails}
             <div className="p-5 pb-3 border-b border-white/5 flex items-center justify-between">
               <h3 className="font-bold text-sm text-amber-400 flex items-center gap-1.5">
                 <Sparkles size={14} className="text-amber-400" />
-                <span>快速補貨：{quickRestockItem.name.zh}</span>
+                <span>快速補貨：{getLocalizedText(quickRestockItem.name, 'zh')}</span>
               </h3>
               <button
                 type="button"
@@ -11372,7 +11373,7 @@ ${customerDetails}
                   }
                   try {
                     await onRestock(quickRestockItem.id, amt);
-                    alert(`🎉 成功為「${quickRestockItem.name.zh}」快速進貨 +${amt} ${quickRestockItem.unit}！`);
+                    alert(`🎉 成功為「${getLocalizedText(quickRestockItem.name, 'zh')}」快速進貨 +${amt} ${quickRestockItem.unit}！`);
                     setQuickRestockItem(null);
                   } catch (err: any) {
                     console.error(err);

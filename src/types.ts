@@ -4,7 +4,7 @@ export type Language = 'zh' | 'en' | 'ko' | 'ja' | 'th' | 'vi';
 
 export interface CustomAddOn {
   id: string;
-  name: string;
+  name: { [key in Language]?: string } | string;
   price: number;
 }
 

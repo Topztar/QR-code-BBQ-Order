@@ -1,6 +1,7 @@
 import { apiFetch } from "../lib/api";
 import React, { useState, useEffect, useRef } from 'react';
 import { Order, OrderStatus, Language, TableConfig, MenuItem, Category, Ingredient } from '../types';
+import { getLocalizedText } from '../utils/i18n';
 import { TRANSLATIONS } from '../data';
 import { safeStorage } from '../lib/safeStorage';
 import { ChefHat, Printer, Trash2, Check, Flame, Ban, RefreshCw, Volume2, Wifi, Edit, Save, Settings, X, Clock, AlertTriangle, TrendingUp, Calendar, Info, Mic, Flag, Eye, Search, Timer, Download } from 'lucide-react';
@@ -1196,7 +1197,7 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
               全部品項 (All Stations)
             </button>
             {getCategoriesList().map((cat) => {
-              const name = cat.name[currentLang] || cat.name['zh'] || cat.id;
+              const name = (getLocalizedText(cat.name, currentLang) || cat.id);
               const isSelected = selectedCategory === cat.id;
               return (
                 <button
@@ -1239,10 +1240,10 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
                   <div className="p-4 border-b border-white/5 flex items-center justify-between bg-zinc-900/60 shrink-0 gap-3">
                     <div className="flex-1">
                       <h4 className="font-extrabold text-[#E5B453] text-[15px] font-serif tracking-wide">
-                        {dish.name[currentLang] || dish.name.zh || ''}
+                        {getLocalizedText(dish.name, currentLang)}
                       </h4>
                       <p className="text-[10px] text-white/40 uppercase tracking-widest mt-0.5">
-                        {currentLang === 'zh' ? (dish.name.en || 'Dishes Combo') : (dish.name.zh || '')}
+                        {(currentLang === 'zh' ? getLocalizedText(dish.name, 'en') || 'Dishes Combo' : getLocalizedText(dish.name, 'zh'))}
                       </p>
                     </div>
                     
@@ -1305,7 +1306,7 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
                                 )}
                                 {oi.customization.selectedAddOns?.map((addOn: any) => (
                                   <span key={addOn.id} className="bg-amber-500/5 text-amber-400 border border-amber-500/10 text-[9px] font-medium px-1 rounded">
-                                    +{addOn.name}
+                                    +{getLocalizedText(addOn.name, currentLang)}
                                   </span>
                                 ))}
                               </div>
@@ -1340,7 +1341,7 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
                   {/* Card bottom footer summary */}
                   <div className="p-3 bg-black/10 border-t border-white/5 flex items-center justify-between text-[10px] text-white/30 shrink-0">
                     <span>共有 {dish.orderItems.length} 個桌號點購此品項</span>
-                    <span className="font-mono">{dish.name[currentLang] || dish.name.zh || ''}</span>
+                    <span className="font-mono">{getLocalizedText(dish.name, currentLang)}</span>
                   </div>
                 </div>
               );
@@ -1539,7 +1540,7 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
                                 it.customization.soupBase === 'coconut-milk' ? t('coconutMilkAdd') : '',
                                 it.customization.notes ? `${t('notesLabel')}: ${it.customization.notes}` : ''
                               ].filter(Boolean).join('/');
-                              const itName = it.name[currentLang] || it.name.zh || '';
+                              const itName = getLocalizedText(it.name, currentLang);
                               return `[ ] ${itName} x ${it.qty} ${t('qtyPortion')}\n    【 ${spec} 】`;
                             }).join('\n');
                             const ticketStr = `
@@ -1645,7 +1646,7 @@ ${specLines}
                           >
                             <div className={`text-left flex-1 min-w-0 ${it.isCompleted ? 'opacity-40' : ''}`}>
                               <span className={`font-bold text-white text-sm block ${it.isCompleted ? 'line-through text-zinc-400' : ''}`}>
-                                 {it.name[currentLang] || it.name.zh || ''} <strong className="text-[#E5B453] font-mono text-base">x {it.qty}</strong> {t('qtyPortion')}
+                                 {getLocalizedText(it.name, currentLang)} <strong className="text-[#E5B453] font-mono text-base">x {it.qty}</strong> {t('qtyPortion')}
                                 {!isMatch && (
                                   <span className="ml-1.5 inline-block text-[9px] bg-zinc-800 text-zinc-500 font-medium px-1 rounded select-none">
                                     非選定分區
@@ -1673,7 +1674,7 @@ ${specLines}
                                 )}
                                 {it.customization.selectedAddOns?.map((addOn) => (
                                   <span key={addOn.id} className="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-semibold px-1.5 py-0.5 rounded font-sans">
-                                    +{addOn.name}
+                                    +{getLocalizedText(addOn.name, currentLang)}
                                   </span>
                                 ))}
                               </div>
@@ -2075,7 +2076,7 @@ ${specLines}
                           : 'bg-transparent text-zinc-400 border-white/10 hover:text-white'
                       }`}
                     >
-                      {cat.name[currentLang] || cat.name.zh || cat.id}
+                      {(getLocalizedText(cat.name, currentLang) || cat.id)}
                     </button>
                   ))}
                 </div>
@@ -2104,7 +2105,7 @@ ${specLines}
                 {menuItems
                   .filter((item) => {
                     const matchesCategory = kdsSelectedCategory === 'all' || item.category === kdsSelectedCategory;
-                    const matchesSearch = !kdsMenuSearch || item.name.zh.toLowerCase().includes(kdsMenuSearch.toLowerCase()) || (item.name.en && item.name.en.toLowerCase().includes(kdsMenuSearch.toLowerCase()));
+                    const matchesSearch = !kdsMenuSearch || getLocalizedText(item.name, 'zh').toLowerCase().includes(kdsMenuSearch.toLowerCase()) || (getLocalizedText(item.name, 'en') && getLocalizedText(item.name, 'en').toLowerCase().includes(kdsMenuSearch.toLowerCase()));
                     return matchesCategory && matchesSearch;
                   })
                   .map((item) => (
@@ -2113,7 +2114,7 @@ ${specLines}
                       className="p-2 rounded-lg bg-black/25 hover:bg-black/45 border border-white/5 flex items-center justify-between text-xs transition"
                     >
                       <div className="text-left flex-1 min-w-0 mr-2">
-                        <p className="font-bold text-white truncate text-[11px]">{item.name.zh}</p>
+                        <p className="font-bold text-white truncate text-[11px]">{getLocalizedText(item.name, 'zh')}</p>
                         <p className="text-[9px] text-zinc-500 font-mono truncate">ID: {item.id}</p>
                       </div>
                       <div className="flex items-center space-x-1.5 shrink-0">
@@ -2169,7 +2170,7 @@ ${specLines}
                       <div className="flex items-center justify-between">
                         <div className="text-left min-w-0">
                           <p className="font-bold text-white text-[11px] flex items-center gap-1">
-                            <span>{ig.name.zh}</span>
+                            <span>{getLocalizedText(ig.name, 'zh')}</span>
                             {isWarning && (
                               <span className="text-[9px] text-rose-400 font-extrabold flex items-center gap-0.5 shrink-0 bg-rose-500/10 px-1 rounded border border-rose-500/15">
                                 <AlertTriangle size={9} />
@@ -2662,7 +2663,7 @@ ${specLines}
                         <div className="flex items-center justify-between gap-3 flex-wrap">
                           <div className={it.isCompleted ? 'opacity-40 line-through' : ''}>
                             <span className="font-extrabold text-lg text-white block">
-                              {it.name[currentLang] || it.name.zh || ''}
+                              {getLocalizedText(it.name, currentLang)}
                             </span>
                             <span className="text-xs text-zinc-400 font-medium block mt-0.5 font-mono">{currentLang === 'zh' ? (it.name.en || '') : (it.name.zh || '')}</span>
                           </div>
@@ -2748,7 +2749,7 @@ ${specLines}
                               <div className="flex flex-wrap gap-1.5">
                                 {it.customization.selectedAddOns.map((addOn) => (
                                   <span key={addOn.id} className="bg-amber-500/15 text-amber-250 border border-amber-500/30 font-bold px-2 py-0.5 rounded text-xs">
-                                    ＋ {addOn.name} x{addOn.qty || 1}
+                                    ＋ {getLocalizedText(addOn.name, currentLang)} x{addOn.qty || 1}
                                   </span>
                                 ))}
                               </div>
@@ -2789,7 +2790,7 @@ ${specLines}
                         it.customization.soupBase === 'coconut-milk' ? t('coconutMilkAdd') : '',
                         it.customization.notes ? `${t('notesLabel')}: ${it.customization.notes}` : ''
                       ].filter(Boolean).join('/');
-                      const itName = it.name[currentLang] || it.name.zh || '';
+                      const itName = getLocalizedText(it.name, currentLang);
                       return `[ ] ${itName} x ${it.qty} ${t('qtyPortion')}\n    【 ${spec} 】`;
                     }).join('\n');
                     const ticketStr = `
