@@ -587,7 +587,7 @@ async function saveStateToFirestore() {
 }
 
 function sanitizeMenu(menu: MenuItem[]) {
-  const languages: Language[] = ['zh', 'en', 'ko', 'ja', 'th'];
+  const languages: Language[] = ['zh', 'en', 'ko', 'ja', 'th', 'vi'];
   menu.forEach((item: any) => {
     // Sanitize name
     if (!item.name) {
@@ -1253,10 +1253,10 @@ app.post('/api/menu', (req, res) => {
   const newItem: MenuItem = {
     id: `dish-${Date.now()}`,
     category,
-    name: typeof name === 'object' ? name : { zh: name || '', en: name || '', ko: name || '', ja: name || '', th: name || '' },
+    name: typeof name === 'object' ? name : { zh: name || '', en: name || '', ko: name || '', ja: name || '', th: name || '', vi: name || '' },
     price: Number(price),
     image: image || 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=400',
-    description: typeof description === 'object' ? description : { zh: description || '', en: description || '', ko: description || '', ja: description || '', th: description || '' },
+    description: typeof description === 'object' ? description : { zh: description || '', en: description || '', ko: description || '', ja: description || '', th: description || '', vi: description || '' },
     available: true,
     isSetMeal: !!isSetMeal,
     requiredSaucesOption: !!requiredSaucesOption,
@@ -1314,10 +1314,10 @@ app.put('/api/menu/:id', (req, res) => {
     const updated = {
       ...liveMenu[itemIndex],
       category: category || liveMenu[itemIndex].category,
-      name: name !== undefined ? (typeof name === 'object' ? name : { zh: name || '', en: name || '', ko: name || '', ja: name || '', th: name || '' }) : liveMenu[itemIndex].name,
+      name: name !== undefined ? (typeof name === 'object' ? name : { zh: name || '', en: name || '', ko: name || '', ja: name || '', th: name || '', vi: name || '' }) : liveMenu[itemIndex].name,
       price: price !== undefined ? Number(price) : liveMenu[itemIndex].price,
       image: image || liveMenu[itemIndex].image,
-      description: description !== undefined ? (typeof description === 'object' ? description : { zh: description || '', en: description || '', ko: description || '', ja: description || '', th: description || '' }) : liveMenu[itemIndex].description,
+      description: description !== undefined ? (typeof description === 'object' ? description : { zh: description || '', en: description || '', ko: description || '', ja: description || '', th: description || '', vi: description || '' }) : liveMenu[itemIndex].description,
       available: available !== undefined ? !!available : liveMenu[itemIndex].available,
       isSetMeal: isSetMeal !== undefined ? !!isSetMeal : liveMenu[itemIndex].isSetMeal,
       requiredSaucesOption: requiredSaucesOption !== undefined ? !!requiredSaucesOption : liveMenu[itemIndex].requiredSaucesOption,
