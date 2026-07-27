@@ -1,4 +1,3 @@
-import { apiFetch } from "../lib/api";
 import React, { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
 import { Download, RefreshCw, Calendar, TrendingUp, Info } from 'lucide-react';

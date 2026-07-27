@@ -1,4 +1,3 @@
-import { apiFetch } from "../lib/api";
 import React from 'react';
 import { Clock, TrendingUp, AlertTriangle, Info } from 'lucide-react';
 import { ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
