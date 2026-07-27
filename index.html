@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Prevent CDN/browser caching of index.html -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <title>沙貝燒烤 | 泰式QR線上點餐系統 Sabay BBQ Online Ordering</title>
+    <script>
+      // Global error listener to automatically reload with cache-busting if a script/chunk fails to load
+      window.addEventListener('error', function(e) {
+        if (e.target && (e.target.tagName === 'SCRIPT' || e.target.tagName === 'LINK')) {
+          console.warn('Resource load failed:', e.target.src || e.target.href);
+          const url = new URL(window.location.href);
+          if (!url.searchParams.has('_cb')) {
+            url.searchParams.set('_cb', Date.now().toString());
+            window.location.replace(url.toString());
+          }
+        }
+      }, true);
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx" onerror="
+      console.warn('Main script loading failed. Attempting force reload with cache busting...');
+      const url = new URL(window.location.href);
+      if (!url.searchParams.has('_cb')) {
+        url.searchParams.set('_cb', Date.now().toString());
+        window.location.replace(url.toString());
+      }
+    "></script>
+  </body>
+</html>
+

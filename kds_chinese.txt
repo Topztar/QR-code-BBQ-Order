@@ -1,0 +1,240 @@
+src/components/KitchenDisplaySystem.tsx:136: // 🔊 語音合成朗讀新訂單狀態與服務 (TTS Order Readout Service)
+src/components/KitchenDisplaySystem.tsx:146: // 🆙 KDS 自動滾動置頂輔助 (KDS Auto-Scroll to Top Service for new incoming orders)
+src/components/KitchenDisplaySystem.tsx:156: // 🧹 舊已完成訂單隱藏輔助 (Hide completed orders > 30 minutes threshold)
+src/components/KitchenDisplaySystem.tsx:207: speak(TRANSLATIONS.app_text_2000?.[currentLang] || '語音合成廣播已開啟，收到新訂單時將自動朗讀');
+src/components/KitchenDisplaySystem.tsx:209: speak(TRANSLATIONS.app_text_2001?.[currentLang] || '語音合成廣播已關閉');
+src/components/KitchenDisplaySystem.tsx:231: if (!tableStr || tableStr.trim() === '' || tableStr.toLowerCase() === 'takeout' || tableStr.toLowerCase() === '外帶') {
+src/components/KitchenDisplaySystem.tsx:232: tableStr = '外帶';
+src/components/KitchenDisplaySystem.tsx:234: tableStr = tableStr + '桌';
+src/components/KitchenDisplaySystem.tsx:238: speak(`${TRANSLATIONS.app_text_2002?.[currentLang] || '收到新訂單，桌號 '}${tableStr}`);
+src/components/KitchenDisplaySystem.tsx:321: error: err.message || '連線錯誤',
+src/components/KitchenDisplaySystem.tsx:526: <p className="font-extrabold text-white border-b border-white/5 pb-1 font-mono">{data.label} 時段運載</p>
+src/components/KitchenDisplaySystem.tsx:528: <span>{TRANSLATIONS.app_text_2004?.[currentLang] || '🎯 今日實際單量:'}</span>
+src/components/KitchenDisplaySystem.tsx:529: <span className="font-mono text-sm font-black">{data.actualToday} 筆</span>
+src/components/KitchenDisplaySystem.tsx:532: <span>{TRANSLATIONS.app_text_2006?.[currentLang] || '📈 預期期望單量:'}</span>
+src/components/KitchenDisplaySystem.tsx:533: <span className="font-mono text-sm font-black">{data.expectedVolume} 筆</span>
+src/components/KitchenDisplaySystem.tsx:536: <span>{TRANSLATIONS.app_text_2007?.[currentLang] || '🗓️ 7日歷史均值:'}</span>
+src/components/KitchenDisplaySystem.tsx:537: <span className="font-mono">{data.historicalAvg} 筆</span>
+src/components/KitchenDisplaySystem.tsx:540: <span>{TRANSLATIONS.app_text_2008?.[currentLang] || '預期波動區間:'}</span>
+src/components/KitchenDisplaySystem.tsx:541: <span>{data.lowerBound} - {data.upperBound} 筆</span>
+src/components/KitchenDisplaySystem.tsx:559: const text = currentLang === 'zh' ? '剛剛下單 Fresh' :
+src/components/KitchenDisplaySystem.tsx:562: currentLang === 'ja' ? '注文直後 Fresh' :
+src/components/KitchenDisplaySystem.tsx:568: const text = currentLang === 'zh' ? `延遲 ${diffMins} 分鐘` :
+src/components/KitchenDisplaySystem.tsx:571: currentLang === 'ja' ? `遅延 ${diffMins} 分` :
+src/components/KitchenDisplaySystem.tsx:576: const text = currentLang === 'zh' ? `嚴重超時 ${diffMins} 分!` :
+src/components/KitchenDisplaySystem.tsx:579: currentLang === 'ja' ? `深刻な超過 ${diffMins} 分!` :
+src/components/KitchenDisplaySystem.tsx:791: drinks: TRANSLATIONS.app_text_2009?.[currentLang] || '飲料',
+src/components/KitchenDisplaySystem.tsx:792: skewers: TRANSLATIONS.app_text_2010?.[currentLang] || '烤肉',
+src/components/KitchenDisplaySystem.tsx:793: sides: TRANSLATIONS.app_text_2011?.[currentLang] || '炸物',
+src/components/KitchenDisplaySystem.tsx:794: noodles: TRANSLATIONS.app_text_2012?.[currentLang] || '特色主食',
+src/components/KitchenDisplaySystem.tsx:795: combos: TRANSLATIONS.app_text_2013?.[currentLang] || '精選套餐',
+src/components/KitchenDisplaySystem.tsx:823: setNoteError(TRANSLATIONS.app_text_2014?.[currentLang] || '此瀏覽器或外掛環境暫不支援 Web Speech API。但您可在下方手動輸入快速備註。');
+src/components/KitchenDisplaySystem.tsx:841: setNoteError(TRANSLATIONS.app_text_2015?.[currentLang] || '麥克風授權失敗，請確認已核准瀏覽器麥克風使用權限');
+src/components/KitchenDisplaySystem.tsx:845: setNoteError(`語音處理錯誤: ${event.error}`);
+src/components/KitchenDisplaySystem.tsx:867: setNoteError(`語音串接失敗: ${e.message}`);
+src/components/KitchenDisplaySystem.tsx:884: '先出': '⚡ 急：優先出餐 (RUSH!)',
+src/components/KitchenDisplaySystem.tsx:885: '加湯': '🍲 免費加湯 (Add broth)',
+src/components/KitchenDisplaySystem.tsx:886: '不要辣': '🌶️ 去辣 (No spicy)',
+src/components/KitchenDisplaySystem.tsx:887: '小辣': '🌶️ 精確小辣',
+src/components/KitchenDisplaySystem.tsx:888: '大辣': '🌶️ 泰國大辣',
+src/components/KitchenDisplaySystem.tsx:889: '外帶': '🥡 外帶打包 (Takeout)',
+src/components/KitchenDisplaySystem.tsx:890: '不要香菜': '🌿 去除香菜 (No coriander)',
+src/components/KitchenDisplaySystem.tsx:891: '多菜': '🥗 多配菜 (Extra veggies)',
+src/components/KitchenDisplaySystem.tsx:892: '加肉': '🥩 加點肉品 (Add extra meat)',
+src/components/KitchenDisplaySystem.tsx:893: '少糖': '🍬 微糖 (Less sweet)',
+src/components/KitchenDisplaySystem.tsx:894: '去冰': '🧊 去冰'
+src/components/KitchenDisplaySystem.tsx:915: setNoteError(TRANSLATIONS.app_text_2016?.[currentLang] || '備註內容不可為空白');
+src/components/KitchenDisplaySystem.tsx:925: setNoteError(res?.error || '儲存失敗，請重試');
+src/components/KitchenDisplaySystem.tsx:928: setNoteError('系統未啟用 KDS 備註回傳端點');
+src/components/KitchenDisplaySystem.tsx:965: setFlagError(TRANSLATIONS.app_text_2017?.[currentLang] || '請輸入需要特別關注的具體原因 / Please enter a reason');
+src/components/KitchenDisplaySystem.tsx:975: setFlagError(res?.error || '無法更新關注旗幟');
+src/components/KitchenDisplaySystem.tsx:988: <span className="font-bold text-xs text-[#E5B453]">{TRANSLATIONS.app_text_2018?.[currentLang] || '🔊 [逼逼！廚房票據機已列印全新工作單]'}</span>
+src/components/KitchenDisplaySystem.tsx:1002: <h2 className="text-base font-bold font-serif tracking-wide text-white">{TRANSLATIONS.app_text_2019?.[currentLang] || '沙貝廚房備餐顯示屏 (KDS Monitor)'}</h2>
+src/components/KitchenDisplaySystem.tsx:1003: <p className="text-white/40 text-xs">{TRANSLATIONS.app_text_2020?.[currentLang] || '即時同步桌席點單 · 最新 1 秒連線正常'}</p>
+src/components/KitchenDisplaySystem.tsx:1015: placeholder={TRANSLATIONS.app_text_2021?.[currentLang] || '搜尋桌號或訂單編號...'}
+src/components/KitchenDisplaySystem.tsx:1023: title="清除搜尋"
+src/components/KitchenDisplaySystem.tsx:1039: {currentLang === 'zh' ? '未完成 (備餐中)' : currentLang === 'en' ? 'Active (Preparing)' : currentLang === 'ko' ? '미완료 (준비 중)' : currentLang === 'ja' ? '未完了 (準備中)' : currentLang === 'th' ? 'ยังไม่เสร็จ (กำลังปรุง)' : 'Chưa xong (Đang chuẩn bị)'}
+src/components/KitchenDisplaySystem.tsx:1048: {currentLang === 'zh' ? '全部歷史票' : currentLang === 'en' ? 'All History Tickets' : currentLang === 'ko' ? '전체 내역서' : currentLang === 'ja' ? '全履歴伝票' : currentLang === 'th' ? 'ประวัติทั้งหมด' : 'Tất cả phiếu lịch sử'}
+src/components/KitchenDisplaySystem.tsx:1057: {currentLang === 'zh' ? '工作台配置 Panel Config:' : 'Workspace Configuration:'}
+src/components/KitchenDisplaySystem.tsx:1068: title="時間直欄訂單票長視圖"
+src/components/KitchenDisplaySystem.tsx:1070: {currentLang === 'zh' ? '標準訂單票卡' : currentLang === 'en' ? 'Standard Tickets' : currentLang === 'ko' ? '일반 주문서' : currentLang === 'ja' ? '標準伝票' : currentLang === 'th' ? 'บัตรออเดอร์ทั่วไป' : 'Phiếu gọi món chuẩn'}
+src/components/KitchenDisplaySystem.tsx:1078: title="合併相同品項與計量進行批次製作"
+src/components/KitchenDisplaySystem.tsx:1081: <span>{currentLang === 'zh' ? '合併相似菜色' : currentLang === 'en' ? 'Merged View' : currentLang === 'ko' ? '메뉴 병합 보기' : currentLang === 'ja' ? 'メニュー統合表示' : currentLang === 'th' ? 'รวมเมนูที่เหมือนกัน' : 'Gộp món giống nhau'}</span>
+src/components/KitchenDisplaySystem.tsx:1085: {/* 🆙 自動滾動與置頂切換輔助 (Auto-Scroll To Top Monitor Controls) */}
+src/components/KitchenDisplaySystem.tsx:1104: title={autoScrollEnabled ? "關閉新訂單自動滾動置頂輔助" : "開啟新訂單自動滾動置頂輔助"}
+src/components/KitchenDisplaySystem.tsx:1107: <span>{autoScrollEnabled ? (currentLang === 'zh' ? '自動滾動: 開' : currentLang === 'en' ? 'Auto-Scroll: ON' : currentLang === 'ko' ? '자동 스크롤: 켜짐' : currentLang === 'ja' ? '自動スクロール: 有効' : currentLang === 'th' ? 'เลื่อนอัตโนมัติ: เปิด' : 'Tự động cuộn: Bật') : (currentLang === 'zh' ? '自動滾動: 關' : currentLang === 'en' ? 'Auto-Scroll: OFF' : currentLang === 'ko' ? '자동 스크롤: 꺼짐' : currentLang === 'ja' ? '자동스크ロール: 無効' : currentLang === 'th' ? 'เลื่อนอัตโนมัติ: ปิด' : 'Tự động cuộn: Tắt')}</span>
+src/components/KitchenDisplaySystem.tsx:1115: title="手動立即滾置頂部 (Manual scroll back to top)"
+src/components/KitchenDisplaySystem.tsx:1117: <span>{currentLang === 'zh' ? '置頂 ⬆️' : currentLang === 'en' ? 'Top ⬆️' : currentLang === 'ko' ? '맨 위로 ⬆️' : currentLang === 'ja' ? 'トップ ⬆️' : currentLang === 'th' ? 'ขึ้นบนสุด ⬆️' : 'Lên đầu ⬆️'}</span>
+src/components/KitchenDisplaySystem.tsx:1121: {/* 🧹 已完成訂單超過 30M 自動隱藏 (Auto-Hide Completed Orders > 30mins) */}
+src/components/KitchenDisplaySystem.tsx:1140: title={hideOlderCompleted ? "點擊關閉「隱藏 30 分鐘前已完成訂單」" : "點擊開啟「自動隱藏 30 分鐘前已完成訂單」以維持 KDS 介面清爽"}
+src/components/KitchenDisplaySystem.tsx:1143: <span>{hideOlderCompleted ? (currentLang === 'zh' ? '自動隱藏已完成 >30m' : currentLang === 'en' ? 'Auto-Hide Done >30m' : currentLang === 'ko' ? '완료 건 숨김 >30분' : currentLang === 'ja' ? '30分超の完了件を隠す' : currentLang === 'th' ? 'ซ่อนรายการเสร็จสิ้น >30นาที' : 'Tự động ản đã xong >30ph') : (currentLang === 'zh' ? '自動隱藏已完成 >30m (關)' : currentLang === 'en' ? 'Auto-Hide Done >30m (OFF)' : currentLang === 'ko' ? '완료 건 숨김 >30분 (꺼짐)' : currentLang === 'ja' ? '30分超の完了件を隠す (無効)' : currentLang === 'th' ? 'ซ่อนรายการเสร็จสิ้น >30นาที (ปิด)' : 'Tự động ẩn đã xong >30ph (Tắt)')}</span>
+src/components/KitchenDisplaySystem.tsx:1147: {/* 🔊 語音合成服務 Speech Synthesis Service Toggle */}
+src/components/KitchenDisplaySystem.tsx:1158: title={ttsEnabled ? "關閉新訂單語音自動播報" : "開啟新訂單語音自動播報"}
+src/components/KitchenDisplaySystem.tsx:1161: <span>{ttsEnabled ? (currentLang === 'zh' ? '語音廣播: 開' : currentLang === 'en' ? 'Voice Readout: ON' : currentLang === 'ko' ? '음성 방송: 켜짐' : currentLang === 'ja' ? '音声読み上げ: 有効' : currentLang === 'th' ? 'ประกาศเสียง: เปิด' : 'Phát thanh giọng nói: Bật') : (currentLang === 'zh' ? '語音廣播: 關' : currentLang === 'en' ? 'Voice Readout: OFF' : currentLang === 'ko' ? '음성 방송: 꺼짐' : currentLang === 'ja' ? '音声読み上げ: 無効' : currentLang === 'th' ? 'ประกาศเสียง: ปิด' : 'Phát thanh giọng nói: Tắt')}</span>
+src/components/KitchenDisplaySystem.tsx:1167: onClick={() => speak('語音測試，沙貝烤肉祝您用餐愉快')}
+src/components/KitchenDisplaySystem.tsx:1169: title="測試播放音量"
+src/components/KitchenDisplaySystem.tsx:1171: {currentLang === 'zh' ? '測試 (Test)' : 'Test'}
+src/components/KitchenDisplaySystem.tsx:1183: 站點分類篩選 (Kitchen Prep Station Filter)
+src/components/KitchenDisplaySystem.tsx:1196: 全部品項 (All Stations)
+src/components/KitchenDisplaySystem.tsx:1225: <p className="text-white/40 font-bold text-sm">{TRANSLATIONS.app_text_2024?.[currentLang] || '找不到符合「'}{searchQuery}>{TRANSLATIONS.app_text_2025?.[currentLang] || '」的待備訂單 🔍'}</p>
+src/components/KitchenDisplaySystem.tsx:1227: <p className="text-white/40 font-bold text-sm">{TRANSLATIONS.app_text_2026?.[currentLang] || '目前沒有任何待備餐點，大家辛苦了！✨'}</p>
+src/components/KitchenDisplaySystem.tsx:1251: 總量 x {dish.totalQty} 份
+src/components/KitchenDisplaySystem.tsx:1260: <span>各桌點單分配 (Table Breakdown)</span>
+src/components/KitchenDisplaySystem.tsx:1272: {oi.tableNumber} {oi.tableNumber.includes('外帶') ? '' : '桌'}
+src/components/KitchenDisplaySystem.tsx:1275: 單號: {oi.orderId}
+src/components/KitchenDisplaySystem.tsx:1279: <span>已等 {elapsed.text}</span>
+src/components/KitchenDisplaySystem.tsx:1283: ⚠️ 即將關店
+src/components/KitchenDisplaySystem.tsx:1322: x {oi.qty} 份
+src/components/KitchenDisplaySystem.tsx:1329: title="檢視這筆完整訂單及操作出餐狀態 (Quick View Full Ticket)"
+src/components/KitchenDisplaySystem.tsx:1342: <span>共有 {dish.orderItems.length} 個桌號點購此品項</span>
+src/components/KitchenDisplaySystem.tsx:1374: {offset >= 150 ? '🎉 鬆開立即完成出餐！' : '👉 右滑直接出餐 (Swipe to complete)'}
+src/components/KitchenDisplaySystem.tsx:1432: <optgroup label="客席就座桌號">
+src/components/KitchenDisplaySystem.tsx:1435: 🪑 第 {num} 桌
+src/components/KitchenDisplaySystem.tsx:1441: 🪑 第 {t.id} 桌
+src/components/KitchenDisplaySystem.tsx:1446: <optgroup label="外帶自取佇列">
+src/components/KitchenDisplaySystem.tsx:1447: {Array.from({ length: 15 }, (_, i) => `外帶 #${i + 1}`).map((takeoutId) => (
+src/components/KitchenDisplaySystem.tsx:1460: alert(res.error || '無法變更桌號');
+src/components/KitchenDisplaySystem.tsx:1470: title="確認 Save"
+src/components/KitchenDisplaySystem.tsx:1478: title="取消 Cancel"
+src/components/KitchenDisplaySystem.tsx:1486: {order.tableNumber.includes('外帶')
+src/components/KitchenDisplaySystem.tsx:1487: ? `${t('takeoutLabel')}${order.tableNumber.replace('外帶', '')}`
+src/components/KitchenDisplaySystem.tsx:1499: title="變更桌號 (Change Table)"
+src/components/KitchenDisplaySystem.tsx:1508: {currentLang === 'zh' ? '下單' : 'Order'}: {new Date(order.createdAt).toLocaleTimeString()}
+src/components/KitchenDisplaySystem.tsx:1511: <span className="inline-flex items-center gap-1 bg-red-500/15 text-red-400 border border-red-500/35 text-[9px] font-black px-1.5 py-0.5 rounded shadow-[0_0_8px_rgba(239,68,68,0.2)] animate-pulse" title={`等待已有 ${Math.floor(lateCheck.currentWaitMins)}分鐘，大於該單餐點平均客製工時 1.5 倍（平均: ${lateCheck.avgPrepMins.toFixed(1)}m, 超時極限: ${lateCheck.limitMins.toFixed(1)}m`}>
+src/components/KitchenDisplaySystem.tsx:1513: <span>🚨 {currentLang === 'zh' ? '製作溢時' : 'Prep Overdue'} ({Math.floor(lateCheck.currentWaitMins)}m / {currentLang === 'zh' ? '限制' : 'Limit'} {Math.floor(lateCheck.limitMins)}m)</span>
+src/components/KitchenDisplaySystem.tsx:1517: <span className="inline-flex items-center gap-1 bg-red-500/20 text-red-400 border border-red-500/30 text-[10px] font-black px-1.5 py-0.5 rounded shadow-[0_0_8px_rgba(239,68,68,0.2)] animate-pulse" title="訂單於結業前 30 分鐘內進入，請優先且速配餐">
+src/components/KitchenDisplaySystem.tsx:1526: title="單一訂單細節快速檢視 (Quick View Details)"
+src/components/KitchenDisplaySystem.tsx:1547: 沙貝燒烤 (廚房工作即時交代單)
+src/components/KitchenDisplaySystem.tsx:1548: 桌號/標記: ${order.tableNumber}
+src/components/KitchenDisplaySystem.tsx:1550: 單號 ID: ${order.id}
+src/components/KitchenDisplaySystem.tsx:1551: 出單 IP : ${printerIp} (VIRTUAL LAN_9100)
+src/components/KitchenDisplaySystem.tsx:1552: 時間 TIME: ${new Date(order.createdAt).toLocaleTimeString()}
+src/components/KitchenDisplaySystem.tsx:1553: 狀態 STATE: ${order.status.toUpperCase()}
+src/components/KitchenDisplaySystem.tsx:1555: 餐點項目與客製需求 Kitchen Item(s):
+src/components/KitchenDisplaySystem.tsx:1559: * 感謝廚房人員辛勞，請於出餐完畢時完成確認 *
+src/components/KitchenDisplaySystem.tsx:1562: title: `驗證列印廚房交代票 #${order.id}`,
+src/components/KitchenDisplaySystem.tsx:1567: alert(`🖨️ 虛擬網卡列印指令傳送正常！(單號: ${order.id})`);
+src/components/KitchenDisplaySystem.tsx:1572: title="熱感出單前預覽虛擬收據 Print Preview and Cue"
+src/components/KitchenDisplaySystem.tsx:1594: ⚠️ 待辦超時 Overdue
+src/components/KitchenDisplaySystem.tsx:1601: <span className="text-[9px] text-white/35 font-bold tracking-wider block font-sans uppercase" title="該桌自首筆點單起算之累計時間 (Tracks session duration for table turnover)">
+src/components/KitchenDisplaySystem.tsx:1602: {order.tableNumber.includes('外帶') ? '顧客滯留 Live' : '桌況佔用 Seated'}
+src/components/KitchenDisplaySystem.tsx:1604: <span className={`inline-flex items-center gap-1 text-[11px] font-black font-mono px-1.5 py-0.5 rounded border mt-0.5 ${occ.style}`} title={`首筆訂單編號: #${occ.oldestOrderId}`}>
+src/components/KitchenDisplaySystem.tsx:1625: title={order.isFlagged ? "取消特別關注標記 (Clear Flag)" : "將此訂單標記為特別關注 (Flag Order)"}
+src/components/KitchenDisplaySystem.tsx:1628: <span>{order.isFlagged ? "已標記關注" : "關注標記"}</span>
+src/components/KitchenDisplaySystem.tsx:1651: 非選定分區
+src/components/KitchenDisplaySystem.tsx:1700: title={it.isCompleted ? "標示為未完成 (Mark as Pending)" : "標示為製作完成 (Mark as Completed)"}
+src/components/KitchenDisplaySystem.tsx:1705: <span>已完成</span>
+src/components/KitchenDisplaySystem.tsx:1708: <span>製作完成</span>
+src/components/KitchenDisplaySystem.tsx:1724: 特別關注原因 (Attention Reason)
+src/components/KitchenDisplaySystem.tsx:1739: placeholder="請輸入關注原因（例如：餐點特製少鹽、急催出餐、湯少...）"
+src/components/KitchenDisplaySystem.tsx:1753: 取消
+src/components/KitchenDisplaySystem.tsx:1760: 確定標記
+src/components/KitchenDisplaySystem.tsx:1771: 🛑 特別關注 ORDER FLAGGED
+src/components/KitchenDisplaySystem.tsx:1778: 取消關注
+src/components/KitchenDisplaySystem.tsx:1782: ⚠️ 原因：{order.flagReason || "店員未備註具體原因"}
+src/components/KitchenDisplaySystem.tsx:1794: KDS 快速備註 (Quick Notes/Dictations)
+src/components/KitchenDisplaySystem.tsx:1809: <span>正在錄音...</span>
+src/components/KitchenDisplaySystem.tsx:1814: <span>🎙️ 語音語音</span>
+src/components/KitchenDisplaySystem.tsx:1834: placeholder={isDictating ? "正在傾聽並將語音轉換成文字..." : "請按下方按鈕或在此輸入備註/口頭指令..."}
+src/components/KitchenDisplaySystem.tsx:1849: 取消
+src/components/KitchenDisplaySystem.tsx:1857: 停止/解析
+src/components/KitchenDisplaySystem.tsx:1865: 儲存備註
+src/components/KitchenDisplaySystem.tsx:1878: 經 KDS Dictate 語音處理
+src/components/KitchenDisplaySystem.tsx:1885: title="清除備註"
+src/components/KitchenDisplaySystem.tsx:1893: 暫無臨時備註，可使用麥克風錄製或口述
+src/components/KitchenDisplaySystem.tsx:1904: 付費: {order.paymentMethod.toUpperCase()}
+src/components/KitchenDisplaySystem.tsx:1907: 🤝 支援右滑直接出餐 Complete
+src/components/KitchenDisplaySystem.tsx:1919: <span>下鍋烹調</span>
+src/components/KitchenDisplaySystem.tsx:1930: <span>出餐完成</span>
+src/components/KitchenDisplaySystem.tsx:1939: title="取消此單"
+src/components/KitchenDisplaySystem.tsx:1942: <span>刪除</span>
+src/components/KitchenDisplaySystem.tsx:1949: <span>已順利出餐 Done</span>
+src/components/KitchenDisplaySystem.tsx:1955: 已廢棄 Cancel
+src/components/KitchenDisplaySystem.tsx:1985: <span className="text-[10px] font-bold text-orange-400 tracking-widest block uppercase font-sans">緊急狀態與客流量控制 Emergency Control</span>
+src/components/KitchenDisplaySystem.tsx:1986: <h4 className="font-bold text-sm mt-0.5 text-white font-serif">廚房「暫停接單」機制 Service Pause Toggle</h4>
+src/components/KitchenDisplaySystem.tsx:1989: {servicePaused ? '🔴 暫停服務中 (Paused)' : '🟢 正常接單中 (Normal)'}
+src/components/KitchenDisplaySystem.tsx:1995: 當店內排隊或現場單量過大、廚房人力飽和時，一鍵啟用暫停接單機制。啟用後：
+src/components/KitchenDisplaySystem.tsx:1998: <li>顧客點餐首頁將<strong>即時彈出橙紅色警示橫幅</strong>，通知廚房正在全力消化訂單中。</li>
+src/components/KitchenDisplaySystem.tsx:1999: <li><strong>鎖定「送出訂單」功能</strong>，但顧客仍可自由流覽餐點與加點歷史。</li>
+src/components/KitchenDisplaySystem.tsx:2000: <li>系統會自動將狀態<strong>推播至前台通知欄</strong>。</li>
+src/components/KitchenDisplaySystem.tsx:2013: <span>{servicePaused ? '⚡ 恢復正常營運接單 (Resume Service)' : '🛑 啟動廚房「暫停接單」 (Pause Service)'}</span>
+src/components/KitchenDisplaySystem.tsx:2026: <span className="text-xs font-black text-white">即時營運及供應鏈控制</span>
+src/components/KitchenDisplaySystem.tsx:2037: 品項沽清
+src/components/KitchenDisplaySystem.tsx:2046: 即時庫存
+src/components/KitchenDisplaySystem.tsx:2065: 全部品項
+src/components/KitchenDisplaySystem.tsx:2087: placeholder="搜尋大廚備料 / 菜名..."
+src/components/KitchenDisplaySystem.tsx:2125: {item.available ? '販售' : '沽清'}
+src/components/KitchenDisplaySystem.tsx:2147: {item.available ? '下架' : '上架'}
+src/components/KitchenDisplaySystem.tsx:2176: 告警
+src/components/KitchenDisplaySystem.tsx:2181: 剩餘: <b className={`font-semibold ${isWarning ? 'text-rose-400' : 'text-zinc-300'}`}>{ig.stock}</b> {ig.unit} / 門檻: {ig.minThreshold}
+src/components/KitchenDisplaySystem.tsx:2195: await onAdjustIngredientStock(ig.id, -10, 'KDS螢幕快捷調減 -10');
+src/components/KitchenDisplaySystem.tsx:2209: await onAdjustIngredientStock(ig.id, -1, 'KDS螢幕快捷調減 -1');
+src/components/KitchenDisplaySystem.tsx:2223: await onAdjustIngredientStock(ig.id, 1, 'KDS螢幕快捷調增 +1');
+src/components/KitchenDisplaySystem.tsx:2237: await onAdjustIngredientStock(ig.id, 10, 'KDS螢幕快捷調增 +10');
+src/components/KitchenDisplaySystem.tsx:2253: placeholder="自訂"
+src/components/KitchenDisplaySystem.tsx:2264: await onAdjustIngredientStock(ig.id, parsed, `KDS螢幕自訂異動盤庫 (${parsed > 0 ? '+' : ''}${parsed})`);
+src/components/KitchenDisplaySystem.tsx:2303: setPrinterSuccess('位址設定成功！');
+src/components/KitchenDisplaySystem.tsx:2306: setPrinterError(res.error || '儲存失敗');
+src/components/KitchenDisplaySystem.tsx:2311: 儲存
+src/components/KitchenDisplaySystem.tsx:2320: 取消
+src/components/KitchenDisplaySystem.tsx:2330: title="修改印表機位址"
+src/components/KitchenDisplaySystem.tsx:2341: 偵測中...
+src/components/KitchenDisplaySystem.tsx:2344: <span className="inline-flex items-center gap-1 text-[9px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded font-extrabold" title={pingState.lastChecked ? `連線狀態: 本機與實體印表機連線正常 (最後偵測: ${pingState.lastChecked})` : ''}>
+src/components/KitchenDisplaySystem.tsx:2346: 在線 🟢
+src/components/KitchenDisplaySystem.tsx:2349: <span className="inline-flex items-center gap-1 text-[9px] bg-rose-500/10 text-rose-400 border border-rose-500/20 px-1.5 py-0.5 rounded font-extrabold" title={pingState.error ? `連線錯誤原因: ${pingState.error}` : '無法通訊，請檢查網路配置、實體印表機電源及區域網路插口'}>
+src/components/KitchenDisplaySystem.tsx:2351: 離線 🔴
+src/components/KitchenDisplaySystem.tsx:2360: title="立即重新測試與印表機的實體網路通訊"
+src/components/KitchenDisplaySystem.tsx:2363: <span>測通</span>
+src/components/KitchenDisplaySystem.tsx:2374: <span>模擬</span>
+src/components/KitchenDisplaySystem.tsx:2387: alert('⚠️ 目前尚無任何虛擬出單記錄可供匯出！ There is no virtual print history to export.');
+src/components/KitchenDisplaySystem.tsx:2402: if (line.includes('桌號/標記') || line.includes('Table')) {
+src/components/KitchenDisplaySystem.tsx:2446: title="匯出近期虛擬熱感印表記錄為 CSV 檔案 (Export Print Logs to CSV)"
+src/components/KitchenDisplaySystem.tsx:2449: <span className="hidden xl:inline">匯出 CSV</span>
+src/components/KitchenDisplaySystem.tsx:2456: title="清除虛擬管線日誌 Clear Virtual Buffer"
+src/components/KitchenDisplaySystem.tsx:2470: ? `端點 ${printerIp}:9100 在線`
+src/components/KitchenDisplaySystem.tsx:2471: : `端點 ${printerIp}:9100 離線`}
+src/components/KitchenDisplaySystem.tsx:2479: title: '列印測試頁 Test Page',
+src/components/KitchenDisplaySystem.tsx:2488: setPrinterSuccess('列印測試頁成功發送！');
+src/components/KitchenDisplaySystem.tsx:2490: setPrinterError(res.error || '列印失敗');
+src/components/KitchenDisplaySystem.tsx:2506: <span>測試紙 Test Page</span>
+src/components/KitchenDisplaySystem.tsx:2522: <p className="text-xs">列印管線管道閒置中</p>
+src/components/KitchenDisplaySystem.tsx:2524: 當點擊加入購物車或完成付款時，系統將模擬 LAN 熱感印表機出單拋送至此。
+src/components/KitchenDisplaySystem.tsx:2537: <span>時間: {log.timestamp}</span>
+src/components/KitchenDisplaySystem.tsx:2545: <span className="text-[#00C300]">100% 傳送正常</span>
+src/components/KitchenDisplaySystem.tsx:2566: {quickViewOrder.tableNumber} {quickViewOrder.tableNumber.includes('外帶') ? '' : '桌'} 餐點明細 (KDS Quick View)
+src/components/KitchenDisplaySystem.tsx:2571: <span>特別關注</span>
+src/components/KitchenDisplaySystem.tsx:2589: <p className="text-white/40">下單時間 Order Time</p>
+src/components/KitchenDisplaySystem.tsx:2593: <p className="text-white/40 font-bold">等候時間 Elapsed Time</p>
+src/components/KitchenDisplaySystem.tsx:2606: ⚠️ 即將關店，加速出餐 (Store closing soon)
+src/components/KitchenDisplaySystem.tsx:2609: 此訂單於每日結業關閉前 30 分鐘內進入，請廚房人員縮短備餐流程，儘速完成出餐！
+src/components/KitchenDisplaySystem.tsx:2617: {quickViewOrder.tableNumber.includes('外帶') ? '顧客滯留總時間 Guest Wait Session' : '桌況佔用總時間 Table Occupancy'}
+src/components/KitchenDisplaySystem.tsx:2622: (自首筆點單於 {new Date(orders.find(o => o.id === qvOcc.oldestOrderId)?.createdAt || '').toLocaleTimeString()} 送出起算，該桌目前共 {qvOcc.orderCount} 筆未完成點單)
+src/components/KitchenDisplaySystem.tsx:2629: <p className="text-[#E5B453] font-bold text-[10px] uppercase tracking-wider">KDS 快速備註 Quick Note</p>
+src/components/KitchenDisplaySystem.tsx:2637: 特別關注 Attention Required
+src/components/KitchenDisplaySystem.tsx:2647: 餐點清單 Item Breakdown ({quickViewOrder.items.length})
+src/components/KitchenDisplaySystem.tsx:2691: <span>已完成</span>
+src/components/KitchenDisplaySystem.tsx:2694: <span>製作完成</span>
+src/components/KitchenDisplaySystem.tsx:2739: {it.customization.soupBase === 'coconut-milk' ? `🥥 ${t('coconutMilkAdd')}` : '冬蔭功 Tom Yum'}
+src/components/KitchenDisplaySystem.tsx:2762: 📌 該品項特殊客製備註 Item Notes
+src/components/KitchenDisplaySystem.tsx:2797: 沙貝燒烤 (廚房工作即時交代單)
+src/components/KitchenDisplaySystem.tsx:2798: 桌號/標記: ${quickViewOrder.tableNumber}
+src/components/KitchenDisplaySystem.tsx:2800: 單號 ID: ${quickViewOrder.id}
+src/components/KitchenDisplaySystem.tsx:2801: 出單 IP : ${printerIp} (VIRTUAL LAN_9100)
+src/components/KitchenDisplaySystem.tsx:2802: 時間 TIME: ${new Date(quickViewOrder.createdAt).toLocaleTimeString()}
+src/components/KitchenDisplaySystem.tsx:2803: 狀態 STATE: ${quickViewOrder.status.toUpperCase()}
+src/components/KitchenDisplaySystem.tsx:2805: 餐點項目與客製需求 Kitchen Item(s):
+src/components/KitchenDisplaySystem.tsx:2809: * 感謝廚房人員辛勞，請於出餐完畢時完成確認 *
+src/components/KitchenDisplaySystem.tsx:2812: title: `驗證列印廚房交代票 #${quickViewOrder.id}`,
+src/components/KitchenDisplaySystem.tsx:2817: alert(`🖨️ 虛擬網卡列印指令傳送正常！(單號: ${quickViewOrder.id})`);
+src/components/KitchenDisplaySystem.tsx:2824: <span>列印廚房單 Print Ticket</span>
+src/components/KitchenDisplaySystem.tsx:2831: 關閉 Close
+src/components/KitchenDisplaySystem.tsx:2839: {/* 🖨️ 列印確認視窗 Printer Selection / Confirmation Dialog */}
+src/components/KitchenDisplaySystem.tsx:2846: <span>{printConfirmData.receiptBody ? '🖨️ 熱感出單預覽 Print Preview' : '確認執行列印任務？'}</span>
+src/components/KitchenDisplaySystem.tsx:2861: <span>任務名稱 Task</span>
+src/components/KitchenDisplaySystem.tsx:2865: <span>印表機 IP Address</span>
+src/components/KitchenDisplaySystem.tsx:2870: 請確認您已與本機熱熱感印硬體連線至同一區域網路內（WiFi），並確認印表機開機且狀態正常。
+src/components/KitchenDisplaySystem.tsx:2876: <p>✔ 出單格式: {printConfirmData.receiptType === 'kitchen' ? '餐廳工作交代票 (Kitchen Ticket)' : '前台客戶收據 (Billing Receipt)'}</p>
+src/components/KitchenDisplaySystem.tsx:2877: <p>✔ 支援本機熱感寬度 80mm / 58mm</p>
+src/components/KitchenDisplaySystem.tsx:2883: <span className="text-[10px] font-bold text-zinc-400 tracking-wider block uppercase">📄 虛擬熱感列印預覽 Thermal Receipt Preview:</span>
+src/components/KitchenDisplaySystem.tsx:2900: 取消
+src/components/KitchenDisplaySystem.tsx:2911: <span>確定執行列印</span>
