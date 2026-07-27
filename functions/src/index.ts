@@ -537,11 +537,32 @@ put('/orders/:id/checkout', async (req, res) => {
   const id = req.params.id as string;
   const checkoutData = req.body;
   try {
+    // Check if the order has a reservationNo
+    const orderDoc = await db.collection('orders').doc(id).get();
+    const orderData = orderDoc.data();
+
     await db.collection('orders').doc(id).update({
       ...checkoutData,
       isPaid: true,
       status: 'paid'
     });
+
+    if (orderData && orderData.reservationNo) {
+      // Find the reservation by reservationNo (it could be stored as `id` or `reservationNo`)
+      const resQuery = await db.collection('reservations').where('reservationNo', '==', orderData.reservationNo).get();
+      if (!resQuery.empty) {
+        for (const doc of resQuery.docs) {
+          await db.collection('reservations').doc(doc.id).delete();
+        }
+      } else {
+        // Fallback: it might be stored directly as the document ID
+        const resDoc = await db.collection('reservations').doc(orderData.reservationNo).get();
+        if (resDoc.exists) {
+          await db.collection('reservations').doc(orderData.reservationNo).delete();
+        }
+      }
+    }
+
     res.json({ success: true });
   } catch (error) {
     res.status(500).send(error);
@@ -1061,6 +1082,16 @@ del('/tables/:id', async (req, res) => {
 // --- Missing Reservations APIs ---
 post('/reservations', async (req, res) => {
   const data = req.body;
+  
+  if (data.date) {
+    const now = new Date();
+    now.setMonth(now.getMonth() + 3);
+    const maxDateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    if (data.date.trim() > maxDateStr) {
+      res.status(400).json({ error: `預約日期最多只能提前 3 個月 (最晚至 ${maxDateStr})！` });
+      return;
+    }
+  }
   const newReservation = {
     id: 'res-' + Math.random().toString(36).substring(2, 11),
     ...data,
@@ -1083,6 +1114,19 @@ put('/reservations/:id', async (req, res) => {
   const id = req.params.id as string;
   const updates = req.body;
   try {
+    if (updates.status === 'cancelled') {
+      // First get the reservation to know the table number
+      const doc = await db.collection('reservations').doc(id).get();
+      const resData = doc.data();
+      if (resData && resData.tableNumber) {
+        await db.collection('tables').doc(resData.tableNumber).update({ status: 'available', preservedFor: '' });
+      }
+      // Delete the reservation to invalidate the exclusive channel
+      await db.collection('reservations').doc(id).delete();
+      res.json({ success: true, message: 'Reservation cancelled and deleted' });
+      return;
+    }
+
     await db.collection('reservations').doc(id).update(updates);
 
     // Also sync table status if status changed
@@ -1095,14 +1139,12 @@ put('/reservations/:id', async (req, res) => {
           await tableRef.update({ status: 'in_use', preservedFor: '' });
         } else if (updates.status === 'pending') {
            await tableRef.update({ status: 'preserved', preservedFor: `${resData.customerName} (${resData.time})` });
-        } else if (updates.status === 'cancelled') {
-           await tableRef.update({ status: 'available', preservedFor: '' });
         }
       }
     }
-
     res.json({ success: true });
   } catch (error) {
+    console.error('Error updating reservation:', error);
     res.status(500).send(error);
   }
 });

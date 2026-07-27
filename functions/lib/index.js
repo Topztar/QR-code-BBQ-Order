@@ -91,6 +91,35 @@ del('/menu/:id', async (req, res) => {
         res.status(500).send(error);
     }
 });
+post('/menu/toggle-available', async (req, res) => {
+    try {
+        const { id } = req.body;
+        if (!id) {
+            return res.status(400).json({ error: 'Missing menu item id' });
+        }
+        let docRef = db.collection('menu').doc(id);
+        let docSnap = await docRef.get();
+        if (!docSnap.exists) {
+            const query = await db.collection('menu').where('id', '==', id).limit(1).get();
+            if (!query.empty) {
+                docRef = query.docs[0].ref;
+                docSnap = query.docs[0];
+            }
+        }
+        if (docSnap.exists) {
+            const currentData = docSnap.data();
+            const newAvailable = !(currentData?.available ?? true);
+            await docRef.set({ available: newAvailable }, { merge: true });
+            const updatedItem = { ...currentData, available: newAvailable };
+            return res.json({ success: true, item: updatedItem, available: newAvailable });
+        }
+        return res.status(404).json({ error: 'Menu item not found' });
+    }
+    catch (error) {
+        console.error('Error toggling menu availability in Cloud Functions:', error);
+        return res.status(500).json({ error: error?.message || 'Server error' });
+    }
+});
 post('/categories', async (req, res) => {
     try {
         const data = req.body;
@@ -210,7 +239,7 @@ get('/settings/min-spend', async (req, res) => {
         res.status(500).send(error);
     }
 });
-function isStoreOpenFromData(sysData, timestamp) {
+function isStoreOpenFromData(sysData, timestamp, isReservation = false) {
     if (!sysData)
         return true;
     if (sysData.liveServicePaused)
@@ -237,6 +266,8 @@ function isStoreOpenFromData(sysData, timestamp) {
     const currentTotalMinutes = hour * 60 + minute;
     for (const slot of activeSlots) {
         if (slot.days && Array.isArray(slot.days) && !slot.days.includes(day))
+            continue;
+        if (slot.isReservableOnly && !isReservation)
             continue;
         const [startH, startM] = (slot.start || '00:00').split(':').map(Number);
         const [endH, endM] = (slot.end || '23:59').split(':').map(Number);
@@ -447,9 +478,38 @@ put('/orders/:id/checkout', async (req, res) => {
     const id = req.params.id;
     const checkoutData = req.body;
     try {
+        const orderDoc = await db.collection('orders').doc(id).get();
+        const orderData = orderDoc.data();
         await db.collection('orders').doc(id).update({
             ...checkoutData,
-            isPaid: true
+            isPaid: true,
+            status: 'paid'
+        });
+        if (orderData && orderData.reservationNo) {
+            const resQuery = await db.collection('reservations').where('reservationNo', '==', orderData.reservationNo).get();
+            if (!resQuery.empty) {
+                for (const doc of resQuery.docs) {
+                    await db.collection('reservations').doc(doc.id).delete();
+                }
+            }
+            else {
+                const resDoc = await db.collection('reservations').doc(orderData.reservationNo).get();
+                if (resDoc.exists) {
+                    await db.collection('reservations').doc(orderData.reservationNo).delete();
+                }
+            }
+        }
+        res.json({ success: true });
+    }
+    catch (error) {
+        res.status(500).send(error);
+    }
+});
+put('/orders/:id/complete', async (req, res) => {
+    const id = req.params.id;
+    try {
+        await db.collection('orders').doc(id).update({
+            status: 'completed'
         });
         res.json({ success: true });
     }
@@ -918,6 +978,15 @@ del('/tables/:id', async (req, res) => {
 });
 post('/reservations', async (req, res) => {
     const data = req.body;
+    if (data.date) {
+        const now = new Date();
+        now.setMonth(now.getMonth() + 3);
+        const maxDateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        if (data.date.trim() > maxDateStr) {
+            res.status(400).json({ error: `預約日期最多只能提前 3 個月 (最晚至 ${maxDateStr})！` });
+            return;
+        }
+    }
     const newReservation = {
         id: 'res-' + Math.random().toString(36).substring(2, 11),
         ...data,
@@ -939,6 +1008,16 @@ put('/reservations/:id', async (req, res) => {
     const id = req.params.id;
     const updates = req.body;
     try {
+        if (updates.status === 'cancelled') {
+            const doc = await db.collection('reservations').doc(id).get();
+            const resData = doc.data();
+            if (resData && resData.tableNumber) {
+                await db.collection('tables').doc(resData.tableNumber).update({ status: 'available', preservedFor: '' });
+            }
+            await db.collection('reservations').doc(id).delete();
+            res.json({ success: true, message: 'Reservation cancelled and deleted' });
+            return;
+        }
         await db.collection('reservations').doc(id).update(updates);
         if (updates.status) {
             const doc = await db.collection('reservations').doc(id).get();
@@ -951,14 +1030,12 @@ put('/reservations/:id', async (req, res) => {
                 else if (updates.status === 'pending') {
                     await tableRef.update({ status: 'preserved', preservedFor: `${resData.customerName} (${resData.time})` });
                 }
-                else if (updates.status === 'cancelled') {
-                    await tableRef.update({ status: 'available', preservedFor: '' });
-                }
             }
         }
         res.json({ success: true });
     }
     catch (error) {
+        console.error('Error updating reservation:', error);
         res.status(500).send(error);
     }
 });
@@ -1028,7 +1105,7 @@ put('/orders/:id/items/:itemId/complete', async (req, res) => {
             const items = order.items.map((it) => it.id === itemId ? { ...it, isCompleted } : it);
             const allCompleted = items.every((it) => it.isCompleted);
             let status = order.status;
-            if (allCompleted) {
+            if (allCompleted && status !== 'paid') {
                 status = 'completed';
             }
             else if (status === 'completed') {
@@ -1145,25 +1222,27 @@ async function sendToNetworkPrinter(host, port = 9100, data) {
 }
 post('/printer/test', async (req, res) => {
     try {
+        const target = req.body?.target || 'all';
         const systemDoc = await db.collection('settings').doc('system').get();
         const sysData = systemDoc.data() || {};
         const livePrinterIp = sysData.livePrinterIp || '192.168.123.100';
         const livePrinterSettings = sysData.livePrinterSettings || { bill: { cashDrawerEnabled: false } };
         let drawerNote = '';
-        if (livePrinterSettings.bill?.cashDrawerEnabled) {
+        if ((target === 'bill' || target === 'all') && livePrinterSettings.bill?.cashDrawerEnabled) {
             drawerNote = `\n----------------------------------------\n現金收銀抽屜連動: 啟用 🟢\n觸發驅動: ${livePrinterSettings.bill.cashDrawerDriver || 'Standard ESC/POS Pulse'}\n實體埠口: ${livePrinterSettings.bill.usbPort || 'USB002'}\n`;
         }
         else {
             drawerNote = `\n----------------------------------------\n現金收銀抽屜連動: 未啟用 ❌\n`;
         }
+        const targetLabel = target === 'kitchen' ? '廚房 KDS 工作票印表機' : target === 'bill' ? '前台帳單與收銀明細印表機' : '全機型 (雙機測試)';
         const testTicket = `
 ========================================
-       沙貝燒烤 (印表機網卡連線測試頁)
+       沙貝燒烤 (${targetLabel} 測試頁)
 ========================================
 測試狀態: 連線傳送 🟢
 主機來源: ${req.ip || 'Cloud Function'}
-印表機 IP: ${livePrinterIp}
-通訊埠: Port 9100 / Virtual 3000
+廚房印表機 IP: ${livePrinterSettings.kitchen?.ip || livePrinterIp} (${livePrinterSettings.kitchen?.connectionType || 'IP'})
+前台印表機 Port: ${livePrinterSettings.bill?.usbPort || 'LPT1'} (${livePrinterSettings.bill?.connectionType || 'LPT'})
 列印時間: ${new Date().toLocaleString()}
 ----------------------------------------
 字型測試 / Font Test:
@@ -1172,7 +1251,11 @@ post('/printer/test', async (req, res) => {
 3. 泰文 🇹🇭 - ลาบหมูย่างส้มตำ${drawerNote}
 ========================================
     `.trim();
-        const tcpResult = await sendToNetworkPrinter(livePrinterIp, 9100, testTicket);
+        let tcpResult = { success: true, log: 'Cloud Function 處理完成' };
+        if (target === 'kitchen' || target === 'all') {
+            const kitchenIp = livePrinterSettings.kitchen?.ip || livePrinterIp;
+            tcpResult = await sendToNetworkPrinter(kitchenIp, 9100, testTicket);
+        }
         const logsDoc = await db.collection('settings').doc('logs').get();
         let printLogs = logsDoc.data()?.printLogs || [];
         printLogs.push({
@@ -1180,14 +1263,14 @@ post('/printer/test', async (req, res) => {
             timestamp: new Date().toLocaleTimeString(),
             content: `${testTicket}\n\n[TCP 印表機傳送日誌]: ${tcpResult.log}`,
             orderId: 'TEST-PAGE',
-            type: 'kitchen'
+            type: target === 'bill' ? 'customer' : 'kitchen'
         });
         await db.collection('settings').doc('logs').set({ printLogs }, { merge: true });
         res.json({
             success: true,
-            message: tcpResult.success ? '測試頁已順利傳送至實體印表機 (Port 9100)' : `印表機紀錄已寫入 (${tcpResult.log})`,
+            message: `測試頁 (${targetLabel}) 已處理傳送`,
             ticketContent: testTicket,
-            ip: livePrinterIp,
+            ip: livePrinterSettings.kitchen?.ip || livePrinterIp,
             tcpLog: tcpResult.log
         });
     }
