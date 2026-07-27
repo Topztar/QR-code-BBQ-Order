@@ -82,234 +82,234 @@ async function seedDefaults() {
   const categories: Category[] = [
     {
       "name": {
-        "vi": "Tiền tip & Giảm giá",
-        "th": "ทิปและส่วนลด",
-        "ja": "チップ・割引",
         "zh": "小費及折扣",
         "en": "Tips & Discounts",
-        "ko": "팁 및 할인"
+        "ko": "팁 및 할인",
+        "th": "ทิปและส่วนลด",
+        "vi": "Tiền tip & Giảm giá",
+        "ja": "チップ・割引"
       },
-      "id": "cat-svadcb",
       "orderIndex": 0,
+      "showOnCustomerPage": false,
+      "id": "cat-svadcb"
+    },
+    {
+      "orderIndex": 1,
+      "name": {
+        "zh": "冰櫃酒水 🧊",
+        "en": "Refrigerated Drinks & Alcohol 🍺",
+        "th": "เครื่องดื่มและสุราแช่เย็น 🍺",
+        "ko": "냉장 음료 및 주류 🍺",
+        "ja": "冷蔵ドリンク・お酒 🍺",
+        "vi": "Đồ uống & Rượu lạnh 🍺"
+      },
+      "id": "cat-7cvvkq",
       "showOnCustomerPage": false
     },
     {
-      "showOnCustomerPage": false,
-      "orderIndex": 1,
-      "id": "cat-7cvvkq",
-      "name": {
-        "en": "Refrigerated Drinks & Alcohol 🍺",
-        "zh": "冰櫃酒水 🧊",
-        "th": "เครื่องดื่มและสุราแช่เย็น 🍺",
-        "ja": "冷蔵ドリンク・お酒 🍺",
-        "vi": "Đồ uống & Rượu lạnh 🍺",
-        "ko": "냉장 음료 및 주류 🍺"
-      }
-    },
-    {
       "showOnCustomerPage": true,
-      "orderIndex": 2,
       "id": "tomyum",
       "name": {
         "en": "Tom Yum Series 🍜",
         "zh": "冬蔭功系列 🍜",
-        "th": "ชุดต้มยำสุดแซ่บ 🍜",
-        "ja": "トムヤムシリーズ 🍜",
         "vi": "Dòng súp Tom Yum 🍜",
-        "ko": "똠얌 수프 시리즈 🍜"
-      }
+        "ja": "トムヤムシリーズ 🍜",
+        "ko": "똠얌 수프 시리즈 🍜",
+        "th": "ชุดต้มยำสุดแซ่บ 🍜"
+      },
+      "orderIndex": 2
     },
     {
+      "orderIndex": 3,
       "name": {
-        "ko": "따뜻한 수프 및 베트남 소고기 쌀국수 🥢",
+        "zh": "熱湯 🥢越南牛肉河粉",
+        "en": "Hot Soups & Beef Pho 🥢",
         "vi": "Súp nóng & Phở bò Việt Nam 🥢",
         "ja": "温かいスープ・ベトナム牛肉フォー 🥢",
-        "th": "ซุปร้อนและเฝอเนื้อเวียดนาม 🥢",
-        "en": "Hot Soups & Beef Pho 🥢",
-        "zh": "熱湯 🥢越南牛肉河粉"
+        "ko": "따뜻한 수프 및 베트남 소고기 쌀국수 🥢",
+        "th": "ซุปร้อนและเฝอเนื้อเวียดนาม 🥢"
       },
       "id": "noodles",
-      "orderIndex": 3,
       "showOnCustomerPage": true
     },
     {
       "orderIndex": 4,
-      "showOnCustomerPage": true,
       "name": {
+        "zh": "精選套餐 🍱優惠",
+        "en": "Chef's Special Combos 🍱",
+        "th": "เซตเมนูสุดคุ้ม 🍱",
         "ko": "셰프 추천 특선 세트 🍱",
         "vi": "Combo đặc biệt 🍱",
-        "ja": "主理人厳選お得セット 🍱",
-        "th": "เซตเมนูสุดคุ้ม 🍱",
-        "zh": "精選套餐 🍱優惠",
-        "en": "Chef's Special Combos 🍱"
+        "ja": "主理人厳選お得セット 🍱"
       },
-      "id": "combos"
-    },
-    {
-      "showOnCustomerPage": true,
-      "orderIndex": 5,
-      "id": "seafood",
-      "name": {
-        "vi": "Hải sản nướng Thái Lan 🦐",
-        "ja": "本格タイ風炭火焼きシーフード 🦐",
-        "th": "อาหารทะเลเผาสูตรเด็ด 🦐",
-        "en": "Signature Thai Seafood 🦐",
-        "zh": "招牌泰式海鮮 🦐",
-        "ko": "시그니처 태국식 해산물 🦐"
-      }
-    },
-    {
-      "showOnCustomerPage": true,
-      "orderIndex": 6,
-      "id": "veggies",
-      "name": {
-        "vi": "Rau củ tươi sạch 🥬",
-        "th": "ผักสดฟาร์มย่าง 🥬",
-        "ja": "地元新鮮野菜焼き 🥬",
-        "zh": "小農鮮蔬菜 🥬",
-        "en": "Farm Fresh Vegetables 🥬",
-        "ko": "신선한 채소 구이 🥬"
-      }
-    },
-    {
-      "orderIndex": 7,
-      "showOnCustomerPage": true,
-      "name": {
-        "ko": "오리지널 숯불 고기 꼬치 및 기타 🍢",
-        "en": "Charcoal BBQ Skewers & Others 🍢",
-        "zh": "碳烤肉類 🍢其他",
-        "th": "บาร์บีคิวเสียบไม้ย่างและอื่นๆ 🍢",
-        "vi": "Thịt nướng xiên & Khác 🍢",
-        "ja": "タイ風肉串炭火焼き・その他 🍢"
-      },
-      "id": "skewers"
-    },
-    {
-      "name": {
-        "vi": "Tráng miệng kiểu Thái 🍰",
-        "ja": "タイ風特製デザート 🍰",
-        "th": "ขนมหวานและพุดดิ้งสูตรพิเศษ 🍰",
-        "zh": "泰式特色甜品 🍰",
-        "en": "Thai Desserts & Sweets 🍰",
-        "ko": "태국식 달콤 디저트 🍰"
-      },
-      "id": "sweets",
-      "orderIndex": 8,
+      "id": "combos",
       "showOnCustomerPage": true
     },
     {
-      "id": "drinks",
+      "orderIndex": 5,
       "name": {
-        "zh": "泰特色沁涼飲品 🍹",
-        "en": "Refreshing Thai Cold Drinks 🍹",
+        "en": "Signature Thai Seafood 🦐",
+        "zh": "招牌泰式海鮮 🦐",
+        "vi": "Hải sản nướng Thái Lan 🦐",
+        "ja": "本格タイ風炭火焼きシーフード 🦐",
+        "th": "อาหารทะเลเผาสูตรเด็ด 🦐",
+        "ko": "시그니처 태국식 해산물 🦐"
+      },
+      "id": "seafood",
+      "showOnCustomerPage": true
+    },
+    {
+      "id": "veggies",
+      "showOnCustomerPage": true,
+      "orderIndex": 6,
+      "name": {
+        "en": "Farm Fresh Vegetables 🥬",
+        "zh": "小農鮮蔬菜 🥬",
+        "ko": "신선한 채소 구이 🥬",
+        "th": "ผักสดฟาร์มย่าง 🥬",
+        "ja": "地元新鮮野菜焼き 🥬",
+        "vi": "Rau củ tươi sạch 🥬"
+      }
+    },
+    {
+      "id": "skewers",
+      "showOnCustomerPage": true,
+      "orderIndex": 7,
+      "name": {
+        "en": "Charcoal BBQ Skewers & Others 🍢",
+        "zh": "碳烤肉類 🍢其他",
+        "ko": "오리지널 숯불 고기 꼬치 및 기타 🍢",
+        "th": "บาร์บีคิวเสียบไม้ย่างและอื่นๆ 🍢",
+        "ja": "タイ風肉串炭火焼き・その他 🍢",
+        "vi": "Thịt nướng xiên & Khác 🍢"
+      }
+    },
+    {
+      "id": "sweets",
+      "showOnCustomerPage": true,
+      "orderIndex": 8,
+      "name": {
+        "ja": "タイ風特製デザート 🍰",
+        "vi": "Tráng miệng kiểu Thái 🍰",
+        "th": "ขนมหวานและพุดดิ้งสูตรพิเศษ 🍰",
+        "ko": "태국식 달콤 디저트 🍰",
+        "en": "Thai Desserts & Sweets 🍰",
+        "zh": "泰式特色甜品 🍰"
+      }
+    },
+    {
+      "id": "drinks",
+      "showOnCustomerPage": true,
+      "orderIndex": 9,
+      "name": {
+        "th": "เครื่องดื่มดับร้อนรสสดชื่น 🍹",
+        "ko": "태국식 청량 음료 🍹",
         "ja": "タイ風さわやかドリンク 🍹",
         "vi": "Đồ uống lạnh kiểu Thái 🍹",
-        "th": "เครื่องดื่มดับร้อนรสสดชื่น 🍹",
-        "ko": "태국식 청량 음료 🍹"
-      },
-      "showOnCustomerPage": true,
-      "orderIndex": 9
+        "zh": "泰特色沁涼飲品 🍹",
+        "en": "Refreshing Thai Cold Drinks 🍹"
+      }
     },
     {
-      "orderIndex": 10,
       "showOnCustomerPage": true,
+      "id": "cat-zene8j",
       "name": {
-        "en": "Exclusive Secret Sauces 🥫",
-        "zh": "獨家醬料 🥫",
-        "ja": "秘伝の特製タレ・ソース 🥫",
-        "th": "ซอสสูตรลับพิเศษ 🥫",
         "vi": "Nước sốt độc quyền 🥫",
-        "ko": "단독 수제 특제 소스 🥫"
+        "ja": "秘伝の特製タレ・ソース 🥫",
+        "ko": "단독 수제 특제 소스 🥫",
+        "th": "ซอสสูตรลับพิเศษ 🥫",
+        "zh": "獨家醬料 🥫",
+        "en": "Exclusive Secret Sauces 🥫"
       },
-      "id": "cat-zene8j"
+      "orderIndex": 10
     },
     {
       "showOnCustomerPage": true,
-      "orderIndex": 11,
       "id": "cat-6ovxss",
       "name": {
-        "ko": "성인 주류 전용 구역 (18+) 🔞",
         "ja": "成人向けお酒エリア (18+) 🔞",
-        "th": "โซนเครื่องดื่มแอลกอฮอล์สำหรับผู้ใหญ่ (18+) 🔞",
         "vi": "Khu vực đồ uống có cồn cho người lớn (18+) 🔞",
+        "th": "โซนเครื่องดื่มแอลกอฮอล์สำหรับผู้ใหญ่ (18+) 🔞",
+        "ko": "성인 주류 전용 구역 (18+) 🔞",
         "en": "Adult Alcoholic Beverages (18+) 🔞",
         "zh": "成人酒品專區 🔞"
-      }
+      },
+      "orderIndex": 11
     }
   ];
 
   const tables: TableConfig[] = [
     {
+      "id": "1",
+      "status": "available",
+      "mergedWith": "",
+      "preservedFor": "",
       "positionY": 15,
       "positionX": 10,
-      "id": "1",
+      "qrCodeUrl": "/?table=1"
+    },
+    {
       "preservedFor": "",
-      "qrCodeUrl": "/?table=1",
+      "positionX": 35,
+      "positionY": 15,
+      "qrCodeUrl": "//?table=2",
+      "id": "2",
       "status": "available",
       "mergedWith": ""
     },
     {
-      "id": "2",
       "preservedFor": "",
-      "qrCodeUrl": "//?table=2",
-      "mergedWith": "",
-      "status": "available",
-      "positionY": 15,
-      "positionX": 35
-    },
-    {
-      "positionY": 15,
+      "qrCodeUrl": "/?table=3",
       "positionX": 60,
-      "preservedFor": "",
-      "id": "3",
-      "mergedWith": "",
+      "positionY": 15,
       "status": "available",
-      "qrCodeUrl": "/?table=3"
+      "mergedWith": "",
+      "id": "3"
     },
     {
+      "qrCodeUrl": "/?table=4",
       "positionY": 75,
       "positionX": 10,
       "preservedFor": "",
-      "id": "4",
       "mergedWith": "",
       "status": "available",
-      "qrCodeUrl": "/?table=4"
+      "id": "4"
     },
     {
-      "positionY": 45,
       "positionX": 10,
+      "positionY": 45,
+      "qrCodeUrl": "/?table=5",
       "preservedFor": "",
       "id": "5",
       "mergedWith": "",
-      "status": "available",
-      "qrCodeUrl": "/?table=5"
+      "status": "in_use"
     },
     {
       "id": "6",
-      "preservedFor": "",
-      "qrCodeUrl": "/?table=6",
       "status": "available",
       "mergedWith": "",
+      "preservedFor": "",
+      "qrCodeUrl": "/?table=6",
       "positionY": 45,
       "positionX": 35
     },
     {
+      "positionX": 35,
+      "qrCodeUrl": "/?table=7",
+      "positionY": 75,
+      "preservedFor": "",
       "mergedWith": "",
       "status": "available",
-      "qrCodeUrl": "/?table=7",
-      "preservedFor": "",
-      "id": "7",
-      "positionX": 35,
-      "positionY": 75
+      "id": "7"
     },
     {
       "positionY": 45,
       "positionX": 60,
+      "qrCodeUrl": "/?table=8",
       "preservedFor": "",
-      "id": "8",
-      "status": "available",
       "mergedWith": "",
-      "qrCodeUrl": "/?table=8"
+      "status": "available",
+      "id": "8"
     }
   ];
 
@@ -346,6 +346,9 @@ async function seedDefaults() {
     "liveOperatingHours": [
       {
         "id": "oh-1",
+        "name": "午餐時段 Lunch Session",
+        "start": "11:00",
+        "end": "14:30",
         "days": [
           0,
           1,
@@ -355,13 +358,14 @@ async function seedDefaults() {
           5,
           6
         ],
-        "start": "00:00",
-        "end": "23:59",
-        "name": "午餐時段 Lunch Session",
         "isActive": false,
         "isReservableOnly": false
       },
       {
+        "id": "oh-2",
+        "name": "晚餐時段 Dinner Session",
+        "start": "17:30",
+        "end": "23:30",
         "days": [
           0,
           1,
@@ -371,12 +375,42 @@ async function seedDefaults() {
           5,
           6
         ],
-        "id": "oh-2",
         "isActive": true,
-        "name": "晚餐時段 Dinner Session",
-        "end": "23:30",
-        "start": "17:30",
         "isReservableOnly": false
+      },
+      {
+        "id": "oh-manual-1785135298026",
+        "name": "調整用",
+        "start": "00:00",
+        "end": "23:59",
+        "days": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ],
+        "isActive": false,
+        "isReservableOnly": false
+      },
+      {
+        "id": "oh-res-1785135317557",
+        "name": "預約專用",
+        "start": "11:00",
+        "end": "12:30",
+        "days": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ],
+        "isActive": true,
+        "isReservableOnly": true
       }
     ],
     "liveRestDays": [],
@@ -384,60 +418,60 @@ async function seedDefaults() {
     "liveServicePaused": false,
     "liveOptionRules": [
       {
-        "category": "加配料",
-        "price": 20,
         "id": "rule-1784360566576",
+        "price": 20,
+        "category": "加配料",
         "name": "加河粉"
       },
       {
-        "category": "加配料",
         "price": 20,
         "id": "rule-1784360574891",
-        "name": "加米線"
+        "name": "加米線",
+        "category": "加配料"
       },
       {
+        "name": "升級套餐(烤蔬菜+泰奶一杯)",
         "category": "加配料",
         "price": 140,
-        "id": "rule-1784360613823",
-        "name": "升級套餐(烤蔬菜+泰奶一杯)"
+        "id": "rule-1784360613823"
       }
     ],
     "livePrinterSettings": {
       "bill": {
-        "usbPort": "LPT1",
-        "cashDrawerEnabled": true,
-        "printAddress": "桃園市大園區高鐵北路二段198號1樓",
-        "restaurantName": "沙貝燒烤 SABAY BBQ",
         "printTelephone": "0966626408",
-        "width": "58mm",
-        "cashDrawerDriver": "ESC_POS_RAW",
-        "ip": "192.168.123.100",
-        "cashDrawerEscPosCommand": "1B700119FA",
-        "headerPrefix": "★★★ 顧客結帳明細單 ★★★",
-        "footerSuffix": "謝謝光臨，歡迎再度光臨！",
-        "connectionType": "LPT",
-        "printTimeEnabled": true,
         "fontSizeFactor": 0.8,
-        "cashDrawerOposName": "CashDrawer1"
+        "cashDrawerEnabled": true,
+        "restaurantName": "沙貝燒烤 SABAY BBQ",
+        "width": "58mm",
+        "cashDrawerEscPosCommand": "1B700119FA",
+        "printTimeEnabled": true,
+        "printAddress": "桃園市大園區高鐵北路二段198號1樓",
+        "footerSuffix": "謝謝光臨，歡迎再度光臨！",
+        "usbPort": "LPT1",
+        "cashDrawerDriver": "ESC_POS_RAW",
+        "connectionType": "LPT",
+        "headerPrefix": "★★★ 顧客結帳明細單 ★★★",
+        "cashDrawerOposName": "CashDrawer1",
+        "ip": "192.168.123.100"
       },
       "kitchen": {
+        "ip": "192.168.123.100",
+        "headerPrefix": "★★★ 廚房工作備餐單 ★★★",
+        "fontSizeFactor": 1,
+        "connectionType": "IP",
         "restaurantName": "沙貝燒烤",
+        "width": "80mm",
+        "usbPort": "USB001",
         "printTelephone": "0966626408",
         "footerSuffix": "請主廚盡速配餐出餐！",
-        "width": "80mm",
-        "headerPrefix": "★★★ 廚房工作備餐單 ★★★",
         "printAddress": "桃園市大園區高鐵北路二段198號1樓",
-        "usbPort": "USB001",
-        "ip": "192.168.123.100",
-        "fontSizeFactor": 1,
-        "printTimeEnabled": true,
-        "connectionType": "IP"
+        "printTimeEnabled": true
       }
     },
     "livePromoCombo": {
       "enabled": true,
-      "eligibleItemIds": [],
       "requiredQty": 10,
+      "eligibleItemIds": [],
       "discountAmount": 20
     },
     "livePromoCombos": [],
@@ -450,39 +484,39 @@ async function seedDefaults() {
     "liveMemberPointsRatio": 20,
     "liveMemberRewards": [
       {
-        "enabled": false,
-        "id": "rew-01",
         "fallbackPrice": 10,
         "cost": 900,
+        "id": "rew-01",
+        "enabled": false,
         "menuItemId": "sk-02"
       },
       {
-        "id": "rew-02",
+        "cost": 800,
         "fallbackPrice": 10,
-        "enabled": false,
         "menuItemId": "vg-01",
-        "cost": 800
+        "enabled": false,
+        "id": "rew-02"
       },
       {
+        "fallbackPrice": 10,
         "cost": 1800,
-        "menuItemId": "dr-01",
+        "id": "rew-03",
         "enabled": false,
-        "fallbackPrice": 10,
-        "id": "rew-03"
+        "menuItemId": "dr-01"
       },
       {
-        "enabled": false,
-        "fallbackPrice": 10,
-        "id": "rew-04",
         "cost": 900,
-        "menuItemId": "sw-01"
+        "fallbackPrice": 10,
+        "menuItemId": "sw-01",
+        "enabled": false,
+        "id": "rew-04"
       },
       {
-        "cost": 2600,
-        "menuItemId": "ty-01",
         "fallbackPrice": 10,
+        "cost": 2600,
+        "enabled": false,
         "id": "rew-05",
-        "enabled": false
+        "menuItemId": "ty-01"
       }
     ]
   }));

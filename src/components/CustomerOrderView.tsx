@@ -184,11 +184,41 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
     };
   }, []);
 
+  const todayDateStr = useMemo(() => {
+    const now = new Date();
+    const yr = now.getFullYear();
+    const mo = String(now.getMonth() + 1).padStart(2, '0');
+    const dy = String(now.getDate()).padStart(2, '0');
+    return `${yr}-${mo}-${dy}`;
+  }, []);
+
+  const maxThreeMonthsDateStr = useMemo(() => {
+    const now = new Date();
+    now.setMonth(now.getMonth() + 3);
+    const yr = now.getFullYear();
+    const mo = String(now.getMonth() + 1).padStart(2, '0');
+    const dy = String(now.getDate()).padStart(2, '0');
+    return `${yr}-${mo}-${dy}`;
+  }, []);
+
+  // 🔒 驗證「預約訂位點餐專屬通道」是否有效 (若後台取消預約或已結帳完成，通道自動作廢與刪除)
+  const validUrlReservationParams = useMemo(() => {
+    if (!urlReservationParams?.reservationNo) return null;
+    const resNo = urlReservationParams.reservationNo;
+    const matchingRes = (reservations || []).find((r: any) =>
+      (r.id === resNo || (r as any).reservationNo === resNo) &&
+      r.status !== 'cancelled' &&
+      r.status !== 'completed'
+    );
+    if (!matchingRes) return null;
+    return urlReservationParams;
+  }, [urlReservationParams, reservations]);
+
   const [selectedTable, setSelectedTable] = useState('5');
   const [activeCustomerReservation, setActiveCustomerReservation] = useState<Reservation | null>(null);
 
   const isHasReservation = useMemo(() => {
-    if (urlReservationParams?.reservationNo) return true;
+    if (validUrlReservationParams?.reservationNo) return true;
     if (activeCustomerReservation) return true;
     const currentTable = (tables || []).find((t: any) => t.id === selectedTable);
     if (currentTable && (currentTable.status === 'preserved' || currentTable.status === 'reserved')) return true;
@@ -207,7 +237,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
       r.status !== 'cancelled'
     );
     return !!matchingRes;
-  }, [urlReservationParams, activeCustomerReservation, selectedTable, tables, reservations, nowTimestamp]);
+  }, [validUrlReservationParams, activeCustomerReservation, selectedTable, tables, reservations, nowTimestamp]);
 
   const isCurrentSlotReservableOnly = useMemo(() => {
     if (servicePaused || !isOpen) return false;
@@ -239,8 +269,8 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
   }, [isOpen, servicePaused, operatingHours, nowTimestamp]);
 
   const isStoreCurrentlyOpen = useMemo(() => {
-    // 預約專屬連結特權：不受營業時間或暫停服務限制，可自由點餐與瀏覽
-    if (urlReservationParams?.reservationNo) return true;
+    // 預約專屬連結特權：不受營業時間或暫停服務限制，可自由點餐與瀏覽（需專屬通道有效）
+    if (validUrlReservationParams?.reservationNo) return true;
 
     if (servicePaused || !isOpen) return false;
 
@@ -339,6 +369,11 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
   const [resNotes, setResNotes] = useState('');
   const [resSubmitting, setResSubmitting] = useState(false);
   const [resFeedback, setResFeedback] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
+
+  const isResDateValid = useMemo(() => {
+    if (!resDate) return true;
+    return resDate <= maxThreeMonthsDateStr;
+  }, [resDate, maxThreeMonthsDateStr]);
 
   // ⏱️ Helper to parse "HH:MM" into total minutes from 00:00
   const parseTimeToMinutes = (t: string) => {
@@ -479,6 +514,11 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
 
     if (!resCustomerName.trim() || !resPhone.trim() || !resTableNumber) {
       setResFeedback({ type: 'error', msg: '請完整填寫顧客姓名、電話與指定桌號！' });
+      return;
+    }
+
+    if (!isResDateValid) {
+      setResFeedback({ type: 'error', msg: `⚠️ 預訂日期最多只能提前 3 個月 (最晚至 ${maxThreeMonthsDateStr})！` });
       return;
     }
 
@@ -1471,7 +1511,11 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
 
   const handleCheckout = async () => {
     if (cart.length === 0 || isCheckoutSubmitting || isCheckoutSubmittingRef.current) return;
-    if (servicePaused && !urlReservationParams?.reservationNo) {
+    if (urlReservationParams?.reservationNo && !validUrlReservationParams?.reservationNo) {
+      setOrderError('⚠️ 您的預約訂位點餐專屬通道已被取消、刪除或已完成結帳（通道已失效），無法進行點餐！');
+      return;
+    }
+    if (servicePaused && !validUrlReservationParams?.reservationNo) {
       setOrderError('⚠️ 廚房因訂單極多暫停接單中，本筆訂單無法送出。造成不便敬請見諒，請留意前台恢復通知！');
       return;
     }
@@ -1980,19 +2024,33 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
       </div>
       
       {/* 預約專屬連結點餐模式 Banner */}
-      {urlReservationParams?.reservationNo && (
+      {validUrlReservationParams?.reservationNo && (
         <div className="bg-gradient-to-r from-amber-950/80 via-zinc-900 to-amber-950/80 border border-amber-500/50 rounded-2xl p-3.5 sm:p-4 text-left space-y-1.5 shadow-xl animate-fade-in my-3">
           <div className="flex items-center justify-between gap-2">
             <span className="font-extrabold text-amber-400 text-xs sm:text-sm flex items-center gap-1.5 font-display">
               <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
-              ✨ 預約訂位點餐專屬通道 (單號: {urlReservationParams.reservationNo})
+              ✨ 預約訂位點餐專屬通道 (單號: {validUrlReservationParams.reservationNo})
             </span>
             <span className="text-[10px] bg-amber-500/20 text-amber-300 font-bold px-2 py-0.5 rounded border border-amber-500/30 shrink-0">
               無受營業時間限制 (24H Pre-order)
             </span>
           </div>
           <p className="text-zinc-300 text-[11px] sm:text-xs leading-relaxed font-sans">
-            歡迎{urlReservationParams.resName ? <strong className="text-white"> {urlReservationParams.resName} </strong> : ''}進入點餐！您已取得店家核發之預約點餐專屬連結（預約日期：<span className="font-mono text-amber-300">{urlReservationParams.resDate || '指定日期'} {urlReservationParams.resTime || ''}</span>）。您可自由瀏覽菜單並下單，訂單送出後將在廚房KDS保留，待預約當天營業時間正式開放備餐。
+            歡迎{validUrlReservationParams.resName ? <strong className="text-white"> {validUrlReservationParams.resName} </strong> : ''}進入點餐！您已取得店家核發之預約點餐專屬連結（預約日期：<span className="font-mono text-amber-300">{validUrlReservationParams.resDate || '指定日期'} {validUrlReservationParams.resTime || ''}</span>）。您可自由瀏覽菜單並下單，訂單送出後將在廚房KDS保留，待預約當天營業時間正式開放備餐。
+          </p>
+        </div>
+      )}
+
+      {urlReservationParams?.reservationNo && !validUrlReservationParams?.reservationNo && (
+        <div className="bg-rose-950/80 border border-rose-500/50 rounded-2xl p-3.5 sm:p-4 text-left space-y-1.5 shadow-xl animate-fade-in my-3">
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-extrabold text-rose-400 text-xs sm:text-sm flex items-center gap-1.5 font-display">
+              <span className="w-2 h-2 rounded-full bg-rose-500"></span>
+              ⚠️ 預約訂位點餐專屬通道已失效或已被刪除 (單號: {urlReservationParams.reservationNo})
+            </span>
+          </div>
+          <p className="text-rose-200 text-[11px] sm:text-xs leading-relaxed font-sans">
+            此預約專屬通道已由店家取消、數據已刪除或訂單已結帳完成。為保障系統安全，此專屬通道已自動關閉失效，無法再使用此通道進行點餐。
           </p>
         </div>
       )}
@@ -4694,15 +4752,20 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                     {/* Date */}
                     <div className="space-y-1">
-                      <label className="text-zinc-300 font-bold text-xs flex items-center gap-1">
+                      <label className="text-zinc-300 font-bold text-xs flex items-center justify-between">
                         <span>📆 預定日期 Date *</span>
+                        {resDate && resDate > maxThreeMonthsDateStr && (
+                          <span className="text-[10px] text-rose-500 font-bold">最多提前3個月</span>
+                        )}
                       </label>
                       <input
                         type="date"
                         required
+                        min={todayDateStr}
+                        max={maxThreeMonthsDateStr}
                         value={resDate}
                         onChange={(e) => setResDate(e.target.value)}
-                        className="w-full bg-[#1c1c1c] border border-white/15 focus:border-amber-400 rounded-xl px-3 py-2 text-white outline-none font-mono transition"
+                        className={`w-full bg-[#1c1c1c] border ${resDate && resDate > maxThreeMonthsDateStr ? 'border-rose-500 text-rose-500 focus:border-rose-400' : 'border-white/15 focus:border-amber-400 text-white'} rounded-xl px-3 py-2 outline-none font-mono transition`}
                       />
                     </div>
 

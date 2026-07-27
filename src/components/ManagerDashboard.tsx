@@ -671,6 +671,28 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   const [resError, setResError] = useState<string | null>(null);
   const [resSuccess, setResSuccess] = useState<string | null>(null);
 
+  const todayDateStr = useMemo(() => {
+    const now = new Date();
+    const yr = now.getFullYear();
+    const mo = String(now.getMonth() + 1).padStart(2, '0');
+    const dy = String(now.getDate()).padStart(2, '0');
+    return `${yr}-${mo}-${dy}`;
+  }, []);
+
+  const maxThreeMonthsDateStr = useMemo(() => {
+    const now = new Date();
+    now.setMonth(now.getMonth() + 3);
+    const yr = now.getFullYear();
+    const mo = String(now.getMonth() + 1).padStart(2, '0');
+    const dy = String(now.getDate()).padStart(2, '0');
+    return `${yr}-${mo}-${dy}`;
+  }, []);
+
+  const isResDateValid = useMemo(() => {
+    if (!resDateInput) return true;
+    return resDateInput <= maxThreeMonthsDateStr;
+  }, [resDateInput, maxThreeMonthsDateStr]);
+
   const isResTimeValid = useMemo(() => {
     if (!operatingHours || operatingHours.length === 0) return true;
     const activeSlots = operatingHours.filter(s => s && s.isActive);
@@ -2859,6 +2881,11 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
       return;
     }
     setResPhoneError(false);
+
+    if (!isResDateValid) {
+      setResError(`⚠️ 預約日期最多只能提前 3 個月 (最晚至 ${maxThreeMonthsDateStr})！`);
+      return;
+    }
 
     if (!isResTimeValid) {
       setResError('⚠️ 預訂時間不在營業時間內，請重新選擇！');
@@ -11841,8 +11868,13 @@ ${customerDetails}
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                   <div className="space-y-1">
-                    <span className="text-zinc-500 font-sans block text-[10px]">預定日期 Date *</span>
-                    <input type="date" required value={resDateInput} onChange={(e) => setResDateInput(e.target.value)} className="w-full bg-[#1e1e1e] border border-white/10 rounded px-2.5 py-1.5 text-white font-mono" />
+                    <span className="text-zinc-500 font-sans text-[10px] flex items-center justify-between">
+                      <span>預定日期 Date *</span>
+                      {!isResDateValid && (
+                        <span className="text-rose-500 font-bold">最多提前3個月</span>
+                      )}
+                    </span>
+                    <input type="date" required min={todayDateStr} max={maxThreeMonthsDateStr} value={resDateInput} onChange={(e) => setResDateInput(e.target.value)} className={`w-full bg-[#1e1e1e] border ${!isResDateValid ? 'border-rose-500 text-rose-500 focus:border-rose-400' : 'border-white/10 focus:border-[#E5B453] text-white'} rounded px-2.5 py-1.5 font-mono outline-none transition-all`} />
                   </div>
                   <div className="space-y-1">
                     <span className="text-zinc-500 font-sans text-[10px] flex items-center justify-between">

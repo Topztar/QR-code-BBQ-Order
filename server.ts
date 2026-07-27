@@ -2051,6 +2051,13 @@ app.post('/api/reservations', (req, res) => {
     return res.status(400).json({ error: 'Missing required field: customerName, phone, tableNumber, date, time / 缺少預約必填欄位' });
   }
 
+  const now = new Date();
+  now.setMonth(now.getMonth() + 3);
+  const maxDateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  if (date && date.trim() > maxDateStr) {
+    return res.status(400).json({ error: `預約日期最多只能提前 3 個月 (最晚至 ${maxDateStr})！` });
+  }
+
   // Check 3-hour reservation time slot conflict
   const parseMins = (t: string) => {
     if (!t) return 0;
@@ -2102,6 +2109,25 @@ app.put('/api/reservations/:id', (req, res) => {
     const newTime = time !== undefined ? time.trim() : existing.time;
     const newTable = tableNumber !== undefined ? tableNumber.trim() : existing.tableNumber;
     const newStatus = status !== undefined ? status : existing.status;
+
+    const now = new Date();
+    now.setMonth(now.getMonth() + 3);
+    const maxDateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    if (newDate && newDate > maxDateStr) {
+      return res.status(400).json({ error: `預約日期最多只能提前 3 個月 (最晚至 ${maxDateStr})！` });
+    }
+
+    // 🔒 預約若被取消，一併刪除該預約紀錄與專屬點餐通道
+    if (newStatus === 'cancelled') {
+      const [deleted] = liveReservations.splice(index, 1);
+      cleanupUnlistedReservationData();
+      syncTableStatusesWithTodayReservations();
+      saveStateToDisk();
+      if (firestoreDb) {
+        deleteDoc(doc(firestoreDb, 'reservations', deleted.id)).catch(err => console.error('[Firebase] Failed to delete cancelled reservation:', err));
+      }
+      return res.json({ success: true, message: 'Reservation cancelled and deleted / 預約已取消並刪除', reservation: deleted });
+    }
 
     if (newStatus !== 'cancelled' && (date !== undefined || time !== undefined || tableNumber !== undefined)) {
       const parseMins = (t: string) => {
@@ -2880,12 +2906,16 @@ app.put('/api/orders/:id/checkout', (req, res) => {
       }
     }
     if (order.isPaid) {
-      const matchingRes = liveReservations.find(r =>
+      const resIdx = liveReservations.findIndex(r =>
         (order.reservationNo && (r.id === order.reservationNo || (r as any).reservationNo === order.reservationNo)) ||
-        (String(r.tableNumber).trim() === tblId && (r.status === 'pending' || r.status === 'seated'))
+        (String(r.tableNumber).trim() === tblId && (r.status === 'pending' || r.status === 'seated' || r.status === 'upcoming'))
       );
-      if (matchingRes) {
-        matchingRes.status = 'completed';
+      if (resIdx > -1) {
+        const [deletedRes] = liveReservations.splice(resIdx, 1);
+        console.log(`[Checkout Cleanup] Deleted reservation ${deletedRes.id} upon order checkout.`);
+        if (firestoreDb) {
+          deleteDoc(doc(firestoreDb, 'reservations', deletedRes.id)).catch(err => console.error('[Firebase] Failed to delete checkout reservation:', err));
+        }
       }
     }
   }

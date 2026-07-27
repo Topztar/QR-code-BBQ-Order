@@ -818,6 +818,20 @@ export default function App() {
     const description = `結帳 🥢 訂單 #${orderId.replace('offline_temp_', '離線')} 完成付款`;
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, isPaid: true, status: 'paid' as OrderStatus, isOfflinePending: true } : o));
 
+    // 🔒 結帳完成後一併刪除相對應的「預約訂位點餐專屬通道」
+    const targetOrder = orders.find(o => o.id === orderId);
+    if (targetOrder) {
+      const resNo = targetOrder.reservationNo;
+      const matchingRes = (reservations || []).find(r =>
+        (resNo && (r.id === resNo || (r as any).reservationNo === resNo)) ||
+        (r.tableNumber === targetOrder.tableNumber && r.date === targetOrder.reservationDate)
+      );
+      if (matchingRes) {
+        console.log(`[Checkout Cleanup] Deleting reservation ${matchingRes.id} associated with paid order ${orderId}`);
+        handleDeleteReservation(matchingRes.id);
+      }
+    }
+
     if (!navigator.onLine || orderId.startsWith('offline_temp_')) {
       addRequestToQueue(`/api/orders/${orderId}/checkout`, 'PUT', checkoutData || { isPaid: true }, description);
       return;
@@ -1247,6 +1261,22 @@ export default function App() {
   };
 
   const handleAddReservation = async (reservation: Omit<Reservation, 'id' | 'createdAt'>) => {
+    const maxThreeMonthsDateStr = (() => {
+      const now = new Date();
+      now.setMonth(now.getMonth() + 3);
+      const yr = now.getFullYear();
+      const mo = String(now.getMonth() + 1).padStart(2, '0');
+      const dy = String(now.getDate()).padStart(2, '0');
+      return `${yr}-${mo}-${dy}`;
+    })();
+
+    if (reservation.date && reservation.date.trim() > maxThreeMonthsDateStr) {
+      return {
+        success: false,
+        error: `預約日期最多只能提前 3 個月 (最晚至 ${maxThreeMonthsDateStr})！`
+      };
+    }
+
     // 預約時段衝突檢測 (3小時用餐時間，同桌次同日期)
     const parseMins = (t: string) => {
       if (!t) return 0;
