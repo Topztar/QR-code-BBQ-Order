@@ -795,8 +795,8 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   const [promoComboSaveSuccess, setPromoComboSaveSuccess] = useState<string | null>(null);
   const prevPromoComboRef = React.useRef<string>(JSON.stringify(promoCombo));
   const [addComboToMenuId, setAddComboToMenuId] = useState<string | null>(null);
-  const [addComboPrice, setAddComboPrice] = useState<number>(399);
-  const [addComboCategory, setAddComboCategory] = useState<string>('skewers');
+  const [addComboPrice, setAddComboPrice] = useState<number>(0);
+  const [addComboCategory, setAddComboCategory] = useState<string>('');
   const [addComboDesc, setAddComboDesc] = useState<string>('');
   const [deleteConfirmComboId, setDeleteConfirmComboId] = useState<string | null>(null);
 
@@ -9351,10 +9351,10 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                 onClick={() => {
                   const newCombo = {
                     id: `combo-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                    name: '新自訂套餐組合',
-                    enabled: true,
-                    requiredQty: 5,
-                    discountAmount: 10,
+                    name: '',
+                    enabled: false,
+                    requiredQty: 0,
+                    discountAmount: 0,
                     eligibleItemIds: []
                   };
                   setTempPromoCombos([...tempPromoCombos, newCombo]);

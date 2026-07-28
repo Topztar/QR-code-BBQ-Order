@@ -282,7 +282,7 @@ async function seedDefaults() {
       "preservedFor": "",
       "id": "5",
       "mergedWith": "",
-      "status": "in_use"
+      "status": "available"
     },
     {
       "id": "6",
