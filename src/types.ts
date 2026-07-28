@@ -121,6 +121,7 @@ export interface TableConfig {
   positionX?: number;
   positionY?: number;
   isOfflinePending?: boolean;
+  maxCapacity?: number;
 }
 
 export interface Reservation {
@@ -131,7 +132,7 @@ export interface Reservation {
   tableNumber: string;
   date: string;
   time: string;
-  status: 'pending' | 'seated' | 'cancelled' | 'completed' | 'checked_out' | 'upcoming';
+  status: 'pending' | 'confirmed' | 'seated' | 'cancelled' | 'completed' | 'checked_out' | 'upcoming';
   notes?: string;
   createdAt: string;
   reservationNo?: string;

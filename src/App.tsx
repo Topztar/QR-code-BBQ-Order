@@ -1120,12 +1120,12 @@ export default function App() {
   };
 
   // Table Mutation Handlers
-  const handleAddTable = async (id: string, qrCodeUrl?: string) => {
+  const handleAddTable = async (id: string, qrCodeUrl?: string, maxCapacity?: number) => {
     try {
       const res = await apiFetch('/api/tables', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, qrCodeUrl }),
+        body: JSON.stringify({ id, qrCodeUrl, maxCapacity }),
       });
       if (res.ok) {
         await fetchData();
@@ -1140,12 +1140,12 @@ export default function App() {
     }
   };
 
-  const handleEditTable = async (id: string, qrCodeUrl: string) => {
+  const handleEditTable = async (id: string, qrCodeUrl: string, maxCapacity?: number) => {
     try {
       const res = await apiFetch(`/api/tables/${encodeURIComponent(id)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ qrCodeUrl }),
+        body: JSON.stringify({ qrCodeUrl, maxCapacity }),
       });
       if (res.ok) {
         await fetchData();

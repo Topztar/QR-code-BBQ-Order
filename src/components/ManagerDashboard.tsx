@@ -361,6 +361,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   const [editingTableObj, setEditingTableObj] = useState<TableConfig | null>(null);
   const [tableIdInput, setTableIdInput] = useState('');
   const [tableQrUrlInput, setTableQrUrlInput] = useState('');
+  const [tableMaxCapacityInput, setTableMaxCapacityInput] = useState('');
   const [tableError, setTableError] = useState<string | null>(null);
   const [tableSuccess, setTableSuccess] = useState<string | null>(null);
   const [takeoutStatus, setTakeoutStatus] = useState({ sequence: 0, lastResetDate: '' });
@@ -661,7 +662,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   const [resPhoneInput, setResPhoneInput] = useState('');
   const [resPhoneError, setResPhoneError] = useState(false);
   const [resGuestsInput, setResGuestsInput] = useState(2);
-  const [resTableInput, setResTableInput] = useState('');
+  const [resTableInputs, setResTableInputs] = useState<string[]>([]);
   const [resDateInput, setResDateInput] = useState('');
   const [resTimeInput, setResTimeInput] = useState('');
   const [resNotesInput, setResNotesInput] = useState('');
@@ -690,10 +691,12 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
 
   const isResDateValid = useMemo(() => {
     if (!resDateInput) return true;
+    if (restDays && restDays.includes(resDateInput)) return false;
     return resDateInput <= maxThreeMonthsDateStr;
-  }, [resDateInput, maxThreeMonthsDateStr]);
+  }, [resDateInput, maxThreeMonthsDateStr, restDays]);
 
   const isResTimeValid = useMemo(() => {
+    if (restDays && restDays.includes(resDateInput)) return false;
     if (!operatingHours || operatingHours.length === 0) return true;
     const activeSlots = operatingHours.filter(s => s && s.isActive);
     if (activeSlots.length === 0) return true;
@@ -2777,6 +2780,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     setEditingTableObj(tb);
     setTableIdInput(tb.id);
     setTableQrUrlInput(tb.qrCodeUrl);
+    setTableMaxCapacityInput(tb.maxCapacity ? tb.maxCapacity.toString() : '');
     setTableError(null);
     setTableSuccess(null);
     setIsTableFormOpen(true);
@@ -2791,8 +2795,9 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
       setTableError('請填載桌位號碼！');
       return;
     }
+    const maxCapacity = tableMaxCapacityInput.trim() ? parseInt(tableMaxCapacityInput) : undefined;
     if (editingTableObj) {
-      const r = await onEditTable(editingTableObj.id, tableQrUrlInput);
+      const r = await onEditTable(editingTableObj.id, tableQrUrlInput, maxCapacity);
       if (r.success) {
         setTableSuccess('桌次資訊儲存更新成功！');
         setTimeout(() => setIsTableFormOpen(false), 1200);
@@ -2800,11 +2805,12 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
         setTableError(r.error || '儲存更新失敗');
       }
     } else {
-      const r = await onAddTable(cleanId, tableQrUrlInput);
+      const r = await onAddTable(cleanId, tableQrUrlInput, maxCapacity);
       if (r.success) {
         setTableSuccess('成功新增全店桌席與 QR 點餐定位元件！');
         setTableIdInput('');
         setTableQrUrlInput('');
+        setTableMaxCapacityInput('');
         setTimeout(() => setIsTableFormOpen(false), 1500);
       } else {
         setTableError(r.error || '此桌號已存在');
@@ -2819,17 +2825,24 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     setResPhoneInput('');
     setResPhoneError(false);
     setResGuestsInput(2);
-    setResTableInput(tables[0]?.id || '1');
+    setResTableInputs([]);
     const d = new Date();
+    d.setDate(d.getDate() + 1); // Default to tomorrow
     const yr = d.getFullYear();
     const mo = String(d.getMonth() + 1).padStart(2, '0');
     const dy = String(d.getDate()).padStart(2, '0');
-    const todayStr = `${yr}-${mo}-${dy}`;
-    setResDateInput(todayStr);
-    const hr = String(d.getHours() + 1).padStart(2, '0');
+    const tomorrowStr = `${yr}-${mo}-${dy}`;
+    
+    setResDateInput(tomorrowStr);
+    
+    if (restDays && restDays.includes(tomorrowStr)) {
+      setTimeout(() => window.alert('⚠️ 預設預定日期 (明日) 為公休日無法訂位，請重新選擇日期！'), 100);
+    }
+
+    const hr = String(new Date().getHours() + 1).padStart(2, '0');
     setResTimeInput(`${hr}:00`);
     setResNotesInput('');
-    const autoNo = generateReservationNo(todayStr, reservations);
+    const autoNo = generateReservationNo(tomorrowStr, reservations);
     setResNoInput(autoNo);
     setGeneratedResLink('');
     setCopiedLinkNotice(false);
@@ -2844,7 +2857,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     setResPhoneInput(res.phone || '');
     setResPhoneError(false);
     setResGuestsInput(res.guestCount || 2);
-    setResTableInput(res.tableNumber);
+    setResTableInputs(res.tableNumber ? res.tableNumber.split(',').map(t => t.trim()).filter(Boolean) : []);
     setResDateInput(res.date);
     setResTimeInput(res.time);
     setResNotesInput(res.notes || '');
@@ -2855,6 +2868,46 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     setResSuccess(null);
     setIsResFormOpen(true);
   };
+
+  // Auto-assign tables based on guest count and availability
+  useEffect(() => {
+    if (!isResFormOpen || !resDateInput || !resTimeInput || tables.length === 0 || editingResObj) return;
+
+    const parseMins = (t: string) => {
+      if (!t) return 0;
+      const [h, m] = t.split(':').map(Number);
+      return (h || 0) * 60 + (m || 0);
+    };
+    const targetMins = parseMins(resTimeInput);
+    
+    // Find overlapping reservations
+    const overlapping = reservations.filter(r => {
+      if (r.status === 'cancelled') return false;
+      if (r.date !== resDateInput.trim()) return false;
+      const rMins = parseMins(r.time);
+      return Math.abs(rMins - targetMins) < 180;
+    });
+
+    const unavailableTableIds = new Set<string>();
+    overlapping.forEach(r => {
+      const rTables = String(r.tableNumber || '').split(',').map(t => t.trim()).filter(Boolean);
+      rTables.forEach(tId => unavailableTableIds.add(tId));
+    });
+
+    const availableTables = tables.filter(t => !unavailableTableIds.has(t.id));
+    availableTables.sort((a, b) => (b.maxCapacity || 4) - (a.maxCapacity || 4));
+
+    let currentCapacity = 0;
+    const selectedIds: string[] = [];
+    
+    for (const t of availableTables) {
+      if (currentCapacity >= resGuestsInput) break;
+      selectedIds.push(t.id);
+      currentCapacity += (t.maxCapacity || 4);
+    }
+    
+    setResTableInputs(selectedIds);
+  }, [resGuestsInput, resDateInput, resTimeInput, tables, reservations, isResFormOpen, editingResObj]);
 
   const handleReservationSaveSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -2892,12 +2945,17 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
       return;
     }
 
+    if (resTableInputs.length === 0) {
+      setResError('請指定預約桌號或確認該時段是否有足夠空桌！');
+      return;
+    }
+
     const currentResNo = resNoInput || generateReservationNo(resDateInput, reservations);
     const payload = {
       customerName: resNameInput.trim(),
       phone: rawPhone,
       guestCount: Number(resGuestsInput) || 1,
-      tableNumber: resTableInput,
+      tableNumber: resTableInputs.join(', '),
       date: resDateInput,
       time: resTimeInput,
       notes: resNotesInput.trim(),
@@ -5669,7 +5727,8 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                         { key: 'all', label: '🔍 全部預約 All' },
                         { key: 'pending', label: '⏳ 待確認' },
                         { key: 'upcoming', label: '⚡ 即將到來' },
-                        { key: 'seated', label: '🟢 已確認 / 已就座' },
+                        { key: 'confirmed', label: '🟢 已確認' },
+                        { key: 'seated', label: '🔵 已就座' },
                         { key: 'completed', label: '✅ 已完成 / 已結帳' },
                         { key: 'cancelled', label: '🔴 已取消' },
                       ].map(filter => {
@@ -5735,15 +5794,12 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                                     const selectedPendingRes = filteredPendingList.filter(r => selectedResIds.includes(r.id));
                                     const promises = selectedPendingRes.map(async (res) => {
                                       if (onEditReservation) {
-                                        await onEditReservation(res.id, { status: 'seated' });
-                                      }
-                                      if (onUpdateTableStatus && res.tableNumber) {
-                                        await onUpdateTableStatus(res.tableNumber, { status: 'in_use', preservedFor: '' });
+                                        await onEditReservation(res.id, { status: 'confirmed' });
                                       }
                                     });
                                     await Promise.all(promises);
                                     setSelectedResIds([]);
-                                    setBatchSuccessMessage(`⚡ 成功批次確認 ${selectedPendingRes.length} 筆預約，並自動安排桌次帶位就座！`);
+                                    setBatchSuccessMessage(`⚡ 成功批次預約確認 ${selectedPendingRes.length} 筆預約！`);
                                     setTimeout(() => setBatchSuccessMessage(null), 4000);
                                   } catch (err) {
                                     console.error(err);
@@ -5892,29 +5948,56 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                                       </td>
                                       <td className="p-3 min-w-[120px] whitespace-nowrap">
                                         {res.status === 'pending' && <span className="bg-amber-500/10 border border-amber-500/20 text-amber-400 px-2 py-0.5 rounded-md font-sans font-bold text-[10px] inline-block">⏳ 待確認 Pending</span>}
+                                        {res.status === 'confirmed' && <span className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-md font-sans font-bold text-[10px] inline-block">🟢 已確認 Confirmed</span>}
                                         {res.status === 'upcoming' && <span className="bg-rose-500/15 border border-rose-550/30 text-rose-400 px-2 py-0.5 rounded-md font-sans font-extrabold text-[10px] inline-block animate-pulse">⚡ 即將到來 Upcoming</span>}
-                                        {res.status === 'seated' && <span className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-md font-sans font-bold text-[10px] inline-block">🟢 已就座 Seated</span>}
+                                        {res.status === 'seated' && <span className="bg-blue-500/10 border border-blue-500/20 text-blue-400 px-2 py-0.5 rounded-md font-sans font-bold text-[10px] inline-block">🔵 已就座 Seated</span>}
                                         {res.status === 'completed' && <span className="bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 px-2 py-0.5 rounded-md font-sans font-bold text-[10px] inline-block">✅ 已結帳 Completed</span>}
                                         {res.status === 'cancelled' && <span className="bg-rose-500/10 border border-rose-500/20 text-rose-450 px-2 py-0.5 rounded-md font-sans font-bold text-[10px] inline-block">🔴 已取消 Cancelled</span>}
                                       </td>
                                       <td className="p-3 min-w-[160px] text-center">
                                         <div className="flex flex-wrap items-center justify-center gap-1.5 text-[10px]">
-                                          {(res.status === 'pending' || res.status === 'upcoming') && (
+                                          {(res.status === 'pending' || res.status === 'confirmed' || res.status === 'upcoming') && (
                                             <>
-                                              <button
-                                                type="button"
-                                                onClick={async () => {
-                                                  if (onEditReservation) {
-                                                    await onEditReservation(res.id, { status: 'seated' });
-                                                  }
-                                                  if (onUpdateTableStatus) {
-                                                    await onUpdateTableStatus(res.tableNumber, { status: 'in_use', preservedFor: '' });
-                                                  }
-                                                }}
-                                                className="px-2 py-1 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold rounded transition active:scale-90 cursor-pointer"
-                                              >
-                                                💡 帶位就座
-                                              </button>
+                                              {res.status === 'pending' && (
+                                                <button
+                                                  type="button"
+                                                  onClick={async () => {
+                                                    if (onEditReservation) {
+                                                      await onEditReservation(res.id, { status: 'confirmed' });
+                                                    }
+                                                  }}
+                                                  className="px-2 py-1 bg-amber-600 hover:bg-amber-500 text-white font-extrabold rounded transition active:scale-90 cursor-pointer"
+                                                >
+                                                  ✔ 預約確認
+                                                </button>
+                                              )}
+                                              {(() => {
+                                                if (res.status !== 'confirmed' && res.status !== 'upcoming') return null;
+                                                const [year, month, day] = res.date.split('-').map(Number);
+                                                const [hour, minute] = res.time.split(':').map(Number);
+                                                const resDateTime = new Date(year, month - 1, day, hour, minute);
+                                                const diffMinutes = (resDateTime.getTime() - Date.now()) / (1000 * 60);
+                                                
+                                                if (diffMinutes <= 20) {
+                                                  return (
+                                                    <button
+                                                      type="button"
+                                                      onClick={async () => {
+                                                        if (onEditReservation) {
+                                                          await onEditReservation(res.id, { status: 'seated' });
+                                                        }
+                                                        if (onUpdateTableStatus) {
+                                                          await onUpdateTableStatus(res.tableNumber, { status: 'in_use', preservedFor: '' });
+                                                        }
+                                                      }}
+                                                      className="px-2 py-1 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold rounded transition active:scale-90 cursor-pointer"
+                                                    >
+                                                      💡 帶位就座
+                                                    </button>
+                                                  );
+                                                }
+                                                return null;
+                                              })()}
                                               <button
                                                 type="button"
                                                 onClick={async () => {
@@ -6019,6 +6102,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                         setEditingTableObj(null);
                         setTableIdInput('');
                         setTableQrUrlInput('');
+                        setTableMaxCapacityInput('');
                         setTableError(null);
                         setTableSuccess(null);
                         setIsTableFormOpen(true);
@@ -11798,7 +11882,7 @@ ${customerDetails}
               </div>
               <div className="space-y-1">
                 <span className="text-zinc-500 block">客用條碼定位 URL QR (點餐自動扣桌號用連結)</span>
-                <input type="url" value={tableQrUrlInput} onChange={(e) => setTableQrUrlInput(e.target.value)} placeholder="如 https://sabaybbq.com/?table=6" className="w-full bg-[#1e1e1e] border border-white/10 rounded px-2.5 py-1.5 text-white font-mono placeholder-white/20" />
+                <input type="text" value={tableQrUrlInput} onChange={(e) => setTableQrUrlInput(e.target.value)} placeholder="如 https://sabaybbq.com/?table=6" className="w-full bg-[#1e1e1e] border border-white/10 rounded px-2.5 py-1.5 text-white font-mono placeholder-white/20" />
                 <div className="pt-1.5 text-right">
                   <button
                     type="button"
@@ -11811,6 +11895,10 @@ ${customerDetails}
                     ✨ 免手打：自動帶入 Firebase 託管點餐連結
                   </button>
                 </div>
+              </div>
+              <div className="space-y-1">
+                <span className="text-zinc-500 block">桌席人數上限 Max Capacity (選填，可作為訂位人數參考)</span>
+                <input type="number" min="1" step="1" value={tableMaxCapacityInput} onChange={(e) => setTableMaxCapacityInput(e.target.value)} placeholder="例如: 4" className="w-full bg-[#1e1e1e] border border-white/10 rounded px-2.5 py-1.5 text-white font-mono placeholder-white/20" />
               </div>
             </div>
             </div>
@@ -11871,7 +11959,7 @@ ${customerDetails}
                     <span className="text-zinc-500 font-sans text-[10px] flex items-center justify-between">
                       <span>預定日期 Date *</span>
                       {!isResDateValid && (
-                        <span className="text-rose-500 font-bold">最多提前3個月</span>
+                        <span className="text-rose-500 font-bold text-xs">{restDays && restDays.includes(resDateInput) ? '公休日無法訂位' : '無效或超過3個月'}</span>
                       )}
                     </span>
                     <input type="date" required min={todayDateStr} max={maxThreeMonthsDateStr} value={resDateInput} onChange={(e) => setResDateInput(e.target.value)} className={`w-full bg-[#1e1e1e] border ${!isResDateValid ? 'border-rose-500 text-rose-500 focus:border-rose-400' : 'border-white/10 focus:border-[#E5B453] text-white'} rounded px-2.5 py-1.5 font-mono outline-none transition-all`} />
@@ -11894,13 +11982,28 @@ ${customerDetails}
                   </div>
                   <div className="space-y-1">
                     <span className="text-zinc-500 font-sans block text-[10px]">指定桌號 Designated Table *</span>
-                    <select value={resTableInput} onChange={(e) => setResTableInput(e.target.value)} className="w-full bg-[#1e1e1e] border border-white/10 rounded px-2.5 py-1.5 text-white">
+                    <div className="w-full bg-[#1e1e1e] border border-white/10 rounded p-1.5 text-white max-h-32 overflow-y-auto space-y-1">
                       {tables.map(t => (
-                        <option key={t.id} value={t.id}>
-                          {t.id} 號桌位 (現狀: {t.status === 'preserved' ? '保留中' : t.status === 'in_use' ? '用餐中' : '空閒'})
-                        </option>
+                        <label key={t.id} className="flex items-center gap-2 cursor-pointer hover:bg-white/5 p-1 rounded">
+                          <input 
+                            type="checkbox" 
+                            checked={resTableInputs.includes(t.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setResTableInputs(prev => [...prev, t.id]);
+                              } else {
+                                setResTableInputs(prev => prev.filter(id => id !== t.id));
+                              }
+                            }}
+                            className="accent-amber-500" 
+                          />
+                          <span className="text-xs">
+                            {t.id} 號桌位 {t.maxCapacity ? `(上限 ${t.maxCapacity}人)` : ''} 
+                            <span className="text-zinc-400 ml-1 text-[10px]">(現狀: {t.status === 'preserved' ? '保留中' : t.status === 'in_use' ? '用餐中' : '空閒'})</span>
+                          </span>
+                        </label>
                       ))}
-                    </select>
+                    </div>
                   </div>
                 </div>
 
@@ -11929,7 +12032,7 @@ ${customerDetails}
                         const currentNo = resNoInput || generateReservationNo(resDateInput, reservations);
                         setResNoInput(currentNo);
                         const origin = window.location.origin;
-                        const link = `${origin}/?reservationNo=${encodeURIComponent(currentNo)}&tableNumber=${encodeURIComponent(resTableInput || '1')}&resName=${encodeURIComponent(resNameInput || '預約顧客')}&resDate=${encodeURIComponent(resDateInput)}&resTime=${encodeURIComponent(resTimeInput)}`;
+                        const link = `${origin}/?reservationNo=${encodeURIComponent(currentNo)}&tableNumber=${encodeURIComponent(resTableInputs.join(',') || '1')}&resName=${encodeURIComponent(resNameInput || '預約顧客')}&resDate=${encodeURIComponent(resDateInput)}&resTime=${encodeURIComponent(resTimeInput)}`;
                         setGeneratedResLink(link);
                         try {
                           navigator.clipboard.writeText(link);

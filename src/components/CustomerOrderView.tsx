@@ -365,15 +365,16 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
   const [resDate, setResDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [resTime, setResTime] = useState('18:00');
   const [resGuests, setResGuests] = useState(2);
-  const [resTableNumber, setResTableNumber] = useState('1');
+  const [resTableNumbers, setResTableNumbers] = useState<string[]>([]);
   const [resNotes, setResNotes] = useState('');
   const [resSubmitting, setResSubmitting] = useState(false);
   const [resFeedback, setResFeedback] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
 
   const isResDateValid = useMemo(() => {
     if (!resDate) return true;
+    if (restDays && restDays.includes(resDate)) return false;
     return resDate <= maxThreeMonthsDateStr;
-  }, [resDate, maxThreeMonthsDateStr]);
+  }, [resDate, maxThreeMonthsDateStr, restDays]);
 
   // ⏱️ Helper to parse "HH:MM" into total minutes from 00:00
   const parseTimeToMinutes = (t: string) => {
@@ -404,13 +405,13 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
     dayReservations.forEach(r => {
       const rMins = parseTimeToMinutes(r.time);
       if (Math.abs(rMins - targetMins) < 180) {
-        occupiedTableIds.add(r.tableNumber);
+        const rTables = String(r.tableNumber || '').split(',').map(t => t.trim()).filter(Boolean);
+        rTables.forEach(tId => occupiedTableIds.add(tId));
       }
     });
 
     const availableTables = tables.filter(t => !occupiedTableIds.has(t.id));
     const isFullyBooked = availableTables.length === 0;
-    const isCurrentTableOccupied = occupiedTableIds.has(resTableNumber);
 
     // Calculate suggested alternative time slots for this date where at least one table is free
     const candidateSlots = [
@@ -428,7 +429,8 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
       dayReservations.forEach(r => {
         const rMins = parseTimeToMinutes(r.time);
         if (Math.abs(rMins - slotMins) < 180) {
-          slotOccupiedIds.add(r.tableNumber);
+          const rTables = String(r.tableNumber || '').split(',').map(t => t.trim()).filter(Boolean);
+          rTables.forEach(tId => slotOccupiedIds.add(tId));
         }
       });
 
@@ -446,12 +448,12 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
       isFullyBooked,
       availableTables,
       occupiedTableIds,
-      isCurrentTableOccupied,
       suggestedTimes: suggestedTimes.slice(0, 6)
     };
-  }, [resDate, resTime, resTableNumber, tables, reservations]);
+  }, [resDate, resTime, tables, reservations]);
 
   const isResTimeValid = useMemo(() => {
+    if (restDays && restDays.includes(resDate)) return false;
     if (!operatingHours || operatingHours.length === 0) return true;
     const activeSlots = operatingHours.filter(s => s && s.isActive);
     if (activeSlots.length === 0) return true;
@@ -483,10 +485,23 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
   }, [operatingHours, resDate, resTime]);
 
   useEffect(() => {
-    if (tables && tables.length > 0 && !tables.some(t => t.id === resTableNumber)) {
-      setResTableNumber(tables[0].id);
+    if (!showReservationModal || !resDate || !resTime || !tables || tables.length === 0) return;
+    if (isTableFixed && urlReservationParams?.tableNumber) return; // Don't auto-assign if table is fixed by QR
+
+    const availableTables = [...reservationAvailabilityInfo.availableTables];
+    availableTables.sort((a, b) => (b.maxCapacity || 4) - (a.maxCapacity || 4));
+
+    let currentCapacity = 0;
+    const selectedIds: string[] = [];
+    
+    for (const t of availableTables) {
+      if (currentCapacity >= resGuests) break;
+      selectedIds.push(t.id);
+      currentCapacity += (t.maxCapacity || 4);
     }
-  }, [tables]);
+    
+    setResTableNumbers(selectedIds);
+  }, [resGuests, resDate, resTime, tables, showReservationModal, isTableFixed, urlReservationParams, reservationAvailabilityInfo.availableTables]);
 
   useEffect(() => {
     if (urlReservationParams?.tableNumber) {
@@ -512,7 +527,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
     e.preventDefault();
     setResFeedback(null);
 
-    if (!resCustomerName.trim() || !resPhone.trim() || !resTableNumber) {
+    if (!resCustomerName.trim() || !resPhone.trim() || resTableNumbers.length === 0) {
       setResFeedback({ type: 'error', msg: '請完整填寫顧客姓名、電話與指定桌號！' });
       return;
     }
@@ -535,22 +550,9 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
       return;
     }
 
-    if (reservationAvailabilityInfo.isCurrentTableOccupied) {
-      if (reservationAvailabilityInfo.availableTables.length > 0) {
-        const altTable = reservationAvailabilityInfo.availableTables[0].id;
-        setResTableNumber(altTable);
-        setResFeedback({
-          type: 'error',
-          msg: `⚠️ 所選【${resTableNumber} 桌】在該 3 小時內已被預約，已為您自動切換至目前空閒的【${altTable} 桌】，請確認後再試！`
-        });
-        return;
-      } else {
-        setResFeedback({
-          type: 'error',
-          msg: '⚠️ 該時段已額滿，無可用桌號！請選擇其他時間。'
-        });
-        return;
-      }
+    if (resTableNumbers.length === 0) {
+      setResFeedback({ type: 'error', msg: '請指定預約桌號或確認該時段是否有足夠空桌！' });
+      return;
     }
 
     // 驗證電話格式對齊後台預約規則 (市話 9-10位 02~08，手機 10位 09xx)
@@ -575,7 +577,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
       customerName: resCustomerName.trim(),
       phone: resPhone.trim(),
       guestCount: Number(resGuests) || 1,
-      tableNumber: resTableNumber,
+      tableNumber: resTableNumbers.join(', '),
       date: resDate,
       time: resTime,
       notes: resNotes.trim(),
@@ -605,7 +607,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
       }
 
       if (success) {
-        setSelectedTable(resTableNumber);
+        setSelectedTable(resTableNumbers.join(', '));
         setGuestCount(Number(resGuests) || 2);
         setActiveCustomerReservation({
           id: 'res-' + Date.now(),
@@ -614,7 +616,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
         });
         setResFeedback({
           type: 'success',
-          msg: `🎉 預約成功！資料已同步至櫃檯【餐廳預約訂位與客席保留管理系統】，並已為您自動切換至【${resTableNumber} 桌】開始點餐！`,
+          msg: `🎉 預約成功！資料已同步至櫃檯【餐廳預約訂位與客席保留管理系統】，並已為您自動切換至【${resTableNumbers.join(', ')} 桌】開始點餐！`,
         });
 
         setTimeout(() => {
@@ -2118,7 +2120,10 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
               {guestCount} {TRANSLATIONS.peopleUnit[currentLang] || '人'}
             </span>
             <button
-              onClick={() => setGuestCount(prev => Math.min(20, prev + 1))}
+              onClick={() => {
+                const maxCap = tables?.find(t => t.id === selectedTable)?.maxCapacity || 20;
+                setGuestCount(prev => Math.min(maxCap, prev + 1));
+              }}
               className="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 transition flex items-center justify-center font-bold text-white text-lg"
             >
               +
@@ -4811,17 +4816,28 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                       <label className="text-zinc-300 font-bold text-xs flex items-center gap-1">
                         <span>🪑 指定預約桌號 Designated Table *</span>
                       </label>
-                      <select
-                        value={resTableNumber}
-                        onChange={(e) => setResTableNumber(e.target.value)}
-                        className="w-full bg-[#1c1c1c] border border-white/15 focus:border-amber-400 rounded-xl px-3 py-2 text-white outline-none transition cursor-pointer"
-                      >
-                        {tables.map((tb) => (
-                          <option key={tb.id} value={tb.id}>
-                            【{tb.id} 桌】(現狀: {tb.status === 'preserved' ? '🟣 保留中' : tb.status === 'in_use' ? '🔵 用餐中' : '🟢 空閒'})
-                          </option>
+                      <div className="w-full bg-[#1c1c1c] border border-white/15 rounded-xl p-2 text-white max-h-32 overflow-y-auto space-y-1">
+                        {tables.map(t => (
+                          <label key={t.id} className="flex items-center gap-2 cursor-pointer hover:bg-white/5 p-1 rounded">
+                            <input 
+                              type="checkbox" 
+                              checked={resTableNumbers.includes(t.id)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setResTableNumbers(prev => [...prev, t.id]);
+                                } else {
+                                  setResTableNumbers(prev => prev.filter(id => id !== t.id));
+                                }
+                              }}
+                              className="accent-amber-500" 
+                            />
+                            <span className="text-xs">
+                              {t.id} 號桌位 {t.maxCapacity ? `(上限 ${t.maxCapacity}人)` : ''} 
+                              <span className="text-zinc-400 ml-1 text-[10px]">(現狀: {t.status === 'preserved' ? '保留中' : t.status === 'in_use' ? '用餐中' : '空閒'})</span>
+                            </span>
+                          </label>
                         ))}
-                      </select>
+                      </div>
                     </div>
                   </div>
 
@@ -4871,7 +4887,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                                   type="button"
                                   onClick={() => {
                                     setResTime(item.time);
-                                    if (item.firstFreeTableId) setResTableNumber(item.firstFreeTableId);
+                                    if (item.firstFreeTableId) setResTableNumbers([item.firstFreeTableId]);
                                   }}
                                   className="px-2.5 py-1.5 bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-slate-950 border border-amber-500/40 rounded-xl text-xs font-mono font-extrabold transition cursor-pointer active:scale-95 flex items-center gap-1 shadow-sm"
                                 >
@@ -4886,17 +4902,6 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                             當日熱門時段客席較滿，您可以嘗試選擇其他日期預約！
                           </div>
                         )}
-                      </div>
-                    ) : reservationAvailabilityInfo.isCurrentTableOccupied ? (
-                      /* Specific Table Occupied Warning */
-                      <div className="p-3 bg-amber-950/60 border border-amber-500/40 rounded-xl space-y-1 text-left animate-fadeIn">
-                        <div className="flex items-center gap-1.5 text-amber-300 font-bold text-xs">
-                          <AlertTriangle size={16} />
-                          <span>⚠️ 所選【{resTableNumber} 桌】在該 3 小時內已被預約</span>
-                        </div>
-                        <p className="text-[11px] text-zinc-300">
-                          此時段另有空閒客席 <strong className="text-emerald-400 font-mono">【{reservationAvailabilityInfo.availableTables[0]?.id} 桌】</strong>，已自動為您推薦選取！
-                        </p>
                       </div>
                     ) : (
                       /* Normal Available status */

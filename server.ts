@@ -204,79 +204,87 @@ let liveStaffPin = "952788";
 let livePrinterIp = '192.168.123.100';
 
 let liveTables: TableConfig[] = [
-          {
-            "mergedWith": "",
-            "preservedFor": "",
-            "status": "available",
-            "positionX": 10,
-            "id": "1",
-            "qrCodeUrl": "/?table=1",
-            "positionY": 15
-          },
-          {
-            "id": "2",
-            "qrCodeUrl": "//?table=2",
-            "positionY": 15,
-            "mergedWith": "",
-            "preservedFor": "",
-            "status": "available",
-            "positionX": 35
-          },
-          {
-            "positionY": 15,
-            "id": "3",
-            "qrCodeUrl": "/?table=3",
-            "positionX": 60,
-            "status": "available",
-            "mergedWith": "",
-            "preservedFor": ""
-          },
-          {
-            "status": "available",
-            "positionX": 10,
-            "mergedWith": "",
-            "preservedFor": "",
-            "qrCodeUrl": "/?table=4",
-            "id": "4",
-            "positionY": 75
-          },
-          {
-            "preservedFor": "",
-            "mergedWith": "",
-            "positionX": 10,
-            "status": "available",
-            "positionY": 45,
-            "id": "5",
-            "qrCodeUrl": "/?table=5"
-          },
-          {
-            "id": "6",
-            "qrCodeUrl": "/?table=6",
-            "positionY": 45,
-            "mergedWith": "",
-            "preservedFor": "",
-            "status": "available",
-            "positionX": 35
-          },
-          {
-            "positionY": 75,
-            "id": "7",
-            "qrCodeUrl": "/?table=7",
-            "positionX": 35,
-            "status": "available",
-            "preservedFor": "",
-            "mergedWith": ""
-          },
-          {
-            "positionY": 45,
-            "id": "8",
-            "qrCodeUrl": "/?table=8",
-            "positionX": 60,
-            "status": "available",
-            "preservedFor": "",
-            "mergedWith": ""
-          }
-        ];
+  {
+    "id": "1",
+    "status": "available",
+    "mergedWith": "",
+    "preservedFor": "",
+    "positionY": 15,
+    "positionX": 10,
+    "qrCodeUrl": "/?table=1",
+    "maxCapacity": 3
+  },
+  {
+    "preservedFor": "",
+    "positionX": 35,
+    "positionY": 15,
+    "qrCodeUrl": "//?table=2",
+    "id": "2",
+    "status": "available",
+    "mergedWith": "",
+    "maxCapacity": 3
+  },
+  {
+    "preservedFor": "",
+    "qrCodeUrl": "/?table=3",
+    "positionX": 60,
+    "positionY": 15,
+    "status": "available",
+    "mergedWith": "",
+    "id": "3",
+    "maxCapacity": 3
+  },
+  {
+    "qrCodeUrl": "/?table=4",
+    "positionY": 75,
+    "positionX": 10,
+    "preservedFor": "",
+    "mergedWith": "",
+    "status": "available",
+    "id": "4",
+    "maxCapacity": 4
+  },
+  {
+    "positionX": 10,
+    "positionY": 45,
+    "qrCodeUrl": "/?table=5",
+    "preservedFor": "",
+    "id": "5",
+    "mergedWith": "",
+    "status": "available",
+    "maxCapacity": 4
+  },
+  {
+    "id": "6",
+    "status": "available",
+    "mergedWith": "",
+    "preservedFor": "",
+    "qrCodeUrl": "/?table=6",
+    "positionY": 45,
+    "positionX": 35,
+    "maxCapacity": 4
+  },
+  {
+    "positionX": 35,
+    "qrCodeUrl": "/?table=7",
+    "positionY": 75,
+    "preservedFor": "",
+    "mergedWith": "",
+    "status": "available",
+    "id": "7",
+    "maxCapacity": 4
+  },
+  {
+    "positionY": 45,
+    "positionX": 60,
+    "qrCodeUrl": "/?table=8",
+    "preservedFor": "",
+    "mergedWith": "",
+    "status": "available",
+    "id": "8",
+    "maxCapacity": 2
+  }
+];
 
 let liveReservations: Reservation[] = [];
 
@@ -491,7 +499,7 @@ function syncTableStatusesWithTodayReservations() {
     // Find pending or upcoming reservation for THIS TABLE for TODAY
     const todayPendingRes = liveReservations.find(r => 
       String(r.tableNumber).trim() === tblId &&
-      (r.status === 'pending' || r.status === 'upcoming') &&
+      (r.status === 'pending' || r.status === 'upcoming' || r.status === 'confirmed') &&
       r.date.trim() === todayStr
     );
 
@@ -1961,7 +1969,7 @@ app.get('/api/tables', (req, res) => {
 });
 
 app.post('/api/tables', (req, res) => {
-  const { id, qrCodeUrl, status, preservedFor, mergedWith, positionX, positionY } = req.body;
+  const { id, qrCodeUrl, status, preservedFor, mergedWith, positionX, positionY, maxCapacity } = req.body;
   if (!id) {
     return res.status(400).json({ error: 'Missing required field: id / 缺少桌號 ID' });
   }
@@ -1979,7 +1987,8 @@ app.post('/api/tables', (req, res) => {
     preservedFor: preservedFor || '',
     mergedWith: mergedWith || '',
     positionX: positionX !== undefined ? parseFloat(positionX) : 10,
-    positionY: positionY !== undefined ? parseFloat(positionY) : 10
+    positionY: positionY !== undefined ? parseFloat(positionY) : 10,
+    maxCapacity: maxCapacity !== undefined ? parseInt(maxCapacity, 10) : undefined
   };
   liveTables.push(newTable);
   // Sort table list numerically if possible
@@ -1998,7 +2007,7 @@ app.post('/api/tables', (req, res) => {
 
 app.put('/api/tables/:id', (req, res) => {
   const { id } = req.params;
-  const { qrCodeUrl, status, preservedFor, mergedWith, positionX, positionY } = req.body;
+  const { qrCodeUrl, status, preservedFor, mergedWith, positionX, positionY, maxCapacity } = req.body;
   const decodedId = decodeURIComponent(id).trim();
   const tableIndex = liveTables.findIndex(t => t.id.toString().trim() === decodedId);
   if (tableIndex > -1) {
@@ -2019,6 +2028,9 @@ app.put('/api/tables/:id', (req, res) => {
     }
     if (positionY !== undefined) {
       liveTables[tableIndex].positionY = parseFloat(positionY);
+    }
+    if (maxCapacity !== undefined) {
+      liveTables[tableIndex].maxCapacity = parseInt(maxCapacity, 10);
     }
     saveStateToDisk();
     return res.json({ success: true, table: liveTables[tableIndex] });
@@ -2058,23 +2070,39 @@ app.post('/api/reservations', (req, res) => {
     return res.status(400).json({ error: `預約日期最多只能提前 3 個月 (最晚至 ${maxDateStr})！` });
   }
 
-  // Check 3-hour reservation time slot conflict
+  // Check 3-hour reservation time slot conflict & Global Capacity
   const parseMins = (t: string) => {
     if (!t) return 0;
     const [h, m] = t.split(':').map(Number);
     return (h || 0) * 60 + (m || 0);
   };
   const targetMins = parseMins(time);
-  const conflict = liveReservations.find(r => {
+  
+  const overlapping = liveReservations.filter(r => {
     if (r.status === 'cancelled') return false;
     if (r.date !== date.trim()) return false;
-    if (r.tableNumber !== tableNumber.trim()) return false;
     const rMins = parseMins(r.time);
     return Math.abs(rMins - targetMins) < 180;
   });
 
-  if (conflict) {
-    return res.status(400).json({ error: `預約時段衝突：【${tableNumber} 桌】在 ${date} ${time} 前後 3 小時內已有預約 (${conflict.time} ${conflict.customerName})` });
+  // 1. Selected Tables Capacity Check
+  const requestedTables = String(tableNumber).split(',').map(t => t.trim()).filter(Boolean);
+  const selectedTablesCapacity = liveTables
+    .filter(t => requestedTables.includes(t.id.toString()))
+    .reduce((sum, t) => sum + (t.maxCapacity || 0), 0);
+  const newGuestCount = parseInt(guestCount, 10) || 1;
+  
+  if (selectedTablesCapacity < newGuestCount) {
+    return res.status(400).json({ error: `指定桌號加總人數上限 (${selectedTablesCapacity}人) 不足：不可低於用餐人數 (${newGuestCount}人)！` });
+  }
+
+  // 2. Table Conflict Check
+  for (const r of overlapping) {
+    const rTables = String(r.tableNumber || '').split(',').map(t => t.trim()).filter(Boolean);
+    const conflictingTable = requestedTables.find(t => rTables.includes(t));
+    if (conflictingTable) {
+      return res.status(400).json({ error: `預約時段衝突：【${conflictingTable} 桌】在 ${date} ${time} 前後 3 小時內已有預約 (${r.time} ${r.customerName})` });
+    }
   }
 
   const newReservation: Reservation = {
@@ -2129,26 +2157,42 @@ app.put('/api/reservations/:id', (req, res) => {
       return res.json({ success: true, message: 'Reservation cancelled and deleted / 預約已取消並刪除', reservation: deleted });
     }
 
-    if (newStatus !== 'cancelled' && (date !== undefined || time !== undefined || tableNumber !== undefined)) {
+    if (newStatus !== 'cancelled' && (date !== undefined || time !== undefined || tableNumber !== undefined || guestCount !== undefined)) {
       const parseMins = (t: string) => {
         if (!t) return 0;
         const [h, m] = t.split(':').map(Number);
         return (h || 0) * 60 + (m || 0);
       };
       const targetMins = parseMins(newTime);
-      const conflict = liveReservations.find(r => {
+      
+      const overlapping = liveReservations.filter(r => {
         if (r.id === existing.id || (r as any).reservationNo === existing.id) return false;
         if (r.status === 'cancelled') return false;
         if (r.date.trim() !== newDate) return false;
-        if (String(r.tableNumber).trim() !== String(newTable).trim()) return false;
         const rMins = parseMins(r.time);
         return Math.abs(rMins - targetMins) < 180;
       });
-      if (conflict) {
-        return res.status(400).json({ error: `預約時段衝突：【${newTable} 桌】在 ${newDate} ${newTime} 前後 3 小時內已有預約 (${conflict.time} ${conflict.customerName})` });
+
+      // 1. Selected Tables Capacity Check
+      const requestedTables = String(newTable).split(',').map(t => t.trim()).filter(Boolean);
+      const selectedTablesCapacity = liveTables
+        .filter(t => requestedTables.includes(t.id.toString()))
+        .reduce((sum, t) => sum + (t.maxCapacity || 0), 0);
+      const newGuestCount = guestCount !== undefined ? parseInt(guestCount as any, 10) || 1 : existing.guestCount;
+      
+      if (selectedTablesCapacity < newGuestCount) {
+        return res.status(400).json({ error: `指定桌號加總人數上限 (${selectedTablesCapacity}人) 不足：不可低於用餐人數 (${newGuestCount}人)！` });
+      }
+
+      // 2. Table Conflict Check
+      for (const r of overlapping) {
+        const rTables = String(r.tableNumber || '').split(',').map(t => t.trim()).filter(Boolean);
+        const conflictingTable = requestedTables.find(t => rTables.includes(t));
+        if (conflictingTable) {
+          return res.status(400).json({ error: `預約時段衝突：【${conflictingTable} 桌】在 ${newDate} ${newTime} 前後 3 小時內已有預約 (${r.time} ${r.customerName})` });
+        }
       }
     }
-
     if (customerName !== undefined) liveReservations[index].customerName = customerName;
     if (phone !== undefined) liveReservations[index].phone = phone;
     if (guestCount !== undefined) liveReservations[index].guestCount = parseInt(guestCount, 10) || 1;
@@ -2908,7 +2952,7 @@ app.put('/api/orders/:id/checkout', (req, res) => {
     if (order.isPaid) {
       const resIdx = liveReservations.findIndex(r =>
         (order.reservationNo && (r.id === order.reservationNo || (r as any).reservationNo === order.reservationNo)) ||
-        (String(r.tableNumber).trim() === tblId && (r.status === 'pending' || r.status === 'seated' || r.status === 'upcoming'))
+        (String(r.tableNumber).trim() === tblId && (r.status === 'pending' || r.status === 'seated' || r.status === 'upcoming' || r.status === 'confirmed'))
       );
       if (resIdx > -1) {
         const [deletedRes] = liveReservations.splice(resIdx, 1);
@@ -2968,7 +3012,7 @@ app.put('/api/orders/:id/pay', async (req, res) => {
     }
     const matchingRes = liveReservations.find(r =>
       (order.reservationNo && (r.id === order.reservationNo || (r as any).reservationNo === order.reservationNo)) ||
-      (String(r.tableNumber).trim() === tblId && (r.status === 'pending' || r.status === 'seated'))
+      (String(r.tableNumber).trim() === tblId && (r.status === 'pending' || r.status === 'seated' || r.status === 'upcoming' || r.status === 'confirmed'))
     );
     if (matchingRes) {
       matchingRes.status = 'completed';
@@ -3593,22 +3637,12 @@ async function main() {
         let changed = false;
         
         liveReservations.forEach(res => {
-          if (res.status === 'pending') {
-            const [year, month, day] = res.date.split('-').map(Number);
-            const [hour, minute] = res.time.split(':').map(Number);
-            
-            if (!isNaN(year) && !isNaN(month) && !isNaN(day) && !isNaN(hour) && !isNaN(minute)) {
-              // Construct local date time for reservation
-              const resDateTime = new Date(year, month - 1, day, hour, minute);
-              const diffMs = resDateTime.getTime() - now.getTime();
-              const diffMinutes = diffMs / (1000 * 60);
-              
-              // If the reservation is within 1 hour (60 minutes) and has not passed more than 2 hours (120 minutes)
-              if (diffMinutes > -120 && diffMinutes <= 60) {
-                res.status = 'upcoming';
-                changed = true;
-                console.log(`[Reservation Auto-Check] Automatically marked reservation ${res.id} (${res.customerName}) at ${res.date} ${res.time} as upcoming.`);
-              }
+          if (res.status === 'confirmed') {
+            const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+            if (res.date.trim() === todayStr) {
+              res.status = 'upcoming';
+              changed = true;
+              console.log(`[Reservation Auto-Check] Automatically marked confirmed reservation ${res.id} (${res.customerName}) at ${res.date} ${res.time} as upcoming (same day).`);
             }
           }
         });
