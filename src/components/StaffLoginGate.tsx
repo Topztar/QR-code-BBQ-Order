@@ -9,7 +9,7 @@ interface StaffLoginGateProps {
 export const StaffLoginGate: React.FC<StaffLoginGateProps> = ({ onLoginSuccess, onCancel }) => {
   const [pin, setPin] = useState('');
   const [errorCode, setErrorCode] = useState(false);
-  const [_loading] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const handleNumberClick = (num: string) => {
     if (pin.length < 6) {
@@ -143,10 +143,10 @@ export const StaffLoginGate: React.FC<StaffLoginGateProps> = ({ onLoginSuccess, 
 
         <button
           type="submit"
-          disabled={pin.length < 6}
+          disabled={pin.length < 6 || loading}
           id="pin-submit-button"
           className={`w-full font-bold py-3 px-6 rounded-2xl transition-all duration-150 flex items-center justify-center space-x-1.5 cursor-pointer text-xs ${
-            pin.length === 6
+            pin.length === 6 && !loading
               ? 'bg-[#E5B453] text-[#0F0F0F] font-black'
               : 'bg-white/5 text-white/30 border border-white/5 cursor-not-allowed'
           }`}
