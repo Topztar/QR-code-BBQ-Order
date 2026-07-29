@@ -2854,7 +2854,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                             )}
                           </div>
                           <p className="text-white/45 text-[9px] sm:text-xs leading-snug line-clamp-2">
-                            {item.description?.[currentLang] || item.description?.zh || ''}
+                            {getLocalizedText(item.description, currentLang)}
                           </p>
                         </div>
 
@@ -3126,7 +3126,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                 </div>
                 {!isSimplifiedMode && (
                   <p className="text-xs text-white/60 line-clamp-1 mt-1 font-sans">
-                    {selectedDetailItem?.description?.[currentLang] || selectedDetailItem?.description?.zh || ''}
+                    {getLocalizedText(selectedDetailItem?.description, currentLang)}
                   </p>
                 )}
               </div>
@@ -4470,7 +4470,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                                 </span>
                               </div>
                               <p className="text-white/45 text-[9px] sm:text-xs leading-snug line-clamp-1">
-                                {item.description?.[currentLang] || item.description?.zh || ''}
+                                {getLocalizedText(item.description, currentLang)}
                               </p>
                             </div>
                             <div className="flex items-center text-white/30 text-[9px]">
@@ -4596,7 +4596,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                             </span>
                           </div>
                           <p className="text-[11px] text-white/50 line-clamp-2 md:line-clamp-1">
-                            {item.description?.[currentLang] || item.description?.zh || ''}
+                            {getLocalizedText(item.description, currentLang)}
                           </p>
                         </div>
 

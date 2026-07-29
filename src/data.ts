@@ -3301,12 +3301,12 @@ export const INITIAL_MENU: any[] = [
     "isNotSpicy": true,
     "available": true,
     "description": {
-      "en": "",
-      "zh": "",
-      "vi": "",
-      "th": "",
-      "ko": "",
-      "ja": ""
+      "en": "The Singleton 12 Years Single Malt Scotch Whisky, smooth with rich fruity notes.",
+      "zh": "蘇格登12年單一麥芽威士忌，口感滑順，帶有豐富果香與泥煤餘韻。",
+      "vi": "Rượu Singleton 12 Năm Single Malt Scotch Whisky, hương vị mượt mà thơm nồng trái cây.",
+      "th": "เดอะ ซิงเกิลตัน สกอตช์วิสกี้ซิงเกิลมอลต์ 12 ปี นุ่มนวลพร้อมกลิ่นหอมของผลไม้",
+      "ko": "싱글톤 12년 싱글 몰트 스카치 위스키. 부드럽고 풍부한 과일향.",
+      "ja": "ザ・シングルトン 12年 シングルモルト スコッチウイスキー。フルーティーでまろやかな味わい。"
     },
     "orderIndex": 43,
     "isTakeoutAvailable": false,

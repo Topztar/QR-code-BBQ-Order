@@ -3202,7 +3202,7 @@ ${specLines}
                             <span className="font-extrabold text-lg text-white block">
                               {getLocalizedText(it.name, currentLang)}
                             </span>
-                            <span className="text-xs text-zinc-400 font-medium block mt-0.5 font-mono">{currentLang === 'zh' ? (it.name?.en || '') : (it.name?.zh || '')}</span>
+                            <span className="text-xs text-zinc-400 font-medium block mt-0.5 font-mono">{getLocalizedText(it.name, currentLang === 'zh' ? 'en' : 'zh')}</span>
                           </div>
                           
                           <div className="flex items-center gap-2">
