@@ -2003,7 +2003,7 @@ export default function App() {
                   orders={orders}
                   onUpdateOrderStatus={handleUpdateOrderStatus}
                   onRestock={handleRestock}
-                  promotions={[]}
+
                   onToggleMenuItemAvailability={handleToggleMenuItemAvailability}
                   onSendPromoPush={handleSendPromoPush}
                   menuItems={menuItems}

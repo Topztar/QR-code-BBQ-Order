@@ -1,6 +1,6 @@
 import { apiFetch } from "../lib/api";
 import React, { Component, useState, useEffect, useMemo } from 'react';
-import { Ingredient, Promotion, Language, Category, TableConfig, Order, OrderStatus, Reservation } from '../types';
+import { Ingredient, Language, Category, TableConfig, Order, OrderStatus, Reservation } from '../types';
 import { getLocalizedText } from '../utils/i18n';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
 import { TrendingUp, Package, AlertTriangle, Layers, Sparkles, Coins, Lock, Unlock, QrCode, Trash2, Plus, Edit, Download, Calendar, FileText, ShoppingBag, ShoppingCart, Copy, Check, ExternalLink, Minus, Flame, Printer, Maximize2, Minimize2, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -132,7 +132,7 @@ interface ManagerDashboardProps {
   orders: Order[];
   onUpdateOrderStatus: (orderId: string, status: OrderStatus) => Promise<void>;
   onRestock: (id: string, amount: number) => Promise<void>;
-  promotions: Promotion[];
+
   onSendPromoPush: (notif: { title: string; message: string; badge: string }) => Promise<void>;
   onToggleMenuItemAvailability: (id: string) => Promise<void>;
   menuItems: any[];
@@ -208,7 +208,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   orders,
   onUpdateOrderStatus,
   onRestock,
-  promotions,
+
   onSendPromoPush,
   onToggleMenuItemAvailability,
   menuItems,

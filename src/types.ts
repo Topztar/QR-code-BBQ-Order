@@ -101,14 +101,6 @@ export interface IngredientCost {
   amount: number;
 }
 
-export interface Promotion {
-  id: string;
-  title: { [key in Language]?: string };
-  code: string;
-  discountRate: number; // e.g. 0.9 for 10% off
-  description: { [key in Language]?: string };
-  active: boolean;
-}
 
 export interface Category {
   id: string;

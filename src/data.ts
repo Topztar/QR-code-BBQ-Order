@@ -1,4 +1,4 @@
-import { Language, Promotion } from './types';
+import { Language } from './types';
 
 export const TRANSLATIONS: { [key: string]: { [lang in Language]: string } } = {
   welcome: { zh: '泰式炭火燒烤桌邊點餐系統', en: 'Thai Charcoal BBQ Ordering System', ko: '태국식 숯불 바베큐 테이블 주문 시스템', ja: 'タイ風炭火焼肉テーブル注文システム', th: 'ระบบสั่งอาหารปิ้งย่างถ่านไทย', vi: 'Hệ thống gọi món nướng than Thái' },
@@ -4939,4 +4939,3 @@ export const INITIAL_INGREDIENTS: any[] = [
 
 export const INGREDIENT_RECIPE_MAP: { [foodId: string]: { ingredientId: string; amount: number }[] } = {};
 
-export const INITIAL_PROMOTIONS: Promotion[] = [];
