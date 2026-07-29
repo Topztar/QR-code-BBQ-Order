@@ -2938,10 +2938,18 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
       return;
     }
     const payload = {
-      name: { zh: itemNameZh, en: itemNameEn || itemNameZh, ko: itemNameZh, ja: itemNameZh, th: itemNameZh },
+      name: { 
+        ...(editingItem?.name || {}), 
+        zh: itemNameZh, 
+        en: itemNameEn || itemNameZh 
+      },
       price: Number(itemPrice),
       image: itemImage,
-      description: { zh: itemDescZh, en: itemDescEn || itemDescZh, ko: itemDescZh, ja: itemDescZh, th: itemDescZh },
+      description: { 
+        ...(editingItem?.description || {}), 
+        zh: itemDescZh, 
+        en: itemDescEn || itemDescZh 
+      },
       category: itemCategory,
       available: true,
       hasNoodlesOption: hasNoodles,

@@ -192,12 +192,14 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
     return `${yr}-${mo}-${dy}`;
   }, []);
 
-  const maxThreeMonthsDateStr = useMemo(() => {
+  const maxNinetyDaysDateStr = useMemo(() => {
     const now = new Date();
-    now.setMonth(now.getMonth() + 3);
-    const yr = now.getFullYear();
-    const mo = String(now.getMonth() + 1).padStart(2, '0');
-    const dy = String(now.getDate()).padStart(2, '0');
+    const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
+    const localDate = new Date(utcTime + (3600000 * 8));
+    localDate.setDate(localDate.getDate() + 90);
+    const yr = localDate.getFullYear();
+    const mo = String(localDate.getMonth() + 1).padStart(2, '0');
+    const dy = String(localDate.getDate()).padStart(2, '0');
     return `${yr}-${mo}-${dy}`;
   }, []);
 
@@ -362,7 +364,16 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
   const [resCustomerName, setResCustomerName] = useState('');
   const [resPhone, setResPhone] = useState('');
   const [resPhoneError, setResPhoneError] = useState(false);
-  const [resDate, setResDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [resDate, setResDate] = useState(() => {
+    const now = new Date();
+    const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
+    const localDate = new Date(utcTime + (3600000 * 8));
+    localDate.setDate(localDate.getDate() + 1);
+    const yr = localDate.getFullYear();
+    const mo = String(localDate.getMonth() + 1).padStart(2, '0');
+    const dy = String(localDate.getDate()).padStart(2, '0');
+    return `${yr}-${mo}-${dy}`;
+  });
   const [resTime, setResTime] = useState('18:00');
   const [resGuests, setResGuests] = useState(2);
   const [resTableNumbers, setResTableNumbers] = useState<string[]>([]);
@@ -380,14 +391,59 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
   const isResDateValid = useMemo(() => {
     if (!resDate) return true;
     if (restDays && restDays.includes(resDate)) return false;
-    return resDate <= maxThreeMonthsDateStr;
-  }, [resDate, maxThreeMonthsDateStr, restDays]);
+    return resDate <= maxNinetyDaysDateStr;
+  }, [resDate, maxNinetyDaysDateStr, restDays]);
 
   // ⏱️ Helper to parse "HH:MM" into total minutes from 00:00
   const parseTimeToMinutes = (t: string) => {
     if (!t) return 0;
     const [h, m] = t.split(':').map(Number);
     return (h || 0) * 60 + (m || 0);
+  };
+
+  const handleResDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newDate = e.target.value;
+    setResDate(newDate);
+    if (!newDate) return;
+    
+    if (restDays?.includes(newDate)) {
+      alert('很抱歉，這天是公休日，請重新選擇日期！');
+      setResDate('');
+      return;
+    }
+
+    // Check if the entire day is fully booked
+    const dayReservations = (reservations || []).filter(
+      r => r.date === newDate && r.status !== 'cancelled'
+    );
+    
+    const candidateSlots = [
+      '11:00', '11:30', '12:00', '12:30', '13:00', '13:30', '14:00',
+      '17:00', '17:30', '18:00', '18:30', '19:00', '19:30', '20:00', '20:30', '21:00', '21:30'
+    ];
+
+    let anySlotAvailable = false;
+    for (const slotTime of candidateSlots) {
+      const slotMins = parseTimeToMinutes(slotTime);
+      const slotOccupiedIds = new Set<string>();
+      dayReservations.forEach(r => {
+        const rMins = parseTimeToMinutes(r.time);
+        if (Math.abs(rMins - slotMins) < 180) {
+          const rTables = String(r.tableNumber || '').split(',').map(t => t.trim()).filter(Boolean);
+          rTables.forEach(tId => slotOccupiedIds.add(tId));
+        }
+      });
+      const freeForSlot = tables.filter(t => !slotOccupiedIds.has(t.id));
+      if (freeForSlot.length > 0) {
+        anySlotAvailable = true;
+        break;
+      }
+    }
+
+    if (!anySlotAvailable && tables.length > 0) {
+      alert('很抱歉，該日期預約已滿，請重新選擇日期！');
+      setResDate('');
+    }
   };
 
   // 3-Hour Reservation Window checking & Fully Booked slot detection
@@ -558,7 +614,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
     }
 
     if (!isResDateValid) {
-      setResFeedback({ type: 'error', msg: `⚠️ 預訂日期最多只能提前 3 個月 (最晚至 ${maxThreeMonthsDateStr})！` });
+      setResFeedback({ type: 'error', msg: `⚠️ 預訂日期最多只能提前 90 天 (最晚至 ${maxNinetyDaysDateStr})！` });
       return;
     }
 
@@ -4769,18 +4825,18 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                     <div className="space-y-1">
                       <label className="text-zinc-300 font-bold text-xs flex items-center justify-between">
                         <span>📆 預定日期 Date *</span>
-                        {resDate && resDate > maxThreeMonthsDateStr && (
-                          <span className="text-[10px] text-rose-500 font-bold">最多提前3個月</span>
+                        {resDate && resDate > maxNinetyDaysDateStr && (
+                          <span className="text-[10px] text-rose-500 font-bold">最多提前90天</span>
                         )}
                       </label>
                       <input
                         type="date"
                         required
                         min={todayDateStr}
-                        max={maxThreeMonthsDateStr}
+                        max={maxNinetyDaysDateStr}
                         value={resDate}
-                        onChange={(e) => setResDate(e.target.value)}
-                        className={`w-full bg-[#1c1c1c] border ${resDate && resDate > maxThreeMonthsDateStr ? 'border-rose-500 text-rose-500 focus:border-rose-400' : 'border-white/15 focus:border-amber-400 text-white'} rounded-xl px-3 py-2 outline-none font-mono transition`}
+                        onChange={handleResDateChange}
+                        className={`w-full bg-[#1c1c1c] border ${resDate && resDate > maxNinetyDaysDateStr ? 'border-rose-500 text-rose-500 focus:border-rose-400' : 'border-white/15 focus:border-amber-400 text-white'} rounded-xl px-3 py-2 outline-none font-mono transition`}
                       />
                     </div>
 

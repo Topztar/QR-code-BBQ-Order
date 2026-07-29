@@ -109,8 +109,14 @@ export default function App() {
     return items.map(item => {
       const defaultItem = INITIAL_MENU.find(x => x.id === item.id);
       if (defaultItem) {
-        const name = { ...defaultItem.name, ...item.name };
-        const description = { ...defaultItem.description, ...item.description };
+        const cleanName = { ...item.name };
+        const cleanDesc = { ...item.description };
+        ['ko', 'ja', 'th', 'vi'].forEach(lang => {
+          if (cleanName[lang as Language] === cleanName['zh']) delete cleanName[lang as Language];
+          if (cleanDesc[lang as Language] === cleanDesc['zh']) delete cleanDesc[lang as Language];
+        });
+        const name = { ...defaultItem.name, ...cleanName };
+        const description = { ...defaultItem.description, ...cleanDesc };
         return { ...item, name, description };
       }
       return item;
