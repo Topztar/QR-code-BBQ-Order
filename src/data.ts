@@ -642,41 +642,41 @@ export const INITIAL_CATEGORIES: any[] = [
 
   {
     "id": "cat-svadcb",
-    "name": {
-      "zh": "小費及折扣",
-      "vi": "Tiền tip & Giảm giá",
-      "th": "ทิปและส่วนลด",
-      "ja": "チップ・割引",
-      "ko": "팁 및 할인",
-      "en": "Tips & Discounts"
-    },
     "orderIndex": 0,
-    "showOnCustomerPage": false
+    "showOnCustomerPage": false,
+    "name": {
+      "vi": "Tiền tip & Giảm giá",
+      "ko": "팁 및 할인",
+      "ja": "チップ・割引",
+      "th": "ทิปและส่วนลด",
+      "en": "Tips & Discounts",
+      "zh": "小費及折扣"
+    }
   },
   {
     "id": "cat-7cvvkq",
+    "showOnCustomerPage": false,
     "name": {
-      "vi": "Đồ uống & Rượu lạnh 🍺",
       "zh": "冰櫃酒水 🧊",
-      "th": "เครื่องดื่มและสุราแช่เย็น 🍺",
-      "ja": "冷蔵ドリンク・お酒 🍺",
       "en": "Refrigerated Drinks & Alcohol 🍺",
+      "ja": "冷蔵ドリンク・お酒 🍺",
+      "th": "เครื่องดื่มและสุราแช่เย็น 🍺",
+      "vi": "Đồ uống & Rượu lạnh 🍺",
       "ko": "냉장 음료 및 주류 🍺"
     },
-    "showOnCustomerPage": false,
     "orderIndex": 1
   },
   {
     "id": "tomyum",
-    "showOnCustomerPage": true,
     "orderIndex": 2,
+    "showOnCustomerPage": true,
     "name": {
-      "ko": "똠얌 수프 시리즈 🍜",
       "en": "Tom Yum Series 🍜",
+      "zh": "冬蔭功系列 🍜",
       "ja": "トムヤムシリーズ 🍜",
       "th": "ชุดต้มยำสุดแซ่บ 🍜",
-      "zh": "冬蔭功系列 🍜",
-      "vi": "Dòng súp Tom Yum 🍜"
+      "vi": "Dòng súp Tom Yum 🍜",
+      "ko": "똠얌 수프 시리즈 🍜"
     }
   },
   {
@@ -684,149 +684,4180 @@ export const INITIAL_CATEGORIES: any[] = [
     "showOnCustomerPage": true,
     "orderIndex": 3,
     "name": {
+      "zh": "熱湯 🥢越南牛肉河粉",
       "en": "Hot Soups & Beef Pho 🥢",
-      "ko": "따뜻한 수프 및 베트남 소고기 쌀국수 🥢",
-      "ja": "温かいスープ・ベトナム牛肉フォー 🥢",
       "th": "ซุปร้อนและเฝอเนื้อเวียดนาม 🥢",
-      "vi": "Súp nóng & Phở bò Việt Nam 🥢",
-      "zh": "熱湯 🥢越南牛肉河粉"
+      "ja": "温かいスープ・ベトナム牛肉フォー 🥢",
+      "ko": "따뜻한 수프 및 베트남 소고기 쌀국수 🥢",
+      "vi": "Súp nóng & Phở bò Việt Nam 🥢"
     }
   },
   {
     "id": "combos",
+    "orderIndex": 4,
     "showOnCustomerPage": true,
     "name": {
       "zh": "精選套餐 🍱優惠",
-      "vi": "Combo đặc biệt 🍱",
-      "th": "เซตเมนูสุดคุ้ม 🍱",
-      "ja": "主理人厳選お得セット 🍱",
       "en": "Chef's Special Combos 🍱",
-      "ko": "셰프 추천 특선 세트 🍱"
-    },
-    "orderIndex": 4
+      "ja": "主理人厳選お得セット 🍱",
+      "th": "เซตเมนูสุดคุ้ม 🍱",
+      "ko": "셰프 추천 특선 세트 🍱",
+      "vi": "Combo đặc biệt 🍱"
+    }
   },
   {
     "id": "seafood",
     "name": {
       "vi": "Hải sản nướng Thái Lan 🦐",
-      "zh": "招牌泰式海鮮 🦐",
+      "ko": "시그니처 태국식 해산물 🦐",
       "th": "อาหารทะเลเผาสูตรเด็ด 🦐",
       "ja": "本格タイ風炭火焼きシーフード 🦐",
       "en": "Signature Thai Seafood 🦐",
-      "ko": "시그니처 태국식 해산물 🦐"
+      "zh": "招牌泰式海鮮 🦐"
     },
-    "orderIndex": 5,
-    "showOnCustomerPage": true
+    "showOnCustomerPage": true,
+    "orderIndex": 5
   },
   {
     "id": "veggies",
-    "showOnCustomerPage": true,
+    "orderIndex": 6,
     "name": {
-      "ja": "地元新鮮野菜焼き 🥬",
-      "ko": "신선한 채소 구이 🥬",
       "en": "Farm Fresh Vegetables 🥬",
       "zh": "小農鮮蔬菜 🥬",
-      "vi": "Rau củ tươi sạch 🥬",
-      "th": "ผักสดฟาร์มย่าง 🥬"
+      "ja": "地元新鮮野菜焼き 🥬",
+      "th": "ผักสดฟาร์มย่าง 🥬",
+      "ko": "신선한 채소 구이 🥬",
+      "vi": "Rau củ tươi sạch 🥬"
     },
-    "orderIndex": 6
-  },
-  {
-    "id": "skewers",
-    "orderIndex": 7,
-    "showOnCustomerPage": true,
-    "name": {
-      "ja": "タイ風肉串炭火焼き・その他 🍢",
-      "en": "Charcoal BBQ Skewers & Others 🍢",
-      "ko": "오리지널 숯불 고기 꼬치 및 기타 🍢",
-      "vi": "Thịt nướng xiên & Khác 🍢",
-      "zh": "碳烤肉類 🍢其他",
-      "th": "บาร์บีคิวเสียบไม้ย่างและอื่นๆ 🍢"
-    }
-  },
-  {
-    "id": "sweets",
-    "name": {
-      "en": "Thai Desserts & Sweets 🍰",
-      "ko": "태국식 달콤 디저트 🍰",
-      "ja": "タイ風特製デザート 🍰",
-      "th": "ขนมหวานและพุดดิ้งสูตรพิเศษ 🍰",
-      "zh": "泰式特色甜品 🍰",
-      "vi": "Tráng miệng kiểu Thái 🍰"
-    },
-    "orderIndex": 8,
     "showOnCustomerPage": true
   },
   {
-    "id": "drinks",
+    "id": "skewers",
     "showOnCustomerPage": true,
     "name": {
+      "zh": "碳烤肉類 🍢其他",
+      "en": "Charcoal BBQ Skewers & Others 🍢",
+      "ko": "오리지널 숯불 고기 꼬치 및 기타 🍢",
+      "vi": "Thịt nướng xiên & Khác 🍢",
+      "ja": "タイ風肉串炭火焼き・その他 🍢",
+      "th": "บาร์บีคิวเสียบไม้ย่างและอื่นๆ 🍢"
+    },
+    "orderIndex": 7
+  },
+  {
+    "id": "sweets",
+    "showOnCustomerPage": true,
+    "orderIndex": 8,
+    "name": {
+      "zh": "泰式特色甜品 🍰",
+      "en": "Thai Desserts & Sweets 🍰",
+      "ko": "태국식 달콤 디저트 🍰",
+      "vi": "Tráng miệng kiểu Thái 🍰",
+      "th": "ขนมหวานและพุดดิ้งสูตรพิเศษ 🍰",
+      "ja": "タイ風特製デザート 🍰"
+    }
+  },
+  {
+    "id": "drinks",
+    "orderIndex": 9,
+    "name": {
+      "zh": "泰特色沁涼飲品 🍹",
+      "en": "Refreshing Thai Cold Drinks 🍹",
+      "th": "เครื่องดื่มดับร้อนรสสดชื่น 🍹",
       "ja": "タイ風さわやかドリンク 🍹",
       "ko": "태국식 청량 음료 🍹",
-      "en": "Refreshing Thai Cold Drinks 🍹",
-      "vi": "Đồ uống lạnh kiểu Thái 🍹",
-      "zh": "泰特色沁涼飲品 🍹",
-      "th": "เครื่องดื่มดับร้อนรสสดชื่น 🍹"
+      "vi": "Đồ uống lạnh kiểu Thái 🍹"
     },
-    "orderIndex": 9
+    "showOnCustomerPage": true
   },
   {
     "id": "cat-zene8j",
-    "showOnCustomerPage": true,
+    "orderIndex": 10,
     "name": {
       "ko": "단독 수제 특제 소스 🥫",
-      "en": "Exclusive Secret Sauces 🥫",
-      "ja": "秘伝の特製タレ・ソース 🥫",
+      "vi": "Nước sốt độc quyền 🥫",
       "th": "ซอสสูตรลับพิเศษ 🥫",
-      "zh": "獨家醬料 🥫",
-      "vi": "Nước sốt độc quyền 🥫"
+      "ja": "秘伝の特製タレ・ソース 🥫",
+      "en": "Exclusive Secret Sauces 🥫",
+      "zh": "獨家醬料 🥫"
     },
-    "orderIndex": 10
+    "showOnCustomerPage": true
   },
   {
     "id": "cat-6ovxss",
-    "orderIndex": 11,
-    "showOnCustomerPage": true,
     "name": {
-      "th": "โซนเครื่องดื่มแอลกอฮอล์สำหรับผู้ใหญ่ (18+) 🔞",
       "zh": "成人酒品專區 🔞",
-      "vi": "Khu vực đồ uống có cồn cho người lớn (18+) 🔞",
-      "ko": "성인 주류 전용 구역 (18+) 🔞",
       "en": "Adult Alcoholic Beverages (18+) 🔞",
-      "ja": "成人向けお酒エリア (18+) 🔞"
-    }
+      "ja": "成人向けお酒エリア (18+) 🔞",
+      "th": "โซนเครื่องดื่มแอลกอฮอล์สำหรับผู้ใหญ่ (18+) 🔞",
+      "vi": "Khu vực đồ uống có cồn cho người lớn (18+) 🔞",
+      "ko": "성인 주류 전용 구역 (18+) 🔞"
+    },
+    "showOnCustomerPage": true,
+    "orderIndex": 11
   }
 ];
 
 export const INITIAL_MENU: any[] = [
+
+  {
+    "id": "dish-2696007842576",
+    "hasNoodlesOption": false,
+    "containsSeafood": false,
+    "recipe": [],
+    "containsBeef": false,
+    "isNotSpicy": true,
+    "description": {
+      "en": "Refreshing and cool, a perfect match for delicious BBQ.",
+      "zh": "沁涼消暑，口感清爽，搭配燒烤絕配",
+      "ja": "冷たくてさわやか、バーベキューに最高の組み合わせ。",
+      "th": "เย็นชื่นใจ รสชาติสดชื่น เข้ากันได้ดีเยี่ยมกับเมนูปิ้งย่าง",
+      "ko": "시원하고 상쾌하여 바베큐와 완벽한 조화를 이룹니다.",
+      "vi": "Giải nhiệt sảng khoái, hương vị tươi mát, sự kết hợp hoàn hảo với món nướng."
+    },
+    "orderIndex": 0,
+    "price": 60,
+    "customAddOns": [],
+    "available": true,
+    "category": "cat-7cvvkq",
+    "name": {
+      "ja": "ビタミンミルク豆乳",
+      "th": "นมถั่วเหลืองไวตามิ้ลค์",
+      "ko": "비타밀크 두유",
+      "vi": "Sữa đậu nành Vitamilk",
+      "en": "Vitamilk Soy Milk",
+      "zh": "Vitamilk豆奶"
+    },
+    "containsPork": false,
+    "image": "https://images.unsplash.com/photo-1563227812-0ea4c22e6cc8?auto=format&fit=crop&q=80&w=400"
+  },
+  {
+    "id": "dish-2606012021064",
+    "image": "https://images.unsplash.com/photo-1608270586620-248524c67de9?auto=format&fit=crop&q=80&w=400",
+    "containsBeef": false,
+    "orderIndex": 1,
+    "containsSeafood": false,
+    "available": true,
+    "price": 150,
+    "hasNoodlesOption": false,
+    "category": "cat-7cvvkq",
+    "description": {
+      "ko": "시원하고 상쾌하여 바베큐와 완벽한 조화를 이룹니다.",
+      "vi": "Giải nhiệt sảng khoái, hương vị tươi mát, sự kết hợp hoàn hảo với món nướng.",
+      "ja": "冷たくてさわやか、バーベキューに最高の組み合わせ。",
+      "th": "เย็นชื่นใจ รสชาติสดชื่น เข้ากันได้ดีเยี่ยมกับเมนูปิ้งย่าง",
+      "zh": "沁涼消暑，口感清爽，搭配燒烤絕配",
+      "en": "Refreshing and cool, a perfect match for delicious BBQ."
+    },
+    "name": {
+      "zh": "麒麟啤酒",
+      "en": "Kirin Beer",
+      "vi": "bia kirin",
+      "ko": "기린맥주",
+      "ja": "キリンビール",
+      "th": "เบียร์คิริน"
+    },
+    "containsPork": false,
+    "recipe": [],
+    "customAddOns": [],
+    "isNotSpicy": true
+  },
+  {
+    "id": "dish-2605122152569",
+    "containsPork": false,
+    "available": true,
+    "orderIndex": 2,
+    "image": "https://images.unsplash.com/photo-1541658016709-82535e94bc69?auto=format&fit=crop&q=80&w=400",
+    "price": 110,
+    "customAddOns": [],
+    "containsSeafood": false,
+    "name": {
+      "th": "สปายไทยค็อกเทล",
+      "ja": "スパイタイカクテル",
+      "vi": "Cocktail Thái SPY",
+      "ko": "SPY 타이 칵테일",
+      "en": "SPY Thai Wine Cooler",
+      "zh": "SPY泰國雞尾酒"
+    },
+    "containsBeef": false,
+    "recipe": [],
+    "hasNoodlesOption": false,
+    "description": {
+      "th": "เย็นชื่นใจ รสชาติสดชื่น เข้ากันได้ดีเยี่ยมกับเมนูปิ้งย่าง",
+      "ja": "冷たくてさわやか、バーベキューに最高の組み合わせ。",
+      "ko": "시원하고 상쾌하여 바베큐와 완벽한 조화를 이룹니다.",
+      "vi": "Giải nhiệt sảng khoái, hương vị tươi mát, sự kết hợp hoàn hảo với món nướng.",
+      "en": "Refreshing and cool, a perfect match for delicious BBQ.",
+      "zh": "沁涼消暑，口感清爽，搭配燒烤絕配"
+    },
+    "isNotSpicy": true,
+    "category": "cat-7cvvkq"
+  },
+  {
+    "id": "dish-2603071951301",
+    "orderIndex": 3,
+    "customAddOns": [],
+    "recipe": [],
+    "containsSeafood": false,
+    "containsPork": false,
+    "name": {
+      "vi": "Giá combo phô mai",
+      "ko": "치즈 콤보 가격",
+      "ja": "チーズコンボの価格",
+      "th": "ราคา คอมโบชีส",
+      "zh": "乳酪組合價",
+      "en": "Cheese Drink Combo Deal"
+    },
+    "category": "cat-svadcb",
+    "price": -10,
+    "isNotSpicy": true,
+    "image": "https://images.unsplash.com/photo-1504754524776-8f4f37790ca0?auto=format&fit=crop&q=80&w=400",
+    "hasNoodlesOption": false,
+    "description": {
+      "zh": "超值優惠組合，物超所值，限時享用",
+      "en": "Great value combo package, high cost-performance deal for a limited time.",
+      "ja": "期間限定の超お得な割引パッケージ",
+      "th": "แพ็คเกจส่วนลดสุดคุ้ม คุ้มสุดๆ ระยะเวลาจำกัดเท่านั้น",
+      "vi": "Gói giảm giá siêu giá trị, giá trị đồng tiền, thời gian có hạn",
+      "ko": "슈퍼 가치 할인 패키지, 가격 대비 훌륭한 가치, 제한된 시간 동안만 제공"
+    },
+    "isAvailable": false,
+    "containsBeef": false,
+    "available": true
+  },
+  {
+    "id": "dish-2602121900078",
+    "containsPork": false,
+    "available": true,
+    "image": "https://images.unsplash.com/photo-1497534446932-c925b458314e?auto=format&fit=crop&q=80&w=400",
+    "isTakeoutAvailable": true,
+    "orderIndex": 4,
+    "price": 90,
+    "customAddOns": [],
+    "containsSeafood": false,
+    "name": {
+      "ko": "계화 밀크티 판나코타",
+      "vi": "Panna Cotta Trà Sữa Hoa Mộc Tê",
+      "ja": "キンモクセイミルクティープリン",
+      "th": "พานาคอตต้าชานมดอกหอมหมื่นลี้",
+      "en": "Osmanthus Milk Tea Panna Cotta",
+      "zh": "桂花奶茶奶酪"
+    },
+    "containsBeef": false,
+    "recipe": [],
+    "hasNoodlesOption": false,
+    "description": {
+      "en": "Rich panna cotta infused with the charming aroma of osmanthus and milk tea, smooth and perfectly sweet.",
+      "zh": "香濃奶酪融合桂花與奶茶的迷人香氣，口感滑順，甜而不膩。",
+      "th": "พานาคอตต้าเนื้อเนียนนุ่มผสมผสานกลิ่นหอมของดอกหอมหมื่นลี้และชานม หวานพอดีคำ",
+      "ja": "濃厚なプリンにキンモクセイとミルクティーの魅惑的な香りが溶け込み、なめらかで上品な甘さ。",
+      "vi": "Panna cotta thơm béo kết hợp hương hoa mộc tê và trà sữa quyến rũ, kết cấu mềm mịn, ngọt thanh không ngấy.",
+      "ko": "진한 판나코타에 계화와 밀크티의 매혹적인 향이 어우러져 부드럽고 적당히 달콤한 디저트입니다."
+    },
+    "isNotSpicy": true,
+    "category": "sweets"
+  },
+  {
+    "id": "dish-2602121834434",
+    "image": "https://images.unsplash.com/photo-1529193591184-b1d58069ecdd?auto=format&fit=crop&q=80&w=400",
+    "available": true,
+    "isNotSpicy": true,
+    "containsBeef": true,
+    "containsSeafood": false,
+    "recipe": [],
+    "price": 390,
+    "isTakeoutAvailable": true,
+    "containsPork": false,
+    "hasNoodlesOption": false,
+    "description": {
+      "en": "Slow-grilled CHOICE top blade steak over charcoal, bursting with rich aroma and delicious flavor in every bite.",
+      "zh": "炭火慢烤CHOICE嫩煎里肌原肉牛排，香氣四溢，每一口都是極致美味",
+      "th": "สเต็กเนื้อใบพายเกรด CHOICE ย่างถ่านช้าๆ หอมฟุ้ง อร่อยเข้มข้นทุกคำ",
+      "ja": "炭火でじっくり焼いたCHOICEトップブレード原肉ステーキ、香り高く一口ごとに至高の美味しさ。",
+      "vi": "Bít tết thăn vai bò CHOICE nướng chậm trên than hoa, thơm nức nát, mỗi cắn đều là hương vị tuyệt hảo.",
+      "ko": "숯불에 천천히 구워낸 CHOICE 부채살 원육 스테이크, 풍미가 가득하여 한 입마다 극상의 맛을 선사합니다."
+    },
+    "orderIndex": 5,
+    "name": {
+      "vi": "Bít tết thăn vai bò (5oz)",
+      "ko": "탑블레이드 스테이크 (5oz)",
+      "th": "สเต็กเนื้อใบพาย (5oz)",
+      "ja": "トップブレードステーキ (5oz)",
+      "zh": "原肉板腱牛5oz",
+      "en": "Top Blade Steak (5oz)"
+    },
+    "customAddOns": [],
+    "category": "skewers"
+  },
+  {
+    "id": "dish-2601312248029",
+    "containsPork": false,
+    "orderIndex": 6,
+    "price": 90,
+    "image": "https://images.unsplash.com/photo-1563227812-0ea4c22e6cc8?auto=format&fit=crop&q=80&w=400",
+    "hasNoodlesOption": false,
+    "customAddOns": [],
+    "description": {
+      "ko": "독특한 판단 잎의 은은한 향과 진한 우유가 어우러진 부드럽고 촉촉한 디저트.",
+      "vi": "Hương lá dứa thơm mát hòa quyện cùng sữa tươi béo ngậy, kết cấu mềm mịn thơm ngon.",
+      "ja": "独特なパンダンの香りと濃厚なミルクが絶妙にマッチした、なめらかで美味しいプリン。",
+      "th": "กลิ่นหอมอันเป็นเอกลักษณ์ของใบเตยผสมผสานกับรสนมเข้มข้นอย่างลงตัว เนื้อเนียนนุ่มละมุนลิ้น",
+      "zh": "獨特香斕葉的清香與濃郁鮮奶完美調配，滑嫩可口。",
+      "en": "Fresh pandan aroma perfectly blended with rich milk, smooth and delicious."
+    },
+    "category": "sweets",
+    "containsSeafood": false,
+    "containsBeef": false,
+    "isTakeoutAvailable": true,
+    "recipe": [],
+    "isNotSpicy": true,
+    "name": {
+      "zh": "香斕奶酪",
+      "en": "Pandan Panna Cotta",
+      "vi": "Panna Cotta Lá Dứa",
+      "ko": "판단 판나코타",
+      "th": "พานาคอตต้าใบเตย",
+      "ja": "パンダンプリン"
+    },
+    "available": true
+  },
+  {
+    "id": "dish-2601310009011",
+    "orderIndex": 7,
+    "customAddOns": [],
+    "price": 80,
+    "category": "sweets",
+    "image": "https://images.unsplash.com/photo-1541658016709-82535e94bc69?auto=format&fit=crop&q=80&w=400",
+    "hasNoodlesOption": false,
+    "isTakeoutAvailable": true,
+    "recipe": [],
+    "name": {
+      "ja": "ミルクプリン",
+      "th": "พานาคอตต้านมสด",
+      "ko": "우유 판나코타",
+      "vi": "Panna Cotta Sữa Tươi",
+      "en": "Fresh Milk Panna Cotta",
+      "zh": "鮮奶奶酪"
+    },
+    "available": true,
+    "containsPork": false,
+    "containsSeafood": false,
+    "description": {
+      "en": "Made with pure fresh milk, releasing a rich and natural milky aroma that melts in your mouth.",
+      "zh": "純鮮乳製作，散發香純濃郁的奶香，入口即化。",
+      "vi": "Làm từ sữa tươi nguyên chất, lan tỏa hương sữa thơm béo đặc trưng, tan ngay trong miệng.",
+      "ko": "순수 우유로 만들어 입안 가득 고소하고 진한 우유 향이 퍼지며 사르르 녹아내립니다.",
+      "ja": "純粋な牛乳を使用し、濃厚なコクのある風味が口の中でとろけます。",
+      "th": "ทำจากนมสดแท้ 100% ให้กลิ่นหอมนมเข้มข้น หอมมัน ละลายในปาก"
+    },
+    "isNotSpicy": true,
+    "containsBeef": false
+  },
+  {
+    "id": "dish-2601310007093",
+    "orderIndex": 8,
+    "price": 90,
+    "category": "sweets",
+    "customAddOns": [],
+    "image": "https://images.unsplash.com/photo-1544145945-f90425340c7e?auto=format&fit=crop&q=80&w=400",
+    "hasNoodlesOption": false,
+    "isTakeoutAvailable": true,
+    "name": {
+      "th": "พานาคอตต้าชาไทย",
+      "ja": "タイ風ミルクティープリン",
+      "ko": "타이 밀크티 판나코타",
+      "vi": "Panna Cotta Trà Sữa Thái",
+      "zh": "泰式奶茶奶酪",
+      "en": "Thai Milk Tea Panna Cotta"
+    },
+    "recipe": [],
+    "available": true,
+    "containsPork": false,
+    "containsSeafood": false,
+    "description": {
+      "en": "Infused with classic Thai tea leaves, perfectly presenting the unique flavor and milkiness of Thai milk tea.",
+      "zh": "選用泰國經典茶葉，完美呈現泰奶的獨特風味與乳香。",
+      "ja": "タイのクラシックな茶葉を使用し、タイ風ミルクティーの独特な味わいとコクを完璧に再現。",
+      "th": "ใช้ใบชาไทยคลาสสิกแท้ๆ นำเสนอรสชาติอันเป็นเอกลักษณ์ของชาไทยและนมอย่างลงตัว",
+      "ko": "태국 클래식 찻잎을 사용하여 타이 밀크티 고유의 풍미와 고소함을 완벽하게 담았습니다.",
+      "vi": "Sử dụng lá trà Thái cổ điển, tái hiện hoàn hảo hương vị độc đáo và độ béo ngậy của trà sữa Thái."
+    },
+    "isNotSpicy": true,
+    "containsBeef": false
+  },
+  {
+    "id": "dish-2512111741522",
+    "image": "https://images.unsplash.com/photo-1544145945-f90425340c7e?auto=format&fit=crop&q=80&w=400",
+    "category": "cat-7cvvkq",
+    "hasNoodlesOption": false,
+    "isNotSpicy": true,
+    "containsBeef": false,
+    "name": {
+      "en": "Oolong Tea (Decomposing)",
+      "zh": "分解茶",
+      "vi": "Trà suy sụp",
+      "ko": "고장차",
+      "ja": "ブレイクダウンティー",
+      "th": "ชาสลาย"
+    },
+    "available": true,
+    "price": 100,
+    "containsSeafood": false,
+    "orderIndex": 9,
+    "customAddOns": [],
+    "description": {
+      "th": "เย็นชื่นใจ รสชาติสดชื่น เข้ากันได้ดีเยี่ยมกับเมนูปิ้งย่าง",
+      "ja": "冷たくてさわやか、バーベキューに最高の組み合わせ。",
+      "ko": "시원하고 상쾌하여 바베큐와 완벽한 조화를 이룹니다.",
+      "vi": "Giải nhiệt sảng khoái, hương vị tươi mát, sự kết hợp hoàn hảo với món nướng.",
+      "en": "Refreshing and cool, a perfect match for delicious BBQ.",
+      "zh": "沁涼消暑，口感清爽，搭配燒烤絕配"
+    },
+    "recipe": [],
+    "containsPork": false
+  },
+  {
+    "id": "dish-2509281752083",
+    "description": {
+      "zh": "嚴選台灣深海L號大魷魚~非一般店家m號的尺寸！鹹香鮮嫩又多汁~低脂低熱量優質蛋白質補充",
+      "en": "Strictly selected Taiwan deep-sea L-size giant squid! Savory, tender and juicy, low-fat & low-calorie quality protein.",
+      "ja": "厳選された台湾深海Lサイズ大イカ！香ばしく柔らかでジューシー、低脂質・低カロリーの高品質タンパク質。",
+      "th": "คัดสรรหมึกยักษ์ไซส์ L จากทะเลลึกไต้หวัน รสชาติเค็มหอม นุ่มชุ่มฉ่ำ โปรตีนสูง ไขมันต่ำ",
+      "ko": "엄선된 대만 심해 L사이즈 왕오징어! 짭조름하고 신선하며 육즙이 가득한 저지방 고단백 건강식.",
+      "vi": "Mực ống khổng lồ size L đại dương Đài Loan được tuyển chọn kỹ lượng, mặn mà tươi ngon mọng nước, bổ sung protein chất lượng cao ít béo."
+    },
+    "isTakeoutAvailable": true,
+    "hasNoodlesOption": false,
+    "price": 280,
+    "containsBeef": false,
+    "available": true,
+    "recipe": [],
+    "orderIndex": 10,
+    "image": "https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=400",
+    "isNotSpicy": false,
+    "category": "seafood",
+    "containsPork": false,
+    "name": {
+      "en": "Thai BBQ Giant Squid (L-Size)",
+      "zh": "泰鮮大魷魚(碳烤)",
+      "th": "หมึกยักษ์ย่างถ่านสไตล์ไทย (ไซส์ L)",
+      "ja": "タイ風炭火焼き大イカ (Lサイズ)",
+      "vi": "Mực ống khổng lồ nướng than Thái (Size L)",
+      "ko": "태국식 숯불 王오징어 구이 (L)"
+    },
+    "customAddOns": [],
+    "containsSeafood": true
+  },
+  {
+    "id": "dish-2509271759269",
+    "image": "https://images.unsplash.com/photo-1533622597524-a1215e26c0a2?auto=format&fit=crop&q=80&w=400",
+    "containsPork": false,
+    "price": 390,
+    "recipe": [],
+    "containsSeafood": true,
+    "orderIndex": 11,
+    "customAddOns": [
+      {
+        "price": 140,
+        "id": "addon-1784478515294-528",
+        "name": {
+          "th": "ชุดอาหารอัพเกรด (ผักย่าง + นมไทย 1 แก้ว)",
+          "ja": "グレードアップ定食（焼き野菜＋タイミルク1杯）",
+          "ko": "업그레이드된 정식 (구운 야채 + 태국 우유 1잔)",
+          "vi": "Set ăn nâng cấp (rau nướng + 1 cốc sữa Thái)",
+          "en": "Upgraded set meal (roasted vegetables + a cup of Thai milk)",
+          "zh": "升級套餐(烤蔬菜+泰奶一杯)"
+        }
+      }
+    ],
+    "available": true,
+    "name": {
+      "en": "Spicy Thai Seafood MAMA Noodles w/ Giant Squid",
+      "zh": "道地泰式大魷魚海鮮乾拌mama麵（辣）",
+      "vi": "Mỳ khô mực lớn và hải sản Thái chính gốc (cay)",
+      "ko": "정통 태국식 대오징어와 해산물 건어물 마마면(매운맛)",
+      "ja": "本場タイの大イカと海鮮のドライママヌードル（辛口）",
+      "th": "มาม่าปลาหมึกเส้นใหญ่และทะเลแห้งสูตรดั้งเดิมของไทย (รสเผ็ด)"
+    },
+    "description": {
+      "zh": "經典泰式mama麵~拌入獨家醬汁~擠上新鮮檸檬! 酸辣開胃 <一點辣都沒吃的不要點喔>配料:嚴選深海L號大魷魚 鮮蝦 魷魚(圈) 鱈魚丸 貢丸 日本魚板 洋蔥 紅蘿蔔絲 小黃瓜 高麗菜",
+      "en": "Authentic Thai-style soup noodles with rich, warming broth",
+      "ko": "클래식 타이 마마 누들~특제 소스를 섞은~상큼한 레몬을 짜낸 맛! 매콤새콤 전채 <별로 좋아하지 않으면 주문하지 마세요> 재료 : 엄선한 심해 L사이즈 오징어, 생새우, 오징어(링), 대구볼, 공물볼, 생선살, 양파, 당근채, 오이, 양배추",
+      "vi": "Mì Thái cổ điển ~ trộn với nước sốt độc quyền ~ vắt chanh tươi! Món khai vị chua nóng <Đừng gọi nếu bạn không thích> Thành phần: Mực biển cỡ L được lựa chọn cẩn thận, tôm tươi, mực (vòng), cá tuyết viên, bi cống, đĩa cá Nhật, hành tây, cà rốt thái sợi, dưa chuột, bắp cải",
+      "th": "มาม่าไทยสุดคลาสสิค ~ คลุกน้ำจิ้มสูตรพิเศษ ~ คั้นมะนาวสด! อาหารเรียกน้ำย่อยเผ็ดร้อน <อย่าสั่งถ้าไม่ชอบเลย> ส่วนผสม: ปลาหมึกทะเลน้ำลึกไซส์ L คัดมาอย่างดี กุ้งสด ปลาหมึก(วงแหวน) ลูกชิ้นปลาคอด ลูกชิ้น ปลาญี่ปุ่น หัวหอม แครอทฝอย แตงกวา กะหล่ำปลี",
+      "ja": "タイの定番ママヌードル～専用ソースと絡めて～フレッシュレモンを絞って！酸辣湯前菜 ＜苦手な方はご遠慮ください＞ 材料：厳選深海イカLサイズ、活海老、いか（リング）、たらね、貢ぎ玉、国産魚盛り、玉ねぎ、人参千切り、キュウリ、キャベツ"
+    },
+    "isNotSpicy": false,
+    "containsBeef": false,
+    "hasNoodlesOption": false,
+    "category": "tomyum"
+  },
+  {
+    "id": "dish-2508252142113",
+    "recipe": [],
+    "description": {
+      "en": "Slowly grilled over charcoal, bursting with aroma and flavor",
+      "zh": "誰說雞皮只能炸?在炭火擁抱下收斂了油脂~蛻變成誘人酥脆口感",
+      "ja": "鶏の皮は揚げるしかないなんて誰が言ったのでしょう？炭火の包み込みで脂分が減り、カリッとした食感が魅力です",
+      "th": "ใครว่าหนังไก่ทอดได้อย่างเดียว? ภายใต้อ้อมกอดของไฟถ่าน ไขมันจะลดลง~กลายเป็นเนื้อกรอบที่น่าดึงดูด",
+      "vi": "Ai nói da gà chỉ có thể chiên? Dưới ngọn lửa than hồng, mỡ được giảm bớt ~ chuyển thành kết cấu giòn hấp dẫn",
+      "ko": "누가 닭껍질은 튀겨야 한다고 했나요? 숯불의 품에 안겨 지방은 감소~바삭한 식감이 매력"
+    },
+    "containsSeafood": false,
+    "isNotSpicy": false,
+    "containsBeef": false,
+    "name": {
+      "zh": "雞皮10串",
+      "en": "Grilled Chicken Skin (10 Skewers)",
+      "ja": "鶏皮串 10本",
+      "th": "หนังไก่เสียบไม้ 10 ชิ้น",
+      "vi": "10 xiên da gà",
+      "ko": "닭 껍질 꼬치 10개"
+    },
+    "category": "combos",
+    "hasNoodlesOption": false,
+    "available": true,
+    "orderIndex": 12,
+    "image": "https://images.unsplash.com/photo-1529193591184-b1d58069ecdd?auto=format&fit=crop&q=80&w=400",
+    "customAddOns": [],
+    "price": 550,
+    "containsPork": false
+  },
+  {
+    "id": "dish-2508252141154",
+    "hasNoodlesOption": false,
+    "category": "combos",
+    "description": {
+      "th": "เนื้อซี่โครง 5 ไม้ + เนื้อแกะ 5 ไม้ ย่างถ่านช้าๆ หอมฟุ้ง อร่อยฟินทุกคำ",
+      "ja": "牛カルビ串5本＋子羊肉串5本。炭火でじっくり焼き上げ、香り高く一口ごとに至高の美味しさ。",
+      "vi": "Xiên sườn bò x5 + Xiên thịt cừu x5. Nướng chậm trên than hoa, thơm nức nát, ngon tuyệt hảo từng miếng.",
+      "ko": "소갈비꼬치 5개 + 어린양고기꼬치 5개. 숯불에 천천히 구워 향긋함이 가득하며 매 한 입마다 극상의 맛.",
+      "zh": "原塊牛肋5串+小羔羊肉5串\n炭火慢烤，香氣四溢，每一口都是極致美味",
+      "en": "Beef rib skewers x5 + Lamb chop skewers x5. Slowly grilled over charcoal, rich in aroma and flavors."
+    },
+    "customAddOns": [],
+    "name": {
+      "en": "Beef 5 & Lamb 5 Skewers Combo",
+      "zh": "牛5羊5串",
+      "th": "เซตเนื้อ 5 ไม้ & แกะ 5 ไม้",
+      "ja": "牛5本・羊5本 串セット",
+      "vi": "Set 5 xiên bò & 5 xiên cừu",
+      "ko": "소고기 5 & 양고기 5 꼬치 세트"
+    },
+    "containsSeafood": false,
+    "available": true,
+    "isNotSpicy": false,
+    "isTakeoutAvailable": true,
+    "containsPork": false,
+    "image": "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&q=80&w=400",
+    "orderIndex": 13,
+    "recipe": [],
+    "price": 680,
+    "containsBeef": true
+  },
+  {
+    "id": "dish-2508252136150",
+    "isNotSpicy": false,
+    "name": {
+      "vi": "Đúng. 10 xiên thịt cừu",
+      "ko": "사실이다. 양꼬치 10개",
+      "ja": "そうです。子羊串 10本",
+      "th": "จริง. เนื้อแกะเสียบไม้ 10 ชิ้น",
+      "en": "Australian Lamb Skewers (10 Skewers)",
+      "zh": "真。小羔羊肉10串"
+    },
+    "containsBeef": false,
+    "image": "https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=400",
+    "price": 650,
+    "category": "combos",
+    "recipe": [],
+    "containsSeafood": false,
+    "containsPork": false,
+    "orderIndex": 14,
+    "available": true,
+    "hasNoodlesOption": false,
+    "customAddOns": [],
+    "description": {
+      "en": "Slowly grilled over charcoal, bursting with aroma and flavor",
+      "zh": "嚴選6個月內小羔羊肉。(澳洲進口) 放炭火上烤至金黃 逼出多餘油脂 撒上孜然粉",
+      "vi": "Thịt cừu được lựa chọn cẩn thận trong vòng 6 tháng. (Nhập khẩu từ Úc) Nướng trên lửa than cho đến khi chín vàng, chắt bớt mỡ thừa rồi rắc bột thì là",
+      "ko": "6개월 이내의 엄선된 양고기를 사용합니다. (호주산) 숯불에 노릇노릇해질 때까지 굽고, 여분의 지방을 짜내고 큐민가루를 뿌려준다",
+      "ja": "生後6ヶ月以内の子羊を厳選。 （オーストラリア産） 炭火で焼き色がつくまで焼き、余分な脂を絞り、クミンパウダーをふりかける",
+      "th": "คัดสรรเนื้อแกะอย่างพิถีพิถันภายใน 6 เดือน (นำเข้าจากออสเตรเลีย) อบบนไฟถ่านจนเป็นสีทอง บีบไขมันส่วนเกินออก แล้วโรยด้วยผงยี่หร่า"
+    }
+  },
+  {
+    "id": "dish-2508252133258",
+    "category": "combos",
+    "hasNoodlesOption": false,
+    "description": {
+      "en": "Golden ratio beef rib cubes, charcoal-grilled to crispy perfection outside and tender pink inside, an ultimate treat for your tastebuds.",
+      "zh": "黃金比例 of 牛肋肉塊,烤炙外表焦香,內裡粉嫩,一口咬下,是味蕾的極致享受",
+      "ko": "황금 비율의 소갈비살, 겉은 바삭하고 속은 촉촉한 핑크빛으로 구워내 한 입 베어물면 미각의 극치를 경험할 수 있습니다.",
+      "vi": "Thịt sườn bò tỉ lệ vàng, nướng xém cạnh bên ngoài, bên trong mềm hồng, một miếng cắn là trải nghiệm vị giác tuyệt vời.",
+      "ja": "黄金比率の牛カルビ串。外は香ばしく炙り、中はやわらかピンク色。一口食べれば至福の味わい。",
+      "th": "เนื้อซี่โครงสัดส่วนทองคำ ย่างจนข้างนอกหอมกรอบ ข้างในนุ่มสีชมพู อร่อยฟินทุกคำ"
+    },
+    "name": {
+      "zh": "極炙牛肋10串",
+      "en": "Beef Rib Skewers (10 Skewers)",
+      "vi": "Xiên sườn bò nướng thượng hạng (10 xiên)",
+      "ko": "극상 소갈비꼬치 (10꼬치)",
+      "th": "บาร์บีคิวเนื้อซี่โครงย่าง (10 ไม้)",
+      "ja": "極上牛カルビ串 (10本)"
+    },
+    "customAddOns": [],
+    "containsSeafood": false,
+    "available": true,
+    "isTakeoutAvailable": true,
+    "isNotSpicy": false,
+    "containsPork": false,
+    "image": "https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=400",
+    "orderIndex": 15,
+    "recipe": [],
+    "price": 650,
+    "containsBeef": true
+  },
+  {
+    "id": "dish-2508252009102",
+    "containsPork": false,
+    "isNotSpicy": true,
+    "containsSeafood": false,
+    "customAddOns": [],
+    "category": "drinks",
+    "price": 90,
+    "containsBeef": false,
+    "name": {
+      "vi": "Milo Khủng Long",
+      "ko": "마일로 다이노소어",
+      "th": "ไมโลไดโนเสาร์",
+      "ja": "マイロ・ダイナソー",
+      "en": "Milo Dinosaur",
+      "zh": "恐龍美祿"
+    },
+    "available": true,
+    "recipe": [],
+    "description": {
+      "en": "Classic Milo chocolate drink, iced and topped with a generous amount of Milo powder for double the chocolate experience.",
+      "zh": "經典美祿可可飲品，冰鎮後撒上滿滿的可可粉，濃郁香甜的雙重享受。",
+      "th": "เครื่องดื่มโกโก้ไมโลคลาสสิก เสิร์ฟเย็นพร้อมโรยผงโกโก้พูนๆ ให้ความอร่อยเข้มข้นเป็นสองเท่า",
+      "ja": "冷たいマイロのココアドリンクに、たっぷりのココアパウダーをトッピングした濃厚で甘いダブルの味わい。",
+      "vi": "Thức uống cacao Milo cổ điển, ướp lạnh và phủ đầy bột cacao cho trải nghiệm ngọt ngào đậm đà nhân đôi.",
+      "ko": "아이스 마일로 초콜릿 음료 위에 마일로 가루를 듬뿍 올려 더욱 진하고 달콤한 초코 풍미를 즐길 수 있는 음료."
+    },
+    "hasNoodlesOption": false,
+    "orderIndex": 16,
+    "image": "https://images.unsplash.com/photo-1497534446932-c925b458314e?auto=format&fit=crop&q=80&w=400",
+    "isTakeoutAvailable": true
+  },
+  {
+    "id": "dish-2508252008143",
+    "description": {
+      "zh": "沁涼消暑，口感清爽，搭配燒烤絕配",
+      "en": "Refreshing and cool, a perfect match for delicious BBQ.",
+      "ja": "冷たくてさわやか、バーベキューに最高の組み合わせ。",
+      "th": "เย็นชื่นใจ รสชาติสดชื่น เข้ากันได้ดีเยี่ยมกับเมนูปิ้งย่าง",
+      "vi": "Giải nhiệt sảng khoái, hương vị tươi mát, sự kết hợp hoàn hảo với món nướng.",
+      "ko": "시원하고 상쾌하여 바베큐와 완벽한 조화를 이룹니다."
+    },
+    "name": {
+      "vi": "Sữa Ca Cao Đá Kiểu Thái",
+      "ko": "태국식 아이스 코코아 밀크",
+      "ja": "タイ風アイスココア",
+      "th": "โกโก้เย็นสไตล์ไทย",
+      "en": "Thai Iced Cocoa Milk",
+      "zh": "泰式可可冰奶"
+    },
+    "containsSeafood": false,
+    "orderIndex": 17,
+    "containsPork": false,
+    "containsBeef": false,
+    "available": true,
+    "image": "https://images.unsplash.com/photo-1563227812-0ea4c22e6cc8?auto=format&fit=crop&q=80&w=400",
+    "price": 90,
+    "isNotSpicy": true,
+    "category": "drinks"
+  },
+  {
+    "id": "dish-2508252003261",
+    "orderIndex": 18,
+    "image": "https://images.unsplash.com/photo-1497534446932-c925b458314e?auto=format&fit=crop&q=80&w=400",
+    "name": {
+      "zh": "爆漿泰奶包",
+      "en": "Thai Milk Tea Custard Lava Bun",
+      "ko": "폭발적인 태국 우유 주머니",
+      "vi": "Túi sữa Thái nổ",
+      "th": "ถุงนมไทยระเบิด",
+      "ja": "爆発するタイの牛乳袋"
+    },
+    "containsBeef": false,
+    "recipe": [],
+    "price": 80,
+    "category": "sweets",
+    "customAddOns": [],
+    "description": {
+      "en": "Slowly grilled over charcoal, bursting with rich aroma and delicious flavor in every bite.",
+      "zh": "炭火慢烤，香氣四溢，每一口都是極致美味",
+      "ko": "숯불에 천천히 구워서 향이 넘치고, 한입 먹을 때마다 최고의 맛이 난다",
+      "vi": "Được nướng từ từ trên lửa than, hương thơm tràn ngập, mỗi miếng cắn là vị ngon tuyệt đỉnh",
+      "th": "ค่อยๆ ย่างบนไฟถ่าน กลิ่นหอมฟุ้งฟุ้ง และทุกคำคือความอร่อยขั้นสุด",
+      "ja": "炭火でじっくり焼き上げると香ばしさが溢れ、一口食べるごとに最高の美味しさです"
+    },
+    "containsPork": false,
+    "isNotSpicy": true,
+    "containsSeafood": false,
+    "hasNoodlesOption": false,
+    "available": true
+  },
+  {
+    "id": "dish-2508202000500",
+    "containsSeafood": false,
+    "isTakeoutAvailable": true,
+    "isNotSpicy": false,
+    "recipe": [],
+    "hasNoodlesOption": false,
+    "name": {
+      "ko": "인기 D 세트",
+      "vi": "Combo D Phổ Biến",
+      "th": "เซ็ต D ยอดนิยม",
+      "ja": "人気Dセット",
+      "en": "Popular Set D Combo",
+      "zh": "人氣D餐"
+    },
+    "containsBeef": false,
+    "category": "combos",
+    "orderIndex": 19,
+    "image": "https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=400",
+    "customAddOns": [],
+    "description": {
+      "en": "1 serving of Signature Seafood dry mix MAMA noodles, 1 serving of Charcoal Grilled Beef Short Rib Trio (with bread and vegetables), 1 serving of Charcoal Grilled Handmade Moon Shrimp Cake, 2 pieces of Mentaiko Saury (deboned) 🧉 Free 2 cups of Thai milk tea",
+      "zh": "招牌海鮮乾拌mama麵1份、椰碳牛小排三重奏（佐麵包蔬菜）1份、 碳烤手工月亮蝦餅1份、明太子秋刀魚（去刺）2P🧉 贈手標泰奶2杯",
+      "ko": "시그니처 해물 비빔 MAMA 누들 1인분, 코코넛 숯불 우갈비 삼중주(빵, 야채 곁들임) 1인분, 숯불 수제 월량샤빙(새우전) 1인분, 명란 꽁치구이(가시 제거) 2P 🧉 타이 밀크티 2잔 무료 증정",
+      "vi": "1 phần Mì MAMA trộn khô Hải sản Đặc trưng, 1 phần Bò nướng than dừa Trio (kèm bánh mì & rau), 1 phần Chả tôm trăng nướng than thủ công, 2 phần Cá thu đao sốt trứng cá tuyết Mentaiko (đã rút xương) 🧉 Tặng 2 ly trà sữa Thái",
+      "th": "บะหมี่มาม่าแห้งทะเลซิกเนเจอร์ 1 ที่, ซี่โครงเนื้อย่างถ่านมะพร้าวทริโอ (เสิร์ฟพร้อมขนมปังและผัก) 1 ที่, ทอดมันกุ้งพระจันทร์ย่างถ่านทำมือ 1 ที่, ปลาซันมะราดซอสไข่ปลาค็อด (ไร้ก้าง) 2 ชิ้น 🧉 ฟรีชาไทยตรามือ 2 แก้ว",
+      "ja": "看板シーフードまぜMAMA麺 1人前、ココナッツ炭火牛カルビ三重奏（パン・野菜添え） 1人前、炭火焼き手作りムーンエビ餅 1人前、明太子秋刀魚（骨なし） 2P 🧉 タイミルクティー 2杯無料サービス"
+    },
+    "containsPork": false,
+    "available": true,
+    "price": 1550
+  },
+  {
+    "id": "dish-2508201955573",
+    "available": true,
+    "price": 2160,
+    "description": {
+      "en": "Strictly selected seafood, first choice for gatherings 🥳 Seared sashimi-grade scallops x4, Charcoal grilled tiger prawns x6, Thai jumbo oysters x3, Hand-shredded dried squid, Japanese yellowtail collar (Hamachi kama)",
+      "zh": "嚴選海味，聚餐首選🥳 炙燒生食級干貝×4 椰碳烤大草蝦×6 泰式大生蠔×3 手撕魷魚干 日本鯖甘魚下巴",
+      "ko": "엄선된 해산물, 모임 추천 메뉴 🥳 살짝 구운 횟감용 가리비 관자 4개, 코코넛 숯불 왕새우 구이 6개, 태국식 대형 생굴 3개, 수제 찢은 오징어 구이, 일본식 방어 턱밑살 구이",
+      "vi": "Hải sản tuyển chọn, lựa chọn hàng đầu cho các buổi tiệc 🥳 Sò điệp áp chảo chuẩn sashimi x4, Tôm sú nướng than dừa x6, Hàu sống cỡ lớn sốt Thái x3, Mực khô xé tay, Má đùi cá cam Nhật nướng",
+      "ja": "厳選シーフード、お集まりに最適 🥳 炙り生食用ホタテ貝柱×4、ココナッツ炭火焼き大ブラックタイガー海老×6、タイ風大生牡蠣×3、手裂きスルメイカ、日本産ブリカマ",
+      "th": "คัดสรรอาหารทะเลระดับพรีเมียม ทางเลือกแรกสำหรับการสังสรรค์ 🥳 หอยเชลล์เกรดซาชิมิเบิร์นไฟ x4, กุ้งลายเสือย่างถ่านมะพร้าว x6, หอยนางรมยักษ์สไตล์ไทย x3, ปลาหมึกฉีกมือ, คางปลาฮามาจิญี่ปุ่นย่าง"
+    },
+    "containsSeafood": false,
+    "containsBeef": false,
+    "name": {
+      "zh": "奢華C餐",
+      "en": "Luxury Set C Combo",
+      "vi": "Combo C Sang Trọng",
+      "ko": "럭셔리 C 세트",
+      "ja": "豪華Cセット",
+      "th": "เซ็ต C สุดหรู"
+    },
+    "image": "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&q=80&w=400",
+    "category": "combos",
+    "hasNoodlesOption": false,
+    "recipe": [],
+    "isNotSpicy": true,
+    "containsPork": false,
+    "orderIndex": 20,
+    "isTakeoutAvailable": true,
+    "customAddOns": []
+  },
+  {
+    "id": "dish-2508141908165",
+    "name": {
+      "vi": "Xô sữa Thái rỗng",
+      "ko": "태국 우유 빈 양동이",
+      "ja": "タイミルクの空バケツ",
+      "th": "ถังเปล่านมไทย",
+      "zh": "泰奶空桶",
+      "en": "Empty Thai Milk Tea Bucket (1L)"
+    },
+    "category": "cat-svadcb",
+    "orderIndex": 21,
+    "recipe": [],
+    "containsBeef": false,
+    "description": {
+      "zh": "超值優惠組合，物超所值，限時享用",
+      "en": "Great value combo package, high cost-performance deal for a limited time.",
+      "ja": "期間限定の超お得な割引パッケージ",
+      "th": "แพ็คเกจส่วนลดสุดคุ้ม คุ้มสุดๆ ระยะเวลาจำกัดเท่านั้น",
+      "vi": "Gói giảm giá siêu giá trị, giá trị đồng tiền, thời gian có hạn",
+      "ko": "슈퍼 가치 할인 패키지, 가격 대비 훌륭한 가치, 제한된 시간 동안만 제공"
+    },
+    "available": true,
+    "containsSeafood": false,
+    "customAddOns": [],
+    "hasNoodlesOption": false,
+    "image": "https://images.unsplash.com/photo-1504754524776-8f4f37790ca0?auto=format&fit=crop&q=80&w=400",
+    "price": -30,
+    "containsPork": false,
+    "isNotSpicy": true
+  },
+  {
+    "id": "dish-2508112131059",
+    "containsPork": false,
+    "orderIndex": 22,
+    "customAddOns": [],
+    "recipe": [],
+    "containsSeafood": false,
+    "description": {
+      "th": "ผักกาดขาวเบบี้แรพย่างถ่าน กรอบหวาน แคลอรีต่ำ ไฟเบอร์สูง อุดมด้วยวิตามิน",
+      "ja": "炭火で焼いたシャキシャキ甘いベビー白菜。低カロリー・高食物繊維でビタミン豊富。",
+      "vi": "Cải baby nướng than giòn ngọt, ít calo giàu chất xơ, chứa nhiều vitamin.",
+      "ko": "숯불에 구워 아삭하고 달콤한  베이비 배추~ 저칼로리 고섬유질, 풍부한 비타민 함유.",
+      "zh": "炭烤清脆香甜娃娃菜~低熱量高纖維~含多種維生素",
+      "en": "Charcoal-grilled crisp and sweet baby cabbage, low calorie, high fiber, rich in vitamins."
+    },
+    "name": {
+      "en": "Baby Chinese Cabbage (2pcs)",
+      "zh": "娃娃菜2p",
+      "ja": "ベビー白菜の炭火焼き (2個)",
+      "th": "ผักกาดขาวเบบี้แรพย่าง (2 ชิ้น)",
+      "ko": "베이비 배추 구이 (2개)",
+      "vi": "Cải baby nướng (2 phần)"
+    },
+    "available": true,
+    "isNotSpicy": false,
+    "hasNoodlesOption": false,
+    "containsBeef": false,
+    "price": 80,
+    "image": "https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&q=80&w=400",
+    "isTakeoutAvailable": true,
+    "category": "veggies"
+  },
+  {
+    "id": "dish-2508112130113",
+    "customAddOns": [],
+    "image": "https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=400",
+    "isTakeoutAvailable": true,
+    "containsPork": true,
+    "price": 90,
+    "category": "skewers",
+    "orderIndex": 23,
+    "name": {
+      "ja": "ジューシーえのき豚肉巻き",
+      "th": "หมูสามชั้นพันเห็ดเข็มทองน้ำฉ่ำ",
+      "vi": "Ba chỉ heo cuộn nấm kim châm mọng nước",
+      "ko": "육즙 가득 팽이버섯 삼겹살말이",
+      "zh": "爆汁金針菇豬肉",
+      "en": "Juicy Pork Wrapped Enoki Mushroom"
+    },
+    "isNotSpicy": false,
+    "description": {
+      "ko": "부드러운 삼겹살로 달콤한 팽이버섯을 감싸 숯불에 천천히 구워 육즙을 꽉 잡아냈습니다. 한 입 씹을 때마다 육즙이 터집니다.",
+      "vi": "Thịt heo mềm ngọt cuộn nấm kim châm tươi ngon, nướng chậm trên than hoa khóa chặt nước sốt đậm đà, mọng nước trong từng miếng cắn.",
+      "ja": "柔らかい豚肉で甘みのあるえのき茸を巻き、炭火でじっくり焼いて旨味を閉じ込めました。一口ごとにジューシーな味わいが広がります。",
+      "th": "เนื้อหมูนุ่มๆ พันเห็ดเข็มทองรสหวาน ย่างถ่านช้าๆ เพื่อล็อคน้ำซุปเข้มข้น ชุ่มฉ่ำทุกคำที่กัด",
+      "en": "Tender pork wrapped around sweet enoki mushrooms, slow-grilled over charcoal to lock in the juices for a burst of flavor in every bite.",
+      "zh": "嫩滑豬肉包裹鮮甜金針菇，炭火慢烤鎖住滿滿湯汁，每一口都爆汁。"
+    },
+    "available": true,
+    "containsBeef": false,
+    "recipe": [],
+    "hasNoodlesOption": false,
+    "containsSeafood": false
+  },
+  {
+    "id": "dish-2507182004409",
+    "isNotSpicy": true,
+    "name": {
+      "en": "Hakka Coin Card Payment",
+      "zh": "客家幣刷卡",
+      "ko": "객가 화폐 카드 스와이프",
+      "vi": "Quẹt thẻ tiền tệ Hakka",
+      "th": "การรูดบัตรสกุลเงินฮากกา",
+      "ja": "客家通貨カードのスワイプ"
+    },
+    "containsBeef": false,
+    "image": "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&q=80&w=400",
+    "price": -1000,
+    "category": "cat-svadcb",
+    "recipe": [],
+    "containsSeafood": false,
+    "containsPork": false,
+    "isAvailable": true,
+    "orderIndex": 24,
+    "available": true,
+    "hasNoodlesOption": false,
+    "customAddOns": [],
+    "description": {
+      "ja": "期間限定の超お得な割引パッケージ",
+      "th": "แพ็คเกจส่วนลดสุดคุ้ม คุ้มสุดๆ ระยะเวลาจำกัดเท่านั้น",
+      "vi": "Gói giảm giá siêu giá trị, giá trị đồng tiền, thời gian có hạn",
+      "ko": "슈퍼 가치 할인 패키지, 가격 대비 훌륭한 가치, 제한된 시간 동안만 제공",
+      "en": "Great value combo package, high cost-performance deal for a limited time.",
+      "zh": "超值優惠組合，物超所值，限時享用"
+    }
+  },
+  {
+    "id": "dish-2507072257199",
+    "isNotSpicy": false,
+    "name": {
+      "en": "Signature Set A Combo",
+      "zh": "招牌A餐",
+      "vi": "Chữ ký Một bữa ăn",
+      "ko": "시그니처A 한끼",
+      "ja": "シグネチャーAのお食事",
+      "th": "ลายเซ็นมื้ออาหาร"
+    },
+    "containsBeef": false,
+    "image": "https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=400",
+    "price": 660,
+    "category": "combos",
+    "recipe": [],
+    "containsSeafood": false,
+    "containsPork": false,
+    "orderIndex": 25,
+    "available": true,
+    "customAddOns": [],
+    "hasNoodlesOption": false,
+    "description": {
+      "vi": "Lần đầu tiên vào? Bạn không biết nên chọn gì? Dưới đây là những cái tốt nhất. Bạn có thể nhận được các sản phẩm đặc trưng của cửa hàng ngay lập tức! 1 xiên thịt bò thủ công kiểu Thái/1 xiên thịt lợn nấm kim châm ngon ngọt/1 xiên thịt chua miền Bắc Thái và xúc xích bún/4 miếng cánh gà nướng kiểu Thái/1 phần da đậu hũ chiên giòn kiểu Thái/1 phần cay ngọt ngọt/1 cốc trà sữa Thái!",
+      "ko": "처음 들어오시나요? 무엇을 선택해야 할지 모르시나요? 여기에 최고의 것들이 있습니다. 매장의 시그니처 제품을 한번에 만나보실 수 있어요! 태국산 수제 쇠고기 꼬치 / 육즙이 풍부한 팽이버섯 돼지고기 1개 / 태국 북부 신맛이 나는 고기와 쌀국수 소시지 1개 / 태국식 구운 닭날개 4조각 / 태국식 바삭한 두부껍질 1인분 / 매콤달콤한 태국식 두부껍질 1인분 / 태국식 밀크티 1컵!",
+      "ja": "初めて入りますか？何を選べばいいのか分からない？ここに最高のものがあります。お店の看板商品が一気に手に入る！タイ手打ちビーフ1串/ジューシーえのき茸ポーク1串/タイ北部の酸っぱい肉とビーフンソーセージ1串/タイ風手羽先グリル4本/タイ風パリパリ湯葉1食分/甘辛1食分/タイミルクティー1杯！",
+      "th": "เข้ามาครั้งแรก? ไม่รู้จะเลือกอะไร? นี่คือสิ่งที่ดีที่สุด คุณสามารถรับสินค้าซิกเนเจอร์ของร้านได้ในคราวเดียว! เนื้อไทยทำมือ 1 ไม้/หมูเห็ดเข็มทอง 1 ไม้/เนื้อเปรี้ยวและไส้กรอกเส้นก๋วยเตี๋ยว 1 ไม้/ปีกไก่ย่าง 4 ชิ้น/ผิวเต้าหู้กรอบ 1 ส่วน/เผ็ดร้อน 1 ส่วน/ชานมไทย 1 ถ้วย!",
+      "en": "Slowly grilled over charcoal, bursting with aroma and flavor",
+      "zh": "第一次進來?不知道選啥 精華都在這了 店內招牌商品一次擁有! 泰式手工牛肉1串/爆汁金針菇豬肉1串/泰北酸肉冬粉腸1串/泰式烤雞翅4隻/泰酥豆皮1份/甜不辣1份/泰式奶茶1杯!"
+    }
+  },
+  {
+    "id": "dish-2506292231385",
+    "available": true,
+    "customAddOns": [],
+    "orderIndex": 26,
+    "category": "cat-7cvvkq",
+    "containsPork": false,
+    "containsSeafood": false,
+    "recipe": [],
+    "price": 100,
+    "hasNoodlesOption": false,
+    "name": {
+      "ko": "스노우 마운틴 팥빙수",
+      "vi": "Bá đá bào núi tuyết",
+      "th": "น้ำแข็งไสภูเขาหิมะ",
+      "ja": "かき氷（スノーマウンテン）",
+      "en": "Snow Mountain Shaved Ice",
+      "zh": "雪山"
+    },
+    "containsBeef": false,
+    "description": {
+      "ko": "시원하고 상쾌하여 바베큐와 완벽한 조화를 이룹니다.",
+      "vi": "Giải nhiệt sảng khoái, hương vị tươi mát, sự kết hợp hoàn hảo với món nướng.",
+      "th": "เย็นชื่นใจ รสชาติสดชื่น เข้ากันได้ดีเยี่ยมกับเมนูปิ้งย่าง",
+      "ja": "冷たくてさわやか、バーベキューに最高の組み合わせ。",
+      "zh": "沁涼消暑，口感清爽，搭配燒烤絕配",
+      "en": "Refreshing and cool, a perfect match for delicious BBQ."
+    },
+    "image": "https://images.unsplash.com/photo-1497534446932-c925b458314e?auto=format&fit=crop&q=80&w=400",
+    "isNotSpicy": true
+  },
+  {
+    "id": "dish-2506182247281",
+    "customAddOns": [],
+    "containsSeafood": false,
+    "available": true,
+    "price": 800,
+    "containsPork": false,
+    "image": "https://images.unsplash.com/photo-1563227812-0ea4c22e6cc8?auto=format&fit=crop&q=80&w=400",
+    "orderIndex": 27,
+    "name": {
+      "th": "ไวน์ซินฟานเดล",
+      "ja": "ジンファンデルワイン",
+      "ko": "진판델 와인",
+      "vi": "rượu Zinfandel",
+      "zh": "金芬黛葡萄酒",
+      "en": "Zinfandel Red Wine"
+    },
+    "isNotSpicy": true,
+    "hasNoodlesOption": false,
+    "recipe": [],
+    "category": "cat-7cvvkq",
+    "containsBeef": false,
+    "description": {
+      "en": "Refreshing and cool, a perfect match for delicious BBQ.",
+      "zh": "沁涼消暑，口感清爽，搭配燒烤絕配",
+      "ja": "冷たくてさわやか、バーベキューに最高の組み合わせ。",
+      "th": "เย็นชื่นใจ รสชาติสดชื่น เข้ากันได้ดีเยี่ยมกับเมนูปิ้งย่าง",
+      "vi": "Giải nhiệt sảng khoái, hương vị tươi mát, sự kết hợp hoàn hảo với món nướng.",
+      "ko": "시원하고 상쾌하여 바베큐와 완벽한 조화를 이룹니다."
+    }
+  },
+  {
+    "id": "dish-2506132134210",
+    "customAddOns": [],
+    "price": 150,
+    "hasNoodlesOption": false,
+    "image": "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&q=80&w=400",
+    "isNotSpicy": false,
+    "containsPork": false,
+    "name": {
+      "th": "ขวดซอสแดงสำหรับพกพา",
+      "ja": "レッドソースの持ち帰り用ボトル",
+      "ko": "레드 소스 테이크아웃 병",
+      "vi": "Chai nước sốt đỏ mang theo",
+      "en": "Signature Spicy Red Sauce Bottle",
+      "zh": "紅醬外帶瓶"
+    },
+    "orderIndex": 28,
+    "description": {
+      "en": "Carefully crafted with rich flavors to complement your meal",
+      "zh": "店內的大辣紅醬~獨家自製~沾烤肉沾炸物加在海鮮乾拌麵都很好吃",
+      "vi": "Nước sốt đỏ cay ở cửa hàng~tự làm độc quyền~rất ngon khi chấm cùng thịt nướng hoặc đồ chiên và thêm vào mì hải sản khô",
+      "ko": "매장에 있는 매콤한 빨간 소스~직접 직접 만든~바비큐나 튀김에 찍어서 건어물 국수에 넣어먹으면 맛있어요",
+      "ja": "店内の特製赤辛だれは、焼き肉や揚げ物につけたり、海鮮麺に添えると美味しいです",
+      "th": "น้ำจิ้มรสเด็ดในร้าน~ทำเองโดยเฉพาะ~อร่อยเมื่อนำไปจิ้มกับเนื้อบาร์บีคิวหรืออาหารทอดแล้วเติมลงในบะหมี่ทะเลแห้ง"
+    },
+    "containsSeafood": false,
+    "category": "cat-zene8j",
+    "containsBeef": false,
+    "recipe": [],
+    "available": true
+  },
+  {
+    "id": "dish-2506132131288",
+    "hasNoodlesOption": false,
+    "recipe": [],
+    "category": "cat-zene8j",
+    "description": {
+      "zh": "店內的小辣綠醬~獨家自製~沾烤肉沾炸物加在海鮮乾拌麵都很好吃",
+      "en": "Carefully crafted with rich flavors to complement your meal",
+      "vi": "Nước sốt xanh cay của cửa hàng ~ độc quyền tự làm ~ rất ngon khi chấm với thịt nướng hoặc đồ chiên và thêm vào mì hải sản khô",
+      "ko": "매장에 있는 매콤한 그린소스~직접 직접 만든~바비큐나 튀김에 찍어서 건어물 국수에 넣어먹으면 맛있어요",
+      "ja": "店内の特製グリーンソースは焼き肉や揚げ物につけたり、海鮮麺に添えると美味しいですよ～自家製です～",
+      "th": "ซอสเขียวรสเผ็ดในร้าน~ทำเองโดยเฉพาะ~อร่อยเมื่อจิ้มกับเนื้อบาร์บีคิวหรืออาหารทอดแล้วเติมลงในบะหมี่ทะเลแห้ง"
+    },
+    "containsSeafood": false,
+    "containsBeef": false,
+    "name": {
+      "th": "ขวดซอสเขียวสำหรับพกพา",
+      "ja": "グリーンソースの持ち帰り用ボトル",
+      "ko": "그린 소스 테이크아웃 병",
+      "vi": "Chai nước sốt xanh mang theo",
+      "zh": "綠醬外帶瓶",
+      "en": "Signature Thai Green Chili Sauce Bottle"
+    },
+    "orderIndex": 29,
+    "available": true,
+    "isNotSpicy": false,
+    "image": "https://images.unsplash.com/photo-1473093295043-cdd812d0e601?auto=format&fit=crop&q=80&w=400",
+    "containsPork": false,
+    "customAddOns": [],
+    "price": 150
+  },
+  {
+    "id": "dish-2505242017116",
+    "hasNoodlesOption": false,
+    "category": "veggies",
+    "recipe": [],
+    "description": {
+      "en": "Fresh zucchini grilled over charcoal until lightly charred, locking in sweet, refreshing juices.",
+      "zh": "新鮮櫛瓜炭火烤至表皮微焦，內部依然飽滿多汁，清甜爽口。",
+      "th": "ซูชินีสดใหม่ย่างถ่านจนผิวเกรียมเล็กน้อย แต่ด้านในยังชุ่มฉ่ำและหวานกรอบสดชื่น",
+      "ja": "新鮮なズッキーニを炭火で香ばしく焼き上げ、中は驚くほどジューシーでみずみずしい甘みが楽しめます。",
+      "vi": "Bí ngòi tươi nướng than hoa xém nhẹ bên ngoài, bên trong vẫn giữ được nước ngọt tự nhiên thanh mát.",
+      "ko": "신선한 쥬키니 호박을 숯불에 겉은 노릇하게 굽고 속은 촉촉하게 채워 시원하고 달콤한 맛."
+    },
+    "containsSeafood": false,
+    "containsBeef": false,
+    "isTakeoutAvailable": true,
+    "name": {
+      "en": "Juicy Grilled Zucchini",
+      "zh": "爆汁櫛瓜",
+      "vi": "Bí ngòi nướng mọng nước",
+      "ko": "즙이 터지는 애호박 구이",
+      "th": "ซูชินีย่างน้ำฉ่ำ",
+      "ja": "ジューシー焼きズッキーニ"
+    },
+    "orderIndex": 30,
+    "available": true,
+    "isNotSpicy": false,
+    "image": "https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=400",
+    "containsPork": false,
+    "customAddOns": [],
+    "price": 140
+  },
+  {
+    "id": "dish-2505041844456",
+    "containsPork": true,
+    "name": {
+      "th": "ก๋วยเตี๋ยวหมูต้มยำไทยและข้าว",
+      "ja": "タイのトムヤムポークとライスヌードル",
+      "ko": "태국식 Tomyam 돼지고기와 쌀국수",
+      "vi": "Bún thịt lợn và cơm Thái Tomyam",
+      "en": "Thai Tom Yum Pork Rice Noodle",
+      "zh": "泰式東炎豬肉.米線"
+    },
+    "customAddOns": [
+      {
+        "id": "addon-1784478850618-672",
+        "price": 20,
+        "name": {
+          "zh": "加河粉",
+          "en": "Add pho",
+          "vi": "Thêm phở",
+          "ko": "사진 추가",
+          "ja": "フォーを追加",
+          "th": "เพิ่มโพธิ์"
+        }
+      },
+      {
+        "price": 20,
+        "id": "addon-1784478853337-718",
+        "name": {
+          "en": "Add rice noodles",
+          "zh": "加米線",
+          "vi": "Thêm bún",
+          "ko": "쌀국수 추가",
+          "th": "ใส่เส้นก๋วยเตี๋ยว",
+          "ja": "ビーフンを加えます"
+        }
+      },
+      {
+        "name": {
+          "vi": "Set ăn nâng cấp (rau nướng + 1 cốc sữa Thái)",
+          "ko": "업그레이드된 정식 (구운 야채 + 태국 우유 1잔)",
+          "th": "ชุดอาหารอัพเกรด (ผักย่าง + นมไทย 1 แก้ว)",
+          "ja": "グレードアップ定食（焼き野菜＋タイミルク1杯）",
+          "zh": "升級套餐(烤蔬菜+泰奶一杯)",
+          "en": "Upgraded set meal (roasted vegetables + a cup of Thai milk)"
+        },
+        "id": "addon-1784478856450-76",
+        "price": 140
+      }
+    ],
+    "description": {
+      "vi": "Thịt ba chỉ Đài Loan, cá viên, cá viên, phi lê cá Nhật, cô gái đại lục, hành tây, cà rốt, chùa chín tầng, bắp cải",
+      "ko": "대만산 삼겹살, 대구생선볼, 헌정볼, 일본식 생선살, 본토 소녀, 양파, 당근, 구층탑, 양배추",
+      "th": "หมูสามชั้นไต้หวันสไลซ์ ลูกชิ้นปลาค็อด ลูกชิ้น เนื้อปลาญี่ปุ่น สาวแผ่นดิน หัวหอม แครอท เจดีย์เก้าชั้น กะหล่ำปลี",
+      "ja": "台湾産豚バラ肉、タラつみれ、貢ぎ目、日本産魚の切り身、本土娘、玉ねぎ、人参、九重塔、キャベツ",
+      "en": "Authentic Thai-style soup noodles with rich, warming broth",
+      "zh": "台灣豬五花肉片、鱈魚丸 貢丸、日本魚板、大陸妹、洋蔥 紅蘿蔔、九層塔、高麗菜"
+    },
+    "orderIndex": 31,
+    "isTakeoutAvailable": true,
+    "hasNoodlesOption": false,
+    "containsBeef": false,
+    "isNotSpicy": false,
+    "price": 240,
+    "available": true,
+    "category": "tomyum",
+    "containsSeafood": false,
+    "image": "https://images.unsplash.com/photo-1569718212165-3a8278d5f624?auto=format&fit=crop&q=80&w=400",
+    "recipe": []
+  },
+  {
+    "id": "dish-2505041843176",
+    "containsBeef": false,
+    "containsSeafood": false,
+    "image": "https://images.unsplash.com/photo-1548943487-a2e4e43b4853?auto=format&fit=crop&q=80&w=400",
+    "name": {
+      "ja": "タイのトムヤムクンとフォー",
+      "th": "ต้มยำไทยหมูและเฝอ",
+      "ko": "태국 톰얌 돼지고기와 쌀국수",
+      "vi": "Thịt lợn và phở Tomyam kiểu Thái",
+      "zh": "泰式東炎豬肉.河粉",
+      "en": "Thai Tom Yum Pork Pho Noodle"
+    },
+    "hasNoodlesOption": false,
+    "isNotSpicy": false,
+    "category": "tomyum",
+    "recipe": [],
+    "price": 240,
+    "description": {
+      "ko": "대만산 삼겹살, 대구생선볼, 헌정볼, 일본식 생선살, 본토 소녀, 양파, 당근, 구층탑, 양배추",
+      "vi": "Thịt ba chỉ Đài Loan, cá viên, cá viên, phi lê cá Nhật, cô gái đại lục, hành tây, cà rốt, chùa chín tầng, bắp cải",
+      "ja": "台湾産豚バラ肉、タラつみれ、貢ぎ目、日本産魚の切り身、本土娘、玉ねぎ、人参、九重塔、キャベツ",
+      "th": "หมูสามชั้นไต้หวันสไลซ์ ลูกชิ้นปลาค็อด ลูกชิ้น เนื้อปลาญี่ปุ่น สาวแผ่นดิน หัวหอม แครอท เจดีย์เก้าชั้น กะหล่ำปลี",
+      "en": "Authentic Thai-style soup noodles with rich, warming broth",
+      "zh": "台灣豬五花肉片、鱈魚丸 貢丸、日本魚板、大陸妹、洋蔥 紅蘿蔔、九層塔、高麗菜"
+    },
+    "containsPork": true,
+    "available": true,
+    "customAddOns": [
+      {
+        "name": {
+          "en": "Add pho",
+          "zh": "加河粉",
+          "th": "เพิ่มโพธิ์",
+          "ja": "フォーを追加",
+          "ko": "사진 추가",
+          "vi": "Thêm phở"
+        },
+        "price": 20,
+        "id": "addon-1784478881366-690"
+      },
+      {
+        "id": "addon-1784478887811-679",
+        "price": 20,
+        "name": {
+          "ko": "쌀국수 추가",
+          "vi": "Thêm bún",
+          "ja": "ビーフンを加えます",
+          "th": "ใส่เส้นก๋วยเตี๋ยว",
+          "en": "Add rice noodles",
+          "zh": "加米線"
+        }
+      },
+      {
+        "name": {
+          "ko": "업그레이드된 정식 (구운 야채 + 태국 우유 1잔)",
+          "vi": "Set ăn nâng cấp (rau nướng + 1 cốc sữa Thái)",
+          "ja": "グレードアップ定食（焼き野菜＋タイミルク1杯）",
+          "th": "ชุดอาหารอัพเกรด (ผักย่าง + นมไทย 1 แก้ว)",
+          "zh": "升級套餐(烤蔬菜+泰奶一杯)",
+          "en": "Upgraded set meal (roasted vegetables + a cup of Thai milk)"
+        },
+        "id": "addon-1784478890845-28",
+        "price": 140
+      }
+    ],
+    "orderIndex": 32
+  },
+  {
+    "id": "dish-2505041825592",
+    "category": "drinks",
+    "isNotSpicy": true,
+    "description": {
+      "zh": "網紅網帥拍照必備~茶香濃郁的經典泰奶~空桶回店回購再折30元!",
+      "en": "Refreshing and cool, a perfect match for BBQ",
+      "ja": "ネット有名人やかっこいい男性の写真撮影必需品～紅茶の香りが強い定番のタイミルク～空になったバケツを店舗に返却すると30元割引！",
+      "th": "ดาราทางอินเทอร์เน็ตและหนุ่มเท่ๆ ที่ต้องมีไว้ถ่ายรูป~ นมไทยคลาสสิกกลิ่นชาเข้มข้น~ คืนถังเปล่าไปที่ร้านรับส่วนลด 30 หยวน!",
+      "vi": "Một thứ không thể thiếu đối với những người nổi tiếng trên mạng và những chàng trai sành điệu khi chụp ảnh ~ Sữa Thái cổ điển với hương trà đậm đà ~ Trả lại chiếc xô rỗng cho cửa hàng và được giảm giá 30 nhân dân tệ!",
+      "ko": "인터넷 연예인, 멋남들의 사진찍기 필수품~ 진한 차향이 나는 클래식 태국 우유~ 빈 양동이를 매장에 반납하고 30위안 할인 받으세요!"
+    },
+    "hasNoodlesOption": false,
+    "containsBeef": false,
+    "recipe": [],
+    "customAddOns": [],
+    "price": 180,
+    "available": true,
+    "containsSeafood": false,
+    "orderIndex": 33,
+    "image": "https://images.unsplash.com/photo-1497534446932-c925b458314e?auto=format&fit=crop&q=80&w=400",
+    "name": {
+      "zh": "街頭泰奶1L",
+      "en": "Thai Street Milk Tea (1L Bucket)",
+      "th": "สตรีทนมไทย 1ลิตร",
+      "ja": "ストリートタイミルク 1L",
+      "ko": "스트리트 타이 우유 1L",
+      "vi": "Sữa đường Thái 1L"
+    },
+    "containsPork": false
+  },
+  {
+    "id": "dish-2505041753253",
+    "recipe": [],
+    "containsBeef": true,
+    "orderIndex": 34,
+    "description": {
+      "zh": "配料: 美國嫩肩里肌choice牛肉片 蝦子 魷魚圈 蛤蠣 鱈魚丸 貢丸 日本魚板 大陸妹 洋蔥 紅蘿蔔 九層塔",
+      "en": "Authentic Thai-style soup noodles with rich, warming broth",
+      "ja": "食材: アメリカ産柔らか肩フィレ特選牛スライス、海老、イカリング、アサリ、タラボール、ポークボール、国産フィッシュプレート、本土娘、玉ねぎ、人参、九重塔",
+      "th": "ส่วนผสม: เนื้อวัวสันคอแบบอเมริกันสไลซ์ กุ้ง ปลาหมึกแหวน หอยลาย ลูกชิ้นปลาคอด ลูกชิ้นหมู ปลาญี่ปุ่น สาวแผ่นดินใหญ่ หัวหอม แครอท เจดีย์เก้าชั้น",
+      "vi": "Nguyên liệu: Thịt bò vai phi lê Mỹ chọn lọc lát mỏng, tôm, mực chiên, nghêu, cá tuyết viên, thịt lợn viên, đĩa cá Nhật, gái đất liền, hành tây, cà rốt, chùa chín tầng",
+      "ko": "식품 : 미국산 부드러운 어깨 필레 특선 쇠고기 조각, 새우, 오징어 고리, 조개, 대구 완자, 돼지 고기 완자, 일본식 생선 접시, 본토 소녀, 양파, 당근, 구층탑"
+    },
+    "category": "tomyum",
+    "name": {
+      "zh": "泰滿足海陸牛冬蔭功",
+      "en": "Surf & Turf Beef Tom Yum Noodle Soup",
+      "th": "ความพึงพอใจของไทยซีแลนด์เนื้อต้มยำกุ้ง",
+      "ja": "タイの満足シーランドビーフのトムヤムクン",
+      "ko": "타이 만족 씨랜드 비프 똠얌꿍",
+      "vi": "Món Thái Hài Lòng Thịt Bò Biển Tom Yum Goong"
+    },
+    "image": "https://images.unsplash.com/photo-1569718212165-3a8278d5f624?auto=format&fit=crop&q=80&w=400",
+    "containsPork": false,
+    "hasNoodlesOption": false,
+    "hasCoconutsMilkOption": true,
+    "isNotSpicy": false,
+    "customAddOns": [
+      {
+        "id": "addon-1784478928738-313",
+        "name": {
+          "vi": "Thêm phở",
+          "ko": "사진 추가",
+          "ja": "フォーを追加",
+          "th": "เพิ่มโพธิ์",
+          "en": "Add pho",
+          "zh": "加河粉"
+        },
+        "price": 20
+      },
+      {
+        "price": 20,
+        "name": {
+          "vi": "Thêm bún",
+          "ko": "쌀국수 추가",
+          "ja": "ビーフンを加えます",
+          "th": "ใส่เส้นก๋วยเตี๋ยว",
+          "zh": "加米線",
+          "en": "Add rice noodles"
+        },
+        "id": "addon-1784478931302-574"
+      },
+      {
+        "id": "addon-1784478933543-454",
+        "price": 140,
+        "name": {
+          "zh": "升級套餐(烤蔬菜+泰奶一杯)",
+          "en": "Upgraded set meal (roasted vegetables + a cup of Thai milk)",
+          "th": "ชุดอาหารอัพเกรด (ผักย่าง + นมไทย 1 แก้ว)",
+          "ja": "グレードアップ定食（焼き野菜＋タイミルク1杯）",
+          "ko": "업그레이드된 정식 (구운 야채 + 태국 우유 1잔)",
+          "vi": "Set ăn nâng cấp (rau nướng + 1 cốc sữa Thái)"
+        }
+      }
+    ],
+    "containsSeafood": false,
+    "price": 390,
+    "available": true
+  },
+  {
+    "id": "dish-2505041751044",
+    "customAddOns": [
+      {
+        "name": {
+          "ko": "사진 추가",
+          "vi": "Thêm phở",
+          "th": "เพิ่มโพธิ์",
+          "ja": "フォーを追加",
+          "en": "Add pho",
+          "zh": "加河粉"
+        },
+        "price": 20,
+        "id": "addon-1784478951444-682"
+      },
+      {
+        "id": "addon-1784478953658-987",
+        "price": 20,
+        "name": {
+          "en": "Add rice noodles",
+          "zh": "加米線",
+          "vi": "Thêm bún",
+          "ko": "쌀국수 추가",
+          "ja": "ビーフンを加えます",
+          "th": "ใส่เส้นก๋วยเตี๋ยว"
+        }
+      },
+      {
+        "id": "addon-1784478955921-185",
+        "price": 140,
+        "name": {
+          "en": "Upgraded set meal (roasted vegetables + a cup of Thai milk)",
+          "zh": "升級套餐(烤蔬菜+泰奶一杯)",
+          "ja": "グレードアップ定食（焼き野菜＋タイミルク1杯）",
+          "th": "ชุดอาหารอัพเกรด (ผักย่าง + นมไทย 1 แก้ว)",
+          "vi": "Set ăn nâng cấp (rau nướng + 1 cốc sữa Thái)",
+          "ko": "업그레이드된 정식 (구운 야채 + 태국 우유 1잔)"
+        }
+      }
+    ],
+    "containsSeafood": false,
+    "isNotSpicy": false,
+    "description": {
+      "vi": "Nguyên liệu: Thịt ba chỉ Đài Loan lát, tôm, mực chiên, nghêu, cá viên, cá viên, cá viên Nhật, gái đất liền, hành tây, cà rốt, chùa chín tầng",
+      "ko": "재료: 대만산 삼겹살, 새우, 오징어 링, 조개, 대구 완자, 공물 볼, 일본 생선 석판, 본토 소녀, 양파, 당근, 구층탑",
+      "ja": "食材: 台湾産豚バラ肉、エビ、イカリング、ハマグリ、タラつみれ、貢ぎ目、日本魚片、本土娘、玉ねぎ、人参、九重塔",
+      "th": "ส่วนผสม: หมูสามชั้นไต้หวันสไลซ์, กุ้ง, ปลาหมึกวง, หอยกาบ, ลูกชิ้นปลาคอด, ลูกชิ้น, แผ่นปลาญี่ปุ่น, สาวแผ่นดินใหญ่, หัวหอม, แครอท, เจดีย์เก้าชั้น",
+      "zh": "配料:台灣豬五花肉片 蝦子 魷魚圈 蛤蠣 鱈魚丸 貢丸 日本魚板 大陸妹 洋蔥 紅蘿蔔 九層塔",
+      "en": "Authentic Thai-style soup noodles with rich, warming broth"
+    },
+    "containsPork": true,
+    "category": "tomyum",
+    "hasCoconutsMilkOption": true,
+    "price": 360,
+    "name": {
+      "zh": "海陸豬冬蔭功湯",
+      "en": "Surf & Turf Pork Tom Yum Soup",
+      "ko": "돼지고기 똠양꿍 수프",
+      "vi": "Súp Tom Yum Thịt Heo",
+      "th": "ต้มยำหมู",
+      "ja": "ポークトムヤムスープ"
+    },
+    "available": true,
+    "recipe": [],
+    "containsBeef": false,
+    "orderIndex": 35,
+    "hasNoodlesOption": false,
+    "image": "https://images.unsplash.com/photo-1569718212165-3a8278d5f624?auto=format&fit=crop&q=80&w=400"
+  },
+  {
+    "id": "dish-2504161837515",
+    "containsPork": false,
+    "orderIndex": 36,
+    "category": "veggies",
+    "name": {
+      "zh": "蔬菜拼盤",
+      "en": "Fresh Vegetables Platter",
+      "ko": "야채 플래터",
+      "vi": "Đĩa rau củ",
+      "th": "จานผัก",
+      "ja": "野菜盛り合わせ"
+    },
+    "customAddOns": [],
+    "description": {
+      "zh": "炭火慢烤，香氣四溢，每一口都是極致美味",
+      "en": "Slowly grilled over charcoal, bursting with rich aroma and delicious flavor in every bite.",
+      "vi": "Được nướng từ từ trên lửa than, hương thơm tràn ngập, mỗi miếng cắn là vị ngon tuyệt đỉnh",
+      "ko": "숯불에 천천히 구워서 향이 넘치고, 한입 먹을 때마다 최고의 맛이 난다",
+      "ja": "炭火でじっくり焼き上げると香ばしさが溢れ、一口食べるごとに最高の美味しさです",
+      "th": "ค่อยๆ ย่างบนไฟถ่าน กลิ่นหอมฟุ้งฟุ้ง และทุกคำคือความอร่อยขั้นสุด"
+    },
+    "available": true,
+    "containsBeef": false,
+    "hasNoodlesOption": false,
+    "price": 260,
+    "containsSeafood": false,
+    "image": "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&q=80&w=400",
+    "recipe": [],
+    "isNotSpicy": false
+  },
+  {
+    "id": "dish-2503181902333",
+    "containsBeef": false,
+    "containsSeafood": false,
+    "isTakeoutAvailable": true,
+    "image": "https://images.unsplash.com/photo-1529193591184-b1d58069ecdd?auto=format&fit=crop&q=80&w=400",
+    "name": {
+      "zh": "澳洲小羊肩排2P",
+      "en": "Australian Lamb Shoulder Chops 2P",
+      "ko": "호주산 양어깨갈비 2P",
+      "vi": "Sườn vai cừu Úc 2P",
+      "th": "ซี่โครงไหล่แกะออสเตรเลียย่าง 2 ชิ้น",
+      "ja": "オーストラリア産ラム肩ロースステーキ 2P"
+    },
+    "hasNoodlesOption": false,
+    "isNotSpicy": false,
+    "category": "skewers",
+    "recipe": [],
+    "price": 680,
+    "description": {
+      "vi": "Sườn vai cừu Úc tuyển chọn, nướng chậm trên bếp than, rắc thêm bột thì là thơm phức, mỗi miếng cắn đều mang lại vị tươi ngon cực đỉnh.",
+      "ko": "엄선된 호주산 양어깨갈비를 숯불에 천천히 구워 큐민을 뿌렸습니다. 향긋함이 가득하여 한 입마다 극상의 신선하고 맛있는 풍미를 선사합니다.",
+      "ja": "厳選されたオーストラリア産ラム肩ロースを炭火でじっくり焼き上げ、クミンを散らしました。豊かな香りが広がり、一口ごとに極上の美味しさをお楽しみいただけます。",
+      "th": "คัดสรรซี่โครงไหล่แกะออสเตรเลียอย่างดี ย่างถ่านอย่างช้าๆ โรยด้วยยี่หร่า กลิ่นหอมกรุ่น ทุกคำคือความอร่อยระดับสุดยอด",
+      "en": "Strictly selected Australian lamb shoulder chops, slowly grilled over charcoal and sprinkled with cumin. Rich in aroma, every bite is an ultimate delicious experience.",
+      "zh": "嚴選澳洲小羊肩排，炭火慢烤，撒上孜然，香氣四溢，每一口都是極致鮮美味"
+    },
+    "containsPork": false,
+    "available": true,
+    "customAddOns": [],
+    "orderIndex": 37
+  },
+  {
+    "id": "dish-2503171838086",
+    "category": "seafood",
+    "containsBeef": false,
+    "orderIndex": 38,
+    "hasNoodlesOption": false,
+    "price": 2200,
+    "recipe": [],
+    "description": {
+      "ko": "숯불에 천천히 구워서 향이 넘치고, 한입 먹을 때마다 최고의 맛이 난다",
+      "vi": "Được nướng từ từ trên lửa than, hương thơm tràn ngập, mỗi miếng cắn là vị ngon tuyệt đỉnh",
+      "ja": "炭火でじっくり焼き上げると香ばしさが溢れ、一口食べるごとに最高の美味しさです",
+      "th": "ค่อยๆ ย่างบนไฟถ่าน กลิ่นหอมฟุ้งฟุ้ง และทุกคำคือความอร่อยขั้นสุด",
+      "zh": "炭火慢烤，香氣四溢，每一口都是極致美味",
+      "en": "Slowly grilled over charcoal, bursting with rich aroma and delicious flavor in every bite."
+    },
+    "image": "https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=400",
+    "isTakeoutAvailable": false,
+    "containsSeafood": true,
+    "available": true,
+    "containsPork": false,
+    "name": {
+      "zh": "泰式生蠔11p",
+      "en": "Thai Style Fresh Oysters (11pcs)",
+      "vi": "Hàu Thái 11p",
+      "ko": "태국 굴 11p",
+      "th": "หอยนางรมไทย11บ",
+      "ja": "タイ産牡蠣 11ペンス"
+    },
+    "isNotSpicy": false,
+    "customAddOns": []
+  },
+  {
+    "id": "dish-2503012218077",
+    "price": -1,
+    "containsPork": false,
+    "category": "cat-svadcb",
+    "customAddOns": [],
+    "image": "https://images.unsplash.com/photo-1504754524776-8f4f37790ca0?auto=format&fit=crop&q=80&w=400",
+    "description": {
+      "en": "Great value combo package, high cost-performance deal for a limited time.",
+      "zh": "超值優惠組合，物超所值，限時享用",
+      "ko": "슈퍼 가치 할인 패키지, 가격 대비 훌륭한 가치, 제한된 시간 동안만 제공",
+      "vi": "Gói giảm giá siêu giá trị, giá trị đồng tiền, thời gian có hạn",
+      "th": "แพ็คเกจส่วนลดสุดคุ้ม คุ้มสุดๆ ระยะเวลาจำกัดเท่านั้น",
+      "ja": "期間限定の超お得な割引パッケージ"
+    },
+    "recipe": [],
+    "isNotSpicy": true,
+    "available": true,
+    "containsBeef": false,
+    "name": {
+      "en": "Hakka Coin Coupon",
+      "zh": "客家幣",
+      "th": "สกุลเงินฮากกา",
+      "ja": "客家の通貨",
+      "vi": "tiền Khách Gia",
+      "ko": "하카화폐"
+    },
+    "orderIndex": 39,
+    "hasNoodlesOption": false,
+    "containsSeafood": false
+  },
+  {
+    "id": "dish-2502252357010",
+    "name": {
+      "ja": "肉づくし Bセット",
+      "th": "เซตคนรักเนื้อ B",
+      "ko": "고기 가득 B세트",
+      "vi": "Set Thịt Đầy Đặn B",
+      "zh": "多肉B餐",
+      "en": "Meat Lover's Set B Combo"
+    },
+    "containsBeef": false,
+    "isTakeoutAvailable": true,
+    "image": "https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=400",
+    "category": "combos",
+    "price": 460,
+    "isNotSpicy": false,
+    "available": true,
+    "orderIndex": 40,
+    "containsPork": false,
+    "hasNoodlesOption": false,
+    "containsSeafood": false,
+    "customAddOns": [],
+    "recipe": [],
+    "description": {
+      "vi": "Bò thủ công Thái x1, Xiên sườn bò x1, Xiên sườn cừu x1, Xiên phao câu gà x1, Xiên dồi trường x1, Xiên xúc xích mọng nước x1, Da gà giòn x1. Sự lựa chọn hoàn hảo khi không biết ăn gì!",
+      "ko": "태국 수제 소고기×1, 소갈비꼬치×1, 어린양갈비꼬치×1, 닭꼬리꼬치×1, 엄선 대창꼬치×1, 육즙 소세지꼬치×1, 바삭 닭껍질×1. 결정 장애가 있을 땐 이 세트!",
+      "th": "เนื้อวัวแฮนด์เมดไทย x1, เนื้อซี่โครง x1, ซี่โครงแกะ x1, ตูดไก่ x1, ไส้ใหญ่ย่าง x1, ไส้กรอกชีส x1, หนังไก่กรอบ x1 เซตนี้จบสำหรับคนเลือกไม่ถูก!",
+      "ja": "タイ風手作り牛肉×1、牛カルビ串×1、子羊カルビ串×1、ぼんじり串×1、厳選肥腸串×1、ジューシーソーセージ串×1、パリパリ鶏皮×1。迷ったらこれ！",
+      "zh": "泰式手工牛×1原塊牛肋串×1 小羔羊肋串×1\n肉雞七里香串×1精選肥腸串×1噴水香腸串×1啃的雞皮×1 選擇障礙的點它就是了",
+      "en": "Thai Handmade Beef x1, Beef Rib Skewer x1, Lamb Chop Skewer x1, Chicken Butt Skewer x1, Crispy Pork Intestine Skewer x1, Juicy Sausage Skewer x1, Crispy Chicken Skin x1. The ultimate combo for undecided eaters!"
+    }
+  },
+  {
+    "id": "dish-2502031821565",
+    "isNotSpicy": true,
+    "customAddOns": [],
+    "name": {
+      "th": "ดาลมอร์ 12 ปี",
+      "ja": "ダルモア 12年",
+      "vi": "Rượu Dalmore 12 Năm",
+      "ko": "달모어 12년",
+      "zh": "大摩12年",
+      "en": "The Dalmore 12 Years Whisky"
+    },
+    "recipe": [],
+    "containsPork": false,
+    "description": {
+      "zh": "沁涼消暑，口感清爽，搭配燒烤絕配",
+      "en": "Refreshing and cool, a perfect match for delicious BBQ.",
+      "ko": "시원하고 상쾌하여 바베큐와 완벽한 조화를 이룹니다.",
+      "vi": "Giải nhiệt sảng khoái, hương vị tươi mát, sự kết hợp hoàn hảo với món nướng.",
+      "ja": "冷たくてさわやか、バーベキューに最高の組み合わせ。",
+      "th": "เย็นชื่นใจ รสชาติสดชื่น เข้ากันได้ดีเยี่ยมกับเมนูปิ้งย่าง"
+    },
+    "isTakeoutAvailable": false,
+    "price": 3200,
+    "hasNoodlesOption": false,
+    "containsBeef": false,
+    "orderIndex": 41,
+    "containsSeafood": false,
+    "image": "https://images.unsplash.com/photo-1544145945-f90425340c7e?auto=format&fit=crop&q=80&w=400",
+    "category": "cat-6ovxss",
+    "available": true
+  },
+  {
+    "id": "dish-2502031820148",
+    "hasNoodlesOption": false,
+    "recipe": [],
+    "orderIndex": 42,
+    "containsBeef": false,
+    "image": "https://images.unsplash.com/photo-1497534446932-c925b458314e?auto=format&fit=crop&q=80&w=400",
+    "name": {
+      "en": "The Singleton 13 Years Whisky",
+      "zh": "蘇格登13年",
+      "ko": "싱글톤 13년",
+      "vi": "Rượu Singleton 13 Năm",
+      "ja": "シングルトン 13年",
+      "th": "เดอะ ซิงเกิลตัน 13 ปี"
+    },
+    "containsSeafood": false,
+    "price": 2400,
+    "category": "cat-6ovxss",
+    "isTakeoutAvailable": false,
+    "description": {
+      "ko": "시원하고 상쾌하여 바베큐와 완벽한 조화를 이룹니다.",
+      "vi": "Giải nhiệt sảng khoái, hương vị tươi mát, sự kết hợp hoàn hảo với món nướng.",
+      "ja": "冷たくてさわやか、バーベキューに最高の組み合わせ。",
+      "th": "เย็นชื่นใจ รสชาติสดชื่น เข้ากันได้ดีเยี่ยมกับเมนูปิ้งย่าง",
+      "en": "Refreshing and cool, a perfect match for delicious BBQ.",
+      "zh": "沁涼消暑，口感清爽，搭配燒烤絕配"
+    },
+    "containsPork": false,
+    "isNotSpicy": true,
+    "available": true,
+    "customAddOns": []
+  },
+  {
+    "id": "dish-2502031818015",
+    "containsBeef": false,
+    "image": "https://images.unsplash.com/photo-1497534446932-c925b458314e?auto=format&fit=crop&q=80&w=400",
+    "containsSeafood": false,
+    "isTakeoutAvailable": false,
+    "price": 1800,
+    "isNotSpicy": true,
+    "recipe": [],
+    "containsPork": false,
+    "available": true,
+    "orderIndex": 43,
+    "customAddOns": [],
+    "description": {
+      "zh": "",
+      "en": "",
+      "ja": "",
+      "th": "",
+      "ko": "",
+      "vi": ""
+    },
+    "name": {
+      "th": "เดอะ ซิงเกิลตัน 12 ปี",
+      "ja": "ザ・シングルトン 12年",
+      "vi": "Rượu Singleton 12 Năm",
+      "ko": "싱글톤 12년 위스키",
+      "zh": "蘇格登12年",
+      "en": "The Singleton 12 Years Whisky"
+    },
+    "category": "cat-6ovxss",
+    "hasNoodlesOption": false
+  },
+  {
+    "id": "dish-2502012109279",
+    "recipe": [],
+    "image": "https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=400",
+    "available": true,
+    "containsBeef": false,
+    "isNotSpicy": false,
+    "containsSeafood": false,
+    "price": 80,
+    "containsPork": false,
+    "hasNoodlesOption": false,
+    "customAddOns": [],
+    "category": "veggies",
+    "description": {
+      "th": "<Non-GMO> ไม่มันเยิ้ม ~ หวานอร่อย ~ มีคุณค่าทางโภชนาการสูง",
+      "ja": "＜非遺伝子組み換え＞脂っこくない～甘くて美味しい～栄養価が高い",
+      "ko": "<Non-GMO> 느끼하지도 기름지지도 않은 ~ 달콤하고 맛있는 ~ 영양가 높은",
+      "vi": "<Non-GMO> Không béo ngậy ~ ngọt ngào thơm ngon ~ giá trị dinh dưỡng cao",
+      "en": "Slowly grilled over charcoal, bursting with aroma and flavor",
+      "zh": "<非基改>不油不膩~香甜可口~營養價高"
+    },
+    "orderIndex": 44,
+    "name": {
+      "vi": "Măng ngô hữu cơ",
+      "ko": "유기농 옥수수순",
+      "ja": "有機トウモロコシの芽",
+      "th": "หน่อข้าวโพดออร์แกนิก",
+      "zh": "有機玉米筍",
+      "en": "Organic Baby Corn"
+    }
+  },
+  {
+    "id": "dish-2502012029386",
+    "containsBeef": false,
+    "hasNoodlesOption": false,
+    "price": 80,
+    "orderIndex": 45,
+    "name": {
+      "ko": "펑후 화지완",
+      "vi": "Bành Hồ Huazhiwan",
+      "th": "เผิงหู หัวจือวาน",
+      "ja": "澎湖華志湾",
+      "en": "Penghu Cuttlefish Balls",
+      "zh": "澎湖花枝丸"
+    },
+    "available": true,
+    "description": {
+      "th": "อาหารทะเลที่คัดสรรอย่างพิถีพิถันจากเผิงหู~ ทานเป็นชิ้นๆ ได้เลย",
+      "ja": "澎湖産の厳選海鮮～塊で食べられる",
+      "ko": "펑후에서 엄선한 해산물~ 덩어리째 드실 수 있어요",
+      "vi": "Hải sản được lựa chọn cẩn thận từ Bành Hồ ~ bạn có thể ăn thành từng miếng",
+      "en": "Slowly grilled over charcoal, bursting with aroma and flavor",
+      "zh": "嚴選澎湖海味~吃得到塊狀花枝"
+    },
+    "containsSeafood": true,
+    "image": "https://images.unsplash.com/photo-1529193591184-b1d58069ecdd?auto=format&fit=crop&q=80&w=400",
+    "category": "seafood",
+    "containsPork": false,
+    "recipe": [],
+    "customAddOns": [],
+    "isNotSpicy": false
+  },
+  {
+    "id": "dish-2501142131426",
+    "containsBeef": false,
+    "image": "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&q=80&w=400",
+    "category": "veggies",
+    "orderIndex": 46,
+    "description": {
+      "en": "Slowly grilled over charcoal, bursting with aroma and flavor",
+      "zh": "炭烤高山高麗菜~烤好清脆香甜~別家應該沒有賣~不吃看看?",
+      "th": "กะหล่ำปลีภูเขาย่างถ่าน~กรอบและหวาน~ไม่คิดว่าจะมีขายที่อื่น~อย่าลองนะ?",
+      "ja": "山キャベツの炭火焼き～シャキシャキで甘い～他では売っていないと思います～食べてみませんか？",
+      "ko": "숯불구이 산배추~바삭하고 달콤해요~다른 데는 안 파는 것 같아요~안 드셔보시겠어요?",
+      "vi": "Bắp cải núi nướng than ~ Giòn và ngọt ~ Tôi không nghĩ nó được bán ở nơi khác ~ Bạn thử xem?"
+    },
+    "hasNoodlesOption": false,
+    "price": 80,
+    "containsSeafood": false,
+    "containsPork": false,
+    "recipe": [],
+    "isNotSpicy": false,
+    "available": true,
+    "customAddOns": [],
+    "name": {
+      "zh": "爽脆高麗菜",
+      "en": "Crispy Grilled Cabbage",
+      "ko": "바삭한 양배추",
+      "vi": "bắp cải giòn",
+      "th": "กะหล่ำปลีกรอบ",
+      "ja": "シャキシャキキャベツ"
+    }
+  },
+  {
+    "id": "dish-2412022102224",
+    "containsBeef": false,
+    "hasNoodlesOption": false,
+    "containsSeafood": false,
+    "recipe": [],
+    "orderIndex": 47,
+    "isTakeoutAvailable": false,
+    "description": {
+      "zh": "泰式奶茶使用碳火慢燒! 風味獨特 值得一試",
+      "en": "Refreshing and cool, a perfect match for BBQ",
+      "vi": "Trà sữa Thái nấu chậm trên lửa than! Hương vị độc đáo đáng để thử",
+      "ko": "숯불에 천천히 끓여낸 태국식 밀크티! 독특한 맛은 시도해 볼 가치가 있습니다",
+      "th": "ชานมไทยปรุงช้าๆด้วยไฟถ่าน! รสชาติที่เป็นเอกลักษณ์คุ้มค่าแก่การลอง",
+      "ja": "炭火でじっくり煮込んだタイミルクティー！独特の風味は試してみる価値あり"
+    },
+    "isNotSpicy": true,
+    "containsPork": false,
+    "image": "https://images.unsplash.com/photo-1497534446932-c925b458314e?auto=format&fit=crop&q=80&w=400",
+    "name": {
+      "en": "Charcoal Smoked Thai Tea (Pot)",
+      "zh": "炭燒奶茶(壺)",
+      "th": "ชานมไทยคั่วเตาถ่าน (หม้อ)",
+      "ja": "炭火焙煎タイミルクティー（ポット）",
+      "vi": "Trà sữa Thái rang than (Ấm)",
+      "ko": "숯불 타이 밀크티 (포트)"
+    },
+    "available": true,
+    "category": "drinks",
+    "price": 180,
+    "customAddOns": []
+  },
+  {
+    "id": "dish-2412021741257",
+    "price": 10,
+    "orderIndex": 48,
+    "image": "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&q=80&w=400",
+    "containsBeef": false,
+    "category": "cat-zene8j",
+    "description": {
+      "en": "Meticulously crafted with rich layers of flavor to complement your meal.",
+      "zh": "精心調製，口感層次豐富，為您的餐點添彩",
+      "ko": "정성껏 준비한 풍부한 맛으로 식사에 색을 더해줍니다",
+      "vi": "Được chế biến kỹ lưỡng với hương vị đậm đà, thêm màu sắc cho bữa ăn của bạn",
+      "th": "ปรุงอย่างพิถีพิถันด้วยรสชาติเข้มข้น เพิ่มสีสันให้กับมื้ออาหารของคุณ",
+      "ja": "丁寧に仕上げた豊かな味わいで、お食事を彩ります。"
+    },
+    "hasNoodlesOption": false,
+    "customAddOns": [],
+    "recipe": [],
+    "name": {
+      "vi": "Nước sốt Thái",
+      "ko": "태국식 핫소스",
+      "ja": "タイのホットソース",
+      "th": "ซอสเผ็ดแบบไทยๆ",
+      "zh": "泰辣醬",
+      "en": "Thai Spicy Chili Dip"
+    },
+    "available": true,
+    "containsPork": false,
+    "isNotSpicy": false,
+    "containsSeafood": false
+  },
+  {
+    "id": "dish-2412021734433",
+    "recipe": [],
+    "category": "seafood",
+    "containsPork": false,
+    "image": "https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=400",
+    "name": {
+      "en": "Shredded Dried Giant Squid",
+      "zh": "手撕大魷魚干",
+      "ja": "大スルメ手切り",
+      "th": "ปลาหมึกแห้งขนาดใหญ่ฉีกด้วยมือ",
+      "vi": "Mực khô lớn xé tay",
+      "ko": "손으로 잘게 썬 대형 말린 오징어"
+    },
+    "customAddOns": [],
+    "price": 390,
+    "isNotSpicy": true,
+    "containsSeafood": true,
+    "containsBeef": false,
+    "orderIndex": 49,
+    "description": {
+      "en": "Slowly grilled over charcoal, bursting with aroma and flavor",
+      "zh": "下酒必點!老饕最愛!",
+      "th": "ต้องสั่งพร้อมเครื่องดื่ม! ของโปรดในหมู่นักชิม!",
+      "ja": "ドリンクと一緒に注文必須！食通の間で大人気！",
+      "ko": "음료와 함께 꼭 주문해야해요! 미식가들 사이에서 가장 인기 있는 곳!",
+      "vi": "Phải đặt hàng với đồ uống! Một yêu thích của những người sành ăn!"
+    },
+    "hasNoodlesOption": false,
+    "available": true
+  },
+  {
+    "id": "dish-2412021733504",
+    "category": "seafood",
+    "recipe": [],
+    "image": "https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=400",
+    "containsPork": false,
+    "name": {
+      "ja": "炙り生食可能ホタテ (3個)",
+      "th": "หอยเชลล์เกรดซาซิมิเบิร์นไฟ (3 ชิ้น)",
+      "ko": "직화 아부리 생식용 가리비 관자 (3개)",
+      "vi": "Sò điệp ăn sống khò lửa (3 con)",
+      "en": "Seared Sashimi Grade Scallops (3pcs)",
+      "zh": "炙燒生食級干貝3P"
+    },
+    "customAddOns": [],
+    "price": 390,
+    "isNotSpicy": true,
+    "containsSeafood": true,
+    "containsBeef": false,
+    "orderIndex": 50,
+    "isTakeoutAvailable": true,
+    "description": {
+      "en": "Must-try for seafood lovers! Served with Thai lemon sauce, seared to perfection with mouthwatering aroma in every bite.",
+      "zh": "愛吃海味必點!搭配檸檬泰式醬汁\n炙燒過後香氣四溢，每一口都是極致美味",
+      "vi": "Món nướng hải sản không thể bỏ qua! Kèm sốt chanh Thái, khò lửa thơm nức nát, ngon tuyệt hảo từng miếng.",
+      "ko": "해산물 마니아 필수 주문! 태국식 레몬 소스와 함께 직화로 구워 향긋함이 가득한 극상의 맛.",
+      "th": "สายอาหารทะเลต้องสั่ง! ทานคู่ซอสมะนาวสไตล์ไทย เบิร์นไฟหอมฟุ้ง อร่อยละมุนทุกคำ",
+      "ja": "海鮮好き必見！タイ風レモンソース付き、炙り立ての香ばしい香りと絶品の味わい。"
+    },
+    "available": true,
+    "hasNoodlesOption": false
+  },
+  {
+    "id": "dish-2412021732545",
+    "containsBeef": false,
+    "hasNoodlesOption": false,
+    "containsSeafood": true,
+    "recipe": [],
+    "orderIndex": 51,
+    "description": {
+      "zh": "嗜辣者必嚐!下酒必備 已去殼",
+      "en": "Slowly grilled over charcoal, bursting with aroma and flavor",
+      "th": "สำหรับผู้ที่ชอบอาหารรสเผ็ดต้องลอง! เป็นสิ่งที่ต้องมีสำหรับการดื่ม ปอกเปลือกแล้ว",
+      "ja": "辛いもの好きな方はぜひ試してみてください！お酒を飲む際の必需品。すでに殻をむいています",
+      "ko": "매운음식 좋아하시는 분들 꼭 드셔보세요! 술을 마실 때 꼭 필요한 것. 이미 껍질이 벗겨졌어",
+      "vi": "Món ăn nhất định phải thử dành cho những ai thích ăn cay! Phải có để uống. Đã bóc vỏ"
+    },
+    "isNotSpicy": false,
+    "containsPork": false,
+    "image": "https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&q=80&w=400",
+    "name": {
+      "en": "Spicy Thai Scallops (9pcs)",
+      "zh": "泰辣扇貝9P",
+      "vi": "Sò điệp cay Thái 9P",
+      "ko": "태국식 매운 가리비 9P",
+      "ja": "タイ産スパイシーホタテ貝柱 9P",
+      "th": "หอยเชลล์เผ็ดไทย 9P"
+    },
+    "available": true,
+    "category": "seafood",
+    "price": 360,
+    "customAddOns": []
+  },
+  {
+    "id": "dish-2412021732071",
+    "category": "seafood",
+    "image": "https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&q=80&w=400",
+    "name": {
+      "ja": "エビのココナッツ炭火焼き 6P",
+      "th": "กุ้งเผาถ่านมะพร้าว6P",
+      "vi": "Tôm nướng than dừa 6P",
+      "ko": "코코넛 숯불 새우구이 6P",
+      "en": "Coconut Charcoal Grilled Tiger Prawns (6pcs)",
+      "zh": "椰碳烤大草蝦6P"
+    },
+    "containsPork": false,
+    "description": {
+      "zh": "烤大草蝦6支~已經剪掉鬚鬚跟尖尖的刺~但剝殼一樣要小心",
+      "en": "Slowly grilled over charcoal, bursting with aroma and flavor",
+      "ja": "大海老のグリル6尾～ひげと鋭い棘はカットしてあります～殻を剥くときは注意してください",
+      "th": "กุ้งเผาตัวใหญ่ 6 ตัว ~ หนวดและหนามแหลมถูกตัด ~ แต่ต้องระวังตอนปอกเปลือก",
+      "vi": "6 con tôm lớn nướng ~ râu và gai nhọn đã được cắt bỏ ~ nhưng hãy cẩn thận khi bóc vỏ",
+      "ko": "큰새우구이 6개~수염과 날카로운 가시는 잘랐지만 껍질벗길때 조심하세요"
+    },
+    "price": 360,
+    "isNotSpicy": true,
+    "customAddOns": [],
+    "containsSeafood": true,
+    "orderIndex": 52,
+    "containsBeef": false,
+    "available": true,
+    "recipe": [],
+    "hasNoodlesOption": false
+  },
+  {
+    "id": "dish-2411142306093",
+    "image": "https://images.unsplash.com/photo-1563227812-0ea4c22e6cc8?auto=format&fit=crop&q=80&w=400",
+    "available": true,
+    "containsSeafood": false,
+    "containsPork": false,
+    "hasNoodlesOption": false,
+    "name": {
+      "vi": "Rượu sữa Đài Xuân 5,6%",
+      "ko": "타이춘 밀크와인 5.6%",
+      "ja": "台中ミルクワイン 5.6%",
+      "th": "ไวน์นมไท่ชุน 5.6%",
+      "en": "Thai Cream Liqueur 5.6%",
+      "zh": "泰醇奶酒5.6%"
+    },
+    "price": 380,
+    "orderIndex": 53,
+    "customAddOns": [],
+    "category": "cat-6ovxss",
+    "isNotSpicy": true,
+    "containsBeef": false,
+    "recipe": [],
+    "description": {
+      "zh": "泰式風味奶酒!妹酒 微醺最佳選擇",
+      "en": "Refreshing and cool, a perfect match for BBQ",
+      "th": "ไวน์นมรสไทย! ซิสเตอร์ไวน์คือตัวเลือกที่ดีที่สุดสำหรับคนขี้เมา",
+      "ja": "タイ風味のミルクワイン！ほろ酔いには姉妹ワインが最適",
+      "ko": "태국맛 밀크와인! 자매 와인은 취한 사람들에게 최고의 선택입니다",
+      "vi": "Rượu sữa hương vị Thái! Rượu chị là sự lựa chọn tốt nhất cho người say"
+    }
+  },
+  {
+    "id": "dish-2411142303467",
+    "image": "https://images.unsplash.com/photo-1541658016709-82535e94bc69?auto=format&fit=crop&q=80&w=400",
+    "available": true,
+    "isNotSpicy": true,
+    "containsBeef": false,
+    "containsSeafood": false,
+    "recipe": [],
+    "price": 280,
+    "containsPork": false,
+    "hasNoodlesOption": false,
+    "description": {
+      "ko": "태국맛 밀크와인! 자매 와인은 취한 사람들에게 최고의 선택입니다",
+      "vi": "Rượu sữa hương vị Thái! Rượu chị là sự lựa chọn tốt nhất cho người say",
+      "th": "ไวน์นมรสไทย! ซิสเตอร์ไวน์คือตัวเลือกที่ดีที่สุดสำหรับคนขี้เมา",
+      "ja": "タイ風味のミルクワイン！ほろ酔いには姉妹ワインが最適",
+      "zh": "泰式風味奶酒!妹酒 微醺最佳選擇",
+      "en": "Refreshing and cool, a perfect match for BBQ"
+    },
+    "orderIndex": 54,
+    "name": {
+      "zh": "泰醇奶酒1.4%",
+      "en": "Thai Cream Liqueur 1.4%",
+      "th": "ไวน์นมไท่ชุน 1.4%",
+      "ja": "台中ミルクワイン 1.4%",
+      "ko": "타이춘 밀크와인 1.4%",
+      "vi": "Rượu sữa Đài Xuân 1,4%"
+    },
+    "customAddOns": [],
+    "category": "cat-6ovxss"
+  },
+  {
+    "id": "dish-2411142030288",
+    "available": true,
+    "name": {
+      "ko": "주스 탄산수",
+      "vi": "Nước ép có ga",
+      "th": "น้ำผลไม้เป็นประกาย",
+      "ja": "ジュース・スパークリングウォーター",
+      "zh": "果汁氣泡水",
+      "en": "Fruit Juice Sparkling Water"
+    },
+    "isNotSpicy": true,
+    "image": "https://images.unsplash.com/photo-1544145945-f90425340c7e?auto=format&fit=crop&q=80&w=400",
+    "containsBeef": false,
+    "price": 100,
+    "customAddOns": [],
+    "recipe": [],
+    "hasNoodlesOption": false,
+    "containsSeafood": false,
+    "description": {
+      "ja": "冷たくてさわやか、バーベキューに最高の組み合わせ。",
+      "th": "เย็นชื่นใจ รสชาติสดชื่น เข้ากันได้ดีเยี่ยมกับเมนูปิ้งย่าง",
+      "vi": "Giải nhiệt sảng khoái, hương vị tươi mát, sự kết hợp hoàn hảo với món nướng.",
+      "ko": "시원하고 상쾌하여 바베큐와 완벽한 조화를 이룹니다.",
+      "en": "Refreshing and cool, a perfect match for delicious BBQ.",
+      "zh": "沁涼消暑，口感清爽，搭配燒烤絕配"
+    },
+    "containsPork": false,
+    "category": "cat-7cvvkq",
+    "orderIndex": 55
+  },
+  {
+    "id": "dish-2411142028551",
+    "containsBeef": false,
+    "containsSeafood": false,
+    "category": "cat-7cvvkq",
+    "recipe": [],
+    "isNotSpicy": true,
+    "available": true,
+    "hasNoodlesOption": false,
+    "containsPork": false,
+    "orderIndex": 56,
+    "description": {
+      "en": "Refreshing and cool, a perfect match for delicious BBQ.",
+      "zh": "沁涼消暑，口感清爽，搭配燒烤絕配",
+      "ko": "시원하고 상쾌하여 바베큐와 완벽한 조화를 이룹니다.",
+      "vi": "Giải nhiệt sảng khoái, hương vị tươi mát, sự kết hợp hoàn hảo với món nướng.",
+      "th": "เย็นชื่นใจ รสชาติสดชื่น เข้ากันได้ดีเยี่ยมกับเมนูปิ้งย่าง",
+      "ja": "冷たくてさわやか、バーベキューに最高の組み合わせ。"
+    },
+    "image": "https://images.unsplash.com/photo-1608270586620-248524c67de9?auto=format&fit=crop&q=80&w=400",
+    "customAddOns": [],
+    "name": {
+      "ko": "하이네켄",
+      "vi": "Heineken",
+      "th": "ไฮเนเก้น",
+      "ja": "ハイネケン",
+      "zh": "海尼根",
+      "en": "Heineken Beer"
+    },
+    "price": 150
+  },
+  {
+    "id": "dish-2411112029373",
+    "hasNoodlesOption": false,
+    "containsBeef": false,
+    "orderIndex": 57,
+    "price": 70,
+    "recipe": [],
+    "containsSeafood": false,
+    "category": "skewers",
+    "image": "https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=400",
+    "containsPork": true,
+    "available": true,
+    "name": {
+      "zh": "邪惡熱狗豬血糕",
+      "en": "Hot Dog & Pork Blood Cake Skewer",
+      "th": "เค้กเลือดหมูฮอทด็อกชั่วร้าย",
+      "ja": "邪悪なホットドッグの豚血ケーキ",
+      "ko": "사악한 핫도그 돼지 혈액 케이크",
+      "vi": "Bánh huyết heo xúc xích ác quỷ"
+    },
+    "customAddOns": [],
+    "isNotSpicy": false,
+    "description": {
+      "en": "Slowly grilled over charcoal, bursting with aroma and flavor",
+      "zh": "豬血糕+熱狗組合 大人小孩都愛♥️今天就別管熱量了吧!",
+      "th": "เค้กเลือดหมู + ฮอทด็อกเป็นที่ชื่นชอบของทั้งเด็กและผู้ใหญ่ ♥️วันนี้ไม่ต้องกังวลเรื่องแคลอรี่!",
+      "ja": "豚の血ケーキ＋ホットドッグの組み合わせは大人も子供も大好き♥️今日はカロリーを気にせず！",
+      "ko": "돼지피케이크+핫도그 조합은 어른도 아이도 모두 좋아하는 조합♥️오늘은 칼로리 걱정하지 마세요!",
+      "vi": "Sự kết hợp bánh tiết heo + xúc xích được cả người lớn và trẻ em yêu thích♥️Đừng lo lắng về lượng calo hôm nay nhé!"
+    }
+  },
+  {
+    "id": "dish-2411091621575",
+    "hasNoodlesOption": false,
+    "description": {
+      "zh": "沁涼消暑，口感清爽，搭配燒烤絕配",
+      "en": "Refreshing and cool, a perfect match for delicious BBQ.",
+      "vi": "Giải nhiệt sảng khoái, hương vị tươi mát, sự kết hợp hoàn hảo với món nướng.",
+      "ko": "시원하고 상쾌하여 바베큐와 완벽한 조화를 이룹니다.",
+      "ja": "冷たくてさわやか、バーベキューに最高の組み合わせ。",
+      "th": "เย็นชื่นใจ รสชาติสดชื่น เข้ากันได้ดีเยี่ยมกับเมนูปิ้งย่าง"
+    },
+    "containsSeafood": false,
+    "name": {
+      "en": "Corona Extra Beer",
+      "zh": "可樂娜",
+      "ja": "コロナ",
+      "th": "โคโรนา",
+      "vi": "Corona",
+      "ko": "코로나"
+    },
+    "containsBeef": false,
+    "orderIndex": 58,
+    "available": true,
+    "customAddOns": [],
+    "image": "https://images.unsplash.com/photo-1608270586620-248524c67de9?auto=format&fit=crop&q=80&w=400",
+    "isNotSpicy": true,
+    "recipe": [],
+    "category": "cat-7cvvkq",
+    "price": 150,
+    "containsPork": false
+  },
+  {
+    "id": "dish-2411042135298",
+    "recipe": [],
+    "orderIndex": 59,
+    "category": "cat-svadcb",
+    "containsBeef": false,
+    "isNotSpicy": true,
+    "image": "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&q=80&w=400",
+    "description": {
+      "zh": "超值優惠組合，物超所值，限時享用",
+      "en": "Great value combo package, high cost-performance deal for a limited time.",
+      "th": "แพ็คเกจส่วนลดสุดคุ้ม คุ้มสุดๆ ระยะเวลาจำกัดเท่านั้น",
+      "ja": "期間限定の超お得な割引パッケージ",
+      "ko": "슈퍼 가치 할인 패키지, 가격 대비 훌륭한 가치, 제한된 시간 동안만 제공",
+      "vi": "Gói giảm giá siêu giá trị, giá trị đồng tiền, thời gian có hạn"
+    },
+    "customAddOns": [],
+    "containsSeafood": false,
+    "name": {
+      "en": "Staff Tip / Service Gratitude",
+      "zh": "tip",
+      "ja": "ヒント",
+      "th": "ทิป",
+      "vi": "tiền boa",
+      "ko": "팁"
+    },
+    "price": 10,
+    "available": true,
+    "containsPork": false,
+    "hasNoodlesOption": false
+  },
+  {
+    "id": "dish-2410270119261",
+    "customAddOns": [
+      {
+        "name": {
+          "en": "heating",
+          "zh": "加熱",
+          "th": "เครื่องทำความร้อน",
+          "ja": "暖房",
+          "vi": "sưởi ấm",
+          "ko": "난방"
+        },
+        "id": "addon-1784479411862-296",
+        "price": 0
+      }
+    ],
+    "orderIndex": 60,
+    "recipe": [],
+    "hasNoodlesOption": false,
+    "image": "https://images.unsplash.com/photo-1497534446932-c925b458314e?auto=format&fit=crop&q=80&w=400",
+    "name": {
+      "en": "Hakutsuru Japanese Sake",
+      "zh": "白鶴清酒",
+      "th": "สาเก ฮาคุรุ",
+      "ja": "白鶴 清酒",
+      "vi": "Rượu Sake Hakutsuru",
+      "ko": "하쿠츠루 사케"
+    },
+    "containsPork": false,
+    "price": 350,
+    "category": "cat-6ovxss",
+    "available": true,
+    "containsSeafood": false,
+    "description": {
+      "vi": "Giải nhiệt sảng khoái, hương vị tươi mát, sự kết hợp hoàn hảo với món nướng.",
+      "ko": "시원하고 상쾌하여 바베큐와 완벽한 조화를 이룹니다.",
+      "th": "เย็นชื่นใจ รสชาติสดชื่น เข้ากันได้ดีเยี่ยมกับเมนูปิ้งย่าง",
+      "ja": "冷たくてさわやか、バーベキューに最高の組み合わせ。",
+      "zh": "沁涼消暑，口感清爽，搭配燒烤絕配",
+      "en": "Refreshing and cool, a perfect match for delicious BBQ."
+    },
+    "containsBeef": false,
+    "isNotSpicy": true,
+    "isTakeoutAvailable": false
+  },
+  {
+    "id": "dish-2410132030420",
+    "name": {
+      "ko": "사랑의 맛 보리차",
+      "vi": "Hương trà lúa mạch tình yêu",
+      "th": "รสชาติของชาข้าวบาร์เลย์แห่งความรัก",
+      "ja": "恋の麦茶の味",
+      "en": "AGV Barley Tea",
+      "zh": "愛之味麥茶"
+    },
+    "available": true,
+    "hasNoodlesOption": false,
+    "containsSeafood": false,
+    "containsBeef": false,
+    "description": {
+      "ko": "시원하고 상쾌하여 바베큐와 완벽한 조화를 이룹니다.",
+      "vi": "Giải nhiệt sảng khoái, hương vị tươi mát, sự kết hợp hoàn hảo với món nướng.",
+      "th": "เย็นชื่นใจ รสชาติสดชื่น เข้ากันได้ดีเยี่ยมกับเมนูปิ้งย่าง",
+      "ja": "冷たくてさわやか、バーベキューに最高の組み合わせ。",
+      "zh": "沁涼消暑，口感清爽，搭配燒烤絕配",
+      "en": "Refreshing and cool, a perfect match for delicious BBQ."
+    },
+    "isNotSpicy": true,
+    "customAddOns": [],
+    "orderIndex": 61,
+    "image": "https://images.unsplash.com/photo-1497534446932-c925b458314e?auto=format&fit=crop&q=80&w=400",
+    "category": "cat-7cvvkq",
+    "price": 100,
+    "containsPork": false,
+    "recipe": []
+  },
+  {
+    "id": "dish-2410022148358",
+    "description": {
+      "zh": "沁涼消暑，口感清爽，搭配燒烤絕配",
+      "en": "Refreshing and cool, a perfect match for delicious BBQ.",
+      "th": "เย็นชื่นใจ รสชาติสดชื่น เข้ากันได้ดีเยี่ยมกับเมนูปิ้งย่าง",
+      "ja": "冷たくてさわやか、バーベキューに最高の組み合わせ。",
+      "ko": "시원하고 상쾌하여 바베큐와 완벽한 조화를 이룹니다.",
+      "vi": "Giải nhiệt sảng khoái, hương vị tươi mát, sự kết hợp hoàn hảo với món nướng."
+    },
+    "customAddOns": [],
+    "image": "https://images.unsplash.com/photo-1608270586620-248524c67de9?auto=format&fit=crop&q=80&w=400",
+    "orderIndex": 62,
+    "containsPork": false,
+    "name": {
+      "en": "Budweiser Beer",
+      "zh": "百威",
+      "th": "บัดไวเซอร์",
+      "ja": "バドワイザー",
+      "ko": "버드와이저",
+      "vi": "Budweiser"
+    },
+    "hasNoodlesOption": false,
+    "price": 150,
+    "recipe": [],
+    "containsSeafood": false,
+    "category": "cat-7cvvkq",
+    "containsBeef": false,
+    "isNotSpicy": true,
+    "available": true
+  },
+  {
+    "id": "dish-2409232044239",
+    "orderIndex": 63,
+    "customAddOns": [
+      {
+        "price": 20,
+        "id": "addon-1784479460272-831",
+        "name": {
+          "ja": "フォーを追加",
+          "th": "เพิ่มโพธิ์",
+          "vi": "Thêm phở",
+          "ko": "사진 추가",
+          "en": "Add pho",
+          "zh": "加河粉"
+        }
+      },
+      {
+        "name": {
+          "en": "Add rice noodles",
+          "zh": "加米線",
+          "th": "ใส่เส้นก๋วยเตี๋ยว",
+          "ja": "ビーフンを加えます",
+          "ko": "쌀국수 추가",
+          "vi": "Thêm bún"
+        },
+        "id": "addon-1784479462255-754",
+        "price": 20
+      },
+      {
+        "price": 140,
+        "id": "addon-1784479465274-753",
+        "name": {
+          "zh": "升級套餐(烤蔬菜+泰奶一杯)",
+          "en": "Upgraded set meal (roasted vegetables + a cup of Thai milk)",
+          "th": "ชุดอาหารอัพเกรด (ผักย่าง + นมไทย 1 แก้ว)",
+          "ja": "グレードアップ定食（焼き野菜＋タイミルク1杯）",
+          "ko": "업그레이드된 정식 (구운 야채 + 태국 우유 1잔)",
+          "vi": "Set ăn nâng cấp (rau nướng + 1 cốc sữa Thái)"
+        }
+      }
+    ],
+    "recipe": [],
+    "hasNoodlesOption": false,
+    "image": "https://images.unsplash.com/photo-1569718212165-3a8278d5f624?auto=format&fit=crop&q=80&w=400",
+    "name": {
+      "zh": "牛小排冬蔭功湯",
+      "en": "Charcoal Short Rib Beef Tom Yum Soup",
+      "vi": "Súp Tom Yum Sườn Bò",
+      "ko": "쇠고기 갈비 톰얌 수프",
+      "ja": "牛カルビのトムヤムスープ",
+      "th": "ต้มยำซี่โครงเนื้อ"
+    },
+    "containsPork": false,
+    "price": 620,
+    "category": "tomyum",
+    "available": true,
+    "containsSeafood": false,
+    "description": {
+      "ja": "5.2オンスのビーフショートリブ（非加水、非再構造肉特選グレード）を炭火で焼き、スープで提供します。グルメに大人気♥️本場タイの濃厚スープベース",
+      "th": "ซี่โครงเนื้อวัวขนาด 5.2 ออนซ์ (เกรดเลือกเนื้อสัตว์แบบไม่รดน้ำและไม่มีการปรับโครงสร้างใหม่) ย่างบนถ่านและเสิร์ฟในซุป! ของโปรดของนักชิม ♥️ฐานซุปเข้มข้นแบบไทยแท้",
+      "vi": "5,2 ounce sườn bò ngắn (loại thịt không nước, không tái cấu trúc) nướng trên than củi và dùng trong súp! Món ăn yêu thích của người sành ăn♥️Súp đậm đà chính gốc Thái",
+      "ko": "5.2온스의 쇠고기 갈비(물을 넣지 않고, 재구성하지 않은 고기 선택 등급)를 숯불에 구워 국물에 곁들여 먹습니다! 미식가가 가장 좋아하는 ♥️ 정통 태국식 진한 수프 베이스",
+      "zh": " 5.2盎司牛小排 (無灌水非重組肉choice等級)炭烤過在入湯！饕客的最愛♥️道地泰式濃郁湯底",
+      "en": "Authentic Thai-style soup noodles with rich, warming broth"
+    },
+    "containsBeef": true,
+    "isNotSpicy": false,
+    "hasCoconutsMilkOption": true
+  },
+  {
+    "id": "dish-2409232043478",
+    "containsBeef": true,
+    "category": "tomyum",
+    "containsSeafood": false,
+    "name": {
+      "th": "ก๋วยเตี๋ยวเนื้อซี่โครงสั้นเนื้อไทย",
+      "ja": "タイ産牛肉ショートリブビーフン",
+      "ko": "태국식 쇠고기 갈비 쌀국수",
+      "vi": "Bún sườn bò kiểu Thái",
+      "zh": "泰式牛小排米線",
+      "en": "Thai Grilled Short Rib Beef Rice Noodle"
+    },
+    "description": {
+      "en": "Authentic Thai style noodle soup with a rich, heart-warming broth.",
+      "zh": " 5.2盎司牛小排 (無灌水非重組肉choice等級)碳烤過在入湯！饕客的最愛♥️道地泰式風味湯麵，濃郁湯底暖心暖胃",
+      "ko": "5.2온스의 쇠고기 갈비(물을 넣지 않고, 재구성하지 않은 고기 선택 등급)를 숯불에 구워 국물에 곁들여 먹습니다! 미식가들이 즐겨찾는 정통 태국식 누들스프, 진한 국물 베이스가 마음과 배를 따뜻하게 해주는 정통 태국식 누들스프",
+      "vi": "5,2 ounce sườn bò ngắn (loại thịt không nước, không tái cấu trúc) nướng trên than củi và dùng trong súp! Là món ăn được những người sành ăn yêu thích♥️Mì Thái đúng kiểu Thái, nước súp đậm đà làm ấm lòng và dạ dày",
+      "th": "ซี่โครงเนื้อวัวขนาด 5.2 ออนซ์ (เกรดเลือกเนื้อสัตว์แบบไม่รดน้ำและไม่มีการปรับโครงสร้างใหม่) ย่างบนถ่านและเสิร์ฟในซุป! ของโปรดของนักชิม♥️ซุปก๋วยเตี๋ยวสไตล์ไทยแท้ น้ำซุปเข้มข้นช่วยให้อุ่นหัวใจและท้อง",
+      "ja": "5.2オンスのビーフショートリブ（非加水、非再構造肉特選グレード）を炭火で焼き、スープで提供します。グルメに大人気♥️本格的なタイ風ヌードルスープ、濃厚なスープベースで心もお腹も温まります"
+    },
+    "orderIndex": 64,
+    "hasNoodlesOption": false,
+    "isNotSpicy": false,
+    "containsPork": false,
+    "price": 620,
+    "available": true,
+    "customAddOns": [
+      {
+        "name": {
+          "ja": "フォーを追加",
+          "th": "เพิ่มโพธิ์",
+          "vi": "Thêm phở",
+          "ko": "사진 추가",
+          "zh": "加河粉",
+          "en": "Add pho"
+        },
+        "price": 20,
+        "id": "addon-1784479484092-785"
+      },
+      {
+        "id": "addon-1784479486352-323",
+        "name": {
+          "zh": "加米線",
+          "en": "Add rice noodles",
+          "ja": "ビーフンを加えます",
+          "th": "ใส่เส้นก๋วยเตี๋ยว",
+          "vi": "Thêm bún",
+          "ko": "쌀국수 추가"
+        },
+        "price": 20
+      },
+      {
+        "name": {
+          "zh": "升級套餐(烤蔬菜+泰奶一杯)",
+          "en": "Upgraded set meal (roasted vegetables + a cup of Thai milk)",
+          "ko": "업그레이드된 정식 (구운 야채 + 태국 우유 1잔)",
+          "vi": "Set ăn nâng cấp (rau nướng + 1 cốc sữa Thái)",
+          "th": "ชุดอาหารอัพเกรด (ผักย่าง + นมไทย 1 แก้ว)",
+          "ja": "グレードアップ定食（焼き野菜＋タイミルク1杯）"
+        },
+        "price": 140,
+        "id": "addon-1784479488427-739"
+      }
+    ],
+    "image": "https://images.unsplash.com/photo-1569718212165-3a8278d5f624?auto=format&fit=crop&q=80&w=400",
+    "recipe": []
+  },
+  {
+    "id": "dish-2409232042549",
+    "orderIndex": 65,
+    "containsPork": false,
+    "price": 620,
+    "containsSeafood": false,
+    "customAddOns": [
+      {
+        "price": 20,
+        "name": {
+          "th": "เพิ่มโพธิ์",
+          "ja": "フォーを追加",
+          "ko": "사진 추가",
+          "vi": "Thêm phở",
+          "en": "Add pho",
+          "zh": "加河粉"
+        },
+        "id": "addon-1784479520251-308"
+      },
+      {
+        "id": "addon-1784479522216-624",
+        "price": 20,
+        "name": {
+          "zh": "加米線",
+          "en": "Add rice noodles",
+          "th": "ใส่เส้นก๋วยเตี๋ยว",
+          "ja": "ビーフンを加えます",
+          "ko": "쌀국수 추가",
+          "vi": "Thêm bún"
+        }
+      },
+      {
+        "name": {
+          "en": "Upgraded set meal (roasted vegetables + a cup of Thai milk)",
+          "zh": "升級套餐(烤蔬菜+泰奶一杯)",
+          "ko": "업그레이드된 정식 (구운 야채 + 태국 우유 1잔)",
+          "vi": "Set ăn nâng cấp (rau nướng + 1 cốc sữa Thái)",
+          "th": "ชุดอาหารอัพเกรด (ผักย่าง + นมไทย 1 แก้ว)",
+          "ja": "グレードアップ定食（焼き野菜＋タイミルク1杯）"
+        },
+        "id": "addon-1784479526311-934",
+        "price": 140
+      }
+    ],
+    "image": "https://images.unsplash.com/photo-1569718212165-3a8278d5f624?auto=format&fit=crop&q=80&w=400",
+    "hasNoodlesOption": false,
+    "recipe": [],
+    "available": true,
+    "containsBeef": true,
+    "category": "tomyum",
+    "name": {
+      "zh": "泰式牛小排河粉",
+      "en": "Thai Grilled Short Rib Beef Pho Noodle",
+      "ko": "태국식 쇠고기 갈비 포",
+      "vi": "Phở sườn bò kiểu Thái",
+      "th": "เฝอซี่โครงเนื้อไทย",
+      "ja": "タイ産牛肉ショートリブのフォー"
+    },
+    "isNotSpicy": false,
+    "description": {
+      "vi": "5,2 ounce sườn bò ngắn (loại thịt không nước, không tái cấu trúc) nướng trên than củi và dùng trong súp! Là món ăn được những người sành ăn yêu thích♥️Mì Thái đúng kiểu Thái, nước súp đậm đà làm ấm lòng và dạ dày",
+      "ko": "5.2온스의 쇠고기 갈비(물을 넣지 않고, 재구성하지 않은 고기 선택 등급)를 숯불에 구워 국물에 곁들여 먹습니다! 미식가들이 즐겨찾는 정통 태국식 누들스프, 진한 국물 베이스가 마음과 배를 따뜻하게 해주는 정통 태국식 누들스프",
+      "ja": "5.2オンスのビーフショートリブ（非加水、非再構造肉特選グレード）を炭火で焼き、スープで提供します。グルメに大人気♥️本格的なタイ風ヌードルスープ、濃厚なスープベースで心もお腹も温まります",
+      "th": "ซี่โครงเนื้อวัวขนาด 5.2 ออนซ์ (เกรดเลือกเนื้อสัตว์แบบไม่รดน้ำและไม่มีการปรับโครงสร้างใหม่) ย่างบนถ่านและเสิร์ฟในซุป! ของโปรดของนักชิม♥️ซุปก๋วยเตี๋ยวสไตล์ไทยแท้ น้ำซุปเข้มข้นช่วยให้อุ่นหัวใจและท้อง",
+      "zh": " 5.2盎司牛小排 (無灌水非重組肉choice等級)碳烤過在入湯！饕客的最愛♥️道地泰式風味湯麵，濃郁湯底暖心暖胃",
+      "en": "Authentic Thai style noodle soup with a rich, heart-warming broth."
+    }
+  },
+  {
+    "id": "dish-2409232024040",
+    "containsBeef": false,
+    "available": true,
+    "isNotSpicy": false,
+    "hasNoodlesOption": false,
+    "category": "seafood",
+    "description": {
+      "th": "<ชุดลดราคาสามชิ้น> หอยนางรมมิยากิ นม และอาหารทะเลขนาด L คัดสรรมาอย่างดี! ซิกเนเจอร์ของร้าน!\nสามารถรับประทานดิบหรือย่างได้",
+      "ja": "＜お得な3点セット＞Lサイズの宮城産牡蠣・牛乳・魚介類を厳選！お店のサインも！\n生でも焼いても食べられる",
+      "vi": "<Bộ giảm giá ba món> Hàu, sữa và hải sản Miyagi cỡ L được lựa chọn cẩn thận! Chữ ký của cửa hàng!\nCó thể ăn sống hoặc nướng",
+      "ko": "<3종 할인세트> 엄선된 L 사이즈 미야기현 굴과 우유, 해산물! 매장의 시그니처!\n생으로 먹어도 되고 구워서 먹어도 된다",
+      "zh": "<三顆優惠組>嚴選L號宮城生蠔 牛奶海味!店內招牌! \n可生食 可碳烤",
+      "en": "Slowly grilled over charcoal, bursting with aroma and flavor"
+    },
+    "image": "https://images.unsplash.com/photo-1529193591184-b1d58069ecdd?auto=format&fit=crop&q=80&w=400",
+    "orderIndex": 66,
+    "containsPork": false,
+    "recipe": [],
+    "name": {
+      "en": "Thai Style Fresh Oysters (3pcs Combo)",
+      "zh": "泰式生蠔3p",
+      "vi": "Hàu Thái 3p",
+      "ko": "태국 굴 3p",
+      "th": "หอยนางรมไทย3p",
+      "ja": "タイオイスター3P"
+    },
+    "containsSeafood": true,
+    "isTakeoutAvailable": false,
+    "price": 660,
+    "customAddOns": []
+  },
+  {
+    "id": "dish-2409131907512",
+    "price": 100,
+    "containsSeafood": false,
+    "containsBeef": false,
+    "orderIndex": 67,
+    "image": "https://images.unsplash.com/photo-1563227812-0ea4c22e6cc8?auto=format&fit=crop&q=80&w=400",
+    "name": {
+      "th": "น้ำแข็งใส (ใหญ่)",
+      "ja": "氷水（大）",
+      "ko": "얼음물(대)",
+      "vi": "Nước đá (lớn)",
+      "zh": "冰水(大)",
+      "en": "Large Ice Water"
+    },
+    "containsPork": false,
+    "hasNoodlesOption": false,
+    "isNotSpicy": true,
+    "customAddOns": [],
+    "description": {
+      "vi": "Giải nhiệt sảng khoái, hương vị tươi mát, sự kết hợp hoàn hảo với món nướng.",
+      "ko": "시원하고 상쾌하여 바베큐와 완벽한 조화를 이룹니다.",
+      "ja": "冷たくてさわやか、バーベキューに最高の組み合わせ。",
+      "th": "เย็นชื่นใจ รสชาติสดชื่น เข้ากันได้ดีเยี่ยมกับเมนูปิ้งย่าง",
+      "en": "Refreshing and cool, a perfect match for delicious BBQ.",
+      "zh": "沁涼消暑，口感清爽，搭配燒烤絕配"
+    },
+    "available": true,
+    "category": "cat-7cvvkq",
+    "recipe": []
+  },
+  {
+    "id": "dish-2408192006066",
+    "containsBeef": false,
+    "available": true,
+    "isNotSpicy": true,
+    "recipe": [],
+    "containsSeafood": false,
+    "orderIndex": 68,
+    "hasNoodlesOption": false,
+    "description": {
+      "th": "ค่าบริการเปิดขวดสำหรับเครื่องดื่มที่นำมาเอง (คิดราคาต่อขวด)",
+      "ja": "お持ち込み飲料のボトルごとの抜栓料（コーケージ）です。",
+      "vi": "Phí phục vụ khui chai đối với thức uống tự mang vào (tính theo chai).",
+      "ko": "주류 반입 시 적용되는 병당 코키지 서비스 요금입니다.",
+      "en": "Corkage fee for bringing your own beverage (charged per bottle).",
+      "zh": "自備酒水之開瓶服務費（按瓶計費）。"
+    },
+    "containsPork": false,
+    "image": "https://images.unsplash.com/photo-1504754524776-8f4f37790ca0?auto=format&fit=crop&q=80&w=400",
+    "name": {
+      "zh": "開瓶費1支",
+      "en": "Corkage Fee (Per Bottle)",
+      "vi": "Phí đóng chai 1 chai",
+      "ko": "코르키지 요금 1병",
+      "th": "ค่าเปิดขวด 1 ขวด",
+      "ja": "持ち込み料金 1本"
+    },
+    "category": "cat-svadcb",
+    "price": 500,
+    "customAddOns": []
+  },
+  {
+    "id": "dish-2408191941429",
+    "available": true,
+    "name": {
+      "en": "Northern Thai Fermented Pork Sausage w/ Glass Noodles",
+      "zh": "泰北酸肉冬粉腸",
+      "ja": "タイ北部のサワーポークとウィンターヌードルソーセージ",
+      "th": "หมูยอภาคเหนือและไส้กรอกหมี่ฤดูหนาว",
+      "vi": "Bún chua mùa đông và thịt chua miền Bắc Thái",
+      "ko": "북부 태국 신 돼지고기와 겨울 국수 소시지"
+    },
+    "isNotSpicy": false,
+    "image": "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&q=80&w=400",
+    "containsBeef": false,
+    "price": 90,
+    "customAddOns": [],
+    "recipe": [],
+    "containsSeafood": false,
+    "hasNoodlesOption": false,
+    "containsPork": true,
+    "description": {
+      "th": "ไส้กรอกอีสานเส้นหมี่เขียวแท้ <ไม่ใช่ว่าอาหารเปรี้ยวหรือบูด> ลูกค้าที่สั่งสินค้าต้องมีความเข้าใจดังนี้",
+      "ja": "本格タイ風サワーポークソーセージ グリーンヌードル入り ＜酸っぱい・傷むわけではありません＞ この商品をご注文いただくお客様は、この点をご理解いただいた上でご注文ください",
+      "ko": "정통 태국식 신 돼지고기 소시지 녹색면 <음식이 신맛이 나거나 상한 것이 아닙니다> 본 상품을 주문하시는 고객께서는 이 점을 숙지하시기 바랍니다.",
+      "vi": "Xúc xích heo chua Thái chính hãng với bún xanh <Không phải đồ ăn bị chua hay hư> Khách hàng đặt mua sản phẩm này phải hiểu rõ điều này",
+      "en": "Slowly grilled over charcoal, bursting with aroma and flavor",
+      "zh": "正宗泰國酸肉腸包冬粉<不是食物酸掉壞掉喔>下單此商品的顧客一定要有此認知"
+    },
+    "category": "skewers",
+    "orderIndex": 69
+  },
+  {
+    "id": "dish-2407231815553",
+    "containsSeafood": false,
+    "price": -10,
+    "name": {
+      "en": "Friend Discount Coupon",
+      "zh": "好友折扣",
+      "th": "ส่วนลดเพื่อน",
+      "ja": "友達割引",
+      "ko": "친구할인",
+      "vi": "Giảm giá cho bạn bè"
+    },
+    "recipe": [],
+    "category": "cat-svadcb",
+    "containsBeef": false,
+    "description": {
+      "ko": "슈퍼 가치 할인 패키지, 가격 대비 훌륭한 가치, 제한된 시간 동안만 제공",
+      "vi": "Gói giảm giá siêu giá trị, giá trị đồng tiền, thời gian có hạn",
+      "th": "แพ็คเกจส่วนลดสุดคุ้ม คุ้มสุดๆ ระยะเวลาจำกัดเท่านั้น",
+      "ja": "期間限定の超お得な割引パッケージ",
+      "zh": "超值優惠組合，物超所值，限時享用",
+      "en": "Great value combo package, high cost-performance deal for a limited time."
+    },
+    "orderIndex": 70,
+    "image": "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&q=80&w=400",
+    "hasNoodlesOption": false,
+    "customAddOns": [],
+    "available": true,
+    "isNotSpicy": true,
+    "containsPork": false
+  },
+  {
+    "id": "dish-2305152126508",
+    "containsSeafood": false,
+    "price": 70,
+    "name": {
+      "ko": "양갈비",
+      "vi": "sườn cừu",
+      "th": "ซี่โครงแกะ",
+      "ja": "ラムリブ",
+      "en": "Cumin Lamb Rib Skewers",
+      "zh": "小羔羊肋"
+    },
+    "recipe": [],
+    "category": "skewers",
+    "containsBeef": false,
+    "description": {
+      "zh": "嚴選6個月內小羔羊肉。(澳洲進口) 炭火上烤至金黃 撒上孜然粉!店內熱銷NO2.",
+      "en": "Slowly grilled over charcoal, bursting with aroma and flavor",
+      "ko": "6개월 이내의 엄선된 양고기를 사용합니다. (호주수입) 숯불에 노릇노릇해질 때까지 구운 후 커민가루를 뿌려주세요! 매장에서 가장 많이 팔리는 NO2입니다.",
+      "vi": "Thịt cừu được lựa chọn cẩn thận trong vòng 6 tháng. (Nhập khẩu từ Úc) Nướng trên lửa than cho đến khi vàng nâu và rắc bột thì là! NO2 bán chạy nhất tại cửa hàng.",
+      "th": "คัดสรรเนื้อแกะอย่างพิถีพิถันภายใน 6 เดือน (นำเข้าจากออสเตรเลีย) อบบนไฟถ่านจนเป็นสีเหลืองทองโรยผงยี่หร่า! NO2 ที่ขายดีที่สุดในร้าน",
+      "ja": "生後6ヶ月以内の子羊を厳選。 （オーストラリアから輸入） 炭火できつね色になるまで焼き、クミンパウダーをふりかける！当店の売れ筋NO2。"
+    },
+    "orderIndex": 71,
+    "image": "https://images.unsplash.com/photo-1529193591184-b1d58069ecdd?auto=format&fit=crop&q=80&w=400",
+    "hasNoodlesOption": false,
+    "customAddOns": [],
+    "available": true,
+    "isNotSpicy": false,
+    "containsPork": false
+  },
+  {
+    "id": "dish-2304041737306",
+    "description": {
+      "th": "เย็นชื่นใจ รสชาติสดชื่น เข้ากันได้ดีเยี่ยมกับเมนูปิ้งย่าง",
+      "ja": "冷たくてさわやか、バーベキューに最高の組み合わせ。",
+      "ko": "시원하고 상쾌하여 바베큐와 완벽한 조화를 이룹니다.",
+      "vi": "Giải nhiệt sảng khoái, hương vị tươi mát, sự kết hợp hoàn hảo với món nướng.",
+      "en": "Refreshing and cool, a perfect match for delicious BBQ.",
+      "zh": "沁涼消暑，口感清爽，搭配燒烤絕配"
+    },
+    "containsPork": false,
+    "orderIndex": 72,
+    "category": "drinks",
+    "available": true,
+    "customAddOns": [],
+    "recipe": [],
+    "containsSeafood": false,
+    "containsBeef": false,
+    "price": 90,
+    "image": "https://images.unsplash.com/photo-1519996529931-28324d5a630e?auto=format&fit=crop&q=80&w=400",
+    "hasNoodlesOption": false,
+    "isNotSpicy": true,
+    "name": {
+      "zh": "果肉椰子水",
+      "en": "Fresh Coconut Water w/ Pulp",
+      "vi": "Nước cốt dừa",
+      "ko": "펄프 코코넛 워터",
+      "ja": "パルプココナッツウォーター",
+      "th": "น้ำมะพร้าวเนื้อ"
+    }
+  },
+  {
+    "id": "dish-2303301719168",
+    "orderIndex": 73,
+    "category": "seafood",
+    "containsBeef": false,
+    "containsSeafood": true,
+    "hasNoodlesOption": false,
+    "isTakeoutAvailable": false,
+    "name": {
+      "th": "หอยนางรมไทย 1P",
+      "ja": "タイオイスター 1P",
+      "vi": "Hàu Thái 1P",
+      "ko": "타이 굴 1P",
+      "en": "Thai Style Fresh Oyster (1pc)",
+      "zh": "泰式生蠔1P"
+    },
+    "image": "https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=400",
+    "recipe": [],
+    "containsPork": false,
+    "available": true,
+    "isNotSpicy": false,
+    "description": {
+      "en": "Slowly grilled over charcoal, bursting with aroma and flavor",
+      "zh": "嚴選L號宮城生蠔 牛奶海味!店內招牌! 可生食 可碳烤",
+      "ja": "宮城産の牡蠣・牛乳・魚介類をLサイズで厳選！お店のサインも！生でも焼いても食べられる",
+      "th": "หอยนางรม มิยากิ นม และอาหารทะเลไซส์ L คัดสรรมาอย่างดี! ซิกเนเจอร์ของร้าน! สามารถรับประทานดิบหรือย่างได้",
+      "ko": "엄선된 L 사이즈 미야기 굴, 우유, 해산물! 매장의 시그니처! 생으로 먹어도 되고 구워서 먹어도 된다",
+      "vi": "Hàu, sữa và hải sản Miyagi cỡ L được lựa chọn cẩn thận! Chữ ký của cửa hàng! Có thể ăn sống hoặc nướng"
+    },
+    "customAddOns": [],
+    "price": 250
+  },
+  {
+    "id": "dish-2302272107257",
+    "containsPork": false,
+    "orderIndex": 74,
+    "customAddOns": [],
+    "image": "https://images.unsplash.com/photo-1608270586620-248524c67de9?auto=format&fit=crop&q=80&w=400",
+    "available": true,
+    "isNotSpicy": true,
+    "hasNoodlesOption": false,
+    "containsBeef": false,
+    "containsSeafood": false,
+    "description": {
+      "th": "เย็นชื่นใจ รสชาติสดชื่น เข้ากันได้ดีเยี่ยมกับเมนูปิ้งย่าง",
+      "ja": "冷たくてさわやか、バーベキューに最高の組み合わせ。",
+      "ko": "시원하고 상쾌하여 바베큐와 완벽한 조화를 이룹니다.",
+      "vi": "Giải nhiệt sảng khoái, hương vị tươi mát, sự kết hợp hoàn hảo với món nướng.",
+      "zh": "沁涼消暑，口感清爽，搭配燒烤絕配",
+      "en": "Refreshing and cool, a perfect match for delicious BBQ."
+    },
+    "recipe": [],
+    "category": "cat-7cvvkq",
+    "name": {
+      "ja": "シンガポール",
+      "th": "สิงคโปร์",
+      "vi": "singapore",
+      "ko": "싱가포르",
+      "en": "Singha Beer",
+      "zh": "勝獅"
+    },
+    "price": 110
+  },
+  {
+    "id": "dish-2302162152176",
+    "recipe": [],
+    "image": "https://images.unsplash.com/photo-1608270586620-248524c67de9?auto=format&fit=crop&q=80&w=400",
+    "category": "cat-7cvvkq",
+    "containsBeef": false,
+    "orderIndex": 75,
+    "containsSeafood": false,
+    "price": 110,
+    "isNotSpicy": true,
+    "containsPork": false,
+    "description": {
+      "zh": "沁涼消暑，口感清爽，搭配燒烤絕配",
+      "en": "Refreshing and cool, a perfect match for delicious BBQ.",
+      "ko": "시원하고 상쾌하여 바베큐와 완벽한 조화를 이룹니다.",
+      "vi": "Giải nhiệt sảng khoái, hương vị tươi mát, sự kết hợp hoàn hảo với món nướng.",
+      "th": "เย็นชื่นใจ รสชาติสดชื่น เข้ากันได้ดีเยี่ยมกับเมนูปิ้งย่าง",
+      "ja": "冷たくてさわやか、バーベキューに最高の組み合わせ。"
+    },
+    "available": true,
+    "hasNoodlesOption": false,
+    "customAddOns": [],
+    "name": {
+      "zh": "泰象",
+      "en": "Chang Beer",
+      "th": "ไท่เซียง",
+      "ja": "太祥",
+      "ko": "타이샹",
+      "vi": "Thái Tường"
+    }
+  },
+  {
+    "id": "dish-2211162026366",
+    "customAddOns": [],
+    "available": true,
+    "description": {
+      "zh": "營養多~熱量低~含鈣量又直逼牛奶! 是顧胃健康好選擇",
+      "en": "Nutritious, low calories, calcium content close to milk! Excellent choice for stomach health.",
+      "vi": "Giàu dinh dưỡng, ít calo, hàm lượng canxi tiệm cận sữa tươi! Lựa chọn tuyệt vời cho dạ dày.",
+      "ko": "영양 만점~ 저칼로리~ 우유에 맞먹는 칼슘 함량! 위 건강에 좋은 탁월한 선택.",
+      "th": "กระเจี๊ยบเขียวมีประโยชน์สูง แคลอรีต่ำ แคลเซียมใกล้เคียงนมสด! ทางเลือกที่ดีสำหรับกระเพาะอาหาร",
+      "ja": "栄養豊富・低カロリー！牛乳並みのカルシウムで胃に優しい健康的な選択。"
+    },
+    "price": 80,
+    "name": {
+      "vi": "Đậu bắp nướng than (Theo mùa)",
+      "ko": "오크라 구이 (계절 한정)",
+      "th": "กระเจี๊ยบเขียวสไตล์ไทย (ตามฤดูกาล)",
+      "ja": "オクラ炭火焼き (季節限定)",
+      "zh": "秋葵(季節限定)",
+      "en": "Charcoal Grilled Okra (Seasonal)"
+    },
+    "hasNoodlesOption": false,
+    "isNotSpicy": false,
+    "category": "veggies",
+    "containsPork": false,
+    "image": "https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=400",
+    "containsSeafood": false,
+    "recipe": [],
+    "containsBeef": false,
+    "isTakeoutAvailable": true,
+    "orderIndex": 76
+  },
+  {
+    "id": "dish-2209081804158",
+    "available": true,
+    "customAddOns": [
+      {
+        "name": {
+          "zh": "加河粉",
+          "en": "Add pho",
+          "vi": "Thêm phở",
+          "ko": "사진 추가",
+          "ja": "フォーを追加",
+          "th": "เพิ่มโพธิ์"
+        },
+        "price": 20,
+        "id": "addon-1784479721381-721"
+      },
+      {
+        "price": 20,
+        "id": "addon-1784479723321-863",
+        "name": {
+          "en": "Add rice noodles",
+          "zh": "加米線",
+          "vi": "Thêm bún",
+          "ko": "쌀국수 추가",
+          "ja": "ビーフンを加えます",
+          "th": "ใส่เส้นก๋วยเตี๋ยว"
+        }
+      },
+      {
+        "name": {
+          "zh": "升級套餐(烤蔬菜+泰奶一杯)",
+          "en": "Upgraded set meal (roasted vegetables + a cup of Thai milk)",
+          "th": "ชุดอาหารอัพเกรด (ผักย่าง + นมไทย 1 แก้ว)",
+          "ja": "グレードアップ定食（焼き野菜＋タイミルク1杯）",
+          "ko": "업그레이드된 정식 (구운 야채 + 태국 우유 1잔)",
+          "vi": "Set ăn nâng cấp (rau nướng + 1 cốc sữa Thái)"
+        },
+        "price": 140,
+        "id": "addon-1784479725596-570"
+      }
+    ],
+    "description": {
+      "ko": "똠얌꿍을 맛보지 않았다면 태국 음식을 맛봤다고 말할 수 없습니다! 향토맛 국수면의 고전적인 맛, 풍부한 국물 베이스가 마음과 배를 따뜻하게 해준다.",
+      "vi": "Bạn không thể nói mình đã nếm thử đồ ăn Thái nếu chưa thử Tom Yum Goong! Hương vị cổ điển của món phở đậm đà hương vị địa phương, nước súp đậm đà làm ấm lòng và dạ dày",
+      "th": "คุณจะพูดไม่ได้ว่าเคยทานอาหารไทยแล้วถ้ายังไม่เคยลองต้มยำกุ้ง! รสชาติคลาสสิกของบะหมี่ซุปรสท้องถิ่น น้ำซุปเข้มข้นทำให้อุ่นหัวใจและท้อง",
+      "ja": "トムヤムクンを試してみなければ、タイ料理を味わったとは言えません。郷土味スープ麺の定番の味わい、濃厚なスープが心もお腹も温まります",
+      "zh": "沒吃過冬蔭功就不能說吃過泰式! 經典口味道地風味湯麵，濃郁湯底暖心暖胃",
+      "en": "Authentic Thai-style soup noodles with rich, warming broth"
+    },
+    "price": 240,
+    "name": {
+      "zh": "泰式海鮮米線",
+      "en": "Thai Seafood Tom Yum Rice Noodle",
+      "ko": "태국식 해산물 쌀국수",
+      "vi": "Bún hải sản kiểu Thái",
+      "th": "ก๋วยเตี๋ยวทะเลไทย",
+      "ja": "タイ風シーフードビーフン"
+    },
+    "hasNoodlesOption": false,
+    "isNotSpicy": false,
+    "containsPork": false,
+    "category": "tomyum",
+    "image": "https://images.unsplash.com/photo-1533622597524-a1215e26c0a2?auto=format&fit=crop&q=80&w=400",
+    "containsSeafood": true,
+    "recipe": [],
+    "containsBeef": false,
+    "orderIndex": 77
+  },
+  {
+    "id": "dish-2209081753180",
+    "orderIndex": 78,
+    "containsBeef": true,
+    "recipe": [],
+    "hasNoodlesOption": false,
+    "image": "https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=400",
+    "available": true,
+    "price": 590,
+    "category": "skewers",
+    "containsPork": false,
+    "containsSeafood": false,
+    "name": {
+      "ko": "초이스 소갈비-5oz",
+      "vi": "Sườn Bò Choice-5oz",
+      "th": "ซี่โครงเนื้อทางเลือก-5oz",
+      "ja": "特選ビーフショートリブ-5オンス",
+      "en": "USDA Choice Beef Short Rib Steak (5oz)",
+      "zh": "Choice牛小排-5oz"
+    },
+    "description": {
+      "ja": "丁寧にそぎ落とした生肉を炭火でじっくり焼き上げると、香ばしさが溢れ、一口食べるごとにとても美味しいです！",
+      "th": "หลังจากที่เนื้อดิบได้รับการตัดแต่งอย่างระมัดระวังและย่างอย่างช้าๆบนไฟถ่าน กลิ่นหอมก็ล้นออกมา และทุกคำที่กัดก็อร่อยมาก!",
+      "vi": "Sau khi thịt sống được cắt tỉa cẩn thận và nướng từ từ trên lửa than, mùi thơm tràn ngập, mỗi miếng cắn đều vô cùng thơm ngon!",
+      "ko": "생고기를 정성스럽게 손질하여 숯불에 천천히 구워내면 고소한 향이 가득하고, 한입 먹을 때마다 정말 맛있습니다!",
+      "en": "Slowly grilled over charcoal, bursting with rich aroma and delicious flavor in every bite.",
+      "zh": "原肉精修後，炭火慢烤，香氣四溢，每一口都是極致美味!"
+    },
+    "isNotSpicy": true,
+    "customAddOns": [
+      {
+        "price": 20,
+        "id": "addon-1784479747323-7",
+        "name": {
+          "en": "Add pho",
+          "zh": "加河粉",
+          "vi": "Thêm phở",
+          "ko": "사진 추가",
+          "ja": "フォーを追加",
+          "th": "เพิ่มโพธิ์"
+        }
+      },
+      {
+        "price": 20,
+        "name": {
+          "ja": "ビーフンを加えます",
+          "th": "ใส่เส้นก๋วยเตี๋ยว",
+          "vi": "Thêm bún",
+          "ko": "쌀국수 추가",
+          "zh": "加米線",
+          "en": "Add rice noodles"
+        },
+        "id": "addon-1784479750303-903"
+      },
+      {
+        "name": {
+          "ko": "업그레이드된 정식 (구운 야채 + 태국 우유 1잔)",
+          "vi": "Set ăn nâng cấp (rau nướng + 1 cốc sữa Thái)",
+          "th": "ชุดอาหารอัพเกรด (ผักย่าง + นมไทย 1 แก้ว)",
+          "ja": "グレードアップ定食（焼き野菜＋タイミルク1杯）",
+          "en": "Upgraded set meal (roasted vegetables + a cup of Thai milk)",
+          "zh": "升級套餐(烤蔬菜+泰奶一杯)"
+        },
+        "price": 140,
+        "id": "addon-1784479752305-972"
+      }
+    ]
+  },
+  {
+    "id": "dish-2209081751117",
+    "available": true,
+    "name": {
+      "en": "Extra Large Chicken Butt Skewers",
+      "zh": "特大土雞七里香",
+      "ko": "특대형 토종닭 Qilixiang",
+      "vi": "Gà địa phương cực lớn Qiilixiang",
+      "th": "ไก่ท้องถิ่น Qilixiang ขนาดใหญ่พิเศษ",
+      "ja": "特大地鶏七里香"
+    },
+    "containsPork": false,
+    "image": "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&q=80&w=400",
+    "price": 90,
+    "customAddOns": [],
+    "containsSeafood": false,
+    "orderIndex": 79,
+    "category": "skewers",
+    "recipe": [],
+    "containsBeef": false,
+    "isNotSpicy": false,
+    "description": {
+      "zh": "早上去市場拿回來拔毛+醃料(喜歡雞屁屁的人必點啊!)由於沒有炸過再烤約烤15分鐘",
+      "en": "Slowly grilled over charcoal, bursting with aroma and flavor",
+      "th": "เมื่อเช้าผมไปตลาดก็เอากลับมาแบบถอนขนและหมักด้วย (คนชอบก้นไก่ต้องสั่ง!) เนื่องจากยังไม่ได้ทอดจึงอบประมาณ 15 นาที",
+      "ja": "朝市場に行って、むしりとマリネを付けて持ち帰ってきました（鶏のお尻好きな人は必ず頼む！）まだ揚げていないので、15分ほど焼きます。",
+      "ko": "아침에 시장에 갔다가 따기와 양념장을 가지고 가지고 왔습니다. (닭꽁초 좋아하시는 분들은 필수!) 아직 튀겨지지 않았기 때문에 15분 정도 구워주세요.",
+      "vi": "Sáng đi chợ mang về cùng với cả tuốt và ướp (món phải gọi của ai thích mông gà!) Vì chưa chiên nên nướng khoảng 15 phút."
+    },
+    "hasNoodlesOption": false
+  },
+  {
+    "id": "dish-2208121916271",
+    "hasNoodlesOption": false,
+    "price": 0,
+    "customAddOns": [],
+    "recipe": [],
+    "orderIndex": 80,
+    "image": "https://images.unsplash.com/photo-1473093295043-cdd812d0e601?auto=format&fit=crop&q=80&w=400",
+    "available": true,
+    "containsPork": false,
+    "containsSeafood": false,
+    "category": "cat-zene8j",
+    "isNotSpicy": false,
+    "description": {
+      "ja": "丁寧に仕上げた豊かな味わいで、お食事を彩ります。",
+      "th": "ปรุงอย่างพิถีพิถันด้วยรสชาติเข้มข้น เพิ่มสีสันให้กับมื้ออาหารของคุณ",
+      "vi": "Được chế biến kỹ lưỡng với hương vị đậm đà, thêm màu sắc cho bữa ăn của bạn",
+      "ko": "정성껏 준비한 풍부한 맛으로 식사에 색을 더해줍니다",
+      "en": "Meticulously crafted with rich layers of flavor to complement your meal.",
+      "zh": "精心調製，口感層次豐富，為您的餐點添彩"
+    },
+    "name": {
+      "ko": "파프리카",
+      "vi": "ớt bột",
+      "th": "พริกหยวก",
+      "ja": "パプリカ",
+      "en": "Chili Powder Dip",
+      "zh": "辣椒粉"
+    },
+    "containsBeef": false
+  },
+  {
+    "id": "dish-2208121912457",
+    "description": {
+      "en": "Authentic Thai-style soup noodles with rich, warming broth",
+      "zh": "沒吃過冬蔭功就不能說吃過泰式! 經典口味道地風味湯麵，濃郁湯底暖心暖胃",
+      "th": "คุณจะพูดไม่ได้ว่าเคยทานอาหารไทยแล้วถ้ายังไม่เคยลองต้มยำกุ้ง! รสชาติคลาสสิกของบะหมี่ซุปรสท้องถิ่น น้ำซุปเข้มข้นทำให้อุ่นหัวใจและท้อง",
+      "ja": "トムヤムクンを試してみなければ、タイ料理を味わったとは言えません。郷土味スープ麺の定番の味わい、濃厚なスープが心もお腹も温まります",
+      "ko": "똠얌꿍을 맛보지 않았다면 태국 음식을 맛봤다고 말할 수 없습니다! 향토맛 국수면의 고전적인 맛, 풍부한 국물 베이스가 마음과 배를 따뜻하게 해준다.",
+      "vi": "Bạn không thể nói mình đã nếm thử đồ ăn Thái nếu chưa thử Tom Yum Goong! Hương vị cổ điển của món phở đậm đà hương vị địa phương, nước súp đậm đà làm ấm lòng và dạ dày"
+    },
+    "containsPork": false,
+    "orderIndex": 81,
+    "category": "tomyum",
+    "available": true,
+    "customAddOns": [
+      {
+        "price": 20,
+        "name": {
+          "en": "Add pho",
+          "zh": "加河粉",
+          "ko": "사진 추가",
+          "vi": "Thêm phở",
+          "th": "เพิ่มโพธิ์",
+          "ja": "フォーを追加"
+        },
+        "id": "addon-1784479804720-626"
+      },
+      {
+        "name": {
+          "en": "Add rice noodles",
+          "zh": "加米線",
+          "ko": "쌀국수 추가",
+          "vi": "Thêm bún",
+          "th": "ใส่เส้นก๋วยเตี๋ยว",
+          "ja": "ビーフンを加えます"
+        },
+        "price": 20,
+        "id": "addon-1784479806981-555"
+      },
+      {
+        "price": 140,
+        "name": {
+          "zh": "升級套餐(烤蔬菜+泰奶一杯)",
+          "en": "Upgraded set meal (roasted vegetables + a cup of Thai milk)",
+          "ko": "업그레이드된 정식 (구운 야채 + 태국 우유 1잔)",
+          "vi": "Set ăn nâng cấp (rau nướng + 1 cốc sữa Thái)",
+          "th": "ชุดอาหารอัพเกรด (ผักย่าง + นมไทย 1 แก้ว)",
+          "ja": "グレードアップ定食（焼き野菜＋タイミルク1杯）"
+        },
+        "id": "addon-1784479809050-307"
+      }
+    ],
+    "recipe": [],
+    "containsSeafood": true,
+    "containsBeef": false,
+    "price": 240,
+    "image": "https://images.unsplash.com/photo-1548943487-a2e4e43b4853?auto=format&fit=crop&q=80&w=400",
+    "hasNoodlesOption": false,
+    "isNotSpicy": false,
+    "name": {
+      "th": "เฝอทะเลไทย",
+      "ja": "タイ風シーフードフォー",
+      "ko": "태국 해산물 포",
+      "vi": "Phở hải sản kiểu Thái",
+      "en": "Thai Seafood Tom Yum Pho Noodle",
+      "zh": "泰式海鮮河粉"
+    }
+  },
+  {
+    "id": "dish-2208071821298",
+    "image": "https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=400",
+    "containsBeef": false,
+    "containsSeafood": false,
+    "orderIndex": 82,
+    "available": true,
+    "price": 90,
+    "category": "skewers",
+    "hasNoodlesOption": false,
+    "description": {
+      "en": "Slowly grilled over charcoal, bursting with aroma and flavor",
+      "zh": "外酥內嫩的口感，店內人氣商品!",
+      "vi": "Giòn bên ngoài và mềm bên trong, một mặt hàng phổ biến trong cửa hàng!",
+      "ko": "겉은 바삭하고 속은 부드러운 이 매장의 인기상품!",
+      "ja": "外はカリッと中はふわっとしたお店の人気商品です！",
+      "th": "กรอบนอกนุ่มในเป็นสินค้ายอดนิยมของร้าน!"
+    },
+    "name": {
+      "zh": "泰酥豆皮",
+      "en": "Crispy Tofu Skin Skewer",
+      "th": "หนังเต้าหู้กรอบ",
+      "ja": "タイのパリパリ豆腐皮",
+      "ko": "태국식 바삭한 두부 스킨",
+      "vi": "Da đậu hủ chiên giòn kiểu Thái"
+    },
+    "containsPork": false,
+    "recipe": [],
+    "customAddOns": [],
+    "isNotSpicy": false
+  },
+  {
+    "id": "dish-2208071820475",
+    "available": true,
+    "name": {
+      "en": "Charcoal Grilled Handmade Moon Shrimp Cake",
+      "zh": "碳烤手工月亮蝦餅",
+      "th": "ขนมไหว้พระจันทร์ทำมือย่างถ่าน",
+      "ja": "手作り月海老ケーキの炭火焼き",
+      "ko": "숯불구이 수제 달새우떡",
+      "vi": "Bánh trung thu nướng than thủ công"
+    },
+    "containsPork": false,
+    "image": "https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&q=80&w=400",
+    "price": 320,
+    "containsSeafood": true,
+    "customAddOns": [],
+    "category": "seafood",
+    "orderIndex": 83,
+    "recipe": [],
+    "containsBeef": false,
+    "isNotSpicy": true,
+    "description": {
+      "en": "Slowly grilled over charcoal, bursting with aroma and flavor",
+      "zh": "沒吃過碳烤月亮蝦餅的一定要試試!沾醬會另外附->蝦餅是（手工製作）內含蝦仁、海鮮內餡及魚漿，口感一流",
+      "ja": "炭火焼月海老餅をまだ食べたことがない方はぜひお試しください！つけだれもついてきます → エビケーキ（手作り）はエビ、魚介餡、かまぼこが入っており、一級品の味わいです",
+      "th": "ใครยังไม่เคยลองขนมไหว้พระจันทร์ย่างเตาถ่านต้องลอง! น้ำจิ้มจะรวมอยู่ด้วย -> ทอดมันกุ้ง (ทำมือ) ประกอบด้วยกุ้ง ไส้ทะเล และกะปิ และมีรสชาติชั้นหนึ่ง",
+      "vi": "Nếu bạn chưa từng thử bánh tôm trung thu nướng than thì nhất định phải thử nhé! Nước chấm sẽ được bao gồm -> bánh tôm được làm thủ công gồm có tôm, nhân hải sản và chả cá, có hương vị hảo hạng",
+      "ko": "아직 숯불구이 달새우떡을 먹어본 적이 없다면 꼭 드셔보세요! 디핑 소스가 포함됩니다 -> 새우 케이크는 새우, 해산물 충전재 및 어묵이 들어 있으며 (수제) 맛이 일품입니다."
+    },
+    "hasNoodlesOption": false
+  },
+  {
+    "id": "dish-2208071816553",
+    "isNotSpicy": true,
+    "containsPork": false,
+    "containsSeafood": false,
+    "name": {
+      "zh": "奶香火腿玉米濃湯",
+      "en": "Creamy Ham & Sweet Corn Soup",
+      "th": "ครีมแฮมและซุปข้าวโพด",
+      "ja": "ハムとコーンのクリーミースープ",
+      "ko": "크림 햄과 옥수수 수프",
+      "vi": "Súp kem ngô và giăm bông"
+    },
+    "description": {
+      "th": "เลือกไข่ 2 ฟองอย่างระมัดระวัง + เมล็ดข้าวโพด Hulk -> ปรุงโดยใช้ไฟอ่อน -> โรยด้วยพริกไทยดำบดสด -> เติมซุปเข้มข้นที่มีกลิ่นหอมของน้ำนมลงในชาม",
+      "ja": "卵2個＋ハルクコーン粒を厳選 → 弱火でじっくり煮込む → 挽きたての黒胡椒を振る → ミルキーな香りが広がる濃厚なスープの完成",
+      "ko": "계란 2개 + 헐크옥수수 알갱이를 잘 골라서 -> 약불로 익히기 -> 갓 간 흑후추를 뿌리고 -> 우유향이 가득한 진한 국물 한 그릇 완성",
+      "vi": "Cẩn thận chọn 2 quả trứng + hạt ngô Hulk -> Nấu trên lửa chậm -> Rắc hạt tiêu đen mới xay -> Hoàn thành một bát súp đậm đà thơm mùi sữa",
+      "zh": "嚴選2顆雞蛋+綠巨人玉米粒->慢火煮熟->撒上現磨黑胡椒粒->一碗奶香四溢的濃湯完成",
+      "en": "Authentic Thai-style soup noodles with rich, warming broth"
+    },
+    "customAddOns": [],
+    "recipe": [],
+    "containsBeef": false,
+    "category": "noodles",
+    "image": "https://images.unsplash.com/photo-1569718212165-3a8278d5f624?auto=format&fit=crop&q=80&w=400",
+    "price": 160,
+    "hasNoodlesOption": false,
+    "orderIndex": 84,
+    "available": true
+  },
+  {
+    "id": "dish-2207122341556",
+    "containsBeef": false,
+    "price": 260,
+    "hasCoconutsMilkOption": true,
+    "name": {
+      "en": "Traditional Seafood Tom Yum Soup",
+      "zh": "海鮮冬蔭功湯",
+      "th": "ต้มยำทะเล",
+      "ja": "シーフードトムヤムスープ",
+      "ko": "해산물 똠양꿍 수프",
+      "vi": "Súp Tom Yum hải sản"
+    },
+    "image": "https://images.unsplash.com/photo-1569718212165-3a8278d5f624?auto=format&fit=crop&q=80&w=400",
+    "isNotSpicy": false,
+    "recipe": [],
+    "available": true,
+    "containsPork": false,
+    "orderIndex": 85,
+    "description": {
+      "en": "Authentic Thai-style soup noodles with rich, warming broth",
+      "zh": "道地泰式風味湯，濃郁湯底暖心暖胃",
+      "th": "น้ำซุปรสไทยแท้ น้ำซุปเข้มข้น อุ่นหัวใจและท้อง",
+      "ja": "心もお腹も温まる、本場タイの風味豊かなスープベース",
+      "ko": "정통 태국 맛 수프, 풍부한 수프 베이스가 마음과 배를 따뜻하게 해줍니다.",
+      "vi": "Nước súp đậm đà hương vị Thái, nước súp đậm đà làm ấm lòng và dạ dày"
+    },
+    "customAddOns": [
+      {
+        "price": 20,
+        "name": {
+          "vi": "Thêm phở",
+          "ko": "사진 추가",
+          "ja": "フォーを追加",
+          "th": "เพิ่มโพธิ์",
+          "en": "Add pho",
+          "zh": "加河粉"
+        },
+        "id": "addon-1784479887987-726"
+      },
+      {
+        "id": "addon-1784479890262-993",
+        "name": {
+          "en": "Add rice noodles",
+          "zh": "加米線",
+          "vi": "Thêm bún",
+          "ko": "쌀국수 추가",
+          "ja": "ビーフンを加えます",
+          "th": "ใส่เส้นก๋วยเตี๋ยว"
+        },
+        "price": 20
+      },
+      {
+        "id": "addon-1784479892347-500",
+        "name": {
+          "zh": "升級套餐(烤蔬菜+泰奶一杯)",
+          "en": "Upgraded set meal (roasted vegetables + a cup of Thai milk)",
+          "ko": "업그레이드된 정식 (구운 야채 + 태국 우유 1잔)",
+          "vi": "Set ăn nâng cấp (rau nướng + 1 cốc sữa Thái)",
+          "th": "ชุดอาหารอัพเกรด (ผักย่าง + นมไทย 1 แก้ว)",
+          "ja": "グレードアップ定食（焼き野菜＋タイミルク1杯）"
+        },
+        "price": 140
+      }
+    ],
+    "containsSeafood": true,
+    "category": "tomyum",
+    "hasNoodlesOption": false
+  },
+  {
+    "id": "dish-2207122341013",
+    "isNotSpicy": true,
+    "containsPork": false,
+    "containsSeafood": false,
+    "name": {
+      "ko": "베트남산 신선한 쇠고기 포",
+      "vi": "Phở bò tươi Việt Nam",
+      "th": "เฝอเนื้อสดเวียดนาม",
+      "ja": "ベトナムの新鮮な牛肉のフォー",
+      "zh": "越南鮮牛肉河粉",
+      "en": "Vietnamese Fresh Beef Pho Noodle Soup"
+    },
+    "description": {
+      "vi": "Nước súp ngọt ngọt (xương và rau được luộc trong 3 giờ. Không phải súp bột ngọt. Số lượng giới hạn 14 suất mỗi ngày và sẽ bán hết.) Các lát thịt được làm từ loại thịt thăn vai mềm của Mỹ tuyển chọn! Nguyên liệu: Cô gái Hoa lục, hành tây, hành lá, chùa chín tầng, tiêu đen, giá đỗ và bún.",
+      "ko": "국물은 달큰하고 (뼈와 야채를 3시간 끓여서 만든 국물입니다. MSG 국물이 아닙니다. 하루 14인분 한정이며 품절됩니다.) 고기조각은 미국산 안심 안심 쇠고기 초이스 등급으로 만듭니다! 재료: 중국 본토녀, 양파, 쪽파, 구층탑, 후추, 콩나물, 쌀국수.",
+      "ja": "スープは甘めの甘め（骨と野菜を3時間煮込んでいます。MSGスープではありません。1日14食限定、売り切れ次第終了です。） 肉スライスはアメリカ産の柔らかい肩ヒレ肉特選グレードを使用！材料:中国大陸の女の子、玉ねぎ、ねぎ、九重塔、黒胡椒、もやし、ビーフン。",
+      "th": "ซุปมีรสหวานอมหวาน (ต้มกระดูกและผักเป็นเวลา 3 ชั่วโมง ไม่ใช่ซุปผงชูรส จำกัดเพียง 14 มื้อต่อวันและจะขายหมด) เนื้อชิ้นทำจากเนื้อสันในอเมริกาเกรดคัดสรร! ส่วนผสม: เด็กหญิงจีนแผ่นดินใหญ่ หัวหอม ต้นหอม เจดีย์เก้าชั้น พริกไทยดำ ถั่วงอก และเส้นหมี่",
+      "en": "Authentic Thai-style soup noodles with rich, warming broth",
+      "zh": "湯頭清甜（大骨跟蔬菜熬煮3小時，不是味精湯，每天限量供應14份賣完就沒了）肉片是採用美國嫩肩里肌牛肉choice等級！配料：大陸妹、洋蔥、蔥、九層塔、黑胡椒，豆芽菜、河粉主食。"
+    },
+    "customAddOns": [
+      {
+        "name": {
+          "zh": "加河粉",
+          "en": "Add pho",
+          "ja": "フォーを追加",
+          "th": "เพิ่มโพธิ์",
+          "vi": "Thêm phở",
+          "ko": "사진 추가"
+        },
+        "id": "addon-1784479915298-709",
+        "price": 20
+      },
+      {
+        "price": 140,
+        "name": {
+          "vi": "Set ăn nâng cấp (rau nướng + 1 cốc sữa Thái)",
+          "ko": "업그레이드된 정식 (구운 야채 + 태국 우유 1잔)",
+          "ja": "グレードアップ定食（焼き野菜＋タイミルク1杯）",
+          "th": "ชุดอาหารอัพเกรด (ผักย่าง + นมไทย 1 แก้ว)",
+          "zh": "升級套餐(烤蔬菜+泰奶一杯)",
+          "en": "Upgraded set meal (roasted vegetables + a cup of Thai milk)"
+        },
+        "id": "addon-1784479917660-34"
+      }
+    ],
+    "recipe": [],
+    "containsBeef": true,
+    "category": "noodles",
+    "image": "https://images.unsplash.com/photo-1569718212165-3a8278d5f624?auto=format&fit=crop&q=80&w=400",
+    "price": 250,
+    "hasNoodlesOption": false,
+    "orderIndex": 86,
+    "available": true
+  },
+  {
+    "id": "dish-2207122338495",
+    "isNotSpicy": true,
+    "price": 90,
+    "category": "noodles",
+    "name": {
+      "ko": "김 계란국",
+      "vi": "Súp Rong Biển Trứng",
+      "th": "ซุปสาหร่ายไข่นุ่ม",
+      "ja": "海苔とたまごのスープ",
+      "en": "Seaweed & Egg Drop Soup",
+      "zh": "紫菜蛋花湯"
+    },
+    "containsSeafood": false,
+    "description": {
+      "th": "ก๋วยเตี๋ยวแบบไทยแท้ น้ำซุปข้นอร่อยอุ่นท้อง",
+      "ja": "本格タイ風スープ麺、濃厚なスープで体が温まる",
+      "ko": "정통 태국식 국수, 진하고 따뜻한 육수가 몸을 녹입니다",
+      "vi": "Authentic Thai-style soup noodles with rich, warming broth",
+      "en": "Authentic Thai-style soup noodles with rich, warming broth",
+      "zh": "洗選雞蛋2顆+海帶芽~外食族補充膳食纖維白質的好選擇"
+    },
+    "orderIndex": 87,
+    "available": true,
+    "image": "https://images.unsplash.com/photo-1569718212165-3a8278d5f624?auto=format&fit=crop&q=80&w=400",
+    "containsPork": false,
+    "containsBeef": false
+  },
+  {
+    "id": "dish-2207122336248",
+    "containsPork": false,
+    "containsBeef": false,
+    "image": "https://images.unsplash.com/photo-1533622597524-a1215e26c0a2?auto=format&fit=crop&q=80&w=400",
+    "orderIndex": 88,
+    "description": {
+      "en": "Authentic Thai-style soup noodles with rich, warming broth",
+      "zh": "每日早市新鮮採買~新鮮蛤蠣搭配蔥薑絲九層塔!越簡單越耐人尋味",
+      "th": "ก๋วยเตี๋ยวแบบไทยแท้ น้ำซุปข้นอร่อยอุ่นท้อง",
+      "ja": "本格タイ風スープ麺、濃厚なスープで体が温まる",
+      "ko": "정통 태국식 국수, 진하고 따뜻한 육수가 몸을 녹입니다",
+      "vi": "Authentic Thai-style soup noodles with rich, warming broth"
+    },
+    "isNotSpicy": true,
+    "category": "noodles",
+    "containsSeafood": true,
+    "available": true,
+    "price": 150,
+    "name": {
+      "vi": "Canh Nghêu Tươi Nấu Gừng Húng Quế",
+      "ko": "신선한 바지락 생강 조개탕",
+      "ja": "新鮮アサリと生姜のクリアスープ",
+      "th": "ซุปหอยตลับสดใส่ขิงและโหระพา",
+      "zh": "鮮味蛤蜊湯",
+      "en": "Fresh Clam Soup w/ Ginger"
+    }
+  },
+  {
+    "id": "dish-2207122331502",
+    "containsPork": false,
+    "description": {
+      "vi": "Giải nhiệt sảng khoái, hương vị tươi mát, sự kết hợp hoàn hảo với món nướng.",
+      "ko": "시원하고 상쾌하여 바베큐와 완벽한 조화를 이룹니다.",
+      "ja": "冷たくてさわやか、バーベキューに最高の組み合わせ。",
+      "th": "เย็นชื่นใจ รสชาติสดชื่น เข้ากันได้ดีเยี่ยมกับเมนูปิ้งย่าง",
+      "zh": "沁涼消暑，口感清爽，搭配燒烤絕配",
+      "en": "Refreshing and cool, a perfect match for delicious BBQ."
+    },
+    "containsSeafood": false,
+    "category": "cat-7cvvkq",
+    "available": true,
+    "customAddOns": [],
+    "orderIndex": 89,
+    "price": 100,
+    "containsBeef": false,
+    "name": {
+      "vi": "huy chương vàng",
+      "ko": "금메달",
+      "ja": "金メダル",
+      "th": "เหรียญทอง",
+      "zh": "金牌",
+      "en": "Taiwan Gold Medal Beer"
+    },
+    "hasNoodlesOption": false,
+    "isNotSpicy": true,
+    "image": "https://images.unsplash.com/photo-1541658016709-82535e94bc69?auto=format&fit=crop&q=80&w=400",
+    "recipe": []
+  },
+  {
+    "id": "dish-2207122330338",
+    "containsSeafood": false,
+    "description": {
+      "en": "Refreshing and cool, a perfect match for delicious BBQ.",
+      "zh": "沁涼消暑，口感清爽，搭配燒烤絕配",
+      "ja": "冷たくてさわやか、バーベキューに最高の組み合わせ。",
+      "th": "เย็นชื่นใจ รสชาติสดชื่น เข้ากันได้ดีเยี่ยมกับเมนูปิ้งย่าง",
+      "vi": "Giải nhiệt sảng khoái, hương vị tươi mát, sự kết hợp hoàn hảo với món nướng.",
+      "ko": "시원하고 상쾌하여 바베큐와 완벽한 조화를 이룹니다."
+    },
+    "recipe": [],
+    "containsBeef": false,
+    "category": "cat-7cvvkq",
+    "isNotSpicy": true,
+    "name": {
+      "zh": "金樽",
+      "en": "Gold Draft Beer",
+      "vi": "cúp vàng",
+      "ko": "황금 컵",
+      "ja": "黄金の杯",
+      "th": "ถ้วยทอง"
+    },
+    "customAddOns": [],
+    "orderIndex": 90,
+    "image": "https://images.unsplash.com/photo-1544145945-f90425340c7e?auto=format&fit=crop&q=80&w=400",
+    "price": 150,
+    "containsPork": false,
+    "available": true,
+    "hasNoodlesOption": false
+  },
+  {
+    "id": "dish-2207122323590",
+    "containsSeafood": false,
+    "isNotSpicy": true,
+    "category": "drinks",
+    "description": {
+      "en": "Refreshing and cool, a perfect match for BBQ",
+      "zh": "肥仔的快樂水~搭配燒烤絕配!",
+      "th": "เย็นชื่นใจ รสสดชื่น เข้ากับบาร์บีคิวได้อย่างลงตัว",
+      "ja": "冷たくさわやか、BBQに最高の組み合わせ",
+      "ko": "시원하고 상쾌한 음료로 바베큐와 완벽한 조화",
+      "vi": "Giải nhiệt sảng khoái, hương vị tươi mát, sự kết hợp hoàn hảo với món nướng"
+    },
+    "containsPork": false,
+    "containsBeef": false,
+    "price": 90,
+    "image": "https://images.unsplash.com/photo-1554866585-cd94860890b7?auto=format&fit=crop&q=80&w=400",
+    "orderIndex": 91,
+    "name": {
+      "en": "Coca-Cola",
+      "zh": "可口可樂",
+      "ko": "코카콜라",
+      "vi": "Coca-Cola",
+      "th": "โคคา-โคล่า",
+      "ja": "コカ・コーラ"
+    },
+    "available": true
+  },
+  {
+    "id": "dish-2207122322371",
+    "available": true,
+    "description": {
+      "vi": "Sữa Thái được dán nhãn thủ công cổ điển với hương trà đậm đà ~ sảng khoái và sảng khoái ~ đặc trưng!",
+      "ko": "진한 차 향이 나는 클래식 핸드라벨 태국 우유~ 상큼하고 상큼한~ 시그니처!",
+      "ja": "紅茶の香りが強い定番の手ラベルタイミルク～爽やかさわやか～の代表作！",
+      "th": "นมไทยฉลากมือสุดคลาสสิค กลิ่นหอมชาเข้มข้น ~ สดชื่น สดชื่น ~ ซิกเนเจอร์!",
+      "zh": "茶香濃郁的經典手標泰奶~沁涼消暑~招牌!",
+      "en": "Refreshing and cool, a perfect match for delicious BBQ."
+    },
+    "recipe": [],
+    "containsSeafood": false,
+    "containsBeef": false,
+    "name": {
+      "zh": "泰式奶茶400ml",
+      "en": "Signature Thai Iced Milk Tea (400ml)",
+      "ko": "타이 밀크티 400ml",
+      "vi": "Trà sữa Thái 400ml",
+      "th": "ชานมไทย 400มล",
+      "ja": "タイミルクティー 400ml"
+    },
+    "hasNoodlesOption": false,
+    "orderIndex": 92,
+    "image": "https://images.unsplash.com/photo-1497534446932-c925b458314e?auto=format&fit=crop&q=80&w=400",
+    "category": "drinks",
+    "customAddOns": [],
+    "isNotSpicy": true,
+    "containsPork": false,
+    "price": 90
+  },
+  {
+    "id": "dish-2207122316233",
+    "containsSeafood": false,
+    "recipe": [],
+    "description": {
+      "th": "ผัดพริกเผาขิงและกระเทียมฝอย ~ อร่อยไม่ใส่สารกันบูด! ต้องแช่เย็นเมื่อซื้อกลับบ้าน",
+      "ja": "朝天山椒、生姜、ニンニクの千切りを炒めました～保存料無添加で美味しいです！住宅購入時は要冷蔵",
+      "ko": "차오티안 고추와 다진 생강, 마늘을 볶은 요리~ 맛있고 방부제도 넣지 않았습니다! 집 구입시 냉장보관 필수",
+      "vi": "Xào tiêu Chaotian, gừng và tỏi băm nhỏ ~ thơm ngon và không thêm chất bảo quản! Cần bảo quản tủ lạnh khi mua nhà",
+      "zh": "爆炒朝天椒 薑絲 蒜 ~好吃不添加防腐劑！購買回家需冷藏",
+      "en": "Carefully crafted with rich flavors to complement your meal"
+    },
+    "containsBeef": false,
+    "category": "cat-zene8j",
+    "isNotSpicy": false,
+    "customAddOns": [],
+    "name": {
+      "en": "House Special Chili Sauce (Takeout Jar)",
+      "zh": "特製辣椒醬(外帶)",
+      "vi": "Tương ớt đặc biệt (mang đi)",
+      "ko": "특제 칠리소스(테이크아웃)",
+      "ja": "特製チリソース（持ち帰り）",
+      "th": "น้ำพริกสูตรพิเศษ (ทูโก)"
+    },
+    "orderIndex": 93,
+    "image": "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=400",
+    "available": true,
+    "containsPork": false,
+    "price": 160,
+    "hasNoodlesOption": false
+  },
+  {
+    "id": "dish-2207122312525",
+    "recipe": [],
+    "hasNoodlesOption": false,
+    "available": true,
+    "customAddOns": [],
+    "orderIndex": 94,
+    "containsPork": false,
+    "name": {
+      "ko": "태국 그린 소스",
+      "vi": "Nước sốt xanh Thái",
+      "th": "ซอสเขียวไทย",
+      "ja": "タイのグリーンソース",
+      "zh": "泰式綠醬",
+      "en": "Thai Seafood Green Chili Sauce"
+    },
+    "containsSeafood": false,
+    "isNotSpicy": false,
+    "category": "cat-zene8j",
+    "description": {
+      "zh": "精心調製，口感層次豐富，為您的餐點添彩",
+      "en": "Meticulously crafted with rich layers of flavor to complement your meal.",
+      "ko": "정성껏 준비한 풍부한 맛으로 식사에 색을 더해줍니다",
+      "vi": "Được chế biến kỹ lưỡng với hương vị đậm đà, thêm màu sắc cho bữa ăn của bạn",
+      "th": "ปรุงอย่างพิถีพิถันด้วยรสชาติเข้มข้น เพิ่มสีสันให้กับมื้ออาหารของคุณ",
+      "ja": "丁寧に仕上げた豊かな味わいで、お食事を彩ります。"
+    },
+    "image": "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&q=80&w=400",
+    "price": 0,
+    "containsBeef": false
+  },
+  {
+    "id": "dish-2207122311467",
+    "orderIndex": 95,
+    "description": {
+      "zh": "精心調製，口感層次豐富，為您的餐點添彩",
+      "en": "Meticulously crafted with rich layers of flavor to complement your meal.",
+      "th": "ปรุงอย่างพิถีพิถันด้วยรสชาติเข้มข้น เพิ่มสีสันให้กับมื้ออาหารของคุณ",
+      "ja": "丁寧に仕上げた豊かな味わいで、お食事を彩ります。",
+      "ko": "정성껏 준비한 풍부한 맛으로 식사에 색을 더해줍니다",
+      "vi": "Được chế biến kỹ lưỡng với hương vị đậm đà, thêm màu sắc cho bữa ăn của bạn"
+    },
+    "image": "https://images.unsplash.com/photo-1473093295043-cdd812d0e601?auto=format&fit=crop&q=80&w=400",
+    "category": "cat-zene8j",
+    "recipe": [],
+    "price": 0,
+    "containsBeef": false,
+    "containsSeafood": false,
+    "customAddOns": [],
+    "name": {
+      "zh": "泰式紅醬",
+      "en": "Thai BBQ Red Chili Sauce",
+      "th": "น้ำแดงไทย",
+      "ja": "タイのレッドソース",
+      "ko": "태국식 빨간 소스",
+      "vi": "Nước sốt đỏ Thái"
+    },
+    "isNotSpicy": false,
+    "available": true,
+    "containsPork": false,
+    "hasNoodlesOption": false
+  },
+  {
+    "id": "dish-2207122252395",
+    "recipe": [],
+    "available": true,
+    "hasNoodlesOption": false,
+    "customAddOns": [],
+    "orderIndex": 96,
+    "containsPork": false,
+    "name": {
+      "ja": "フランス豆",
+      "th": "ถั่วฝรั่งเศส",
+      "vi": "Đậu pháp",
+      "ko": "프랑스산 콩",
+      "zh": "四季豆",
+      "en": "Charcoal Grilled Green Beans"
+    },
+    "category": "veggies",
+    "containsSeafood": false,
+    "isNotSpicy": false,
+    "image": "https://images.unsplash.com/photo-1529193591184-b1d58069ecdd?auto=format&fit=crop&q=80&w=400",
+    "description": {
+      "vi": "Còn được gọi là đậu nhạy cảm, chúng có vị ngọt, giàu chất dinh dưỡng và ít calo.",
+      "ko": "민감한 콩이라고도 알려진 이 콩은 맛이 달콤하고 영양분이 풍부하며 칼로리가 낮습니다.",
+      "ja": "敏感豆とも呼ばれ、甘くて栄養が豊富でカロリーが低いです。",
+      "th": "เรียกอีกอย่างว่าถั่วที่ละเอียดอ่อน มีรสหวาน อุดมไปด้วยสารอาหารและมีแคลอรีต่ำ",
+      "zh": "又稱作敏豆，口感清甜、富含營養且低熱量",
+      "en": "Slowly grilled over charcoal, bursting with aroma and flavor"
+    },
+    "price": 80,
+    "containsBeef": false
+  },
+  {
+    "id": "dish-2207122141316",
+    "image": "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&q=80&w=400",
+    "containsBeef": false,
+    "available": true,
+    "description": {
+      "ko": "신주의 인기 미트볼~어른도 아이도 좋아하는",
+      "vi": "Món thịt viên nổi tiếng ở Tân Trúc ~ được cả người lớn và trẻ em yêu thích",
+      "th": "ลูกชิ้นยอดนิยมในซินจู๋ ~ ถูกใจทั้งเด็กและผู้ใหญ่",
+      "ja": "新竹で人気のミートボール ～大人も子供も大好き",
+      "en": "Slowly grilled over charcoal, bursting with aroma and flavor",
+      "zh": "新竹人氣丸子~大人小孩都愛"
+    },
+    "price": 60,
+    "orderIndex": 97,
+    "hasNoodlesOption": false,
+    "name": {
+      "zh": "新竹貢丸",
+      "en": "Hsinchu Pork Meatballs",
+      "th": "ซินจู๋ กงวาน",
+      "ja": "新竹公湾",
+      "ko": "신주공완",
+      "vi": "Tân Trúc Gongwan"
+    },
+    "containsPork": true,
+    "isNotSpicy": false,
+    "containsSeafood": false,
+    "recipe": [],
+    "category": "skewers",
+    "customAddOns": []
+  },
+  {
+    "id": "dish-2207122140364",
+    "available": true,
+    "price": 80,
+    "recipe": [],
+    "containsBeef": false,
+    "image": "https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=400",
+    "orderIndex": 98,
+    "hasNoodlesOption": false,
+    "containsSeafood": true,
+    "isNotSpicy": false,
+    "containsPork": false,
+    "category": "seafood",
+    "description": {
+      "en": "Slowly grilled over charcoal, bursting with aroma and flavor",
+      "zh": "烤甜不辣，口感Q彈紮實!",
+      "ja": "炙ってあり、甘いけど辛くなく、モチモチとした食感！",
+      "th": "คั่วหวานแต่ไม่เผ็ด เนื้อเคี้ยวหนึบ!",
+      "vi": "Rang, ngọt nhưng không cay, dai dai!",
+      "ko": "구워서 달콤하면서도 맵지 않고 쫄깃한 식감!"
+    },
+    "name": {
+      "ja": "ペンペンは甘いですか、それとも辛いですか?",
+      "th": "เป้งเป้งหวานหรือเผ็ดคะ?",
+      "vi": "Peng Peng ngọt hay cay?",
+      "ko": "펭펭은 달달한가요, 아니면 매운가요?",
+      "zh": "澎澎甜不辣",
+      "en": "Chewy Charcoal Grilled Fish Cakes"
+    },
+    "customAddOns": []
+  },
+  {
+    "id": "dish-2207122132048",
+    "orderIndex": 99,
+    "description": {
+      "ko": "엄선된 일본식 방어 턱밑살을 숯불에 소금구이했습니다. 풍부한 기름기와 부드럽고 탄력 있는 살코기가 일품입니다.",
+      "vi": "Má đùi cá cam Nhật tuyển chọn nướng muối than hoa, lớp mỡ béo ngậy cùng thịt cá mềm ngọt thơm ngon.",
+      "ja": "厳選された日本産ブリカマを炭火で塩焼きに。脂がたっぷりのっており、身は引き締まって柔らかくジューシーです。",
+      "th": "คางปลาฮามาจิญี่ปุ่นย่างเกลือด้วยเตาถ่าน เนื้อปลานุ่มแน่นและชุ่มฉ่ำด้วยไขมันปลาชั้นดี",
+      "zh": "嚴選日本鯖甘魚下巴，炭火鹽烤，油脂豐厚，肉質細嫩極富彈性。",
+      "en": "Strictly selected Japanese yellowtail collar, salt-grilled over charcoal. Rich in healthy oils with tender and bouncy meat."
+    },
+    "image": "https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=400",
+    "category": "seafood",
+    "price": 390,
+    "recipe": [],
+    "containsBeef": false,
+    "isTakeoutAvailable": true,
+    "containsSeafood": true,
+    "name": {
+      "ja": "ブリカマ塩焼き",
+      "th": "คางปลาฮามาจิญี่ปุ่นย่างเกลือ",
+      "vi": "Má đùi cá cam Nhật nướng (Hamachi Kama)",
+      "ko": "일본산 방어 턱밑살 구이 (하마치 카마)",
+      "en": "Japanese Yellowtail Collar (Hamachi Kama)",
+      "zh": "鯖甘魚下巴"
+    },
+    "customAddOns": [],
+    "isNotSpicy": true,
+    "available": true,
+    "containsPork": false,
+    "hasNoodlesOption": false
+  },
+  {
+    "id": "dish-2207122058577",
+    "available": true,
+    "orderIndex": 100,
+    "hasNoodlesOption": false,
+    "image": "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&q=80&w=400",
+    "name": {
+      "zh": "招牌泰式烤雞翅(4入)",
+      "en": "Signature Thai BBQ Chicken Wings (4pcs)",
+      "ja": "タイ風手羽先のグリル（4本）\n-- -\nタイの手作り牛肉",
+      "th": "ปีกไก่ย่างซิกเนเจอร์ (4 ชิ้น)\n---​​-\nเนื้อไทยทำมือ",
+      "vi": "Cánh gà nướng kiểu Thái đặc trưng (4 miếng)\n--​-\nThịt bò thủ công Thái Lan",
+      "ko": "시그니처 타이 그릴드 치킨 윙(4개)\n--​​-\n태국산 수제 쇠고기"
+    },
+    "containsBeef": false,
+    "recipe": [],
+    "price": 160,
+    "customAddOns": [],
+    "category": "skewers",
+    "containsPork": false,
+    "containsSeafood": false,
+    "description": {
+      "en": "Slowly grilled over charcoal, bursting with aroma and flavor",
+      "zh": "必點!必點!必點! 早上市場新鮮採買->洗淨醃製獨家泰式醬料",
+      "th": "ต้องสั่ง! ต้องสั่ง! ต้องสั่ง! ซื้อสดๆจากตลาดตอนเช้า -> ล้างและหมักด้วยน้ำจิ้มสูตรเฉพาะของไทย",
+      "ja": "必ず注文してください！必ず注文してください！必ず注文してください！朝市場から仕入れた新鮮→洗って特製タイソースに漬け込む",
+      "ko": "주문해야합니다! 주문해야합니다! 주문해야합니다! 아침에 마트에서 구매한 신선한 재료 -> 씻어서 태국 전용 소스에 재워둡니다",
+      "vi": "Phải đặt hàng! Phải đặt hàng! Phải đặt hàng! Mới mua ngoài chợ lúc sáng -> Rửa sạch và ướp với sốt Thái độc quyền"
+    },
+    "isNotSpicy": false
+  },
+  {
+    "id": "dish-2207122056269",
+    "available": true,
+    "description": {
+      "th": "สเต๊กพิเศษ!!! สินค้าทำมือรายวัน รุ่นลิมิเต็ด อิดิชั่น ~ ใช้เนื้อท้องถิ่นหมักด้วยเครื่องเทศไทยนานาชนิด -> สับเนื้อให้เหนียวแล้วผสมถั่วลิสงหยุนลิน ไม่ใช้เทคโนโลยี มีชีวิตชีวามาก เป็นงานฝีมือจากธรรมชาติทั้งหมด!",
+      "ja": "特製串！毎日の手作り限定版〜地元の牛肉を使用し、さまざまなタイのスパイスで漬け込みます -> 肉を粘りが出るまで刻み、雲林ピーナッツを混ぜます、テクノロジーは使用せず、非常に生き生きとした、すべて天然の手作りです！",
+      "ko": "전용 꼬치!!! 일일 수제 한정판~ 국내산 쇠고기를 사용하고 각종 태국 향신료에 절인 후 -> 고기를 쫄깃쫄깃해질 때까지 다진 뒤 윤린땅콩을 섞어 무기술, 아주 생기 넘치는 천연수공예품!",
+      "vi": "Xiên độc quyền!!! Phiên bản giới hạn thủ công hàng ngày ~ Sử dụng thịt bò địa phương và ngâm với nhiều loại gia vị Thái -> Cắt thịt cho đến khi dẻo rồi trộn vào đậu phộng Yunlin, không cần công nghệ, rất sống động, tất cả đều là thủ công tự nhiên!",
+      "en": "Slowly grilled over charcoal, bursting with aroma and flavor",
+      "zh": "獨家串物!!! 每日手工限量~使用本土牛肉及多種泰國香料醃製而成->肉剁到有黏性再拌入雲林落花生，沒有科技很活，全天然手工!"
+    },
+    "containsBeef": true,
+    "recipe": [],
+    "orderIndex": 101,
+    "image": "https://images.unsplash.com/photo-1529193591184-b1d58069ecdd?auto=format&fit=crop&q=80&w=400",
+    "containsSeafood": false,
+    "containsPork": false,
+    "isNotSpicy": false,
+    "category": "skewers",
+    "customAddOns": [],
+    "hasNoodlesOption": false,
+    "name": {
+      "th": "ไส้กรอกฉีด",
+      "ja": "潮吹きソーセージ",
+      "ko": "스쿼트 소시지",
+      "vi": "xúc xích mực",
+      "zh": "泰式手工牛肉",
+      "en": "Handmade Thai Spiced Beef Skewer"
+    },
+    "price": 90
+  },
+  {
+    "id": "dish-2207122053275",
+    "available": true,
+    "hasNoodlesOption": false,
+    "orderIndex": 102,
+    "image": "https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=400",
+    "name": {
+      "en": "Juicy Taiwanese Pork Sausage",
+      "zh": "噴水香腸",
+      "ja": "鶏の皮をかじった",
+      "th": "หนังไก่แทะ",
+      "vi": "da gà gặm",
+      "ko": "갉아먹힌 닭 껍질"
+    },
+    "containsBeef": false,
+    "price": 60,
+    "recipe": [],
+    "customAddOns": [],
+    "category": "skewers",
+    "containsPork": true,
+    "containsSeafood": false,
+    "isNotSpicy": false,
+    "description": {
+      "vi": "Không có tính từ cao cả nào ~ chỉ có độ ngon trực tiếp nhất ~ đại diện cho món ăn nhẹ của Đài Loan",
+      "ko": "고상한 형용사는 없다~가장 직접적인 맛만~대만과자 대표",
+      "ja": "高尚な形容詞は一切ない ～ただストレートな美味しさだけ～ 台湾スナックの代表格",
+      "th": "ไม่มีคำคุณศัพท์ที่สูงส่ง ~ มีแต่ความอร่อยที่ตรงที่สุดเท่านั้น ~ เป็นตัวแทนของขนมไต้หวัน",
+      "en": "Slowly grilled over charcoal, bursting with aroma and flavor",
+      "zh": "沒有什麼高大上的形容詞~只有最直接的美味~台灣小吃代表"
+    }
+  },
+  {
+    "id": "dish-2207122051592",
+    "orderIndex": 103,
+    "description": {
+      "ko": "누가 닭껍질은 튀겨야 한다고 했나요? 숯불의 품에 안겨 지방은 줄어들고~ 바삭바삭한 식감이 매력으로 변신!",
+      "vi": "Ai nói da gà chỉ có thể chiên? Dưới ngọn lửa than củi, chất béo được giảm bớt ~ và chuyển thành kết cấu giòn hấp dẫn!",
+      "th": "ใครว่าหนังไก่ทอดได้อย่างเดียว? ภายใต้อ้อมกอดของไฟถ่าน ไขมันก็ลดลง~ และกลายเป็นเนื้อกรอบที่น่าหลงใหล!",
+      "ja": "鶏の皮は揚げるしかないなんて誰が言ったのでしょう？炭火の包み込みで脂が減り、カリッとした食感が魅力的！",
+      "en": "Slowly grilled over charcoal, bursting with aroma and flavor",
+      "zh": "誰說雞皮只能炸?在炭火擁抱下收斂了油脂~蛻變成誘人酥脆口感!"
+    },
+    "containsBeef": false,
+    "image": "https://images.unsplash.com/photo-1529193591184-b1d58069ecdd?auto=format&fit=crop&q=80&w=400",
+    "price": 60,
+    "hasNoodlesOption": false,
+    "category": "skewers",
+    "name": {
+      "en": "Crispy Charcoal Grilled Chicken Skin",
+      "zh": "啃的雞皮",
+      "vi": "Đùi gà nướng không xương kiểu Thái",
+      "ko": "태국식 뼈없는 구운 닭다리살",
+      "ja": "タイ風骨なし鶏もも肉のグリル",
+      "th": "สะโพกไก่ย่างไร้กระดูกแบบไทย"
+    },
+    "containsSeafood": false,
+    "containsPork": false,
+    "isNotSpicy": false,
+    "recipe": [],
+    "customAddOns": [],
+    "available": true
+  },
+  {
+    "id": "dish-2207122037251",
+    "isNotSpicy": false,
+    "price": 160,
+    "containsPork": false,
+    "available": true,
+    "recipe": [],
+    "containsSeafood": false,
+    "customAddOns": [],
+    "image": "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&q=80&w=400",
+    "isTakeoutAvailable": true,
+    "category": "skewers",
+    "containsBeef": false,
+    "name": {
+      "vi": "Đùi gà rút xương nướng kiểu Thái",
+      "ko": "태국식 순살 닭다리 구이",
+      "ja": "タイ風骨なし鶏もも焼き",
+      "th": "สะโพกไก่ย่างไร้กระดูกสไตล์ไทย",
+      "zh": "泰式去骨烤雞腿",
+      "en": "Thai Style Boneless Grilled Chicken Leg"
+    },
+    "description": {
+      "zh": "去骨雞腿排以泰式香料醃製，外皮烤至金黃酥脆，肉質鮮嫩多汁，香氣十足。",
+      "en": "Boneless chicken leg marinated in Thai spices, grilled to golden-brown crispy perfection while keeping the meat tender and juicy.",
+      "ja": "タイのスパイスでマリネした骨なし鶏もも肉を、皮は黄金色でパリッと、身はジューシーで風味豊かに焼き上げました。",
+      "th": "สะโพกไก่ไร้กระดูกหมักเครื่องเทศสไตล์ไทย ย่างจนหนังกรอบสีเหลืองทอง เนื้อนุ่มฉ่ำรสชาติเข้มข้น",
+      "ko": "순살 닭다리살을 태국식 향신료로 마리네이드하여 겉은 황금빛으로 바삭하게 구워내고 속은 촉촉하고 부드러운 닭고기 구이.",
+      "vi": "Đùi gà rút xương ướp gia vị Thái đặc trưng, nướng vàng giòn lớp da bên ngoài, thịt bên trong mềm mại mọng nước."
+    },
+    "hasNoodlesOption": false,
+    "orderIndex": 104
+  },
+  {
+    "id": "dish-2005282340194",
+    "containsBeef": false,
+    "recipe": [],
+    "isNotSpicy": false,
+    "containsSeafood": true,
+    "hasNoodlesOption": false,
+    "containsPork": false,
+    "name": {
+      "ko": "정통 태국 해산물 드라이마마 누들(매운맛)",
+      "vi": "Mì khô mama hải sản Thái Lan chính hãng (cay)",
+      "th": "บะหมี่แห้งมาม่าทะเลไทยแท้ (เผ็ด)",
+      "ja": "本格タイシーフードドライママヌードル（辛口）",
+      "en": "Seafood MAMA Noodles",
+      "zh": "道地泰式海鮮乾拌mama麵（辣）"
+    },
+    "image": "https://images.unsplash.com/photo-1569718212165-3a8278d5f624?auto=format&fit=crop&q=80&w=400",
+    "available": true,
+    "description": {
+      "zh": "經典泰式mama麵~拌入獨家醬汁~擠上新鮮檸檬! 酸辣開胃 <一點辣都沒吃的不要點喔>配料:鮮蝦 魷魚圈 鱈魚丸 貢丸 日本魚板 洋蔥 紅蘿蔔絲 小黃瓜 高麗菜!",
+      "en": "Authentic Thai-style soup noodles with rich, warming broth",
+      "vi": "Mì Thái cổ điển ~ trộn với nước sốt độc quyền ~ vắt chanh tươi! Món khai vị chua cay <Không thích thì không gọi> Thành phần: tôm tươi, mực khoanh, cá tuyết viên, thịt heo viên, đĩa cá Nhật, hành tây, cà rốt thái sợi, dưa chuột và bắp cải!",
+      "ko": "클래식 타이 마마 누들~특제 소스를 섞은~상큼한 레몬을 짜낸 맛! 매콤새콤 전채 <별로 좋아하지 않으면 주문하지 마세요> 재료: 신선한 새우, 오징어 링, 대구 완자, 돼지 고기 완자, 일본식 생선 접시, 양파, 채 썬 당근, 오이, 양배추!",
+      "ja": "タイの定番ママヌードル～専用ソースと絡めて～フレッシュレモンを絞って！酸っぱい前菜 ＜苦手な方はご遠慮ください＞ 材料：新鮮なエビ、イカリング、タラ団子、豚団子、魚の盛り合わせ、玉ねぎ、人参の千切り、キュウリ、キャベツ！",
+      "th": "มาม่าไทยสุดคลาสสิค ~ คลุกน้ำจิ้มสูตรพิเศษ ~ คั้นมะนาวสด! อาหารเรียกน้ำย่อยร้อนๆ <อย่าสั่งถ้าไม่ชอบเลย> ส่วนผสม: กุ้งสด, ปลาหมึกแหวน, ลูกชิ้นปลาคอด, ลูกชิ้นหมู, ปลาญี่ปุ่น, หัวหอม, แครอทฝอย, แตงกวา และกะหล่ำปลี!"
+    },
+    "customAddOns": [
+      {
+        "id": "addon-1784480168973-5",
+        "name": {
+          "th": "ชุดอาหารอัพเกรด (ผักย่าง + นมไทย 1 แก้ว)",
+          "ja": "グレードアップ定食（焼き野菜＋タイミルク1杯）",
+          "ko": "업그레이드된 정식 (구운 야채 + 태국 우유 1잔)",
+          "vi": "Set ăn nâng cấp (rau nướng + 1 cốc sữa Thái)",
+          "zh": "升級套餐(烤蔬菜+泰奶一杯)",
+          "en": "Upgraded set meal (roasted vegetables + a cup of Thai milk)"
+        },
+        "price": 140
+      }
+    ],
+    "price": 190,
+    "orderIndex": 105,
+    "category": "tomyum"
+  },
+  {
+    "id": "dish-1909192003211",
+    "containsBeef": false,
+    "recipe": [],
+    "isNotSpicy": false,
+    "containsSeafood": false,
+    "hasNoodlesOption": false,
+    "containsPork": false,
+    "name": {
+      "ko": "터진 새송이버섯",
+      "vi": "Nấm Sò Vua Nổ",
+      "th": "เห็ดนางรมราชาระเบิด",
+      "ja": "爆裂キングヒラタケ",
+      "zh": "爆汁杏鮑菇",
+      "en": "Juicy King Oyster Mushroom Skewer"
+    },
+    "image": "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&q=80&w=400",
+    "available": true,
+    "description": {
+      "zh": "美味多汁~揪c的口感~杏鮑菇口感似雞肉",
+      "en": "Slowly grilled over charcoal, bursting with aroma and flavor",
+      "ko": "맛있고 육즙이 풍부해요~ 느타리버섯의 식감~ 새송이버섯의 맛은 닭고기와 비슷해요",
+      "vi": "Ngon và ngon ngọt ~ Kết cấu của nấm sò ~ Hương vị của nấm sò vua giống như thịt gà",
+      "th": "อร่อยและชุ่มฉ่ำ ~ เนื้อสัมผัสของเห็ดนางรม ~ รสชาติของเห็ดนางรมหลวงก็เหมือนไก่",
+      "ja": "ジューシーで美味しい〜エリンギの食感〜エリンギの味は鶏肉に似ています"
+    },
+    "customAddOns": [],
+    "price": 80,
+    "orderIndex": 106,
+    "category": "veggies"
+  },
+  {
+    "id": "dish-1909191959076",
+    "category": "seafood",
+    "price": 320,
+    "name": {
+      "ja": "明太子さんま（骨抜き）2p",
+      "th": "Mentaiko saury (เอากระดูกออก) 2p",
+      "vi": "Cá thu đao Mentaiko (đã bỏ xương) 2p",
+      "ko": "멘타이코 꽁치(뼈제거) 2p",
+      "zh": "明太子秋刀魚(去刺)2p",
+      "en": "Deboned Pacific Saury Stuffed w/ Mentaiko (2pcs)"
+    },
+    "hasNoodlesOption": false,
+    "containsBeef": false,
+    "containsSeafood": true,
+    "image": "https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=400",
+    "description": {
+      "en": "Slowly grilled over charcoal, bursting with aroma and flavor",
+      "zh": "去骨去刺秋刀魚，填入明太子，口感一流!",
+      "ko": "뼈도 없고 가시도 없는 꽁치를 멘타이코로 채워 맛이 좋습니다!",
+      "vi": "Cá thu đao không xương và không xương, nhồi mentaiko, có vị rất ngon!",
+      "th": "ปลาซันไรย์ไม่มีกระดูกและไร้กระดูกสันหลังสอดไส้เมนไทโกะ รสชาติเยี่ยมมาก!",
+      "ja": "骨と背骨のないさんまに明太子を詰めて食べると美味しいですよ！"
+    },
+    "orderIndex": 107,
+    "customAddOns": [],
+    "available": true,
+    "isNotSpicy": true,
+    "containsPork": false,
+    "recipe": []
+  },
+  {
+    "id": "dish-1909191946205",
+    "image": "https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=400",
+    "orderIndex": 108,
+    "containsPork": false,
+    "recipe": [],
+    "name": {
+      "en": "Charcoal Grilled Shiitake Mushrooms",
+      "zh": "香菇",
+      "ko": "표고버섯 구い",
+      "vi": "Nấm hương nướng than hoa",
+      "ja": "しいたけ焼き",
+      "th": "เห็ดหอมย่าง"
+    },
+    "category": "veggies",
+    "price": 80,
+    "customAddOns": [],
+    "available": true,
+    "description": {
+      "ja": "新鮮な大ぶり椎茸に特製タレを塗って炭火焼きに。椎茸のみずみずしい甘みと旨味をぎゅっと閉じ込めました。",
+      "th": "เห็ดหอมสดดอกโตทาซอสสูตรพิเศษย่างเตาถ่าน รสชาติหวานชุ่มฉ่ำตามธรรมชาติ",
+      "ko": "신선하고 커다란 표고버섯에 특제 소스를 발라 숯불에 구워, 버섯 고유의 촉촉하고 달콤한 풍미를 가두었습니다.",
+      "vi": "Nấm hương tươi cỡ lớn phết sốt đặc chế nướng than hoa, giữ trọn vị ngọt thanh mọng nước tự nhiên của nấm.",
+      "en": "Fresh large shiitake mushrooms brushed with special sauce and charcoal grilled to retain their sweet, juicy natural taste.",
+      "zh": "新鮮大香菇刷上特製醬汁炭烤，鎖住香菇鮮甜多汁的原始美味。"
+    },
+    "hasNoodlesOption": false,
+    "containsBeef": false,
+    "isNotSpicy": false,
+    "containsSeafood": false,
+    "isTakeoutAvailable": true
+  },
+  {
+    "id": "dish-1909191945086",
+    "image": "https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=400",
+    "orderIndex": 109,
+    "containsPork": false,
+    "recipe": [],
+    "name": {
+      "en": "Charcoal Grilled Green Bell Pepper",
+      "zh": "青椒",
+      "ja": "ピーマン",
+      "th": "พริกเขียว",
+      "vi": "tiêu xanh",
+      "ko": "피망"
+    },
+    "category": "veggies",
+    "price": 80,
+    "customAddOns": [],
+    "available": true,
+    "description": {
+      "vi": "Ớt xanh là loại rau có hàm lượng vitamin C cao, cao hơn cả cam và liễu thái hạt lựu ở cùng trọng lượng!",
+      "ko": "풋고추는 같은 무게의 오렌지와 버드나무보다 비타민C 함량이 높은 채소입니다!",
+      "ja": "ピーマンはビタミンCが豊富な野菜で、同じ重量のオレンジや角切りのヤナギよりも多く含まれています。",
+      "th": "พริกเขียวเป็นผักที่มีวิตามินซีสูง สูงกว่าส้ม และหลิวหั่นเต๋าในน้ำหนักเท่ากัน!",
+      "zh": "青椒是維生素C很高的蔬菜，同重量之下比橘子、柳丁都還高!",
+      "en": "Slowly grilled over charcoal, bursting with aroma and flavor"
+    },
+    "hasNoodlesOption": false,
+    "containsBeef": false,
+    "isNotSpicy": false,
+    "containsSeafood": false
+  },
+  {
+    "id": "dish-1909191943297",
+    "image": "https://images.unsplash.com/photo-1529193591184-b1d58069ecdd?auto=format&fit=crop&q=80&w=400",
+    "available": true,
+    "customAddOns": [],
+    "isNotSpicy": false,
+    "hasNoodlesOption": false,
+    "category": "skewers",
+    "containsSeafood": false,
+    "containsPork": true,
+    "price": 60,
+    "orderIndex": 110,
+    "description": {
+      "ko": "숯불에 천천히 구워서 향이 넘치고, 한입 먹을 때마다 최고의 맛이 난다",
+      "vi": "Được nướng từ từ trên lửa than, hương thơm tràn ngập, mỗi miếng cắn là vị ngon tuyệt đỉnh",
+      "th": "ค่อยๆ ย่างบนไฟถ่าน กลิ่นหอมฟุ้งฟุ้ง และทุกคำคือความอร่อยขั้นสุด",
+      "ja": "炭火でじっくり焼き上げると香ばしさが溢れ、一口食べるごとに最高の美味しさです",
+      "zh": "炭火慢烤，香氣四溢，每一口都是極致美味",
+      "en": "Slowly grilled over charcoal, bursting with rich aroma and delicious flavor in every bite."
+    },
+    "recipe": [],
+    "name": {
+      "en": "Crispy Charcoal Grilled Pork Intestine",
+      "zh": "精選香酥肥腸",
+      "th": "ไส้กรอกกรอบคัดพิเศษ",
+      "ja": "厳選クリスピーソーセージ",
+      "ko": "엄선된 크리스피 소시지",
+      "vi": "Xúc Xích Giòn Tuyển Chọn"
+    },
+    "containsBeef": false
+  },
+  {
+    "id": "dish-1909191940395",
+    "containsBeef": true,
+    "image": "https://images.unsplash.com/photo-1529193591184-b1d58069ecdd?auto=format&fit=crop&q=80&w=400",
+    "available": true,
+    "description": {
+      "ja": "絶妙なバランスの牛カルビは、外は炙り、中はピンク色に焼き上げられています。一口食べると、味覚にとって最高の楽しみが得られます。",
+      "th": "ซี่โครงเนื้อที่ได้สัดส่วนกำลังดีจะถูกย่างด้านนอกและด้านในเป็นสีชมพู การได้กัดสักคำถือเป็นความเพลิดเพลินสูงสุดสำหรับต่อมรับรสของคุณ!",
+      "vi": "Những miếng sườn bò có tỷ lệ hoàn hảo được nướng chín bên ngoài và hồng hào bên trong. Cắn một miếng là cảm giác thích thú tột cùng dành cho vị giác của bạn!",
+      "ko": "완벽한 비율의 소갈비살은 겉은 그을리고 속은 핑크빛을 띕니다. 한입 먹는 것이 입맛을 돋우는 최고의 즐거움입니다!",
+      "zh": "金比例的牛肋肉塊,烤炙外表焦香,內裡粉嫩,一口咬下,是味蕾的極致享受!",
+      "en": "Slowly grilled over charcoal, bursting with aroma and flavor"
+    },
+    "price": 70,
+    "orderIndex": 111,
+    "hasNoodlesOption": false,
+    "name": {
+      "en": "Prime Australian Beef Rib Skewer",
+      "zh": "極炙原塊牛肋(澳牛)",
+      "vi": "Sườn bò nướng (bò Úc)",
+      "ko": "구운 쇠고기 갈비(호주산 쇠고기)",
+      "ja": "ビーフリブのグリル（オーストラリア産牛肉）",
+      "th": "ซี่โครงเนื้อย่าง (เนื้อออสเตรเลีย)"
+    },
+    "containsPork": false,
+    "isNotSpicy": false,
+    "containsSeafood": false,
+    "recipe": [],
+    "category": "skewers",
+    "customAddOns": []
+  },
+  {
+    "id": "dish-1909191316572",
+    "recipe": [],
+    "isNotSpicy": false,
+    "containsBeef": false,
+    "available": true,
+    "orderIndex": 112,
+    "containsSeafood": false,
+    "name": {
+      "en": "Marinated Chicken Tail Skewers (5pcs)",
+      "zh": "肉雞七里香",
+      "vi": "Gà thịt Qilixiang",
+      "ko": "육계 치킨 Qilixiang",
+      "ja": "ブロイラーチキン キリシャン",
+      "th": "ไก่เนื้อ Qilixiang"
+    },
+    "description": {
+      "ja": "七里香入りブロイラー串5本～半分には切れません！毎日朝市で仕入れた新鮮〜摘み取って洗って専用マリネに漬け込んで帰ってきます！",
+      "th": "ไก่เนื้อห้าเสียบไม้กับ Qilixiang ~ ไม่ผ่าครึ่ง! ซื้อสดใหม่ที่ตลาดเช้าทุกวัน ~ กลับมาถอน ล้าง และหมักด้วยน้ำดองสุดพิเศษ!",
+      "vi": "Năm xiên gà thịt với Qilixiang ~ không cắt làm đôi! Mới mua ở chợ buổi sáng hàng ngày ~ quay lại hái, rửa sạch và ướp với nước xốt độc quyền!",
+      "ko": "칠리샹을 곁들인 육계 꼬치 5개~ 반으로 쪼개지지 않아요! 매일 아침시장에서 갓 구매한~ 직접 따서 씻어서 전용 양념장에 재워두세요!",
+      "zh": "五顆一串肉雞七里香 ~沒有剖半喔! 每日早市新鮮採買~回來拔毛洗淨醃製獨家醃料!",
+      "en": "Slowly grilled over charcoal, bursting with aroma and flavor"
+    },
+    "image": "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&q=80&w=400",
+    "customAddOns": [],
+    "price": 70,
+    "hasNoodlesOption": false,
+    "category": "skewers",
+    "containsPork": false
+  },
+  {
+    "id": "dish-1909191310334",
+    "hasNoodlesOption": false,
+    "category": "skewers",
+    "containsPork": true,
+    "orderIndex": 113,
+    "containsSeafood": false,
+    "customAddOns": [],
+    "description": {
+      "ja": "厳選された豚バラ肉で新鮮なパクチーを包み、炭火で香ばしく焼き上げました。パクチー好きにはたまらない一品です。",
+      "th": "หมูสามชั้นคัดพิเศษพันผักชีสด ย่างเตาถ่านจนส่งกลิ่นหอมละมุน เมนูที่คนรักผักชีห้ามพลาด",
+      "ko": "엄선된 삼겹살로 신선한 고수를 감싸 숯불에 구워 고소한 고기 기름과 향긋한 고수 향이 어우러집니다. 고수 마니아라면 반드시 맛봐야 할 메뉴.",
+      "vi": "Thịt ba chỉ tuyển chọn cuộn rau mùi tươi, nướng than hoa thơm lừng hòa quyện cùng vị béo của thịt. Món ngon không thể bỏ qua cho tín đồ mê rau mùi.",
+      "zh": "精選豬五花包裹新鮮香菜，炭火烤出油脂香氣，喜愛香菜者的必點美味。",
+      "en": "Premium pork belly wrapped around fresh cilantro (coriander), grilled over charcoal to aromatic perfection. A must-try for cilantro lovers."
+    },
+    "recipe": [],
+    "price": 90,
+    "isTakeoutAvailable": true,
+    "containsBeef": false,
+    "name": {
+      "ko": "고수 삼겹살말이",
+      "vi": "Ba chỉ heo cuộn rau mùi (ngò rí)",
+      "th": "หมูสามชั้นพันผักชี",
+      "ja": "パクチー豚肉巻き",
+      "zh": "香菜豬肉捲",
+      "en": "Pork Roll with Cilantro"
+    },
+    "available": true,
+    "isNotSpicy": false,
+    "image": "https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=400"
+  }
 ];
 
 export const INITIAL_INGREDIENTS: any[] = [
 
   {
     "id": "ig-01",
-    "unit": "pcs",
+    "minThreshold": 15,
+    "stock": 92,
     "name": {
       "zh": "大鮮蝦",
-      "th": "กุ้งแชบ๊วย大",
-      "ja": "新鮮なえび",
       "en": "Fresh Prawns",
+      "ja": "新鮮なえび",
+      "th": "กุ้งแชบ๊วย大",
       "ko": "생새우"
     },
-    "stock": 92,
-    "minThreshold": 15
+    "unit": "pcs"
   },
   {
     "id": "ig-02",
-    "unit": "skewers",
-    "stock": 99,
     "name": {
-      "zh": "頂級牛肉串",
-      "th": "เนื้อวัวพรีเมียม",
-      "ja": "厳選牛肉串",
       "en": "USDA Beef",
-      "ko": "수제 소고기"
+      "zh": "頂級牛肉串",
+      "ko": "수제 소고기",
+      "ja": "厳選牛肉串",
+      "th": "เนื้อวัวพรีเมียม"
     },
+    "stock": 99,
+    "unit": "skewers",
     "minThreshold": 20
   },
   {
@@ -835,77 +4866,77 @@ export const INITIAL_INGREDIENTS: any[] = [
     "unit": "kg",
     "name": {
       "zh": "鮮甜高麗菜",
-      "th": "กะหล่ำปลีหวาน",
-      "ja": "キャベツ",
+      "en": "Organic Cabbage",
       "ko": "유기농 양배추",
-      "en": "Organic Cabbage"
+      "ja": "キャベツ",
+      "th": "กะหล่ำปลีหวาน"
     },
     "minThreshold": 10
   },
   {
     "id": "ig-04",
+    "minThreshold": 8,
     "unit": "pcs",
-    "name": {
-      "th": "หอยนางรมยักษ์/หอยเชลล์",
-      "zh": "生食干貝/生蠔",
-      "en": "Oysters / Scallops",
-      "ko": "석화 굴 및 가리비",
-      "ja": "生牡蠣・干貝"
-    },
     "stock": 100,
-    "minThreshold": 8
-  },
-  {
-    "id": "ig-05",
-    "stock": 117,
-    "minThreshold": 25,
-    "unit": "packs",
     "name": {
-      "th": "บะหมี่มาม่า/ก๋วยเตี๋ยว",
-      "zh": "冬蔭功泡麵/米粉",
-      "en": "Mama / Rice Noodles",
-      "ko": "라면 사리",
-      "ja": "ラーメン・フォー"
+      "en": "Oysters / Scallops",
+      "zh": "生食干貝/生蠔",
+      "ko": "석화 굴 및 가리비",
+      "th": "หอยนางรมยักษ์/หอยเชลล์",
+      "ja": "生牡蠣・干貝"
     }
   },
   {
-    "id": "ig-06",
-    "unit": "cans",
-    "minThreshold": 12,
+    "id": "ig-05",
     "name": {
-      "ja": "ココナッツミルク缶",
-      "ko": "코코넛 밀크",
-      "en": "Rich Coconut Milk",
-      "zh": "頂級椰奶罐",
-      "th": "กะทิกระป๋องออร์แกนิก"
+      "en": "Mama / Rice Noodles",
+      "zh": "冬蔭功泡麵/米粉",
+      "th": "บะหมี่มาม่า/ก๋วยเตี๋ยว",
+      "ja": "ラーメン・フォー",
+      "ko": "라면 사리"
     },
-    "stock": 99.75
+    "stock": 117,
+    "unit": "packs",
+    "minThreshold": 25
+  },
+  {
+    "id": "ig-06",
+    "minThreshold": 12,
+    "stock": 99.75,
+    "name": {
+      "zh": "頂級椰奶罐",
+      "en": "Rich Coconut Milk",
+      "ja": "ココナッツミルク缶",
+      "th": "กะทิกระป๋องออร์แกนิก",
+      "ko": "코코넛 밀크"
+    },
+    "unit": "cans"
   },
   {
     "id": "ig-07",
-    "minThreshold": 20,
-    "unit": "liters",
     "stock": 100,
+    "unit": "liters",
+    "minThreshold": 20,
     "name": {
-      "zh": "泰手標紅茶原料",
       "th": "ชาแดงตรามือเกรดส่งออก",
       "ja": "タイ茶葉",
       "ko": "홍차 베이스",
+      "zh": "泰手標紅茶原料",
       "en": "Thai Red Tea Brew"
     }
   },
   {
     "id": "ig-08",
-    "stock": 99,
     "unit": "skewers",
-    "minThreshold": 15,
+    "stock": 99,
     "name": {
-      "ja": "豚バラ・えのき",
-      "en": "Pork Belly & Enoki",
-      "ko": "돼지 삼겹 및 팽이",
       "zh": "爆香豬五花 / 金針菇",
-      "th": "หมูสามชั้น/เห็ดเข็มทอง"
-    }
+      "en": "Pork Belly & Enoki",
+      "ja": "豚バラ・えのき",
+      "th": "หมูสามชั้น/เห็ดเข็มทอง",
+      "ko": "돼지 삼겹 및 팽이"
+    },
+    "minThreshold": 15
   }
 ];
 
