@@ -1,4 +1,3 @@
-import { Order } from '../types';
 import { safeStorage } from './safeStorage';
 
 export interface QueuedRequest {

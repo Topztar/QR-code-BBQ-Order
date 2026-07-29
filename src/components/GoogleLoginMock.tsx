@@ -1,7 +1,6 @@
 import { apiFetch } from "../lib/api";
 import React, { useState, useEffect } from 'react';
 import { LogIn, LogOut, CheckCircle, Shield, ArrowLeft, Key, ExternalLink, HelpCircle } from 'lucide-react';
-import { TRANSLATIONS } from '../data';
 import { Language } from '../types';
 
 // Helper to mask sensitive email topztar@gmail.com and other personal emails to show only a custom Member Code / Masked ID
@@ -137,18 +136,6 @@ export const GoogleLoginMock: React.FC<GoogleLoginMockProps> = ({
     }
   };
 
-  const handleQuickLogin = (email: string, name: string, picUrl: string) => {
-    const mockProfile: GoogleUserProfile = {
-      id: `google-usr-${Math.floor(1000 + Math.random() * 9000)}`,
-      displayName: name,
-      pictureUrl: picUrl,
-      statusMessage: '今天也要吃爆泰味冬蔭功與碳烤雞皮！🔥🍢',
-      email: email,
-    };
-    onLoginSuccess(mockProfile);
-    setIsOpen(false);
-    setIsCustomMode(false);
-  };
 
   const handleSimulateLogin = () => {
     const mockProfile: GoogleUserProfile = {

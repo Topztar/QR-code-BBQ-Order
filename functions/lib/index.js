@@ -424,7 +424,8 @@ put('/orders/:id/status', async (req, res) => {
     const { status } = req.body;
     try {
         await db.collection('orders').doc(id).update({ status });
-        res.json({ success: true });
+        const updated = await db.collection('orders').doc(id).get();
+        res.json(updated.data());
     }
     catch (error) {
         res.status(500).send(error);
@@ -435,7 +436,8 @@ put('/orders/:id/table-number', async (req, res) => {
     const { tableNumber } = req.body;
     try {
         await db.collection('orders').doc(id).update({ tableNumber });
-        res.json({ success: true });
+        const updated = await db.collection('orders').doc(id).get();
+        res.json(updated.data());
     }
     catch (error) {
         res.status(500).send(error);
@@ -446,7 +448,8 @@ put('/orders/:id/quick-notes', async (req, res) => {
     const { quickNotes } = req.body;
     try {
         await db.collection('orders').doc(id).update({ quickNotes });
-        res.json({ success: true });
+        const updated = await db.collection('orders').doc(id).get();
+        res.json(updated.data());
     }
     catch (error) {
         res.status(500).send(error);
@@ -457,7 +460,8 @@ put('/orders/:id/flag', async (req, res) => {
     const { isFlagged, flagReason } = req.body;
     try {
         await db.collection('orders').doc(id).update({ isFlagged, flagReason });
-        res.json({ success: true });
+        const updated = await db.collection('orders').doc(id).get();
+        res.json(updated.data());
     }
     catch (error) {
         res.status(500).send(error);
@@ -468,7 +472,8 @@ put('/orders/:id/items', async (req, res) => {
     const { items, refundLogs } = req.body;
     try {
         await db.collection('orders').doc(id).update({ items, refundLogs });
-        res.json({ success: true });
+        const updated = await db.collection('orders').doc(id).get();
+        res.json(updated.data());
     }
     catch (error) {
         res.status(500).send(error);
@@ -499,7 +504,8 @@ put('/orders/:id/checkout', async (req, res) => {
                 }
             }
         }
-        res.json({ success: true });
+        const updated = await db.collection('orders').doc(id).get();
+        res.json(updated.data());
     }
     catch (error) {
         res.status(500).send(error);
@@ -511,7 +517,46 @@ put('/orders/:id/complete', async (req, res) => {
         await db.collection('orders').doc(id).update({
             status: 'completed'
         });
-        res.json({ success: true });
+        const updated = await db.collection('orders').doc(id).get();
+        res.json(updated.data());
+    }
+    catch (error) {
+        res.status(500).send(error);
+    }
+});
+put('/orders/:id/items/:itemId/complete', async (req, res) => {
+    const id = req.params.id;
+    const itemId = req.params.itemId;
+    const { isCompleted, isPrepared } = req.body;
+    try {
+        const docRef = db.collection('orders').doc(id);
+        const docSnap = await docRef.get();
+        if (!docSnap.exists) {
+            return res.status(404).json({ error: 'Order not found' });
+        }
+        const order = docSnap.data();
+        const item = order.items.find((it) => it.id === itemId);
+        if (!item) {
+            return res.status(404).json({ error: 'Item not found' });
+        }
+        if (typeof isCompleted !== 'undefined') {
+            item.isCompleted = !!isCompleted;
+            if (item.isCompleted) {
+                item.isPrepared = true;
+            }
+        }
+        if (typeof isPrepared !== 'undefined') {
+            item.isPrepared = !!isPrepared;
+        }
+        const allCompleted = order.items.every((it) => it.isCompleted);
+        if (allCompleted && order.status !== 'paid') {
+            order.status = 'completed';
+        }
+        else if (order.status === 'completed') {
+            order.status = 'preparing';
+        }
+        await docRef.set(order, { merge: true });
+        return res.json(order);
     }
     catch (error) {
         res.status(500).send(error);

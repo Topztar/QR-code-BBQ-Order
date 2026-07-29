@@ -3,61 +3,16 @@ import React, { Component, useState, useEffect, useMemo } from 'react';
 import { Ingredient, Promotion, Language, Category, TableConfig, Order, OrderStatus, Reservation } from '../types';
 import { getLocalizedText } from '../utils/i18n';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
-import { TrendingUp, Package, Users, AlertTriangle, Play, RefreshCw, Layers, Sparkles, Send, Coins, KeyRound, Lock, Unlock, QrCode, Trash2, Plus, Edit, Download, Calendar, Eye, FileText, ShoppingBag, ShoppingCart, Copy, Check, ExternalLink, Minus, Flame, Printer, ArrowUp, ArrowDown, Maximize2, Minimize2, ChevronLeft, ChevronRight } from 'lucide-react';
-import { db, auth, isFirebaseSyncEnabled } from '../lib/firebase';
+import { TrendingUp, Package, AlertTriangle, Layers, Sparkles, Coins, Lock, Unlock, QrCode, Trash2, Plus, Edit, Download, Calendar, FileText, ShoppingBag, ShoppingCart, Copy, Check, ExternalLink, Minus, Flame, Printer, Maximize2, Minimize2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { db, isFirebaseSyncEnabled } from '../lib/firebase';
 import { safeStorage } from '../lib/safeStorage';
-import { collection, doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc } from 'firebase/firestore';
 import PrintLogsD3Chart from './PrintLogsD3Chart';
 
 const localStorage = safeStorage;
 
 
-enum OperationType {
-  CREATE = 'create',
-  UPDATE = 'update',
-  DELETE = 'delete',
-  LIST = 'list',
-  GET = 'get',
-  WRITE = 'write',
-}
 
-interface FirestoreErrorInfo {
-  error: string;
-  operationType: OperationType;
-  path: string | null;
-  authInfo: {
-    userId?: string | null;
-    email?: string | null;
-    emailVerified?: boolean | null;
-    isAnonymous?: boolean | null;
-    tenantId?: string | null;
-    providerInfo?: {
-      providerId?: string | null;
-      email?: string | null;
-    }[];
-  };
-}
-
-function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
-  const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
-    authInfo: {
-      userId: auth.currentUser?.uid || null,
-      email: auth.currentUser?.email || null,
-      emailVerified: auth.currentUser?.emailVerified || null,
-      isAnonymous: auth.currentUser?.isAnonymous || null,
-      tenantId: auth.currentUser?.tenantId || null,
-      providerInfo: auth.currentUser?.providerData?.map(provider => ({
-        providerId: provider.providerId,
-        email: provider.email,
-      })) || []
-    },
-    operationType,
-    path
-  };
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
-}
 
 interface ModalErrorBoundaryProps {
   children: React.ReactNode;
@@ -406,7 +361,6 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     onConfirm: () => void | Promise<void>;
   } | null>(null);
 
-  const [isActionExecuting, setIsActionExecuting] = useState<boolean>(false);
   const [isCheckoutSubmitting, setIsCheckoutSubmitting] = useState<boolean>(false);
 
   // Points Adjustment Modal details
@@ -792,7 +746,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   const [editingOrderTableValue, setEditingOrderTableValue] = useState<string>('');
 
   // Promo combo staging states
-  const [tempPromoCombo, setTempPromoCombo] = useState<any>(promoCombo);
+  const [, setTempPromoCombo] = useState<any>(promoCombo);
   const [tempPromoCombos, setTempPromoCombos] = useState<any[]>([]);
   const [promoComboSaveError, setPromoComboSaveError] = useState<string | null>(null);
   const [promoComboSaveSuccess, setPromoComboSaveSuccess] = useState<string | null>(null);
@@ -1429,56 +1383,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   // Cashier item addition dropdown state
   const [cashierNewItemInput, setCashierNewItemInput] = useState<string>('');
 
-  const handleCashierQtyChange = async (itemId: string, delta: number) => {
-    if (!cashierSelectedOrder || !onUpdateOrderItems) return;
-    const updatedItems = cashierSelectedOrder.items.map((it: any) => {
-      if (it.id === itemId) {
-        return { ...it, qty: it.qty + delta };
-      }
-      return it;
-    }).filter((it: any) => it.qty > 0);
 
-    if (updatedItems.length === 0) {
-      setConfirmActionModal({
-        isOpen: true,
-        title: '⚠️ 訂單已無菜品',
-        message: `訂單 [${cashierSelectedOrder.id}] 的菜品已被清空。是否直接刪除此訂單？`,
-        actionLabel: '確定刪除 Delete',
-        onConfirm: async () => {
-          if (onDeleteOrder) {
-            await onDeleteOrder(cashierSelectedOrder.id);
-          }
-          setSelectedCashierOrderId(null);
-        }
-      });
-      return;
-    }
-
-    await onUpdateOrderItems(cashierSelectedOrder.id, updatedItems);
-  };
-
-  const handleCashierRemoveItem = async (itemId: string) => {
-    if (!cashierSelectedOrder || !onUpdateOrderItems) return;
-    const updatedItems = cashierSelectedOrder.items.filter((it: any) => it.id !== itemId);
-
-    if (updatedItems.length === 0) {
-      setConfirmActionModal({
-        isOpen: true,
-        title: '⚠️ 訂單已無菜品',
-        message: `移除此品項後，訂單 [${cashierSelectedOrder.id}] 將無任何菜品。是否直接刪除此訂單？`,
-        actionLabel: '確定刪除 Delete',
-        onConfirm: async () => {
-          if (onDeleteOrder) {
-            await onDeleteOrder(cashierSelectedOrder.id);
-          }
-          setSelectedCashierOrderId(null);
-        }
-      });
-      return;
-    }
-
-    await onUpdateOrderItems(cashierSelectedOrder.id, updatedItems);
-  };
 
   const handleCashierAddMenuItem = async (menuItemId: string) => {
     if (!cashierSelectedOrder || !onUpdateOrderItems) return;
@@ -10784,6 +10689,30 @@ ${customerDetails}
                     </div>
                   </div>
 
+                  {/* Takeout Info Panel */}
+                  {selectedOrder.takeoutInfo && (
+                    <div className="mt-4 bg-blue-950/40 border border-blue-500/30 rounded-xl p-4 font-sans space-y-2">
+                      <div className="flex items-center gap-2 border-b border-blue-500/20 pb-2 mb-2">
+                        <span className="text-lg">🥡</span>
+                        <h4 className="text-xs font-black text-blue-300 uppercase tracking-wider">外帶表單資訊 Takeout Info</h4>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3 text-xs">
+                        <div>
+                          <span className="text-zinc-500 block text-[10px] mb-0.5">顧客姓名 Name</span>
+                          <span className="text-white font-bold">{selectedOrder.takeoutInfo.customerName}</span>
+                        </div>
+                        <div>
+                          <span className="text-zinc-500 block text-[10px] mb-0.5">聯絡電話 Phone</span>
+                          <span className="text-white font-bold font-mono">{selectedOrder.takeoutInfo.phone}</span>
+                        </div>
+                        <div className="col-span-2">
+                          <span className="text-zinc-500 block text-[10px] mb-0.5">預訂取餐時間 Pickup Time</span>
+                          <span className="text-amber-400 font-black font-mono text-sm">{selectedOrder.takeoutInfo.pickupTime}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Checkout screen block */}
                   <div className="mt-4 pt-1 font-sans">
                     <div className="bg-gradient-to-br from-[#1a1a1a] via-[#121212] to-[#0a0a0a] border border-[#E5B453]/20 rounded-xl p-4.5 space-y-3.5">
@@ -11983,26 +11912,38 @@ ${customerDetails}
                   <div className="space-y-1">
                     <span className="text-zinc-500 font-sans block text-[10px]">指定桌號 Designated Table *</span>
                     <div className="w-full bg-[#1e1e1e] border border-white/10 rounded p-1.5 text-white max-h-32 overflow-y-auto space-y-1">
-                      {tables.map(t => (
-                        <label key={t.id} className="flex items-center gap-2 cursor-pointer hover:bg-white/5 p-1 rounded">
-                          <input 
-                            type="checkbox" 
-                            checked={resTableInputs.includes(t.id)}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setResTableInputs(prev => [...prev, t.id]);
-                              } else {
-                                setResTableInputs(prev => prev.filter(id => id !== t.id));
-                              }
-                            }}
-                            className="accent-amber-500" 
-                          />
-                          <span className="text-xs">
-                            {t.id} 號桌位 {t.maxCapacity ? `(上限 ${t.maxCapacity}人)` : ''} 
-                            <span className="text-zinc-400 ml-1 text-[10px]">(現狀: {t.status === 'preserved' ? '保留中' : t.status === 'in_use' ? '用餐中' : '空閒'})</span>
-                          </span>
-                        </label>
-                      ))}
+                      {(() => {
+                        const currentSelectedCapacity = tables
+                          .filter(t => resTableInputs.includes(t.id))
+                          .reduce((sum, t) => sum + (t.maxCapacity || 0), 0);
+                        
+                        return tables.map(t => {
+                          const isChecked = resTableInputs.includes(t.id);
+                          const isDisabled = !isChecked && currentSelectedCapacity >= resGuestsInput;
+                          
+                          return (
+                            <label key={t.id} className={`flex items-center gap-2 p-1 rounded transition-opacity ${isDisabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-white/5'}`}>
+                              <input 
+                                type="checkbox" 
+                                checked={isChecked}
+                                disabled={isDisabled}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setResTableInputs(prev => [...prev, t.id]);
+                                  } else {
+                                    setResTableInputs(prev => prev.filter(id => id !== t.id));
+                                  }
+                                }}
+                                className="accent-amber-500" 
+                              />
+                              <span className="text-xs">
+                                {t.id} 號桌位 {t.maxCapacity ? `(上限 ${t.maxCapacity}人)` : ''} 
+                                <span className="text-zinc-400 ml-1 text-[10px]">(現狀: {t.status === 'preserved' ? '保留中' : t.status === 'in_use' ? '用餐中' : '空閒'})</span>
+                              </span>
+                            </label>
+                          );
+                        });
+                      })()}
                     </div>
                   </div>
                 </div>

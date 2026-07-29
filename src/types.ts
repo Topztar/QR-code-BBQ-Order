@@ -73,6 +73,11 @@ export interface Order {
   quickNotes?: string;
   isFlagged?: boolean;
   flagReason?: string;
+  takeoutInfo?: {
+    customerName: string;
+    phone: string;
+    pickupTime: string;
+  };
   rating?: number;
   feedback?: string;
   isOfflinePending?: boolean;

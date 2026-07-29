@@ -4,7 +4,7 @@ import { Order, OrderStatus, Language, TableConfig, MenuItem, Category, Ingredie
 import { getLocalizedText } from '../utils/i18n';
 import { TRANSLATIONS } from '../data';
 import { safeStorage } from '../lib/safeStorage';
-import { ChefHat, Printer, Trash2, Check, Flame, Ban, RefreshCw, Volume2, Wifi, Edit, Save, Settings, X, Clock, AlertTriangle, TrendingUp, Calendar, Info, Mic, Flag, Eye, Search, Timer, Download } from 'lucide-react';
+import { ChefHat, Printer, Trash2, Check, Ban, RefreshCw, Volume2, Wifi, Edit, Settings, X, Clock, AlertTriangle, Mic, Flag, Eye, Search, Timer, Download } from 'lucide-react';
 import { ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { KdsHourlyChart } from './KdsHourlyChart';
 
@@ -86,24 +86,6 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
     }
   };
 
-
-
-  const handleItemCompleteToggle = async (orderId: string, itemId: string, isCompleted: boolean, isPrepared?: boolean) => {
-    if (kdsRole === 'staff') {
-      const currentOrder = orders.find(o => o.id === orderId);
-      const currentItem = currentOrder?.items.find(i => (i.id || i.menuItemId) === itemId);
-      if (currentItem) {
-        if (currentItem.isCompleted && !isCompleted) {
-          alert(`⚠️ [廚房權限優先] 廚房已完成此品項出餐，店員端已自動對齊廚房資料 (無法將廚房已完成品項反向取消)！`);
-          return;
-        }
-      }
-    }
-    if (onToggleOrderItemComplete) {
-      await onToggleOrderItemComplete(orderId, itemId, isCompleted, isPrepared);
-    }
-  };
-  
   // 🖐️ Touch & Mouse Swipe States for active cards completion (Swipe-to-Complete)
   const [dragStates, setDragStates] = useState<{
     [orderId: string]: { startX: number; currentX: number; isDragging: boolean };

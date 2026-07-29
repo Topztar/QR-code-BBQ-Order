@@ -3,7 +3,7 @@ import { Language, MenuItem, Ingredient, Order, OrderStatus, OrderItem, Category
 import { getOfflineQueue, addRequestToQueue, clearOfflineQueue, processOfflineQueue, QueuedRequest } from './lib/offlineQueue';
 import { safeStorage } from './lib/safeStorage';
 import { apiFetch } from './lib/api';
-import { db, auth, isFirebaseSyncEnabled } from './lib/firebase';
+import { db, isFirebaseSyncEnabled } from './lib/firebase';
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { TRANSLATIONS, INITIAL_MENU, INITIAL_CATEGORIES } from './data';
 import { LanguageSelector } from './components/LanguageSelector';
@@ -12,7 +12,7 @@ import { CustomerOrderView } from './components/CustomerOrderView';
 import { KitchenDisplaySystem } from './components/KitchenDisplaySystem';
 import { ManagerDashboard } from './components/ManagerDashboard';
 import { StaffLoginGate } from './components/StaffLoginGate';
-import { ChefHat, Smartphone, BarChart3, HelpCircle, UtensilsCrossed, Sparkles, LogOut, Lock, Phone, MapPin, Eye, EyeOff, Coins, Monitor } from 'lucide-react';
+import { ChefHat, Smartphone, BarChart3, UtensilsCrossed, LogOut, Lock, Phone, MapPin, Eye, EyeOff, Coins, Monitor } from 'lucide-react';
 
 interface AnalyticsData {
   totalRevenue: number;
@@ -44,7 +44,6 @@ export default function App() {
 
   // Secure staff role gating
   const [isStaff, setIsStaff] = useState<boolean>(false);
-  const [isVerifyingStaff, setIsVerifyingStaff] = useState<boolean>(false);
 
   // Path routing states
   const [staffPin, setStaffPin] = useState<string>('');
@@ -184,7 +183,7 @@ export default function App() {
     stockWarnings: [],
   });
 
-  const [localOrderIds, setLocalOrderIds] = useState<string[]>(() => {
+  const [, setLocalOrderIds] = useState<string[]>(() => {
     try {
       const stored = safeStorage.getItem('sabay-my-submitted-order-ids');
       return stored ? JSON.parse(stored) : [];
@@ -311,7 +310,7 @@ export default function App() {
 
       const results = await Promise.all(promises);
 
-      const safeJson = async (res: Response, fallback: any, label: string) => {
+      const safeJson = async (res: Response, fallback: any, _label: string) => {
         try {
           if (!res.ok) return fallback;
           const contentType = res.headers.get('content-type');
@@ -1549,15 +1548,6 @@ export default function App() {
     setPushNotifications(pushNotifications.filter((n) => n.id !== notifId));
   };
 
-  // Group active orders that belong to this customer
-  // Since we simulate per-table sessions without real persistent cookies, we group by tableNumber or lineProfile name
-  const filteredActiveOrdersForClient = orders.filter((o) => {
-    if (lineProfile) {
-      return o.customerName === lineProfile.displayName;
-    }
-    // When not logged in, we only display the orders placed directly on this device
-    return localOrderIds.includes(o.id);
-  });
 
   return (
     <div className="min-h-screen bg-[#0F0F0F] text-white flex flex-col font-sans">

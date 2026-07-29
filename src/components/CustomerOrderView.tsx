@@ -1,10 +1,10 @@
 import { apiFetch } from "../lib/api";
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { MenuItem, OrderItem, FoodCustomization, Order, Language, Category, TableConfig, CustomAddOn, OrderHistoryUserStatus, OrderHistoryBillStatus, Reservation } from '../types';
+import { MenuItem, OrderItem, Order, Language, Category, TableConfig, CustomAddOn, OrderHistoryUserStatus, OrderHistoryBillStatus, Reservation } from '../types';
 import { getLocalizedText } from '../utils/i18n';
 import { TRANSLATIONS } from '../data';
 import { safeStorage, safeSessionStorage } from '../lib/safeStorage';
-import { ShoppingCart, Clock, Check, AlertTriangle, ChevronRight, HelpCircle, X, Sparkles, BellRing, QrCode, Coins, Plus, Minus, Star, MessageSquare, Flame, ArrowUp, Loader2, Calendar, User, Phone, Users, FileText } from 'lucide-react';
+import { ShoppingCart, Clock, Check, AlertTriangle, ChevronRight, X, Sparkles, BellRing, QrCode, Coins, Star, Flame, ArrowUp, Loader2, Calendar } from 'lucide-react';
 
 const localStorage = safeStorage;
 const sessionStorage = safeSessionStorage;
@@ -369,6 +369,12 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
   const [resNotes, setResNotes] = useState('');
   const [resSubmitting, setResSubmitting] = useState(false);
   const [resFeedback, setResFeedback] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
+
+  // Takeout Form State
+  const [showTakeoutFormModal, setShowTakeoutFormModal] = useState(false);
+  const [takeoutCustomerName, setTakeoutCustomerName] = useState('');
+  const [takeoutPhone, setTakeoutPhone] = useState('');
+  const [takeoutPickupTime, setTakeoutPickupTime] = useState('18:00');
 
   const isResDateValid = useMemo(() => {
     if (!resDate) return true;
@@ -1330,25 +1336,6 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
     }
   }, [visibleCategories, selectedCategory]);
 
-  const filteredItems = useMemo(() => {
-    const rawFiltered = displayedMenuItems.filter((item) => item.category === selectedCategory);
-    if (!popularItemIds || popularItemIds.length === 0) return rawFiltered;
-    
-    return [...rawFiltered].sort((a, b) => {
-      const idxA = popularItemIds.indexOf(a.id);
-      const idxB = popularItemIds.indexOf(b.id);
-      
-      const isPopA = idxA !== -1;
-      const isPopB = idxB !== -1;
-      
-      if (isPopA && isPopB) {
-        return idxA - idxB;
-      }
-      if (isPopA) return -1;
-      if (isPopB) return 1;
-      return 0;
-    });
-  }, [displayedMenuItems, selectedCategory, popularItemIds]);
 
   const handleOpenDetail = (item: MenuItem) => {
     if (!item.available) return;
@@ -1511,7 +1498,8 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
   const expressFee = (paymentMethod === 'credit' || paymentMethod === 'twqr') ? Math.round(discountedSubtotal * 0.1) : 0;
   const cartTotal = discountedSubtotal + expressFee;
 
-  const handleCheckout = async () => {
+  const handleCheckout = async (skipTakeoutCheck?: boolean | React.MouseEvent) => {
+    const shouldSkipCheck = skipTakeoutCheck === true;
     if (cart.length === 0 || isCheckoutSubmitting || isCheckoutSubmittingRef.current) return;
     if (urlReservationParams?.reservationNo && !validUrlReservationParams?.reservationNo) {
       setOrderError('⚠️ 您的預約訂位點餐專屬通道已被取消、刪除或已完成結帳（通道已失效），無法進行點餐！');
@@ -1559,6 +1547,21 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
       targetTableNumber = mappedTableId;
     }
 
+    // Takeout Form Interception
+    const isTakeoutOrder = targetTableNumber.includes('外帶') || targetTableNumber === '外帶';
+    if (isTakeoutOrder && !shouldSkipCheck) {
+      if (lineProfile && lineProfile.displayName) {
+        setTakeoutCustomerName(lineProfile.displayName);
+      }
+      // Calculate a default pickup time (current time + 30 mins)
+      const date = new Date();
+      date.setMinutes(date.getMinutes() + 30);
+      const defaultTime = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+      setTakeoutPickupTime(defaultTime);
+      setShowTakeoutFormModal(true);
+      return;
+    }
+
     // Synchronously lock submission before any async actions
     isCheckoutSubmittingRef.current = true;
     setIsCheckoutSubmitting(true);
@@ -1578,6 +1581,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
         reservationNo: urlReservationParams?.reservationNo || activeCustomerReservation?.reservationNo,
         reservationDate: urlReservationParams?.resDate || activeCustomerReservation?.date,
         reservationTime: urlReservationParams?.resTime || activeCustomerReservation?.time,
+        takeoutInfo: isTakeoutOrder ? { customerName: takeoutCustomerName, phone: takeoutPhone, pickupTime: takeoutPickupTime } : undefined,
       });
 
       if (actual) {
@@ -1664,19 +1668,6 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
     }
   };
 
-  const statusColors = {
-    pending: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-    preparing: 'bg-sky-500/10 text-sky-400 border-sky-500/20',
-    completed: 'bg-emerald-500/10 text-[#00C300] border-[#00C300]/20',
-    cancelled: 'bg-rose-500/10 text-rose-400 border-rose-500/20',
-  };
-
-  const statusLabels = {
-    pending: { zh: '主廚排單中', en: 'Queueing', ko: '대기 중', ja: '注文審査中', th: 'รอต่อคิวอาหาร' },
-    preparing: { zh: '備餐烹調中', en: 'Cooking', ko: '조리 중', ja: '全力調理中', th: 'กำลังปรุงอาหาร' },
-    completed: { zh: '已送餐完成', en: 'Served', ko: '서빙 완료', ja: '配膳完了', th: 'เสิร์ฟอาหารสำเร็จ' },
-    cancelled: { zh: '已取消退款', en: 'Cancelled', ko: '주문 취소됨', ja: 'キャンセル済', th: 'ยกเลิกออเดอร์' },
-  };
 
   const getMenuItemIngredients = (item: MenuItem | null) => {
     if (!item) return [];
@@ -4817,26 +4808,38 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                         <span>🪑 指定預約桌號 Designated Table *</span>
                       </label>
                       <div className="w-full bg-[#1c1c1c] border border-white/15 rounded-xl p-2 text-white max-h-32 overflow-y-auto space-y-1">
-                        {tables.map(t => (
-                          <label key={t.id} className="flex items-center gap-2 cursor-pointer hover:bg-white/5 p-1 rounded">
-                            <input 
-                              type="checkbox" 
-                              checked={resTableNumbers.includes(t.id)}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  setResTableNumbers(prev => [...prev, t.id]);
-                                } else {
-                                  setResTableNumbers(prev => prev.filter(id => id !== t.id));
-                                }
-                              }}
-                              className="accent-amber-500" 
-                            />
-                            <span className="text-xs">
-                              {t.id} 號桌位 {t.maxCapacity ? `(上限 ${t.maxCapacity}人)` : ''} 
-                              <span className="text-zinc-400 ml-1 text-[10px]">(現狀: {t.status === 'preserved' ? '保留中' : t.status === 'in_use' ? '用餐中' : '空閒'})</span>
-                            </span>
-                          </label>
-                        ))}
+                        {(() => {
+                          const currentSelectedCapacity = tables
+                            .filter(t => resTableNumbers.includes(t.id))
+                            .reduce((sum, t) => sum + (t.maxCapacity || 0), 0);
+                          
+                          return tables.map(t => {
+                            const isChecked = resTableNumbers.includes(t.id);
+                            const isDisabled = !isChecked && currentSelectedCapacity >= resGuests;
+                            
+                            return (
+                              <label key={t.id} className={`flex items-center gap-2 p-1 rounded transition-opacity ${isDisabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-white/5'}`}>
+                                <input 
+                                  type="checkbox" 
+                                  checked={isChecked}
+                                  disabled={isDisabled}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setResTableNumbers(prev => [...prev, t.id]);
+                                    } else {
+                                      setResTableNumbers(prev => prev.filter(id => id !== t.id));
+                                    }
+                                  }}
+                                  className="accent-amber-500" 
+                                />
+                                <span className="text-xs">
+                                  {t.id} 號桌位 {t.maxCapacity ? `(上限 ${t.maxCapacity}人)` : ''} 
+                                  <span className="text-zinc-400 ml-1 text-[10px]">(現狀: {t.status === 'preserved' ? '保留中' : t.status === 'in_use' ? '用餐中' : '空閒'})</span>
+                                </span>
+                              </label>
+                            );
+                          });
+                        })()}
                       </div>
                     </div>
                   </div>
@@ -4936,6 +4939,92 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                   ) : (
                     <span>確認送出預約並點餐</span>
                   )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 🎒 Takeout Form Modal */}
+      {showTakeoutFormModal && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto animate-fadeIn">
+          <div className="bg-[#121824] border border-blue-500/25 rounded-2xl w-full max-w-md shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="p-4 border-b border-blue-500/20 bg-black/20 shrink-0">
+              <h3 className="text-base font-black text-white flex items-center gap-2">
+                <span className="text-xl">🥡</span> 外帶訂單資料填寫
+              </h3>
+              <p className="text-zinc-400 text-xs mt-1">為了提供您最好的餐點品質，請留下聯絡資訊與預計取餐時間。</p>
+            </div>
+            
+            <form 
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!takeoutCustomerName || !takeoutPhone || !takeoutPickupTime) {
+                  return;
+                }
+                setShowTakeoutFormModal(false);
+                handleCheckout(true);
+              }}
+              className="flex flex-col flex-1 min-h-0"
+            >
+              <div className="p-4 space-y-4 overflow-y-auto flex-1">
+                {/* 顧客姓名 */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold text-blue-300 block">顧客姓名 Customer Name <span className="text-rose-400">*</span></label>
+                  <input
+                    type="text"
+                    required
+                    value={takeoutCustomerName}
+                    onChange={e => setTakeoutCustomerName(e.target.value)}
+                    placeholder="請輸入您的姓名 (Name)"
+                    className="w-full bg-black/40 border border-blue-500/20 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/50 transition-colors"
+                  />
+                  {lineProfile && <p className="text-[10px] text-zinc-500">已為您自動帶入 Google 帳戶名稱</p>}
+                </div>
+                
+                {/* 聯絡電話 */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold text-blue-300 block">聯絡電話 Phone Number <span className="text-rose-400">*</span></label>
+                  <input
+                    type="tel"
+                    required
+                    value={takeoutPhone}
+                    onChange={e => setTakeoutPhone(e.target.value)}
+                    placeholder="例如: 0912345678"
+                    className="w-full bg-black/40 border border-blue-500/20 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/50 transition-colors font-mono"
+                  />
+                </div>
+                
+                {/* 預計取餐時間 */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold text-blue-300 block">預計取餐時間 Pickup Time <span className="text-rose-400">*</span></label>
+                  <input
+                    type="time"
+                    required
+                    value={takeoutPickupTime}
+                    onChange={e => setTakeoutPickupTime(e.target.value)}
+                    className="w-full bg-black/40 border border-blue-500/20 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/50 transition-colors font-mono"
+                  />
+                  <p className="text-[10px] text-amber-300/80 italic mt-1">※ 餐點製作約需 20~30 分鐘，敬請稍候。</p>
+                </div>
+              </div>
+              
+              {/* Footer */}
+              <div className="p-4 border-t border-white/10 bg-zinc-950 flex justify-end items-center gap-2.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setShowTakeoutFormModal(false)}
+                  className="px-5 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold rounded-xl transition cursor-pointer text-xs"
+                >
+                  返回修改訂單
+                </button>
+                <button
+                  type="submit"
+                  disabled={isCheckoutSubmitting}
+                  className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black rounded-xl transition cursor-pointer shadow-lg shadow-blue-500/20 active:scale-95 flex items-center gap-2 text-xs"
+                >
+                  {isCheckoutSubmitting ? '傳送中...' : '確認並送出訂單'}
                 </button>
               </div>
             </form>

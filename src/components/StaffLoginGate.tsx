@@ -9,7 +9,7 @@ interface StaffLoginGateProps {
 export const StaffLoginGate: React.FC<StaffLoginGateProps> = ({ onLoginSuccess, onCancel }) => {
   const [pin, setPin] = useState('');
   const [errorCode, setErrorCode] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [_loading] = useState(false);
 
   const handleNumberClick = (num: string) => {
     if (pin.length < 6) {
