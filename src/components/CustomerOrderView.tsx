@@ -366,6 +366,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
   const [resTime, setResTime] = useState('18:00');
   const [resGuests, setResGuests] = useState(2);
   const [resTableNumbers, setResTableNumbers] = useState<string[]>([]);
+  const [isManualTableSelection, setIsManualTableSelection] = useState(false);
   const [resNotes, setResNotes] = useState('');
   const [resSubmitting, setResSubmitting] = useState(false);
   const [resFeedback, setResFeedback] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
@@ -491,23 +492,41 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
   }, [operatingHours, resDate, resTime]);
 
   useEffect(() => {
+    setIsManualTableSelection(false);
+  }, [resGuests, resDate, resTime]);
+
+  useEffect(() => {
     if (!showReservationModal || !resDate || !resTime || !tables || tables.length === 0) return;
     if (isTableFixed && urlReservationParams?.tableNumber) return; // Don't auto-assign if table is fixed by QR
+    if (isManualTableSelection) return; // Skip auto-assign if user has manually selected tables
 
     const availableTables = [...reservationAvailabilityInfo.availableTables];
-    availableTables.sort((a, b) => (b.maxCapacity || 4) - (a.maxCapacity || 4));
+    
+    // Sort tables by capacity ascending to find the best fit (closest to remaining guests)
+    availableTables.sort((a, b) => (a.maxCapacity || 4) - (b.maxCapacity || 4));
 
-    let currentCapacity = 0;
+    let remainingGuests = resGuests;
     const selectedIds: string[] = [];
     
-    for (const t of availableTables) {
-      if (currentCapacity >= resGuests) break;
-      selectedIds.push(t.id);
-      currentCapacity += (t.maxCapacity || 4);
+    while (remainingGuests > 0 && availableTables.length > 0) {
+      // Find the smallest table that can fit the remaining guests
+      let selectedIndex = availableTables.findIndex(t => (t.maxCapacity || 4) >= remainingGuests);
+      
+      if (selectedIndex !== -1) {
+        // Found a single table that can fit everyone remaining
+        selectedIds.push(availableTables[selectedIndex].id);
+        availableTables.splice(selectedIndex, 1);
+        remainingGuests = 0;
+      } else {
+        // No single table can fit them. Pick the LARGEST available table to reduce remaining guests most efficiently.
+        const largestTable = availableTables.pop()!;
+        selectedIds.push(largestTable.id);
+        remainingGuests -= (largestTable.maxCapacity || 4);
+      }
     }
     
     setResTableNumbers(selectedIds);
-  }, [resGuests, resDate, resTime, tables, showReservationModal, isTableFixed, urlReservationParams, reservationAvailabilityInfo.availableTables]);
+  }, [resGuests, resDate, resTime, tables, showReservationModal, isTableFixed, urlReservationParams, reservationAvailabilityInfo.availableTables, isManualTableSelection]);
 
   useEffect(() => {
     if (urlReservationParams?.tableNumber) {
@@ -4824,6 +4843,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                                   checked={isChecked}
                                   disabled={isDisabled}
                                   onChange={(e) => {
+                                    setIsManualTableSelection(true);
                                     if (e.target.checked) {
                                       setResTableNumbers(prev => [...prev, t.id]);
                                     } else {
