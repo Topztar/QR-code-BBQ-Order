@@ -482,17 +482,30 @@ function syncTableStatusesWithTodayReservations() {
   liveTables.forEach(tb => {
     const tblId = tb.id.toString().trim();
     
-    // If table currently has an active order (not completed and not cancelled)
-    const activeOrder = liveOrders.find(o => 
+    // Find active orders for this table (not cancelled)
+    const activeOrders = liveOrders.filter(o => 
       String(o.tableNumber).trim() === tblId && 
-      o.status !== 'completed' && 
       o.status !== 'cancelled'
     );
 
-    if (activeOrder) {
-      if (!activeOrder.isPaid) {
+    const unpaidActiveOrders = activeOrders.filter(o => !o.isPaid && o.status !== 'completed' && o.status !== 'paid');
+
+    if (unpaidActiveOrders.length > 0) {
+      if (tb.status !== 'pending_checkout') {
         tb.status = 'in_use';
+        tb.preservedFor = '';
       }
+      return;
+    }
+
+    // If table was in_use or pending_checkout but has no unpaid active orders left
+    if (tb.status === 'in_use' || tb.status === 'pending_checkout') {
+      tb.status = 'cleaning';
+      return;
+    }
+
+    // Keep cleaning status until staff explicitly clears it to available/preserved
+    if (tb.status === 'cleaning') {
       return;
     }
 

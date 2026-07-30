@@ -438,6 +438,74 @@ export default function App() {
     };
   }, []);
 
+  // 🔄 自動連動桌席狀態與訂單/KDS/預約 (Real-time Table Status Auto-Sync)
+  useEffect(() => {
+    if (!tables || tables.length === 0) return;
+
+    setTables(prevTables => {
+      let hasChanges = false;
+      const newTables = prevTables.map(tb => {
+        const tblId = String(tb.id).trim();
+
+        // 1. 該桌目前尚未結帳/取消的有效訂單
+        const activeOrders = orders.filter(o => 
+          String(o.tableNumber).trim() === tblId && 
+          o.status !== 'cancelled'
+        );
+
+        const unpaidActiveOrders = activeOrders.filter(o => !o.isPaid && o.status !== 'completed' && o.status !== 'paid');
+
+        if (unpaidActiveOrders.length > 0) {
+          const targetStatus = tb.status === 'pending_checkout' ? 'pending_checkout' : 'in_use';
+          if (tb.status !== targetStatus || tb.preservedFor) {
+            hasChanges = true;
+            return { ...tb, status: targetStatus, preservedFor: '' };
+          }
+          return tb;
+        }
+
+        // 2. 原本為入座或待結帳，但已無未付款的有效訂單 -> 自動轉為「清潔中」
+        if (tb.status === 'in_use' || tb.status === 'pending_checkout') {
+          hasChanges = true;
+          return { ...tb, status: 'cleaning' };
+        }
+
+        // 3. 若處於清潔中，保持清潔中（等待員工手動清理完成）
+        if (tb.status === 'cleaning') {
+          return tb;
+        }
+
+        // 4. 檢查今日是否有預約訂位
+        const now = new Date();
+        const yr = now.getFullYear();
+        const mo = String(now.getMonth() + 1).padStart(2, '0');
+        const dy = String(now.getDate()).padStart(2, '0');
+        const todayStr = `${yr}-${mo}-${dy}`;
+
+        const todayPendingRes = reservations.find(r => 
+          String(r.tableNumber).trim() === tblId &&
+          (r.status === 'pending' || r.status === 'upcoming' || r.status === 'confirmed') &&
+          r.date.trim() === todayStr
+        );
+
+        if (todayPendingRes) {
+          const presText = `${todayPendingRes.customerName} (${todayPendingRes.time})`;
+          if (tb.status !== 'preserved' || tb.preservedFor !== presText) {
+            hasChanges = true;
+            return { ...tb, status: 'preserved', preservedFor: presText };
+          }
+        } else if (tb.status === 'preserved') {
+          hasChanges = true;
+          return { ...tb, status: 'available', preservedFor: '' };
+        }
+
+        return tb;
+      });
+
+      return hasChanges ? newTables : prevTables;
+    });
+  }, [orders, reservations]);
+
   // 1. Submit Online Order
   const handlePlaceOrder = async (orderData: {
     tableNumber: string;
@@ -456,6 +524,10 @@ export default function App() {
       return null;
     }
     activeOrderSubmissionsRef.current.add(clientOrderId);
+
+    if (orderData.tableNumber && orderData.tableNumber !== '外帶' && orderData.tableNumber !== 'takeout') {
+      handleUpdateTableStatus(orderData.tableNumber, { status: 'in_use', preservedFor: '' });
+    }
 
     const orderPayload = {
       ...orderData,
@@ -773,6 +845,12 @@ export default function App() {
     // 🔒 結帳完成後一併刪除相對應的「預約訂位點餐專屬通道」
     const targetOrder = orders.find(o => o.id === orderId);
     if (targetOrder) {
+      if (targetOrder.tableNumber && targetOrder.tableNumber !== '外帶' && targetOrder.tableNumber !== 'takeout') {
+        const remainingUnpaid = orders.filter(o => o.tableNumber === targetOrder.tableNumber && o.id !== orderId && !o.isPaid && o.status !== 'cancelled');
+        if (remainingUnpaid.length === 0) {
+          handleUpdateTableStatus(targetOrder.tableNumber, { status: 'cleaning' });
+        }
+      }
       const resNo = targetOrder.reservationNo;
       const matchingRes = (reservations || []).find(r =>
         (resNo && (r.id === resNo || (r as any).reservationNo === resNo)) ||
