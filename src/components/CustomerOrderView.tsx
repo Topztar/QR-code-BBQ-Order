@@ -150,6 +150,18 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
 }) => {
   const t = (key: string) => TRANSLATIONS[key]?.[currentLang] || TRANSLATIONS[key]?.['zh'] || key;
 
+  const getItemUnitPrice = (item: any) => {
+    let base = Number(item.price) || 0;
+    if (item.customization) {
+      if (item.customization.spiciness === 3) base += 10;
+      if (item.customization.soupBase === 'coconut-milk') base += 50;
+      if (item.customization.selectedAddOns && Array.isArray(item.customization.selectedAddOns)) {
+        base += item.customization.selectedAddOns.reduce((s: number, a: any) => s + (Number(a.price) || 0), 0);
+      }
+    }
+    return base;
+  };
+
   const [nowTimestamp, setNowTimestamp] = useState<number>(() => Date.now());
 
   useEffect(() => {
@@ -3920,20 +3932,56 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
 
                               {/* mini listing */}
                               <div className="space-y-1.5 py-1 text-white/70 text-xs text-left">
-                                {order.items.map((it, idx) => (
-                                  <div key={idx} className="flex justify-between font-medium">
-                                    <span>
-                                      {getLocalizedText(it.name, currentLang) || ''} {it.qty} {currentLang === 'vi' ? 'phần' : '份'}
-                                    </span>
-                                    <span className="font-mono text-white/40">NT$ {it.price * it.qty}</span>
+                                {order.items.map((it, idx) => {
+                                  const unitPrice = getItemUnitPrice(it);
+                                  return (
+                                  <div key={idx} className="flex flex-col mb-1.5 border-b border-white/5 pb-1.5 last:border-0 last:pb-0">
+                                    <div className="flex justify-between font-medium">
+                                      <span>
+                                        {getLocalizedText(it.name, currentLang) || ''} <strong className="text-[#E5B453] bg-white/5 px-1 rounded text-[11px] ml-1">x {it.qty}</strong>
+                                      </span>
+                                      <span className="font-mono text-white/40">NT$ {unitPrice * it.qty}</span>
+                                    </div>
+                                    {it.customization && (
+                                      <div className="text-[11px] text-white/40 mt-0.5 space-y-0.5 pl-2">
+                                        {it.customization.sweetness !== undefined && (
+                                          <div>• {t('sweetness') || '甜度'}: {['無糖', '微糖', '正常糖', '多糖'][it.customization.sweetness]}</div>
+                                        )}
+                                        {it.customization.spiciness !== undefined && (
+                                          <div>
+                                            • {t('spiciness') || '辣度'}: {['不辣', '微辣', '中辣', '大辣(+10)'][it.customization.spiciness]}
+                                          </div>
+                                        )}
+                                        {it.customization.soupBase && (
+                                          <div>• {t('soupBase') || '湯底'}: {it.customization.soupBase === 'coconut-milk' ? '椰奶(+50)' : '清湯'}</div>
+                                        )}
+                                        {it.customization.noodleType && (
+                                          <div>• {t('noodleType') || '麵體'}: {
+                                            it.customization.noodleType === 'rice-noodle' ? '米線' :
+                                            it.customization.noodleType === 'vermicelli' ? '冬粉' : '不加麵'
+                                          }</div>
+                                        )}
+                                        {it.customization.selectedAddOns && it.customization.selectedAddOns.map((addon, aIdx) => (
+                                          <div key={aIdx} className="flex justify-between text-white/50">
+                                            <span>+ {typeof addon.name === 'object' ? (addon.name[currentLang as keyof typeof addon.name] || addon.name['zh'] || '') : addon.name}</span>
+                                            <span>(NT$ {addon.price})</span>
+                                          </div>
+                                        ))}
+                                        {it.customization.notes && (
+                                          <div className="text-[#E5B453]/80 italic border-l-2 border-[#E5B453]/30 pl-1.5 mt-1">
+                                            {t('notes') || '備註'}: {it.customization.notes}
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
                                   </div>
-                                ))}
+                                )})}
                               </div>
 
                               <div className="flex justify-between items-center pt-2.5 border-t border-white/5 text-xs">
                                 <span className="text-white/45 font-semibold uppercase">{t('payMethod')}: {order.paymentMethod.toUpperCase()}</span>
                                 <span className="text-white/80 font-bold text-sm">
-                                  {t('payableTotal')}: <strong className="text-[#E5B453] font-mono text-base font-bold">NT$ {order.total}</strong>
+                                  {t('payableTotal')}: <strong className="text-[#E5B453] font-mono text-base font-bold">NT$ {order.total || order.items.reduce((sum, it) => sum + getItemUnitPrice(it) * it.qty, 0)}</strong>
                                 </span>
                               </div>
 
@@ -4213,22 +4261,58 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
 
                             {/* List items */}
                             <div className="space-y-1.5 pl-1">
-                              {pastOrder.items.map((it, iIdx) => (
-                                <div key={iIdx} className="flex justify-between text-xs text-white/80 font-sans">
-                                  <span className="flex items-center space-x-1">
-                                    <span className="text-[#E5B453]">•</span>
-                                    <span>{getLocalizedText(it.name, currentLang) || ''}</span>
-                                    <strong className="text-[#E5B453] bg-white/5 px-1.5 py-0.2 rounded text-[10px]">x {it.qty}</strong>
-                                  </span>
-                                  <span className="font-mono text-white/40">NT$ {it.price * it.qty}</span>
+                              {pastOrder.items.map((it, iIdx) => {
+                                const unitPrice = getItemUnitPrice(it);
+                                return (
+                                <div key={iIdx} className="flex flex-col mb-1.5 border-b border-white/5 pb-1.5 last:border-0 last:pb-0">
+                                  <div className="flex justify-between text-xs text-white/80 font-sans">
+                                    <span className="flex items-center space-x-1">
+                                      <span className="text-[#E5B453]">•</span>
+                                      <span>{getLocalizedText(it.name, currentLang) || ''}</span>
+                                      <strong className="text-[#E5B453] bg-white/5 px-1.5 py-0.2 rounded text-[10px]">x {it.qty}</strong>
+                                    </span>
+                                    <span className="font-mono text-white/40">NT$ {unitPrice * it.qty}</span>
+                                  </div>
+                                  {it.customization && (
+                                    <div className="text-[11px] text-white/40 mt-0.5 space-y-0.5 pl-3">
+                                      {it.customization.sweetness !== undefined && (
+                                        <div>• {t('sweetness') || '甜度'}: {['無糖', '微糖', '正常糖', '多糖'][it.customization.sweetness]}</div>
+                                      )}
+                                      {it.customization.spiciness !== undefined && (
+                                        <div>
+                                          • {t('spiciness') || '辣度'}: {['不辣', '微辣', '中辣', '大辣(+10)'][it.customization.spiciness]}
+                                        </div>
+                                      )}
+                                      {it.customization.soupBase && (
+                                        <div>• {t('soupBase') || '湯底'}: {it.customization.soupBase === 'coconut-milk' ? '椰奶(+50)' : '清湯'}</div>
+                                      )}
+                                      {it.customization.noodleType && (
+                                        <div>• {t('noodleType') || '麵體'}: {
+                                          it.customization.noodleType === 'rice-noodle' ? '米線' :
+                                          it.customization.noodleType === 'vermicelli' ? '冬粉' : '不加麵'
+                                        }</div>
+                                      )}
+                                      {it.customization.selectedAddOns && it.customization.selectedAddOns.map((addon, aIdx) => (
+                                        <div key={aIdx} className="flex justify-between text-white/50">
+                                          <span>+ {typeof addon.name === 'object' ? (addon.name[currentLang as keyof typeof addon.name] || addon.name['zh'] || '') : addon.name}</span>
+                                          <span>(NT$ {addon.price})</span>
+                                        </div>
+                                      ))}
+                                      {it.customization.notes && (
+                                        <div className="text-[#E5B453]/80 italic border-l-2 border-[#E5B453]/30 pl-1.5 mt-1">
+                                          {t('notes') || '備註'}: {it.customization.notes}
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
                                 </div>
-                              ))}
+                              )})}
                             </div>
 
                             {/* Pricing & Reorder */}
                             <div className="flex items-center justify-between pt-3 border-t border-white/5">
                               <div className="text-xs text-white/55">
-                                {t('totalPastSpend')} <strong className="text-[#E5B453] text-[13px] font-mono font-bold">NT$ {pastOrder.total}</strong>
+                                {t('totalPastSpend')} <strong className="text-[#E5B453] text-[13px] font-mono font-bold">NT$ {pastOrder.total || pastOrder.items.reduce((sum, it) => sum + getItemUnitPrice(it) * it.qty, 0)}</strong>
                               </div>
                               <button
                                 type="button"
