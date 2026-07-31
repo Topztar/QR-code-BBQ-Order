@@ -4,7 +4,7 @@ import { Order, OrderStatus, Language, TableConfig, MenuItem, Category, Ingredie
 import { getLocalizedText } from '../utils/i18n';
 import { TRANSLATIONS } from '../data';
 import { safeStorage } from '../lib/safeStorage';
-import { ChefHat, Printer, Trash2, Check, Ban, RefreshCw, Volume2, Wifi, Edit, Settings, X, Clock, AlertTriangle, Mic, Flag, Eye, Search, Timer, Download } from 'lucide-react';
+import { ChefHat, Printer, Trash2, Check, Ban, RefreshCw, Volume2, Wifi, Edit, Settings, X, Clock, AlertTriangle, Mic, Flag, Eye, Search, Timer, Download, ChevronUp, ChevronDown } from 'lucide-react';
 import { ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { KdsHourlyChart } from './KdsHourlyChart';
 import { useRetry } from '../hooks/useRetry';
@@ -133,6 +133,20 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
   // Real-time stock / menu controls state
   const [kdsSelectedCategory, setKdsSelectedCategory] = useState<string>('all');
   const [kdsMenuSearch, setKdsMenuSearch] = useState<string>('');
+
+  // 📝 訂單摺疊狀態
+  const [collapsedOrders, setCollapsedOrders] = useState<Set<string>>(new Set());
+  const toggleOrderCollapse = (orderId: string) => {
+    setCollapsedOrders(prev => {
+      const next = new Set(prev);
+      if (next.has(orderId)) {
+        next.delete(orderId);
+      } else {
+        next.add(orderId);
+      }
+      return next;
+    });
+  };
   const [kdsActiveTab, setKdsActiveTab] = useState<'menu' | 'ingredients'>('menu');
   const [togglingMenuId, setTogglingMenuId] = useState<string | null>(null);
   const [adjustingIngredientId, setAdjustingIngredientId] = useState<string | null>(null);
@@ -809,22 +823,27 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
   };
 
   const handleStatusChange = async (id: string, nextStatus: OrderStatus) => {
+    if (kdsRole !== 'kitchen') {
+      alert('【權限不足】僅有「廚房」角色可以更改訂單狀態，店員僅能瀏覽。');
+      return;
+    }
+
     // Play sound & Web Audio status beep
     playStatusBeepSound();
     setBeepSim(true);
     setTimeout(() => setBeepSim(false), 800);
 
-    if (kdsRole === 'staff') {
-      const currentOrder = orders.find(o => o.id === id);
-      if (currentOrder) {
-        if (currentOrder.status === 'completed' || currentOrder.status === 'cancelled') {
-          alert(`⚠️ [廚房權限優先] 廚房已將訂單 #${id} 處理為 ${currentOrder.status === 'completed' ? '出餐完成' : '已取消'}，店員端已自動對齊廚房最新資料！`);
-          return;
-        }
-      }
-    }
-
     await onUpdateOrderStatus(id, nextStatus);
+  };
+
+  const handleItemStatusToggle = (orderId: string, itemId: string, isCompleted: boolean, isPrepared?: boolean) => {
+    if (kdsRole !== 'kitchen') {
+      alert('【權限不足】僅有「廚房」角色可以更改餐點狀態，店員僅能瀏覽。');
+      return;
+    }
+    if (true) {
+      handleItemStatusToggle(orderId, itemId, isCompleted, isPrepared);
+    }
   };
 
   const getUrgencyText = (createdAt: string) => {
@@ -2058,9 +2077,19 @@ ${specLines}
 
                     {/* Right Side: Urgency Status Badge & Special Attention Flag */}
                     <div className="text-right flex flex-col items-end justify-center gap-1.5 min-w-[100px]">
-                      <span className={`text-[11px] font-bold px-2 py-1 rounded-lg border ${urg.style}`}>
+                      <div className="flex items-center justify-end gap-2 w-full">
+                        <button
+                          type="button"
+                          onClick={() => toggleOrderCollapse(order.id)}
+                          className="p-1 bg-white/5 hover:bg-white/10 rounded border border-white/10 text-white/70 transition cursor-pointer"
+                          title={collapsedOrders.has(order.id) ? "展開訂單 (Expand)" : "摺疊訂單 (Collapse)"}
+                        >
+                          {collapsedOrders.has(order.id) ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
+                        </button>
+                        <span className={`text-[11px] font-bold px-2 py-1 rounded-lg border ${urg.style}`}>
                         {urg.text}
-                      </span>
+                        </span>
+                      </div>
                       <button
                         type="button"
                         onClick={() => toggleFlagState(order.id, !!order.isFlagged, order.flagReason || '')}
@@ -2078,6 +2107,8 @@ ${specLines}
                   </div>
 
                   {/* Ingredients detailed tasks in Chinese */}
+                  {!collapsedOrders.has(order.id) && (
+                  <>
                   <div className="p-5 flex-1 min-h-[140px] space-y-4">
                     <div className="space-y-3.5">
                       {order.items.map((it, idx) => {
@@ -2138,8 +2169,8 @@ ${specLines}
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    if (canInteract && onToggleOrderItemComplete) {
-                                      onToggleOrderItemComplete(order.id, it.id, false, true);
+                                    if (true) {
+                                      handleItemStatusToggle(order.id, it.id, false, true);
                                     }
                                   }}
                                   className="h-10 px-3 rounded-xl text-xs font-black transition-all duration-200 shadow-sm flex items-center justify-center gap-1 border cursor-pointer bg-amber-500 hover:bg-amber-400 text-slate-950 border-amber-400 shadow-amber-500/10"
@@ -2155,8 +2186,8 @@ ${specLines}
                                   <button
                                     type="button"
                                     onClick={() => {
-                                      if (onToggleOrderItemComplete) {
-                                        onToggleOrderItemComplete(order.id, it.id, false, false);
+                                      if (true) {
+                                        handleItemStatusToggle(order.id, it.id, false, false);
                                       }
                                     }}
                                     className="h-10 px-2 rounded-xl text-[11px] font-bold transition-all duration-200 flex items-center justify-center gap-1 border cursor-pointer bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30"
@@ -2169,8 +2200,8 @@ ${specLines}
                                   <button
                                     type="button"
                                     onClick={() => {
-                                      if (onToggleOrderItemComplete) {
-                                        onToggleOrderItemComplete(order.id, it.id, true, true);
+                                      if (true) {
+                                        handleItemStatusToggle(order.id, it.id, true, true);
                                       }
                                     }}
                                     className="h-10 px-3.5 rounded-xl text-xs font-black transition-all duration-200 shadow-sm flex items-center justify-center gap-1 border cursor-pointer bg-[#1e1e1e] hover:bg-[#252525] text-emerald-400 hover:text-emerald-300 border-emerald-500/35 hover:border-emerald-500 shadow-black/20"
@@ -2185,8 +2216,8 @@ ${specLines}
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    if (onToggleOrderItemComplete) {
-                                      onToggleOrderItemComplete(order.id, it.id, false, false);
+                                    if (true) {
+                                      handleItemStatusToggle(order.id, it.id, false, false);
                                     }
                                   }}
                                   className="h-10 px-4 rounded-xl text-xs font-black transition-all duration-200 shadow-sm flex items-center justify-center gap-1 border cursor-pointer bg-emerald-500 hover:bg-emerald-600 text-[#0F0F0F] border-emerald-400 shadow-emerald-500/10"
@@ -2495,6 +2526,8 @@ ${specLines}
                       )}
                     </div>
                   </div>
+                  </>
+                  )}
                 </div>
               </div>
             );
@@ -3213,8 +3246,8 @@ ${specLines}
                               <button
                                 type="button"
                                 onClick={() => {
-                                  if (onToggleOrderItemComplete) {
-                                    onToggleOrderItemComplete(quickViewOrder.id, it.id, false, true);
+                                  if (true) {
+                                    handleItemStatusToggle(quickViewOrder.id, it.id, false, true);
                                   }
                                 }}
                                 className="h-10 px-3 rounded-xl text-xs font-black transition-all duration-200 shadow-sm flex items-center justify-center gap-1 border cursor-pointer bg-amber-500 hover:bg-amber-400 text-slate-950 border-amber-400 shadow-amber-500/10"
@@ -3230,8 +3263,8 @@ ${specLines}
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    if (onToggleOrderItemComplete) {
-                                      onToggleOrderItemComplete(quickViewOrder.id, it.id, false, false);
+                                    if (true) {
+                                      handleItemStatusToggle(quickViewOrder.id, it.id, false, false);
                                     }
                                   }}
                                   className="h-10 px-2 rounded-xl text-[11px] font-bold transition-all duration-200 flex items-center justify-center gap-1 border cursor-pointer bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30"
@@ -3244,8 +3277,8 @@ ${specLines}
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    if (onToggleOrderItemComplete) {
-                                      onToggleOrderItemComplete(quickViewOrder.id, it.id, true, true);
+                                    if (true) {
+                                      handleItemStatusToggle(quickViewOrder.id, it.id, true, true);
                                     }
                                   }}
                                   className="h-10 px-3.5 rounded-xl text-xs font-black transition-all duration-200 shadow-sm flex items-center justify-center gap-1 border cursor-pointer bg-[#1e1e1e] hover:bg-[#252525] text-emerald-400 hover:text-emerald-300 border-emerald-500/35 hover:border-emerald-500 shadow-black/20"
@@ -3260,8 +3293,8 @@ ${specLines}
                               <button
                                 type="button"
                                 onClick={() => {
-                                  if (onToggleOrderItemComplete) {
-                                    onToggleOrderItemComplete(quickViewOrder.id, it.id, false, false);
+                                  if (true) {
+                                    handleItemStatusToggle(quickViewOrder.id, it.id, false, false);
                                   }
                                 }}
                                 className="h-10 px-4 rounded-xl text-xs font-black transition-all duration-200 shadow-sm flex items-center justify-center gap-1 border cursor-pointer bg-emerald-500 hover:bg-emerald-600 text-[#0F0F0F] border-emerald-400 shadow-emerald-500/10"
