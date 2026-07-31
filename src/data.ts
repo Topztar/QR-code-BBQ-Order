@@ -804,10 +804,10 @@ export const INITIAL_MENU: any[] = [
     "name": {
       "zh": "Vitamilk豆奶",
       "en": "Vitamilk Soy Milk",
-      "ko": "Vitamilk豆奶",
-      "ja": "Vitamilk豆奶",
-      "th": "Vitamilk豆奶",
-      "vi": "Vitamilk豆奶"
+      "ko": "비타밀크 두유",
+      "ja": "Vitamilk 豆乳",
+      "th": "นมถั่วเหลืองไวตามิ้ลค์",
+      "vi": "Sữa đậu nành Vitamilk"
     },
     "isNotSpicy": true,
     "available": true,
@@ -818,12 +818,12 @@ export const INITIAL_MENU: any[] = [
     "recipe": [],
     "hasNoodlesOption": false,
     "description": {
-      "zh": "(泰國知名豆奶)眾多口味:原味/黑芝麻/草莓/香蕉/泰式奶茶/巧克力/麥芽\n香濃順口 宵夜早餐無負擔 大人小孩都愛",
-      "en": "Refreshing and cool, a perfect match for delicious BBQ.",
-      "ko": "(泰國知名豆奶)眾多口味:原味/黑芝麻/草莓/香蕉/泰式奶茶/巧克力/麥芽\n香濃順口 宵夜早餐無負擔 大人小孩都愛",
-      "ja": "(泰國知名豆奶)眾多口味:原味/黑芝麻/草莓/香蕉/泰式奶茶/巧克力/麥芽\n香濃順口 宵夜早餐無負擔 大人小孩都愛",
-      "th": "(泰國知名豆奶)眾多口味:原味/黑芝麻/草莓/香蕉/泰式奶茶/巧克力/麥芽\n香濃順口 宵夜早餐無負擔 大人小孩都愛",
-      "vi": "(泰國知名豆奶)眾多口味:原味/黑芝麻/草莓/香蕉/泰式奶茶/巧克力/麥芽\n香濃順口 宵夜早餐無負擔 大人小孩都愛"
+      "zh": "泰國進口經典 Vitamilk 玻璃瓶裝豆奶，香濃滑順。",
+      "en": "Classic Vitamilk bottled soy milk imported from Thailand, smooth and rich.",
+      "ko": "태국 수입 정통 비타밀크 병두유로 고소하고 목넘김이 부드럽습니다.",
+      "ja": "タイ直輸入のクラシックなガラス瓶入り豆乳。濃厚で滑らかなコクがあります。",
+      "th": "นมถั่วเหลืองไวตามิ้ลค์แบบขวดแก้วคลาสสิก นำเข้าจากไทย หอมอร่อยกลมกล่อม",
+      "vi": "Sữa đậu nành Vitamilk đóng chai thủy tinh truyền thống nhập khẩu Thái Lan."
     },
     "image": "https://images.unsplash.com/photo-1563227812-0ea4c22e6cc8?auto=format&fit=crop&q=80&w=400",
     "category": "drinks",
@@ -897,10 +897,10 @@ export const INITIAL_MENU: any[] = [
     "name": {
       "zh": "奶酪組合價",
       "en": "Cheese Drink Combo Deal",
-      "ko": "奶酪組合價",
-      "ja": "奶酪組合價",
-      "th": "奶酪組合價",
-      "vi": "奶酪組合價"
+      "ko": "푸딩 & 음료 세트 할인",
+      "ja": "パンナコッタドリンクセット割",
+      "th": "ชุด세ตพานาคอตต้าและเครื่องดื่ม",
+      "vi": "Combo Panna Cotta kèm đồ uống"
     },
     "id": "dish-2603071951301",
     "available": true,
@@ -910,12 +910,12 @@ export const INITIAL_MENU: any[] = [
     "recipe": [],
     "hasNoodlesOption": false,
     "description": {
-      "zh": "超值優惠組合，物超所值，限時享用",
-      "en": "Great value combo package, high cost-performance deal for a limited time.",
-      "ko": "超值優惠組合，物超所值，限時享用",
-      "ja": "超值優惠組合，物超所值，限時享用",
-      "th": "超值優惠組合，物超所值，限時享用",
-      "vi": "超值優惠組合，物超所值，限時享用"
+      "zh": "精選奶酪搭配指定飲品的超值組合優惠。",
+      "en": "Value combo deal of selected panna cotta with designated beverages.",
+      "ko": "수제 푸딩과 어울리는 음료를 합리적인 가격에 즐길 수 있는 세트 구성입니다.",
+      "ja": "自家製プリンとお好みのドリンクをお得に楽しめる限定セットメニューです。",
+      "th": "ดีลพิเศษสุดคุ้ม พานาคอตต้าจับคู่กับเครื่องดื่มที่กำหนด",
+      "vi": "Ưu đãi giá trị lớn khi kết hợp bánh panna cotta với thức uống chỉ định."
     },
     "image": "https://images.unsplash.com/photo-1504754524776-8f4f37790ca0?auto=format&fit=crop&q=80&w=400",
     "orderIndex": 3,
@@ -1059,12 +1059,12 @@ export const INITIAL_MENU: any[] = [
     "recipe": [],
     "hasNoodlesOption": false,
     "description": {
-      "zh": "選用泰國經典手標紅茶葉，完美呈現泰奶的獨特風味與乳香。",
-      "en": "Infused with classic Thai tea leaves, perfectly presenting the unique flavor and milkiness of Thai milk tea.",
-      "ko": "選用泰國經典手標紅茶葉，完美呈現泰奶的獨特風味與乳香。",
-      "ja": "選用泰國經典手標紅茶葉，完美呈現泰奶的獨特風味與乳香。",
-      "th": "選用泰國經典手標紅茶葉，完美呈現泰奶的獨特風味與乳香。",
-      "vi": "選用泰國經典手標紅茶葉，完美呈現泰奶的獨特風味與乳香。"
+      "zh": "手標泰式奶茶製作的滑嫩奶酪，茶香與奶香完美結合。",
+      "en": "Smooth panna cotta made with hand-brand Thai milk tea.",
+      "ko": "정통 타이 홍차로 만들어 입안에서 사르르 녹는 부드러운 맛과 차 향이 특징입니다.",
+      "ja": "伝統のタイ紅茶で作った滑らかなプリン。豊かなお茶の香りとコクが楽しめます。",
+      "th": "พานาคอตต้าเนื้อเนียนนุ่ม ชงจากชาไทยตรามือแท้ หอมหวานละมุนลิ้น",
+      "vi": "Bánh flan mềm mịn làm từ trà sữa Thái ChaTraMue, sự kết hợp hoàn hảo giữa trà và sữa."
     },
     "image": "https://images.unsplash.com/photo-1544145945-f90425340c7e?auto=format&fit=crop&q=80&w=400",
     "containsSeafood": false,
@@ -1073,10 +1073,10 @@ export const INITIAL_MENU: any[] = [
     "name": {
       "zh": "泰式奶茶奶酪",
       "en": "Thai Milk Tea Panna Cotta",
-      "ko": "泰式奶茶奶酪",
-      "ja": "泰式奶茶奶酪",
-      "th": "泰式奶茶奶酪",
-      "vi": "泰式奶茶奶酪"
+      "ko": "타이 밀크티 푸딩",
+      "ja": "タイミルクティーパンナコッタ",
+      "th": "พานาคอตต้าชาไทย",
+      "vi": "Panna Cotta trà sữa Thái"
     },
     "isNotSpicy": true,
     "available": true,
@@ -1361,21 +1361,21 @@ export const INITIAL_MENU: any[] = [
     "name": {
       "zh": "泰式可可冰奶",
       "en": "Thai Iced Cocoa Milk",
-      "ko": "泰式可可冰奶",
-      "ja": "泰式可可冰奶",
-      "th": "泰式可可冰奶",
-      "vi": "泰式可可冰奶"
+      "ko": "태국식 아이스 코코아",
+      "ja": "タイ風アイスココアミルク",
+      "th": "โกโก้เย็นสูตรไทย",
+      "vi": "Ca ca sữa đá kiểu Thái"
     },
     "orderIndex": 17,
     "category": "drinks",
     "image": "https://images.unsplash.com/photo-1563227812-0ea4c22e6cc8?auto=format&fit=crop&q=80&w=400",
     "description": {
-      "zh": "基底手標泰式奶茶~撒上大量香濃美祿可可粉!!!一杯飲品雙重享受",
-      "en": "Refreshing and cool, a perfect match for delicious BBQ.",
-      "ko": "基底手標泰式奶茶~撒上大量香濃美祿可可粉!!!一杯飲品雙重享受",
-      "ja": "基底手標泰式奶茶~撒上大量香濃美祿可可粉!!!一杯飲品雙重享受",
-      "th": "基底手標泰式奶茶~撒上大量香濃美祿可可粉!!!一杯飲品雙重享受",
-      "vi": "基底手標泰式奶茶~撒上大量香濃美祿可可粉!!!一杯飲品雙重享受"
+      "zh": "香濃可可搭配濃郁鮮乳，冰涼香甜，濃郁醇厚。",
+      "en": "Rich cocoa with creamy fresh milk, sweet and ice-cold.",
+      "ko": "진하고 풍부한 코코아에 고소한 우유가 어우러져 시원하고 달콤한 초콜릿 음료입니다.",
+      "ja": "濃厚なココアとまろやかなミルクを合わせました。冷たくて甘く、コクのある仕上がりです。",
+      "th": "โกโก้รสชาติเข้มข้นผสมนมสดแท้ หวานเย็นกลมกล่อมเข้มข้นสะใจ",
+      "vi": "Ca ca đậm đà kết hợp sữa tươi thơm béo, ngọt ngào mát lạnh."
     },
     "hasNoodlesOption": false,
     "isTakeoutAvailable": true,
@@ -1390,10 +1390,10 @@ export const INITIAL_MENU: any[] = [
     "name": {
       "zh": "爆漿泰奶包",
       "en": "Thai Milk Tea Custard Lava Bun",
-      "ko": "爆漿泰奶包",
-      "ja": "爆漿泰奶包",
-      "th": "爆漿泰奶包",
-      "vi": "爆漿泰奶包"
+      "ko": "타이 밀크티 커스터드 찐빵",
+      "ja": "タイミルクティー流れるカスタードまん",
+      "th": "ซาลาเปาลาวาชาไทย",
+      "vi": "Bánh bao lava trà sữa Thái"
     },
     "id": "dish-2508252003261",
     "available": true,
@@ -1402,12 +1402,12 @@ export const INITIAL_MENU: any[] = [
     "recipe": [],
     "image": "https://images.unsplash.com/photo-1497534446932-c925b458314e?auto=format&fit=crop&q=80&w=400",
     "description": {
-      "zh": "泰國國民小吃!碳烤過的香甜麵包~搭配流心泰奶醬!一吃會上癮!每日少量供應",
-      "en": "Slowly grilled over charcoal, bursting with rich aroma and delicious flavor in every bite.",
-      "ko": "泰國國民小吃!碳烤過的香甜麵包~搭配流心泰奶醬!一吃會上癮!每日少量供應",
-      "ja": "泰國國民小吃!碳烤過的香甜麵包~搭配流心泰奶醬!一吃會上癮!每日少量供應",
-      "th": "泰國國民小吃!碳烤過的香甜麵包~搭配流心泰奶醬!一吃會上癮!每日少量供應",
-      "vi": "泰國國民小吃!碳烤過的香甜麵包~搭配流心泰奶醬!一吃會上癮!每日少量供應"
+      "zh": "外皮Q彈，內餡為香濃泰式奶茶卡士達，一口咬下爆漿美味。",
+      "en": "Chewy bun filled with rich Thai milk tea custard lava.",
+      "ko": "쫄깃한 빵 속에서 달콤하고 향긋한 타이 밀크티 커스터드가 흘러나오는 디저트입니다.",
+      "ja": "もちもちの生地から、濃厚なタイミルクティーのカスタードがとろりと溢れ出る美味しさです。",
+      "th": "ซาลาเปาเนื้อนุ่ม ไส้ครีมคัสตาร์ดชาไทยเยิ้มๆ หอมหวานอร่อย",
+      "vi": "Vỏ bánh bao dẻo dai kết hợp nhân trứng muối trà sữa Thái chảy tràn thơm béo khi cắn."
     },
     "hasNoodlesOption": false,
     "containsPork": false,
@@ -1450,12 +1450,12 @@ export const INITIAL_MENU: any[] = [
     "recipe": [],
     "image": "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&q=80&w=400",
     "description": {
-      "zh": "嚴選海味，聚餐首選🥳 炙燒生食級干貝×4 椰碳烤大草蝦×6 泰式大生蠔×3 手撕魷魚干1份 日本鯖甘魚下巴1份",
-      "en": "Strictly selected seafood, first choice for gatherings 🥳 Seared sashimi-grade scallops x4, Charcoal grilled tiger prawns x6, Thai jumbo oysters x3, Hand-shredded dried squid, Japanese yellowtail collar (Hamachi kama)",
-      "ko": "嚴選海味，聚餐首選🥳 炙燒生食級干貝×4 椰碳烤大草蝦×6 泰式大生蠔×3 手撕魷魚干1份 日本鯖甘魚下巴1份",
-      "ja": "嚴選海味，聚餐首選🥳 炙燒生食級干貝×4 椰碳烤大草蝦×6 泰式大生蠔×3 手撕魷魚干1份 日本鯖甘魚下巴1份",
-      "th": "嚴選海味，聚餐首選🥳 炙燒生食級干貝×4 椰碳烤大草蝦×6 泰式大生蠔×3 手撕魷魚干1份 日本鯖甘魚下巴1份",
-      "vi": "嚴選海味，聚餐首選🥳 炙燒生食級干貝×4 椰碳烤大草蝦×6 泰式大生蠔×3 手撕魷魚干1份 日本鯖甘魚下巴1份"
+      "zh": "精選頂級食材組合，包含安格斯牛肉及多種海鮮，適合多人共享。",
+      "en": "Premium ingredient combination including Angus beef and various seafood, perfect for sharing.",
+      "ko": "앙구스 소고기와 풍성한 해산물을 담아 단체나 가족이 함께 나누기 좋은 프리미엄 세트입니다.",
+      "ja": "アンガス牛と多彩な海鮮を組み合わせた、グループでのシェアに最適なプレミアムセットです。",
+      "th": "ชุดรวมวัตถุดิบพรีเมียม ทั้งเนื้อแองกัสและซีฟู้ด เหมาะสำหรับแบ่งปันในครอบครัว",
+      "vi": "Set tổng hợp nguyên liệu cao cấp gồm bò Angus và nhiều loại hải sản, phù hợp chia sẻ nhóm."
     },
     "hasNoodlesOption": false,
     "category": "combos",
@@ -1463,10 +1463,10 @@ export const INITIAL_MENU: any[] = [
     "name": {
       "zh": "奢華C餐",
       "en": "Luxury Set C Combo",
-      "ko": "奢華C餐",
-      "ja": "奢華C餐",
-      "th": "奢華C餐",
-      "vi": "奢華C餐"
+      "ko": "럭셔리 세트 C",
+      "ja": "豪華Cセット",
+      "th": "ชุดเซตสุดหรู C",
+      "vi": "Set C sang trọng"
     },
     "isNotSpicy": true,
     "id": "dish-2508201955573",
@@ -1834,12 +1834,12 @@ export const INITIAL_MENU: any[] = [
     "containsPork": true,
     "recipe": [],
     "description": {
-      "zh": "經典泰式冬蔭功湯底 配料:台灣豬五花肉片、鱈魚丸 貢丸、日本魚板、大陸妹、洋蔥 紅蘿蔔、九層塔、高麗菜 豆芽菜",
-      "en": "Authentic Thai-style soup noodles with rich, warming broth",
-      "ko": "經典泰式冬蔭功湯底 配料:台灣豬五花肉片、鱈魚丸 貢丸、日本魚板、大陸妹、洋蔥 紅蘿蔔、九層塔、高麗菜 豆芽菜",
-      "ja": "經典泰式冬蔭功湯底 配料:台灣豬五花肉片、鱈魚丸 貢丸、日本魚板、大陸妹、洋蔥 紅蘿蔔、九層塔、高麗菜 豆芽菜",
-      "th": "經典泰式冬蔭功湯底 配料:台灣豬五花肉片、鱈魚丸 貢丸、日本魚板、大陸妹、洋蔥 紅蘿蔔、九層塔、高麗菜 豆芽菜",
-      "vi": "經典泰式冬蔭功湯底 配料:台灣豬五花肉片、鱈魚丸 貢丸、日本魚板、大陸妹、洋蔥 紅蘿蔔、九層塔、高麗菜 豆芽菜"
+      "zh": "精選豬肉搭配滑順泰式米線，吸附酸辣冬蔭功湯汁。",
+      "en": "Selected pork with smooth rice noodles in rich Tom Yum broth.",
+      "ko": "엄선한 돼지고기와 부드러운 쌀국수가 똠얌 국물을 머금어 담백하고 매콤새콤합니다.",
+      "ja": "厳選された豚肉と滑らかなライスヌードルに、トムヤムスープの旨味が染み込んでいます。",
+      "th": "เนื้อหมูนุ่มๆ เสิร์ฟพร้อมเส้นหมี่เหนียวนุ่มในน้ำซุปต้มยำรสกลมกล่อม",
+      "vi": "Thịt heo ngon dùng kèm bún gạo mềm trong súp Tom Yum chua cay."
     },
     "image": "https://images.unsplash.com/photo-1569718212165-3a8278d5f624?auto=format&fit=crop&q=80&w=400",
     "hasNoodlesOption": false,
@@ -1848,10 +1848,10 @@ export const INITIAL_MENU: any[] = [
     "name": {
       "zh": "泰式豬肉.米線",
       "en": "Thai Tom Yum Pork Rice Noodle",
-      "ko": "泰式豬肉.米線",
-      "ja": "泰式豬肉.米線",
-      "th": "泰式豬肉.米線",
-      "vi": "泰式豬肉.米線"
+      "ko": "태국식 돼지고기 쌀국수",
+      "ja": "タイ風豚肉細米麺",
+      "th": "เส้นหมี่ต้มยำหมู",
+      "vi": "Bún thịt heo kiểu Thái"
     },
     "isNotSpicy": false,
     "isTakeoutAvailable": true,
@@ -1907,10 +1907,10 @@ export const INITIAL_MENU: any[] = [
     "name": {
       "zh": "泰式豬肉.河粉",
       "en": "Thai Tom Yum Pork Pho Noodle",
-      "ko": "泰式豬肉.河粉",
-      "ja": "泰式豬肉.河粉",
-      "th": "泰式豬肉.河粉",
-      "vi": "泰式豬肉.河粉"
+      "ko": "태국식 돼지고기 포",
+      "ja": "タイ風豚肉平米麺",
+      "th": "ก๋วยเตี๋ยวเส้นใหญ่ต้มยำหมู",
+      "vi": "Phở thịt heo kiểu Thái"
     },
     "isNotSpicy": false,
     "id": "dish-2505041843176",
@@ -1921,12 +1921,12 @@ export const INITIAL_MENU: any[] = [
     "hasNoodlesOption": false,
     "image": "https://images.unsplash.com/photo-1548943487-a2e4e43b4853?auto=format&fit=crop&q=80&w=400",
     "description": {
-      "zh": "經典泰式冬蔭功湯底 配料台灣豬五花肉片、鱈魚丸 貢丸、日本魚板、大陸妹、洋蔥 紅蘿蔔、九層塔、高麗菜 豆芽菜",
-      "en": "Authentic Thai-style soup noodles with rich, warming broth",
-      "ko": "經典泰式冬蔭功湯底 配料台灣豬五花肉片、鱈魚丸 貢丸、日本魚板、大陸妹、洋蔥 紅蘿蔔、九層塔、高麗菜 豆芽菜",
-      "ja": "經典泰式冬蔭功湯底 配料台灣豬五花肉片、鱈魚丸 貢丸、日本魚板、大陸妹、洋蔥 紅蘿蔔、九層塔、高麗菜 豆芽菜",
-      "th": "經典泰式冬蔭功湯底 配料台灣豬五花肉片、鱈魚丸 貢丸、日本魚板、大陸妹、洋蔥 紅蘿蔔、九層塔、高麗菜 豆芽菜",
-      "vi": "經典泰式冬蔭功湯底 配料台灣豬五花肉片、鱈魚丸 貢丸、日本魚板、大陸妹、洋蔥 紅蘿蔔、九層塔、高麗菜 豆芽菜"
+      "zh": "精選豬肉搭配Q彈泰式河粉，吸附酸辣冬蔭功湯汁。",
+      "en": "Selected pork with chewy flat rice noodles in rich Tom Yum broth.",
+      "ko": "엄선한 돼지고기와 쫄깃한 납작 쌀국수가 똠얌 국물에 잘 어우러진 맛입니다.",
+      "ja": "厳選された豚肉ともちもち의平打ちライスヌードルに、トムヤムスープがよく絡みます。",
+      "th": "เนื้อหมูนุ่มๆ เสิร์ฟพร้อมเส้นใหญ่เหนียวนุ่มในน้ำซุปต้มยำรสเด็ด",
+      "vi": "Thịt heo ngon dùng kèm phở sợi dẹt dai trong súp Tom Yum chua cay."
     },
     "isTakeoutAvailable": true
   },
@@ -1937,12 +1937,12 @@ export const INITIAL_MENU: any[] = [
     "orderIndex": 33,
     "hasNoodlesOption": false,
     "description": {
-      "zh": "網紅網帥拍照必備~茶香濃郁的經典泰奶~1000CC空桶回店回購再折30元!",
-      "en": "Refreshing and cool, a perfect match for BBQ",
-      "ko": "網紅網帥拍照必備~茶香濃郁的經典泰奶~1000CC空桶回店回購再折30元!",
-      "ja": "網紅網帥拍照必備~茶香濃郁的經典泰奶~1000CC空桶回店回購再折30元!",
-      "th": "網紅網帥拍照必備~茶香濃郁的經典泰奶~1000CC空桶回店回購再折30元!",
-      "vi": "網紅網帥拍照必備~茶香濃郁的經典泰奶~1000CC空桶回店回購再折30元!"
+      "zh": "大容量1公升手標泰式奶茶，冰涼過癮，甜香濃郁。",
+      "en": "1-liter bucket of hand-brand Thai milk tea, ice-cold and richly sweet.",
+      "ko": "정통 수제 태국 밀크티를 1리터 대용량으로 시원하고 달콤하게 즐길 수 있습니다.",
+      "ja": "タイ伝統の茶葉を使用したミルクティーを、大容量1Lバケツで冷たく濃厚に味わえます。",
+      "th": "ชาไทยรสชาติเข้มข้นหอมหวานมัน เสิร์ฟในถังใหญ่ขนาด 1 ลิตร เย็นสะใจ",
+      "vi": "Trà sữa Thái ChaTraMue dung tích lớn 1 lít thơm béo đậm đà uống cực đã."
     },
     "image": "https://images.unsplash.com/photo-1497534446932-c925b458314e?auto=format&fit=crop&q=80&w=400",
     "recipe": [],
@@ -1954,10 +1954,10 @@ export const INITIAL_MENU: any[] = [
     "name": {
       "zh": "街頭泰奶1L",
       "en": "Thai Street Milk Tea (1L Bucket)",
-      "ko": "街頭泰奶1L",
-      "ja": "街頭泰奶1L",
-      "th": "街頭泰奶1L",
-      "vi": "街頭泰奶1L"
+      "ko": "태국식 아이스 밀크티 (1L 버킷)",
+      "ja": "タイ風アイスミルクティー (1Lバケツ)",
+      "th": "ชาไทยถัง 1 ลิตร",
+      "vi": "Trà sữa Thái xô 1L"
     },
     "isNotSpicy": true,
     "isTakeoutAvailable": true
@@ -2008,22 +2008,22 @@ export const INITIAL_MENU: any[] = [
     "name": {
       "zh": "泰滿足海陸牛冬蔭功",
       "en": "Surf & Turf Beef Tom Yum Noodle Soup",
-      "ko": "泰滿足海陸牛冬蔭功",
-      "ja": "泰滿足海陸牛冬蔭功",
-      "th": "泰滿足海陸牛冬蔭功",
-      "vi": "泰滿足海陸牛冬蔭功"
+      "ko": "해물 소고기 똠얌 쌀국수",
+      "ja": "海鮮と牛肉のトムヤムヌードル",
+      "th": "ก๋วยเตี๋ยวต้มยำเนื้อและทะเลรวมมิตร",
+      "vi": "Phở Tom Yum bò & hải sản đặc biệt"
     },
     "containsBeef": true,
     "price": 390,
     "containsSeafood": false,
     "hasNoodlesOption": false,
     "description": {
-      "zh": "經典泰式冬蔭功湯底 配料: 美國嫩肩里肌choice牛肉片 蝦子 魷魚圈 蛤蠣 鱈魚丸 貢丸 日本魚板 大陸妹 洋蔥 紅蘿蔔 九層塔 高麗菜",
-      "en": "Authentic Thai-style soup noodles with rich, warming broth",
-      "ko": "經典泰式冬蔭功湯底 配料: 美國嫩肩里肌choice牛肉片 蝦子 魷魚圈 蛤蠣 鱈魚丸 貢丸 日本魚板 大陸妹 洋蔥 紅蘿蔔 九層塔 高麗菜",
-      "ja": "經典泰式冬蔭功湯底 配料: 美國嫩肩里肌choice牛肉片 蝦子 魷魚圈 蛤蠣 鱈魚丸 貢丸 日本魚板 大陸妹 洋蔥 紅蘿蔔 九層塔 高麗菜",
-      "th": "經典泰式冬蔭功湯底 配料: 美國嫩肩里肌choice牛肉片 蝦子 魷魚圈 蛤蠣 鱈魚丸 貢丸 日本魚板 大陸妹 洋蔥 紅蘿蔔 九層塔 高麗菜",
-      "vi": "經典泰式冬蔭功湯底 配料: 美國嫩肩里肌choice牛肉片 蝦子 魷魚圈 蛤蠣 鱈魚丸 貢丸 日本魚板 大陸妹 洋蔥 紅蘿蔔 九層塔 高麗菜"
+      "zh": "豐富海鮮與精選牛肉，搭配濃郁冬蔭功高湯及米線/河粉。",
+      "en": "Abundant seafood and selected beef in rich Tom Yum broth.",
+      "ko": "푸짐한 해산물과 엄선된 소고기에 똠얌 육수와 쌀국수를 더해 든든하게 즐기실 수 있습니다.",
+      "ja": "豊富な海鮮と特選牛肉に、旨辛のトムヤムスープとライスヌードルを合わせました。",
+      "th": "ก๋วยเตี๋ยวต้มยำซุปเข้มข้น อัดแน่นด้วยเนื้อวัวและเครื่องทะเล",
+      "vi": "Hải sản phong phú cùng thịt bò chọn lọc trong nước súp Tom Yum đậm đà kèm bánh phở/bún."
     },
     "image": "https://images.unsplash.com/photo-1569718212165-3a8278d5f624?auto=format&fit=crop&q=80&w=400",
     "hasCoconutsMilkOption": true,
@@ -2075,12 +2075,12 @@ export const INITIAL_MENU: any[] = [
     "recipe": [],
     "hasCoconutsMilkOption": true,
     "description": {
-      "zh": "經典泰式冬蔭功湯底 配料:台灣豬五花肉片 蝦子 魷魚圈 蛤蠣 鱈魚丸 貢丸 日本魚板 大陸妹 洋蔥 紅蘿蔔 九層塔 高麗菜",
-      "en": "Authentic Thai-style soup noodles with rich, warming broth",
-      "ko": "經典泰式冬蔭功湯底 配料:台灣豬五花肉片 蝦子 魷魚圈 蛤蠣 鱈魚丸 貢丸 日本魚板 大陸妹 洋蔥 紅蘿蔔 九層塔 高麗菜",
-      "ja": "經典泰式冬蔭功湯底 配料:台灣豬五花肉片 蝦子 魷魚圈 蛤蠣 鱈魚丸 貢丸 日本魚板 大陸妹 洋蔥 紅蘿蔔 九層塔 高麗菜",
-      "th": "經典泰式冬蔭功湯底 配料:台灣豬五花肉片 蝦子 魷魚圈 蛤蠣 鱈魚丸 貢丸 日本魚板 大陸妹 洋蔥 紅蘿蔔 九層塔 高麗菜",
-      "vi": "經典泰式冬蔭功湯底 配料:台灣豬五花肉片 蝦子 魷魚圈 蛤蠣 鱈魚丸 貢丸 日本魚板 大陸妹 洋蔥 紅蘿蔔 九層塔 高麗菜"
+      "zh": "豐富海鮮與精選豬肉，搭配濃郁冬蔭功高湯。",
+      "en": "Abundant seafood and selected pork in rich Tom Yum broth.",
+      "ko": "푸짐한 해산물과 부드러운 돼지고기를 매콤새콤하고 진한 똠얌 육수에 끓여냈습니다.",
+      "ja": "たっぷりの海鮮と厳選された豚肉を、濃厚なトムヤムスープで煮込みました。",
+      "th": "เครื่องทะเลจัดเต็มและหมูหมักนุ่มๆ ในน้ำซุปต้มยำรสชาติเข้มข้นสะใจ",
+      "vi": "Hải sản phong phú cùng thịt heo chọn lọc trong nước súp Tom Yum đậm đà."
     },
     "image": "https://images.unsplash.com/photo-1569718212165-3a8278d5f624?auto=format&fit=crop&q=80&w=400",
     "hasNoodlesOption": false,
@@ -2089,10 +2089,10 @@ export const INITIAL_MENU: any[] = [
     "name": {
       "zh": "泰澎湃海陸豬冬蔭功",
       "en": "Surf & Turf Pork Tom Yum Soup",
-      "ko": "泰澎湃海陸豬冬蔭功",
-      "ja": "泰澎湃海陸豬冬蔭功",
-      "th": "泰澎湃海陸豬冬蔭功",
-      "vi": "泰澎湃海陸豬冬蔭功"
+      "ko": "해물 돼지고기 똠얌 수프",
+      "ja": "海鮮と豚肉のトムヤムスープ",
+      "th": "ต้มยำหมูและทะเลรวมมิตร",
+      "vi": "Tom Yum heo & hải sản đặc biệt"
     },
     "isNotSpicy": false,
     "id": "dish-2505041751044",
@@ -2109,10 +2109,10 @@ export const INITIAL_MENU: any[] = [
     "name": {
       "zh": "蔬菜拼盤",
       "en": "Fresh Vegetables Platter",
-      "ko": "蔬菜拼盤",
-      "ja": "蔬菜拼盤",
-      "th": "蔬菜拼盤",
-      "vi": "蔬菜拼盤"
+      "ko": "모듬 야채 플래터",
+      "ja": "新鮮野菜의盛り合わせ",
+      "th": "ชุดผักสดรวม",
+      "vi": "Mâm rau củ tươi"
     },
     "isNotSpicy": false,
     "available": true,
@@ -2121,12 +2121,12 @@ export const INITIAL_MENU: any[] = [
     "category": "veggies",
     "recipe": [],
     "description": {
-      "zh": "店家隨機出4種不同80元的碳烤蔬菜",
-      "en": "Slowly grilled over charcoal, bursting with rich aroma and delicious flavor in every bite.",
-      "ko": "店家隨機出4種不同80元的碳烤蔬菜",
-      "ja": "店家隨機出4種不同80元的碳烤蔬菜",
-      "th": "店家隨機出4種不同80元的碳烤蔬菜",
-      "vi": "店家隨機出4種不同80元的碳烤蔬菜"
+      "zh": "多種新鮮蔬菜組合，適合搭配燒烤或火鍋。",
+      "en": "A variety of fresh vegetables, perfect for grilling or hotpot.",
+      "ko": "구이나 샤브샤브에 곁들이기 좋은 신선하고 다양한 야채 모듬입니다.",
+      "ja": "焼き物や鍋料理に最適な、新鮮な野菜を豊富に揃えた盛り合わせです。",
+      "th": "ผักสดหลากหลายชนิด เหมาะสำหรับทานคู่กับเมนูปิ้งย่างหรือชาบู",
+      "vi": "Tổng hợp nhiều loại rau củ tươi ngon, phù hợp ăn kèm đồ nướng hoặc lẩu."
     },
     "image": "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&q=80&w=400",
     "hasNoodlesOption": false,
@@ -2176,22 +2176,22 @@ export const INITIAL_MENU: any[] = [
     "name": {
       "zh": "泰式生蠔11p",
       "en": "Thai Style Fresh Oysters (11pcs)",
-      "ko": "泰式生蠔11p",
-      "ja": "泰式生蠔11p",
-      "th": "泰式生蠔11p",
-      "vi": "泰式生蠔11p"
+      "ko": "태국식 생굴 (11개)",
+      "ja": "タイ風生牡蠣 (11個)",
+      "th": "หอยนางรมสดสไตล์ไทย (11 ตัว)",
+      "vi": "Hàu tươi kiểu Thái (11 con)"
     },
     "containsBeef": false,
     "price": 2200,
     "containsSeafood": true,
     "hasNoodlesOption": false,
     "description": {
-      "zh": "(買十送一)嚴選L號宮城生蠔 牛奶海味!店內招牌! 可生食 可碳烤",
-      "en": "Slowly grilled over charcoal, bursting with rich aroma and delicious flavor in every bite.",
-      "ko": "(買十送一)嚴選L號宮城生蠔 牛奶海味!店內招牌! 可生食 可碳烤",
-      "ja": "(買十送一)嚴選L號宮城生蠔 牛奶海味!店內招牌! 可生食 可碳烤",
-      "th": "(買十送一)嚴選L號宮城生蠔 牛奶海味!店內招牌! 可生食 可碳烤",
-      "vi": "(買十送一)嚴選L號宮城生蠔 牛奶海味!店內招牌! 可生食 可碳烤"
+      "zh": "新鮮生蠔搭配特製泰式酸辣生蠔醬，鮮甜肥美，酸辣開胃。",
+      "en": "Fresh oysters served with special Thai spicy & sour dipping sauce, sweet and juicy.",
+      "ko": "신선하고 통통한 생굴에 새콤매콤한 태국식 특제 소스를 곁들여 바다의 풍미를 느낄 수 있습니다.",
+      "ja": "新鮮で大ぶりの生牡蠣に、特製のタイ風ピリ辛ソースを合わせました。濃厚で爽やかな味わいです。",
+      "th": "หอยนางรมสดตัวโตเนื้อหวานฉ่ำ เสิร์ฟพร้อมน้ำจิ้มซีฟู้ดรสเด็ดสไตล์ไทย",
+      "vi": "Hàu tươi ngon ăn kèm sốt hàu chua cay đặc biệt kiểu Thái, béo ngậy ngọt tự nhiên."
     },
     "image": "https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=400",
     "recipe": [],
@@ -2425,10 +2425,10 @@ export const INITIAL_MENU: any[] = [
     "name": {
       "zh": "碳烤爽脆高麗菜",
       "en": "Crispy Grilled Cabbage",
-      "ko": "碳烤爽脆高麗菜",
-      "ja": "碳烤爽脆高麗菜",
-      "th": "碳烤爽脆高麗菜",
-      "vi": "碳烤爽脆高麗菜"
+      "ko": "숯불 양배추 구이",
+      "ja": "炭火焼きキャベツ",
+      "th": "กะหล่ำปลีย่างเตาถ่าน",
+      "vi": "Bắp cải nướng than giòn"
     },
     "isNotSpicy": false,
     "available": true,
@@ -2438,12 +2438,12 @@ export const INITIAL_MENU: any[] = [
     "containsBeef": false,
     "recipe": [],
     "description": {
-      "zh": "炭烤高山高麗菜~烤好清脆香甜~別家應該沒有賣~不吃看看?",
-      "en": "Slowly grilled over charcoal, bursting with aroma and flavor",
-      "ko": "炭烤高山高麗菜~烤好清脆香甜~別家應該沒有賣~不吃看看?",
-      "ja": "炭烤高山高麗菜~烤好清脆香甜~別家應該沒有賣~不吃看看?",
-      "th": "炭烤高山高麗菜~烤好清脆香甜~別家應該沒有賣~不吃看看?",
-      "vi": "炭烤高山高麗菜~烤好清脆香甜~別家應該沒有賣~不吃看看?"
+      "zh": "新鮮高麗菜碳烤至微焦，口感爽脆，帶有淡淡炭香。",
+      "en": "Fresh cabbage grilled over charcoal to crispy perfection with a hint of smoky flavor.",
+      "ko": "신선한 양배추를 숯불에 노릇하게 구워 아삭한 식감과 은은한 불향이 매력적입니다.",
+      "ja": "新鮮なキャベツを炭火で香ばしく焼き上げました。シャキシャキした食感と炭の香りが楽しめます。",
+      "th": "กะหล่ำปลีสดๆ ย่างเตาถ่านจนหอม ได้รสหวานธรรมชาติและกรอบอร่อย",
+      "vi": "Bắp cải tươi nướng than xém cạnh, vị giòn ngọt thanh kèm hương khói nhẹ."
     },
     "image": "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&q=80&w=400",
     "hasNoodlesOption": false,
@@ -2489,10 +2489,10 @@ export const INITIAL_MENU: any[] = [
     "name": {
       "zh": "泰辣醬",
       "en": "Thai Spicy Chili Dip",
-      "ko": "泰辣醬",
-      "ja": "泰辣醬",
-      "th": "泰辣醬",
-      "vi": "泰辣醬"
+      "ko": "태국식 매운 칠리 소스",
+      "ja": "タイ風スパイシーチリソース",
+      "th": "น้ำพริกเผาไทย",
+      "vi": "Sốt ớt cay Thái"
     },
     "isNotSpicy": false,
     "containsBeef": false,
@@ -2501,12 +2501,12 @@ export const INITIAL_MENU: any[] = [
     "hasNoodlesOption": false,
     "image": "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&q=80&w=400",
     "description": {
-      "zh": "嚴選3種辣椒精心炒製，口感層次豐富，嗜辣者必嚐",
-      "en": "Meticulously crafted with rich layers of flavor to complement your meal.",
-      "ko": "嚴選3種辣椒精心炒製，口感層次豐富，嗜辣者必嚐",
-      "ja": "嚴選3種辣椒精心炒製，口感層次豐富，嗜辣者必嚐",
-      "th": "嚴選3種辣椒精心炒製，口感層次豐富，嗜辣者必嚐",
-      "vi": "嚴選3種辣椒精心炒製，口感層次豐富，嗜辣者必嚐"
+      "zh": "特製泰式酸辣醬，香辣開胃。",
+      "en": "Special Thai spicy & sour dipping sauce.",
+      "ko": "매콤새콤하여 입맛을 돋우는 특제 태국식 소스입니다.",
+      "ja": "ピリ辛で酸味の効いた、食欲をそそる特製タイ風ディップソースです。",
+      "th": "น้ำจิ้มพริกสูตรพิเศษ รสจัดจ้านเผ็ดร้อนสะใจ",
+      "vi": "Sốt chấm chua cay đặc biệt kiểu Thái, hương vị kích thích vị giác."
     },
     "recipe": [],
     "category": "cat-zene8j",
@@ -2970,12 +2970,12 @@ export const INITIAL_MENU: any[] = [
     "hasNoodlesOption": false,
     "image": "https://images.unsplash.com/photo-1569718212165-3a8278d5f624?auto=format&fit=crop&q=80&w=400",
     "description": {
-      "zh": "5.2盎司牛小排 (無灌水非重組肉choice等級)炭烤過在入湯！饕客的最愛♥️道地泰式濃郁湯底",
-      "en": "Authentic Thai-style soup noodles with rich, warming broth",
-      "ko": "5.2盎司牛小排 (無灌水非重組肉choice等級)炭烤過在入湯！饕客的最愛♥️道地泰式濃郁湯底",
-      "ja": "5.2盎司牛小排 (無灌水非重組肉choice等級)炭烤過在入湯！饕客的最愛♥️道地泰式濃郁湯底",
-      "th": "5.2盎司牛小排 (無灌水非重組肉choice等級)炭烤過在入湯！饕客的最愛♥️道地泰式濃郁湯底",
-      "vi": "5.2盎司牛小排 (無灌水非重組肉choice等級)炭烤過在入湯！饕客的最愛♥️道地泰式濃郁湯底"
+      "zh": "嚴選頂級牛小排炭烤後，搭配正宗冬蔭功酸辣高湯，湯頭濃郁香辣。",
+      "en": "Premium charcoal-grilled short rib beef in authentic spicy & sour Tom Yum broth.",
+      "ko": "엄선된 프리미엄 우대갈비를 숯불에 구워 정통 똠얌 수프에 곁들인 진하고 매콤새콤한 탕 요리입니다.",
+      "ja": "厳選された特上牛ショートリブを炭火で焼き、本場のトムヤムスープに合わせた旨辛でコクのあるスープです。",
+      "th": "เนื้อซี่โครงเกรดพรีเมียมย่างเตาถ่าน เสิร์ฟในน้ำซุปต้มยำรสชาติเข้มข้นจัดจ้าน",
+      "vi": "Sườn bò thượng hạng nướng than dùng kèm nước súp Tom Yum chua cay đậm đà."
     },
     "hasCoconutsMilkOption": true,
     "recipe": [],
@@ -2988,10 +2988,10 @@ export const INITIAL_MENU: any[] = [
     "name": {
       "zh": "牛小排冬蔭功湯",
       "en": "Charcoal Short Rib Beef Tom Yum Soup",
-      "ko": "牛小排冬蔭功湯",
-      "ja": "牛小排冬蔭功湯",
-      "th": "牛小排冬蔭功湯",
-      "vi": "牛小排冬蔭功湯"
+      "ko": "숯불 우대갈비 똠얌 수프",
+      "ja": "炭火焼き牛ショートリブのトムヤムスープ",
+      "th": "ต้มยำกะเพราเนื้อซี่โครงย่างเตาถ่าน",
+      "vi": "Súp Tom Yum sườn bò nướng than"
     },
     "customAddOns": [
       {
@@ -3077,10 +3077,10 @@ export const INITIAL_MENU: any[] = [
     "name": {
       "zh": "泰式牛小排.米線",
       "en": "Thai Grilled Short Rib Beef Rice Noodle",
-      "ko": "泰式牛小排.米線",
-      "ja": "泰式牛小排.米線",
-      "th": "泰式牛小排.米線",
-      "vi": "泰式牛小排.米線"
+      "ko": "태국식 숯불 우대갈비 쌀국수",
+      "ja": "タイ風炭火焼き牛ショートリブ細米麺",
+      "th": "เส้นหมี่ต้มยำเนื้อซี่โครงย่าง",
+      "vi": "Bún sườn bò nướng kiểu Thái"
     },
     "isNotSpicy": false,
     "id": "dish-2409232043478",
@@ -3090,12 +3090,12 @@ export const INITIAL_MENU: any[] = [
     "containsBeef": true,
     "recipe": [],
     "description": {
-      "zh": "5.2盎司牛小排 (無灌水非重組肉choice等級)碳烤過在入湯！饕客的最愛♥️道地泰式風味湯麵，濃郁湯底暖心暖胃",
-      "en": "Authentic Thai style noodle soup with a rich, heart-warming broth.",
-      "ko": "5.2盎司牛小排 (無灌水非重組肉choice等級)碳烤過在入湯！饕客的最愛♥️道地泰式風味湯麵，濃郁湯底暖心暖胃",
-      "ja": "5.2盎司牛小排 (無灌水非重組肉choice等級)碳烤過在入湯！饕客的最愛♥️道地泰式風味湯麵，濃郁湯底暖心暖胃",
-      "th": "5.2盎司牛小排 (無灌水非重組肉choice等級)碳烤過在入湯！饕客的最愛♥️道地泰式風味湯麵，濃郁湯底暖心暖胃",
-      "vi": "5.2盎司牛小排 (無灌水非重組肉choice等級)碳烤過在入湯！饕客的最愛♥️道地泰式風味湯麵，濃郁湯底暖心暖胃"
+      "zh": "炭烤頂級牛小排搭配滑順泰式米線，吸附酸辣冬蔭功湯汁，酸辣開胃。",
+      "en": "Charcoal-grilled short rib beef with smooth rice noodles in rich Tom Yum broth.",
+      "ko": "숯불에 구운 우대갈비와 부드러운 쌀국수가 진한 똠얌 국물과 어우러져 입맛을 돋웁니다.",
+      "ja": "炭火で焼いた特上ショートリブを滑らかなライスヌードルに의せ、酸味と辛味の効いたスープが絡む一杯です。",
+      "th": "เนื้อซี่โครงย่างเตาถ่านทานคู่กับเส้นหมี่เหนียวนุ่มในน้ำซุปต้มยำรสจัดจ้าน",
+      "vi": "Sườn bò nướng than dùng kèm bún gạo mềm, thấm đẫm súp Tom Yum chua cay ngon miệng."
     },
     "image": "https://images.unsplash.com/photo-1569718212165-3a8278d5f624?auto=format&fit=crop&q=80&w=400",
     "hasNoodlesOption": false,
@@ -3146,12 +3146,12 @@ export const INITIAL_MENU: any[] = [
     "recipe": [],
     "image": "https://images.unsplash.com/photo-1569718212165-3a8278d5f624?auto=format&fit=crop&q=80&w=400",
     "description": {
-      "zh": "5.2盎司牛小排 (無灌水非重組肉choice等級)碳烤過在入湯！饕客的最愛♥️道地泰式風味湯麵，濃郁湯底暖心暖胃",
-      "en": "Authentic Thai style noodle soup with a rich, heart-warming broth.",
-      "ko": "5.2盎司牛小排 (無灌水非重組肉choice等級)碳烤過在入湯！饕客的最愛♥️道地泰式風味湯麵，濃郁湯底暖心暖胃",
-      "ja": "5.2盎司牛小排 (無灌水非重組肉choice等級)碳烤過在入湯！饕客的最愛♥️道地泰式風味湯麵，濃郁湯底暖心暖胃",
-      "th": "5.2盎司牛小排 (無灌水非重組肉choice等級)碳烤過在入湯！饕客的最愛♥️道地泰式風味湯麵，濃郁湯底暖心暖胃",
-      "vi": "5.2盎司牛小排 (無灌水非重組肉choice等級)碳烤過在入湯！饕客的最愛♥️道地泰式風味湯麵，濃郁湯底暖心暖胃"
+      "zh": "炭烤頂級牛小排搭配Q彈泰式河粉，吸附酸辣冬蔭功湯汁，酸辣開胃。",
+      "en": "Charcoal-grilled short rib beef with chewy flat rice noodles in rich Tom Yum broth.",
+      "ko": "숯불에 구운 우대갈비와 쫄깃한 납작 쌀국수가 새콤매콤한 똠얌 국물을 머금어 조화로운 맛을 냅니다.",
+      "ja": "炭火で焼いた特上ショートリブともちもち의平打ちライスヌードルが、トムヤムスープと絶妙に絡みます。",
+      "th": "เนื้อซี่โครงย่างเตาถ่านเสิร์ฟพร้อมเส้นใหญ่เหนียวนุ่มในน้ำซุปต้มยำรสเด็ด",
+      "vi": "Sườn bò nướng than dùng kèm phở sợi dẹt dai, thấm vị súp Tom Yum chua cay kích thích vị giác."
     },
     "hasNoodlesOption": false,
     "orderIndex": 65,
@@ -3159,10 +3159,10 @@ export const INITIAL_MENU: any[] = [
     "name": {
       "zh": "泰式牛小排.河粉",
       "en": "Thai Grilled Short Rib Beef Pho Noodle",
-      "ko": "泰式牛小排.河粉",
-      "ja": "泰式牛小排.河粉",
-      "th": "泰式牛小排.河粉",
-      "vi": "泰式牛小排.河粉"
+      "ko": "태국식 숯불 우대갈비 똠얌 팟타이/포",
+      "ja": "タイ風炭火焼き牛ショートリブ平米麺",
+      "th": "ก๋วยเตี๋ยวเส้นใหญ่ต้มยำเนื้อซี่โครงย่าง",
+      "vi": "Phở sườn bò nướng kiểu Thái"
     },
     "isNotSpicy": false,
     "id": "dish-2409232042549",
@@ -3523,22 +3523,22 @@ export const INITIAL_MENU: any[] = [
     "name": {
       "zh": "泰式海鮮.米線",
       "en": "Thai Seafood Tom Yum Rice Noodle",
-      "ko": "泰式海鮮.米線",
-      "ja": "泰式海鮮.米線",
-      "th": "泰式海鮮.米線",
-      "vi": "泰式海鮮.米線"
+      "ko": "태국식 해산물 똠얌 쌀국수",
+      "ja": "タイ風海鮮トムヤム細米麺",
+      "th": "เส้นหมี่ต้มยำทะเล",
+      "vi": "Bún hải sản kiểu Thái"
     },
     "price": 240,
     "containsBeef": false,
     "containsSeafood": true,
     "image": "https://images.unsplash.com/photo-1533622597524-a1215e26c0a2?auto=format&fit=crop&q=80&w=400",
     "description": {
-      "zh": "沒吃過冬蔭功就不能說吃過泰式! 經典口味道地風味湯麵，濃郁湯底暖心暖胃",
-      "en": "Authentic Thai-style soup noodles with rich, warming broth",
-      "ko": "沒吃過冬蔭功就不能說吃過泰式! 經典口味道地風味湯麵，濃郁湯底暖心暖胃",
-      "ja": "沒吃過冬蔭功就不能說吃過泰式! 經典口味道地風味湯麵，濃郁湯底暖心暖胃",
-      "th": "沒吃過冬蔭功就不能說吃過泰式! 經典口味道地風味湯麵，濃郁湯底暖心暖胃",
-      "vi": "沒吃過冬蔭功就不能說吃過泰式! 經典口味道地風味湯麵，濃郁湯底暖心暖胃"
+      "zh": "新鮮海鮮搭配滑順泰式米線，吸附酸辣冬蔭功湯汁，酸辣開胃。",
+      "en": "Fresh seafood with smooth rice noodles in rich Tom Yum broth.",
+      "ko": "신선한 해산물과 부드러운 쌀국수가 얼큰하고 매콤새콤한 똠얌 국물에 녹아든 개운한 맛입니다.",
+      "ja": "新鮮なシーフードと滑らかなライスヌードルが、トムヤムスープの旨味を吸い込んだ絶品です。",
+      "th": "อาหารทะเลสดๆ เสิร์ฟพร้อมเส้นหมี่เหนียวนุ่มในซุปต้มยำเข้มข้น",
+      "vi": "Hải sản tươi ngon cùng bún gạo mềm trong súp Tom Yum chua cay đậm đà ngon miệng."
     },
     "hasNoodlesOption": false,
     "recipe": [],
@@ -3761,22 +3761,22 @@ export const INITIAL_MENU: any[] = [
     "name": {
       "zh": "泰式海鮮.河粉",
       "en": "Thai Seafood Tom Yum Pho Noodle",
-      "ko": "泰式海鮮.河粉",
-      "ja": "泰式海鮮.河粉",
-      "th": "泰式海鮮.河粉",
-      "vi": "泰式海鮮.河粉"
+      "ko": "태국식 해산물 똠얌 포",
+      "ja": "タイ風海鮮トムヤム平米麺",
+      "th": "ก๋วยเตี๋ยวเส้นใหญ่ต้มยำทะเล",
+      "vi": "Phở hải sản kiểu Thái"
     },
     "containsBeef": false,
     "price": 240,
     "containsSeafood": true,
     "hasNoodlesOption": false,
     "description": {
-      "zh": "沒吃過冬蔭功就不能說吃過泰式! 經典口味道地風味湯麵，濃郁湯底暖心暖胃",
-      "en": "Authentic Thai-style soup noodles with rich, warming broth",
-      "ko": "沒吃過冬蔭功就不能說吃過泰式! 經典口味道地風味湯麵，濃郁湯底暖心暖胃",
-      "ja": "沒吃過冬蔭功就不能說吃過泰式! 經典口味道地風味湯麵，濃郁湯底暖心暖胃",
-      "th": "沒吃過冬蔭功就不能說吃過泰式! 經典口味道地風味湯麵，濃郁湯底暖心暖胃",
-      "vi": "沒吃過冬蔭功就不能說吃過泰式! 經典口味道地風味湯麵，濃郁湯底暖心暖胃"
+      "zh": "新鮮海鮮搭配Q彈泰式河粉，吸附酸辣冬蔭功湯汁，酸辣開胃。",
+      "en": "Fresh seafood with chewy flat rice noodles in rich Tom Yum broth.",
+      "ko": "신선한 해산물과 쫄깃한 납작 쌀국수가 새콤매콤한 똠얌 국물과 만나 시원한 맛을 선사합니다.",
+      "ja": "新鮮なシーフードともちもち의平打ちライスヌードルが、旨辛のトムヤムスープと相性抜群です。",
+      "th": "อาหารทะเลสดๆ พร้อมเส้นใหญ่เหนียวนุ่มสะใจในน้ำซุปต้มยำรสจัด",
+      "vi": "Hải sản tươi ngon cùng phở sợi dẹt dai trong súp Tom Yum chua cay đậm đà ngon miệng."
     },
     "image": "https://images.unsplash.com/photo-1548943487-a2e4e43b4853?auto=format&fit=crop&q=80&w=400",
     "recipe": [],
@@ -3924,12 +3924,12 @@ export const INITIAL_MENU: any[] = [
     "hasNoodlesOption": false,
     "image": "https://images.unsplash.com/photo-1569718212165-3a8278d5f624?auto=format&fit=crop&q=80&w=400",
     "description": {
-      "zh": "道地泰式風味湯，濃郁湯底暖心暖胃 \n配料:蝦子 魷魚圈 蛤蠣 鱈魚丸 貢丸 日本魚板 大陸妹 洋蔥 紅蘿蔔 九層塔 高麗菜",
-      "en": "Authentic Thai-style soup noodles with rich, warming broth",
-      "ko": "道地泰式風味湯，濃郁湯底暖心暖胃 \n配料:蝦子 魷魚圈 蛤蠣 鱈魚丸 貢丸 日本魚板 大陸妹 洋蔥 紅蘿蔔 九層塔 高麗菜",
-      "ja": "道地泰式風味湯，濃郁湯底暖心暖胃 \n配料:蝦子 魷魚圈 蛤蠣 鱈魚丸 貢丸 日本魚板 大陸妹 洋蔥 紅蘿蔔 九層塔 高麗菜",
-      "th": "道地泰式風味湯，濃郁湯底暖心暖胃 \n配料:蝦子 魷魚圈 蛤蠣 鱈魚丸 貢丸 日本魚板 大陸妹 洋蔥 紅蘿蔔 九層塔 高麗菜",
-      "vi": "道地泰式風味湯，濃郁湯底暖心暖胃 \n配料:蝦子 魷魚圈 蛤蠣 鱈魚丸 貢丸 日本魚板 大陸妹 洋蔥 紅蘿蔔 九層塔 高麗菜"
+      "zh": "新鮮草蝦與花枝，搭配正宗泰國進口冬蔭功酸辣高湯，香辣濃郁開胃！",
+      "en": "Fresh tiger prawns and squid in authentic Tom Yum broth. Zesty, spicy, and satisfying!",
+      "ko": "신선한 타이거 새우와 오징어를 넣고 태국 직수입 똠얌 육수로 끓여내 매콤새콤하고 진한 맛입니다.",
+      "ja": "新鮮なエビとイカを、本場タイ直輸入のスープで仕上げました。爽やかな酸味とコクが特徴です。",
+      "th": "กุ้งและหมึกสดต้มในซุปต้มยำสูตรดั้งเดิม รสจัดจ้านถึงเครื่องสมุนไพร",
+      "vi": "Tôm sú tươi & mực nấu cùng súp Tom Yum nhập khẩu từ Thái Lan, vị chua cay ngon miệng."
     },
     "containsSeafood": true,
     "containsBeef": false,
@@ -3938,10 +3938,10 @@ export const INITIAL_MENU: any[] = [
     "name": {
       "zh": "海鮮冬蔭功湯",
       "en": "Traditional Seafood Tom Yum Soup",
-      "ko": "海鮮冬蔭功湯",
-      "ja": "海鮮冬蔭功湯",
-      "th": "海鮮冬蔭功湯",
-      "vi": "海鮮冬蔭功湯"
+      "ko": "정통 해산물 똠얌꿍",
+      "ja": "伝統海鮮トムヤムクンスープ",
+      "th": "ต้มยำทะเลแบบดั้งเดิม",
+      "vi": "Súp Tom Yum hải sản truyền thống"
     },
     "available": true,
     "id": "dish-2207122341556",
@@ -4529,10 +4529,10 @@ export const INITIAL_MENU: any[] = [
     "name": {
       "zh": "泰式去骨烤雞腿",
       "en": "Thai Style Boneless Grilled Chicken Leg",
-      "ko": "泰式去骨烤雞腿",
-      "ja": "泰式去骨烤雞腿",
-      "th": "泰式去骨烤雞腿",
-      "vi": "泰式去骨烤雞腿"
+      "ko": "태국식 순살 닭다리 구이",
+      "ja": "タイ風骨なし焼き鶏もも肉",
+      "th": "ไก่ย่างไม่มีกระดูกสไตล์ไทย",
+      "vi": "Đùi gà nướng rút xương kiểu Thái"
     },
     "available": true,
     "id": "dish-2207122037251",
@@ -4544,10 +4544,10 @@ export const INITIAL_MENU: any[] = [
     "description": {
       "zh": "去骨雞腿排以泰式香料醃製，外皮烤至金黃，肉質鮮嫩多汁，香氣十足。",
       "en": "Boneless chicken leg marinated in Thai spices, grilled to golden-brown crispy perfection while keeping the meat tender and juicy.",
-      "ko": "去骨雞腿排以泰式香料醃製，外皮烤至金黃，肉質鮮嫩多汁，香氣十足。",
-      "ja": "去骨雞腿排以泰式香料醃製，外皮烤至金黃，肉質鮮嫩多汁，香氣十足。",
-      "th": "去骨雞腿排以泰式香料醃製，外皮烤至金黃，肉質鮮嫩多汁，香氣十足。",
-      "vi": "去骨雞腿排以泰式香料醃製，外皮烤至金黃，肉質鮮嫩多汁，香氣十足。"
+      "ko": "순살 닭다리살을 태국식 향신료로 절여 겉은 바삭하고 속은 촉촉하게 구워냈습니다.",
+      "ja": "骨なしの鶏もも肉をタイのスパイスでマリネし、皮はパリッと、身はジューシーに焼き上げました。",
+      "th": "สะโพกไก่ไม่มีกระดูกหมักเครื่องเทศไทย ย่างจนหนังกรอบเนื้อนุ่มชุ่มฉ่ำ หอมกรุ่น",
+      "vi": "Đùi gà rút xương ướp gia vị Thái, nướng vàng giòn bên ngoài, bên trong mềm mọng nước thơm phức."
     },
     "hasNoodlesOption": false,
     "orderIndex": 104,
