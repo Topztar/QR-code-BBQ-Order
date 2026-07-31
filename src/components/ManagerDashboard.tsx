@@ -2943,16 +2943,16 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     }
     const payload = {
       name: { 
-        ...(editingItem?.name || {}), 
+        ...(typeof editingItem?.name === 'object' ? editingItem.name : {}), 
         zh: itemNameZh, 
-        en: itemNameEn || itemNameZh 
+        ...(itemNameEn ? { en: itemNameEn } : {})
       },
       price: Number(itemPrice),
       image: itemImage,
       description: { 
-        ...(editingItem?.description || {}), 
+        ...(typeof editingItem?.description === 'object' ? editingItem.description : {}), 
         zh: itemDescZh, 
-        en: itemDescEn || itemDescZh 
+        ...(itemDescEn ? { en: itemDescEn } : {})
       },
       category: itemCategory,
       available: true,

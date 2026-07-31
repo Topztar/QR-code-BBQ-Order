@@ -1232,7 +1232,7 @@ async function sendToNetworkPrinter(host, port = 9100, data) {
                 isSettled = true;
                 cleanup();
                 if (err) {
-                    resolve({ success: true, log: `[Simulated Fallback] 發送失敗: ${err.message}` });
+                    resolve({ success: false, log: `發送失敗: ${err.message}` });
                 }
                 else {
                     resolve({ success: true, log: `成功發送 ${data.length} 位元組至熱感印表機 ${host}:${port}` });
@@ -1244,14 +1244,14 @@ async function sendToNetworkPrinter(host, port = 9100, data) {
                 return;
             isSettled = true;
             cleanup();
-            resolve({ success: true, log: `[Simulated Fallback] 網路連線逾時 (${host}:${port})` });
+            resolve({ success: false, log: `網路連線逾時 (${host}:${port})` });
         });
         socket.on('error', (err) => {
             if (isSettled)
                 return;
             isSettled = true;
             cleanup();
-            resolve({ success: true, log: `[Simulated Fallback] Socket 錯誤: ${err.message}` });
+            resolve({ success: false, log: `Socket 錯誤: ${err.message}` });
         });
         try {
             socket.connect(port, host);
@@ -1261,7 +1261,7 @@ async function sendToNetworkPrinter(host, port = 9100, data) {
                 return;
             isSettled = true;
             cleanup();
-            resolve({ success: true, log: `[Simulated Fallback] Socket 連線例外: ${err.message}` });
+            resolve({ success: false, log: `Socket 連線例外: ${err.message}` });
         }
     });
 }

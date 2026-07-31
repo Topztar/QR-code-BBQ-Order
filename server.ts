@@ -851,40 +851,19 @@ async function saveStateToFirestore() {
 }
 
 function sanitizeMenu(menu: MenuItem[]) {
-  const languages: Language[] = ['zh', 'en', 'ko', 'ja', 'th', 'vi'];
   menu.forEach((item: any) => {
     // Sanitize name
     if (!item.name) {
-      item.name = {};
-    }
-    if (typeof item.name === 'string') {
-      const val = item.name;
-      item.name = {};
-      languages.forEach(l => item.name[l] = val);
-    } else if (typeof item.name === 'object') {
-      const defaultVal = item.name.zh || item.name.en || 'Unnamed';
-      languages.forEach(l => {
-        if (item.name[l] === undefined || item.name[l] === null) {
-          item.name[l] = defaultVal;
-        }
-      });
+      item.name = { zh: '' };
+    } else if (typeof item.name === 'string') {
+      item.name = { zh: item.name };
     }
 
     // Sanitize description
     if (!item.description) {
-      item.description = {};
-    }
-    if (typeof item.description === 'string') {
-      const val = item.description;
-      item.description = {};
-      languages.forEach(l => item.description[l] = val);
-    } else if (typeof item.description === 'object') {
-      const defaultVal = item.description.zh || item.description.en || '';
-      languages.forEach(l => {
-        if (item.description[l] === undefined || item.description[l] === null) {
-          item.description[l] = defaultVal;
-        }
-      });
+      item.description = { zh: '' };
+    } else if (typeof item.description === 'string') {
+      item.description = { zh: item.description };
     }
   });
 }
