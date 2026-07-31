@@ -304,6 +304,9 @@ let liveMinSpendPerPerson = 500; // default minimum spend NT$ 200 per guest
 let liveOperatingHours: OperatingHourSlot[] = [
     {
       "id": "oh-1",
+      "name": "午餐時段 Lunch Session",
+      "start": "11:00",
+      "end": "14:30",
       "days": [
         0,
         1,
@@ -313,13 +316,14 @@ let liveOperatingHours: OperatingHourSlot[] = [
         5,
         6
       ],
-      "start": "00:00",
-      "end": "23:59",
-      "name": "午餐時段 Lunch Session",
       "isActive": false,
       "isReservableOnly": false
     },
     {
+      "id": "oh-2",
+      "name": "晚餐時段 Dinner Session",
+      "start": "17:30",
+      "end": "23:30",
       "days": [
         0,
         1,
@@ -329,12 +333,42 @@ let liveOperatingHours: OperatingHourSlot[] = [
         5,
         6
       ],
-      "id": "oh-2",
       "isActive": true,
-      "isReservableOnly": false,
-      "name": "晚餐時段 Dinner Session",
-      "end": "23:30",
-      "start": "17:30"
+      "isReservableOnly": false
+    },
+    {
+      "id": "oh-manual-1785135298026",
+      "name": "調整用",
+      "start": "00:00",
+      "end": "23:59",
+      "days": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "isActive": false,
+      "isReservableOnly": false
+    },
+    {
+      "id": "oh-res-1785135317557",
+      "name": "預約專用",
+      "start": "11:00",
+      "end": "12:30",
+      "days": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "isActive": true,
+      "isReservableOnly": true
     }
   ];
 
