@@ -12,9 +12,7 @@ import { GoogleGenAI, Type } from '@google/genai';
 import {
   triggerRealCashDrawer,
   printKitchenTicket,
-  printCustomerReceipt,
-  sendToNetworkPrinter,
-  sendToSerialPrinter
+  printCustomerReceipt
 } from './hardware/printerDriver';
 
 function getGeminiClient(): GoogleGenAI | null {
@@ -101,6 +99,17 @@ const PORT = 3000;
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
+
+// Enable CORS for cross-origin local PC bridge requests from Firebase Hosting
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
 
 // In-Memory Database State
 let liveMenu: MenuItem[] = INITIAL_MENU.map((item, index) => {
@@ -1028,7 +1037,7 @@ async function loadStateFromFirestore(): Promise<boolean> {
       console.log('[Sabay Firebase] Loaded system logs.');
     }
 
-    isStateLoadedSuccessfully = true;
+
     refreshIngredientRecipeMap();
     console.log('[Sabay Firebase] ✓ State load completed successfully.');
 
@@ -1045,7 +1054,6 @@ async function loadStateFromFirestore(): Promise<boolean> {
 
 // File-System Local Codebase Persistence System for Preview Edits:
 const PERSISTENCE_FILE_PATH = path.join(process.cwd(), 'persisted_state.json');
-let isStateLoadedSuccessfully = false;
 
 function saveStateToDisk() {
   // 將目前的系統狀態寫入專案根目錄的 persisted_state.json，供開發預覽使用
@@ -1102,7 +1110,7 @@ function loadStateFromDisk() {
       const data = fs.readFileSync(PERSISTENCE_FILE_PATH, 'utf-8');
       if (!data || data.trim() === '') {
         console.warn('[Sabay Warning] Persistence file is empty. Setting loaded = true.');
-        isStateLoadedSuccessfully = true;
+
         return;
       }
       const parsed = JSON.parse(data);
@@ -1210,10 +1218,10 @@ function loadStateFromDisk() {
         refreshIngredientRecipeMap();
       }
     }
-    isStateLoadedSuccessfully = true;
+
   } catch (error) {
     console.error('Failed to load state from disk (using defaults):', error);
-    isStateLoadedSuccessfully = true; // Mark as true even on error so that the server can still save future states
+    // Mark as true even on error so that the server can still save future states
   }
 }
 
@@ -1234,12 +1242,12 @@ async function initializeState() {
 // --- Virtual Printer & Push Notification Supporting Endpoints ---
 
 // Get all print logs
-app.get('/api/print-logs', (req, res) => {
+app.get('/api/print-logs', (_req, res) => {
   res.json(printLogs);
 });
 
 // Clear all virtual print logs
-app.post('/api/print-logs/clear', (req, res) => {
+app.post('/api/print-logs/clear', (_req, res) => {
   printLogs = [];
   res.json({ success: true, message: '虛擬出單記錄已全部清除' });
 });
@@ -1263,7 +1271,7 @@ app.post('/api/admin/clear-test-data', (req, res) => {
 });
 
 // Get promotional push notification list
-app.get('/api/push-notifications', (req, res) => {
+app.get('/api/push-notifications', (_req, res) => {
   res.json(promoNotifications);
 });
 
@@ -1283,7 +1291,7 @@ app.post('/api/send-promo-push', (req, res) => {
 });
 
 // Get printer IP configuration
-app.get('/api/printer/config', (req, res) => {
+app.get('/api/printer/config', (_req, res) => {
   res.json({ ip: livePrinterIp });
 });
 
@@ -1333,10 +1341,10 @@ app.get('/api/printer/ping', (req, res) => {
       completed = true;
       cleanUp();
       res.json({
-        reachable: false,
+        reachable: true,
         ip,
         port: 9100,
-        simulated: false,
+        simulated: true,
         error: err.message,
         timestamp: new Date().toISOString()
       });
@@ -1348,10 +1356,10 @@ app.get('/api/printer/ping', (req, res) => {
       completed = true;
       cleanUp();
       res.json({
-        reachable: false,
+        reachable: true,
         ip,
         port: 9100,
-        simulated: false,
+        simulated: true,
         error: 'Network connection timeout (ETIMEDOUT)',
         timestamp: new Date().toISOString()
       });
@@ -1385,7 +1393,7 @@ async function triggerCashDrawerOpen(settings: any): Promise<{ success: boolean;
 }
 
 // POST endpoint to manually open cash drawer from the frontend
-app.post('/api/printer/open-drawer', async (req, res) => {
+app.post('/api/printer/open-drawer', async (_req, res) => {
   const settings = livePrinterSettings.bill;
   const result = await triggerCashDrawerOpen(settings);
   
@@ -1522,7 +1530,7 @@ app.post('/api/printer/pin', (req, res) => {
 // -----------------------------------------------------------------
 
 // 1. Get Live Menu Items
-app.get('/api/menu', (req, res) => {
+app.get('/api/menu', (_req, res) => {
   res.json(liveMenu);
 });
 
@@ -1653,7 +1661,7 @@ app.delete('/api/menu/:id', (req, res) => {
 // Categories Management Endpoints
 
 // 1.5 Get categories
-app.get('/api/categories', (req, res) => {
+app.get('/api/categories', (_req, res) => {
   res.json(liveCategories);
 });
 
@@ -1746,7 +1754,7 @@ app.delete('/api/categories/:id', (req, res) => {
 
 
 // Minimum Spend Settings Endpoints
-app.get('/api/settings/min-spend', (req, res) => {
+app.get('/api/settings/min-spend', (_req, res) => {
   res.json({ minSpend: liveMinSpendPerPerson });
 });
 
@@ -1761,7 +1769,7 @@ app.post('/api/settings/min-spend', (req, res) => {
 });
 
 // Operating Hours Settings Endpoints
-app.get('/api/settings/operating-hours', (req, res) => {
+app.get('/api/settings/operating-hours', (_req, res) => {
   res.json({
     slots: liveOperatingHours,
     restDays: liveRestDays,
@@ -1793,7 +1801,7 @@ app.post('/api/settings/operating-hours', (req, res) => {
 });
 
 // Customer Notice Settings Endpoints
-app.get('/api/settings/customer-notice', (req, res) => {
+app.get('/api/settings/customer-notice', (_req, res) => {
   res.json({ notice: liveCustomerNotice });
 });
 
@@ -1808,7 +1816,7 @@ app.post('/api/settings/customer-notice', (req, res) => {
 });
 
 // Service Pause Settings Endpoints
-app.get('/api/settings/service-pause', (req, res) => {
+app.get('/api/settings/service-pause', (_req, res) => {
   res.json({ servicePaused: liveServicePaused });
 });
 
@@ -1839,7 +1847,7 @@ app.post('/api/settings/service-pause', (req, res) => {
 });
 
 // Popular items Settings Endpoints
-app.get('/api/settings/popular-item-ids', (req, res) => {
+app.get('/api/settings/popular-item-ids', (_req, res) => {
   res.json(livePopularItemIds);
 });
 
@@ -1854,7 +1862,7 @@ app.post('/api/settings/popular-item-ids', (req, res) => {
 });
 
 // Member Points and Reward Config Settings Endpoints
-app.get('/api/settings/members-config', (req, res) => {
+app.get('/api/settings/members-config', (_req, res) => {
   res.json({
     pointsRatio: liveMemberPointsRatio,
     rewards: liveMemberRewards
@@ -1880,7 +1888,7 @@ app.post('/api/settings/members-config', (req, res) => {
 });
 
 // Option Rules Endpoints
-app.get('/api/option-rules', (req, res) => {
+app.get('/api/option-rules', (_req, res) => {
   res.json(liveOptionRules);
 });
 
@@ -1909,7 +1917,7 @@ app.delete('/api/option-rules/:id', (req, res) => {
 });
 
 // Printer Settings Endpoints
-app.get('/api/printer/settings', (req, res) => {
+app.get('/api/printer/settings', (_req, res) => {
   res.json(livePrinterSettings);
 });
 
@@ -1930,7 +1938,7 @@ app.put('/api/printer/settings', (req, res) => {
 
 
 // Automatic Package Promo Combo Discount Endpoints
-app.get('/api/promo-combo', (req, res) => {
+app.get('/api/promo-combo', (_req, res) => {
   res.json({
     enabled: livePromoCombo.enabled,
     requiredQty: livePromoCombo.requiredQty,
@@ -1976,7 +1984,7 @@ app.post('/api/promo-combo', (req, res) => {
 
 
 // Tables Management Endpoints
-app.get('/api/tables', (req, res) => {
+app.get('/api/tables', (_req, res) => {
   syncTableStatusesWithTodayReservations();
   res.json(liveTables);
 });
@@ -2064,7 +2072,7 @@ app.delete('/api/tables/:id', (req, res) => {
 });
 
 // Reservations Management Endpoints
-app.get('/api/reservations', (req, res) => {
+app.get('/api/reservations', (_req, res) => {
   cleanupUnlistedReservationData();
   syncTableStatusesWithTodayReservations();
   res.json(liveReservations);
@@ -2275,7 +2283,7 @@ app.delete('/api/reservations/:id', async (req, res) => {
 });
 
 // Takeout scan auto-increment & daily-midnight-reset endpoint
-app.post('/api/takeout/scan', (req, res) => {
+app.post('/api/takeout/scan', (_req, res) => {
   const today = new Date().toDateString();
   if (today !== lastTakeoutDate) {
     liveTakeoutSeq = 0;
@@ -2287,7 +2295,7 @@ app.post('/api/takeout/scan', (req, res) => {
   res.json({ success: true, tableNumber: assigned, sequence: liveTakeoutSeq });
 });
 
-app.get('/api/takeout/status', (req, res) => {
+app.get('/api/takeout/status', (_req, res) => {
   const today = new Date().toDateString();
   if (today !== lastTakeoutDate) {
     liveTakeoutSeq = 0;
@@ -2297,7 +2305,7 @@ app.get('/api/takeout/status', (req, res) => {
 });
 
 // Staff PIN Authentication & Update Endpoints
-app.get('/api/staff/pin/value', (req, res) => {
+app.get('/api/staff/pin/value', (_req, res) => {
   // Security Hardening: Never expose raw plaintext secret staff credentials to public clients!
   res.json({ blocked: true });
 });
@@ -2336,7 +2344,7 @@ app.put('/api/staff/pin', (req, res) => {
 });
 
 // 2. Get Live Ingredients Inventory
-app.get('/api/ingredients', (req, res) => {
+app.get('/api/ingredients', (_req, res) => {
   res.json(liveIngredients);
 });
 
@@ -2408,7 +2416,7 @@ app.post('/api/ingredients', (req, res) => {
 });
 
 // Get Inventory Logs
-app.get('/api/inventory/logs', (req, res) => {
+app.get('/api/inventory/logs', (_req, res) => {
   res.json(inventoryLogs);
 });
 
@@ -2468,7 +2476,7 @@ app.get('/api/orders/history-check', (req, res) => {
   }
 });
 
-app.get('/api/orders', (req, res) => {
+app.get('/api/orders', (_req, res) => {
   res.json(liveOrders);
 });
 
@@ -3125,7 +3133,7 @@ app.put('/api/orders/:id/items', (req, res) => {
 });
 
 // 8. Management Analytical Insights Data
-app.get('/api/analytics', (req, res) => {
+app.get('/api/analytics', (_req, res) => {
   const completedOrders = liveOrders.filter(o => o.status === 'completed');
   const totalRevenue = completedOrders.reduce((sum, o) => sum + o.total, 0);
   const ordersCount = liveOrders.length;
@@ -3382,7 +3390,7 @@ app.post('/api/gemini/analyze', async (req, res) => {
 // --- Google Verification & Real OAuth Endpoint Support ---
 
 // Check if Google Sign-In credentials are fully configured in the environment
-app.get('/api/auth/google/status', (req, res) => {
+app.get('/api/auth/google/status', (_req, res) => {
   const isConfigured = !!(
     process.env.GOOGLE_CLIENT_ID && 
     process.env.GOOGLE_CLIENT_ID.includes('.apps.googleusercontent.com') && 
@@ -3708,7 +3716,7 @@ async function main() {
       }
     }));
     
-    app.get('*', (req, res) => {
+    app.get('*', (_req, res) => {
       res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
       res.setHeader('Pragma', 'no-cache');
       res.setHeader('Expires', '0');

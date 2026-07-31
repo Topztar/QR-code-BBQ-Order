@@ -1,5 +1,5 @@
 import { apiFetch } from "../lib/api";
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { MenuItem, OrderItem, Order, Language, Category, TableConfig, CustomAddOn, OrderHistoryUserStatus, OrderHistoryBillStatus, Reservation } from '../types';
 import { getLocalizedText } from '../utils/i18n';
 import { TRANSLATIONS } from '../data';
@@ -101,7 +101,6 @@ interface CustomerOrderViewProps {
     guestCount?: number;
     clientOrderId?: string;
   }) => Promise<Order | null>;
-  lineProfile: any;
   activeOrders: Order[];
   pushNotifications: any[];
   onMarkNotificationRead: (id: string) => void;
@@ -129,7 +128,6 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
   reservations = [],
   onAddReservation,
   onPlaceOrder,
-  lineProfile,
   activeOrders,
   pushNotifications,
   onMarkNotificationRead,
@@ -163,6 +161,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
   };
 
   const [nowTimestamp, setNowTimestamp] = useState<number>(() => Date.now());
+  const lineProfile: any = null;
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -413,6 +412,42 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
     return (h || 0) * 60 + (m || 0);
   };
 
+  const generateCandidateSlots = useCallback((dateStr: string) => {
+    const slots: string[] = [];
+    if (!dateStr) return slots;
+    if (restDays && restDays.includes(dateStr)) return slots;
+    if (!operatingHours || operatingHours.length === 0) {
+      return ['11:00', '11:30', '12:00', '12:30', '13:00', '13:30', '14:00', '17:00', '17:30', '18:00', '18:30', '19:00', '19:30', '20:00', '20:30', '21:00', '21:30'];
+    }
+
+    const [y, m, d] = dateStr.split('-').map(Number);
+    if (!y || !m || !d) return slots;
+    const localDate = new Date(y, m - 1, d);
+    const dayOfWeek = localDate.getDay();
+
+    const activeSlots = operatingHours.filter(s => s && s.isActive);
+    activeSlots.forEach(slot => {
+      if (slot.days && Array.isArray(slot.days) && !slot.days.includes(dayOfWeek)) return;
+      const [startH, startM] = (slot.start || '00:00').split(':').map(Number);
+      let [endH, endM] = (slot.end || '23:59').split(':').map(Number);
+      const startTotal = startH * 60 + startM;
+      let endTotal = endH * 60 + endM;
+
+      if (endTotal < startTotal) {
+        endTotal += 24 * 60;
+      }
+
+      for (let mins = startTotal; mins <= endTotal; mins += 30) {
+        const h = Math.floor(mins / 60) % 24;
+        const min = mins % 60;
+        const timeStr = `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+        if (!slots.includes(timeStr)) slots.push(timeStr);
+      }
+    });
+
+    return slots.sort();
+  }, [operatingHours, restDays]);
+
   const handleResDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newDate = e.target.value;
     setResDate(newDate);
@@ -429,10 +464,10 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
       r => r.date === newDate && r.status !== 'cancelled'
     );
     
-    const candidateSlots = [
-      '11:00', '11:30', '12:00', '12:30', '13:00', '13:30', '14:00',
-      '17:00', '17:30', '18:00', '18:30', '19:00', '19:30', '20:00', '20:30', '21:00', '21:30'
-    ];
+    const candidateSlots = generateCandidateSlots(newDate);
+    if (candidateSlots.length > 0 && !candidateSlots.includes(resTime)) {
+      setResTime(candidateSlots[0]);
+    }
 
     let anySlotAvailable = false;
     for (const slotTime of candidateSlots) {
@@ -489,10 +524,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
     const isFullyBooked = availableTables.length === 0;
 
     // Calculate suggested alternative time slots for this date where at least one table is free
-    const candidateSlots = [
-      '11:00', '11:30', '12:00', '12:30', '13:00', '13:30', '14:00',
-      '17:00', '17:30', '18:00', '18:30', '19:00', '19:30', '20:00', '20:30', '21:00', '21:30'
-    ];
+    const candidateSlots = generateCandidateSlots(resDate);
 
     const suggestedTimes: { time: string; freeCount: number; firstFreeTableId: string }[] = [];
 
@@ -525,39 +557,15 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
       occupiedTableIds,
       suggestedTimes: suggestedTimes.slice(0, 6)
     };
-  }, [resDate, resTime, tables, reservations]);
+  }, [resDate, resTime, tables, reservations, generateCandidateSlots]);
 
   const isResTimeValid = useMemo(() => {
     if (restDays && restDays.includes(resDate)) return false;
+    const slots = generateCandidateSlots(resDate);
+    if (slots.length === 0) return false;
     if (!operatingHours || operatingHours.length === 0) return true;
-    const activeSlots = operatingHours.filter(s => s && s.isActive);
-    if (activeSlots.length === 0) return true;
-
-    const [y, m, d] = resDate.split('-').map(Number);
-    if (!y || !m || !d) return true;
-    const localDate = new Date(y, m - 1, d);
-    const dayOfWeek = localDate.getDay();
-
-    const [resH, resM] = resTime.split(':').map(Number);
-    const resTotalMinutes = resH * 60 + resM;
-
-    for (const slot of activeSlots) {
-      if (slot.days && Array.isArray(slot.days) && !slot.days.includes(dayOfWeek)) {
-        continue;
-      }
-      const [startH, startM] = (slot.start || '00:00').split(':').map(Number);
-      const [endH, endM] = (slot.end || '23:59').split(':').map(Number);
-      const startTotal = startH * 60 + startM;
-      const endTotal = endH * 60 + endM;
-
-      if (startTotal <= endTotal) {
-        if (resTotalMinutes >= startTotal && resTotalMinutes <= endTotal) return true;
-      } else {
-        if (resTotalMinutes >= startTotal || resTotalMinutes <= endTotal) return true;
-      }
-    }
-    return false;
-  }, [operatingHours, resDate, resTime]);
+    return slots.includes(resTime);
+  }, [resDate, resTime, generateCandidateSlots, restDays, operatingHours]);
 
   useEffect(() => {
     setIsManualTableSelection(false);
@@ -813,7 +821,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
       isMember,
       hasPastOrders
     };
-  }, [lineProfile, historyCheckResult, clientActiveOrders]);
+  }, [historyCheckResult, clientActiveOrders]);
 
   const orderHistoryBillStatus = useMemo<OrderHistoryBillStatus>(() => {
     const clientHasUnpaid = clientActiveOrders.some(o => o.tableNumber === selectedTable && !o.isPaid);
@@ -4929,18 +4937,26 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                       <label className="text-zinc-300 font-bold text-xs flex items-center justify-between">
                         <span className="flex items-center gap-1">⏰ 預訂時間 Time *</span>
                         {!isResTimeValid && (
-                          <span className="text-[10px] text-rose-500 font-bold">非營業時間</span>
+                          <span className="text-[10px] text-rose-500 font-bold">無有效時段 / 公休日</span>
                         )}
                       </label>
-                      <input
-                        type="time"
+                      <select
                         required
                         value={resTime}
                         onChange={(e) => setResTime(e.target.value)}
+                        disabled={!resDate || (restDays && restDays.includes(resDate))}
                         className={`w-full bg-[#1c1c1c] border ${
                           !isResTimeValid ? 'border-rose-500 focus:border-rose-400 text-rose-500' : 'border-white/15 focus:border-amber-400 text-white'
                         } rounded-xl px-3 py-2 outline-none font-mono transition`}
-                      />
+                      >
+                        {(!resDate || (restDays && restDays.includes(resDate))) ? (
+                          <option value="">-- 請先選擇有效的預定日期 --</option>
+                        ) : (
+                          generateCandidateSlots(resDate).map(slot => (
+                            <option key={slot} value={slot}>{slot}</option>
+                          ))
+                        )}
+                      </select>
                     </div>
                   </div>
 

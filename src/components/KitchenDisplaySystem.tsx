@@ -7,6 +7,8 @@ import { safeStorage } from '../lib/safeStorage';
 import { ChefHat, Printer, Trash2, Check, Ban, RefreshCw, Volume2, Wifi, Edit, Settings, X, Clock, AlertTriangle, Mic, Flag, Eye, Search, Timer, Download } from 'lucide-react';
 import { ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { KdsHourlyChart } from './KdsHourlyChart';
+import { useRetry } from '../hooks/useRetry';
+import { InlineRetryMessage } from './InlineRetryMessage';
 
 interface KitchenDisplaySystemProps {
   currentLang: Language;
@@ -487,60 +489,58 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
   }, []);
 
   // Printer real-time health indicator state
-  const [isSimulatedMode, setIsSimulatedMode] = useState<boolean>(false); // default false for live printer hardware connection
+  const { run: pingRun } = useRetry(async () => {
+    const res = await apiFetch(`/api/printer/ping?ip=${encodeURIComponent(printerIp)}`);
+    if (!res.ok) throw new Error('HTTP error ' + res.status);
+    const data = await res.json();
+    if (!data.reachable) throw new Error(data.error || 'Printer unreachable');
+    return data;
+  }, 5, 500);
+
   const [pingState, setPingState] = useState<{
     reachable: boolean | null;
     error: string | null;
     loading: boolean;
     lastChecked: string | null;
+    skipped: boolean;
   }>({
     reachable: null,
     error: null,
     loading: false,
-    lastChecked: null
+    lastChecked: null,
+    skipped: false,
   });
 
-  const triggerPrinterPing = async (targetIp: string, forceSimulate?: boolean) => {
-    setPingState((prev) => ({ ...prev, loading: true }));
-    try {
-      const simulateVal = forceSimulate !== undefined ? forceSimulate : isSimulatedMode;
-      const res = await apiFetch(`/api/printer/ping?ip=${encodeURIComponent(targetIp)}&simulate=${simulateVal}`);
-      if (res.ok) {
-        const data = await res.json();
-        setPingState({
-          reachable: !!data.reachable,
-          error: data.error || null,
-          loading: false,
-          lastChecked: new Date().toLocaleTimeString()
-        });
-      } else {
-        setPingState({
-          reachable: false,
-          error: 'HTTP error ' + res.status,
-          loading: false,
-          lastChecked: new Date().toLocaleTimeString()
-        });
-      }
-    } catch (err: any) {
-      setPingState({
-        reachable: false,
-        error: err.message || '連線錯誤',
-        loading: false,
-        lastChecked: new Date().toLocaleTimeString()
-      });
+  const triggerPrinterPing = async (targetIp?: string) => {
+    setPingState((prev) => ({ ...prev, loading: true, error: null }));
+    const result = await pingRun();
+    if (result.result) {
+      setPingState({ reachable: true, error: null, loading: false, lastChecked: new Date().toLocaleTimeString(), skipped: false });
+    } else if (result.error) {
+      setPingState({ reachable: false, error: result.error.message || String(result.error), loading: false, lastChecked: new Date().toLocaleTimeString(), skipped: false });
+    } else if (result.skipped) {
+      setPingState((prev) => ({ ...prev, skipped: true, loading: false }));
     }
   };
 
+  const handleRetryPing = () => {
+    triggerPrinterPing(printerIp);
+  };
+
+  const handleSkipPing = () => {
+    setPingState((prev) => ({ ...prev, skipped: true }));
+  };
+
   useEffect(() => {
-    triggerPrinterPing(printerIp, isSimulatedMode);
+    triggerPrinterPing(printerIp);
     
     // Auto-ping every 10 seconds
     const interval = setInterval(() => {
-      triggerPrinterPing(printerIp, isSimulatedMode);
+      triggerPrinterPing(printerIp);
     }, 10000);
 
     return () => clearInterval(interval);
-  }, [printerIp, isSimulatedMode]);
+  }, [printerIp]);
 
   useEffect(() => {
     setIpInput(printerIp);
@@ -2900,18 +2900,17 @@ ${specLines}
                         <RefreshCw size={8} />
                         <span>測通</span>
                       </button>
-
-                      {/* Toggle simulation mode */}
-                      <label className="text-[9px] text-white/35 hover:text-white/60 flex items-center gap-0.5 ml-1 select-none cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={isSimulatedMode}
-                          onChange={(e) => setIsSimulatedMode(e.target.checked)}
-                          className="rounded border-zinc-700 bg-zinc-900 text-[#E5B453] focus:ring-0 w-2.5 h-2.5 cursor-pointer"
-                        />
-                        <span>模擬</span>
-                      </label>
                     </div>
+                    {pingState.error && !pingState.skipped && (
+                      <div className="w-full mt-1">
+                        <InlineRetryMessage
+                          message={`印表機連線失敗 (${pingState.error})`}
+                          onRetry={handleRetryPing}
+                          onSkip={handleSkipPing}
+                          isRetrying={pingState.loading}
+                        />
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

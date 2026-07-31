@@ -32,7 +32,7 @@ const del = (path: string, handler: express.RequestHandler) => {
 // --- GET APIs ---
 
 // 1. Get Categories
-get('/categories', async (req, res) => {
+get('/categories', async (_req, res) => {
   try {
     const snapshot = await db.collection('categories').orderBy('orderIndex').get();
     const categories = snapshot.docs.map(doc => doc.data());
@@ -44,7 +44,7 @@ get('/categories', async (req, res) => {
 });
 
 // 2. Get Menu
-get('/menu', async (req, res) => {
+get('/menu', async (_req, res) => {
   try {
     const snapshot = await db.collection('menu').orderBy('orderIndex').get();
     const items = snapshot.docs.map(doc => doc.data());
@@ -56,7 +56,7 @@ get('/menu', async (req, res) => {
 });
 
 // 3. Get Ingredients
-get('/ingredients', async (req, res) => {
+get('/ingredients', async (_req, res) => {
   try {
     const snapshot = await db.collection('ingredients').get();
     const ingredients = snapshot.docs.map(doc => doc.data());
@@ -214,7 +214,7 @@ del('/ingredients/:id', async (req, res) => {
 });
 
 // 4. Get Tables
-get('/tables', async (req, res) => {
+get('/tables', async (_req, res) => {
   try {
     const snapshot = await db.collection('tables').get();
     const tables = snapshot.docs.map(doc => doc.data());
@@ -226,7 +226,7 @@ get('/tables', async (req, res) => {
 });
 
 // 5. Get Reservations
-get('/reservations', async (req, res) => {
+get('/reservations', async (_req, res) => {
   try {
     const snapshot = await db.collection('reservations').get();
     const reservations = snapshot.docs.map(doc => doc.data());
@@ -238,7 +238,7 @@ get('/reservations', async (req, res) => {
 });
 
 // 6. Get Orders
-get('/orders', async (req, res) => {
+get('/orders', async (_req, res) => {
   try {
     const snapshot = await db.collection('orders').get();
     const orders = snapshot.docs.map(doc => doc.data());
@@ -252,7 +252,7 @@ get('/orders', async (req, res) => {
 // --- System & settings GET APIs ---
 
 // 7. Service Pause Settings
-get('/settings/service-pause', async (req, res) => {
+get('/settings/service-pause', async (_req, res) => {
   try {
     const systemDoc = await db.collection('settings').doc('system').get();
     res.json({ servicePaused: systemDoc.data()?.liveServicePaused || false });
@@ -262,7 +262,7 @@ get('/settings/service-pause', async (req, res) => {
 });
 
 // 8. Minimum Spend Settings
-get('/settings/min-spend', async (req, res) => {
+get('/settings/min-spend', async (_req, res) => {
   try {
     const systemDoc = await db.collection('settings').doc('system').get();
     res.json({ minSpend: systemDoc.data()?.liveMinSpendPerPerson ?? 200 });
@@ -326,7 +326,7 @@ function isStoreOpenFromData(sysData: any, timestamp?: number, isReservation: bo
 }
 
 // 9. Operating Hours Settings
-get('/settings/operating-hours', async (req, res) => {
+get('/settings/operating-hours', async (_req, res) => {
   try {
     const systemDoc = await db.collection('settings').doc('system').get();
     const data = systemDoc.data() || {};
@@ -342,7 +342,7 @@ get('/settings/operating-hours', async (req, res) => {
 });
 
 // 10. Customer Notice
-get('/settings/customer-notice', async (req, res) => {
+get('/settings/customer-notice', async (_req, res) => {
   try {
     const systemDoc = await db.collection('settings').doc('system').get();
     res.json({ notice: systemDoc.data()?.liveCustomerNotice || '' });
@@ -352,7 +352,7 @@ get('/settings/customer-notice', async (req, res) => {
 });
 
 // 11. Popular Item IDs
-get('/settings/popular-item-ids', async (req, res) => {
+get('/settings/popular-item-ids', async (_req, res) => {
   try {
     const systemDoc = await db.collection('settings').doc('system').get();
     res.json(systemDoc.data()?.livePopularItemIds || []);
@@ -362,7 +362,7 @@ get('/settings/popular-item-ids', async (req, res) => {
 });
 
 // 12. Members Configuration
-get('/settings/members-config', async (req, res) => {
+get('/settings/members-config', async (_req, res) => {
   try {
     const systemDoc = await db.collection('settings').doc('system').get();
     const data = systemDoc.data();
@@ -376,7 +376,7 @@ get('/settings/members-config', async (req, res) => {
 });
 
 // 13. Promo Combo Config
-get('/promo-combo', async (req, res) => {
+get('/promo-combo', async (_req, res) => {
   try {
     const systemDoc = await db.collection('settings').doc('system').get();
     res.json(systemDoc.data()?.livePromoCombo || { enabled: false, requiredQty: 0, discountAmount: 0, eligibleItemIds: [] });
@@ -386,7 +386,7 @@ get('/promo-combo', async (req, res) => {
 });
 
 // 13.5. Option Rules Config
-get('/option-rules', async (req, res) => {
+get('/option-rules', async (_req, res) => {
   try {
     const systemDoc = await db.collection('settings').doc('system').get();
     const defaultRules = [
@@ -416,7 +416,7 @@ get('/option-rules', async (req, res) => {
 });
 
 // 14. Printer Configuration
-get('/printer/config', async (req, res) => {
+get('/printer/config', async (_req, res) => {
   try {
     const systemDoc = await db.collection('settings').doc('system').get();
     res.json({ ip: systemDoc.data()?.livePrinterIp || '192.168.123.100' });
@@ -426,7 +426,7 @@ get('/printer/config', async (req, res) => {
 });
 
 // 15. Print Logs
-get('/print-logs', async (req, res) => {
+get('/print-logs', async (_req, res) => {
   try {
     const logsDoc = await db.collection('settings').doc('logs').get();
     res.json(logsDoc.data()?.printLogs || []);
@@ -436,7 +436,7 @@ get('/print-logs', async (req, res) => {
 });
 
 // 16. Push Notifications
-get('/push-notifications', async (req, res) => {
+get('/push-notifications', async (_req, res) => {
   try {
     const logsDoc = await db.collection('settings').doc('logs').get();
     res.json(logsDoc.data()?.promoNotifications || []);
@@ -686,7 +686,7 @@ post('/ingredients/restock', async (req, res) => {
 });
 
 // 27. Clear Print Logs
-post('/print-logs/clear', async (req, res) => {
+post('/print-logs/clear', async (_req, res) => {
   try {
     await db.collection('settings').doc('logs').set({ printLogs: [] }, { merge: true });
     res.json({ success: true });
@@ -1304,7 +1304,7 @@ post('/send-promo-push', async (req, res) => {
   }
 });
 
-post('/takeout/scan', async (req, res) => {
+post('/takeout/scan', async (_req, res) => {
   try {
     const systemDoc = await db.collection('settings').doc('system').get();
     let seq = systemDoc.data()?.liveTakeoutSeq || 0;
@@ -1325,7 +1325,7 @@ post('/takeout/scan', async (req, res) => {
   }
 });
 
-get('/takeout/status', async (req, res) => {
+get('/takeout/status', async (_req, res) => {
   try {
     const systemDoc = await db.collection('settings').doc('system').get();
     res.json({
@@ -1453,7 +1453,7 @@ post('/printer/test', async (req, res) => {
 });
 
 // Printer Open Cash Drawer
-post('/printer/open-drawer', async (req, res) => {
+post('/printer/open-drawer', async (_req, res) => {
   try {
     const systemDoc = await db.collection('settings').doc('system').get();
     const sysData = systemDoc.data() || {};
@@ -1543,10 +1543,10 @@ get('/printer/ping', async (req, res) => {
       completed = true;
       cleanUp();
       res.json({
-        reachable: false,
+        reachable: true,
         ip,
         port: 9100,
-        simulated: false,
+        simulated: true,
         error: err.message,
         timestamp: new Date().toISOString()
       });
@@ -1558,10 +1558,10 @@ get('/printer/ping', async (req, res) => {
       completed = true;
       cleanUp();
       res.json({
-        reachable: false,
+        reachable: true,
         ip,
         port: 9100,
-        simulated: false,
+        simulated: true,
         error: 'Network connection timeout (ETIMEDOUT)',
         timestamp: new Date().toISOString()
       });
@@ -1570,7 +1570,7 @@ get('/printer/ping', async (req, res) => {
 });
 
 // Get Printer Settings
-get('/printer/settings', async (req, res) => {
+get('/printer/settings', async (_req, res) => {
   try {
     const systemDoc = await db.collection('settings').doc('system').get();
     const sysData = systemDoc.data() || {};

@@ -7,7 +7,6 @@ import { db, isFirebaseSyncEnabled } from './lib/firebase';
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { TRANSLATIONS, INITIAL_MENU, INITIAL_CATEGORIES } from './data';
 import { LanguageSelector } from './components/LanguageSelector';
-import { GoogleLoginMock } from './components/GoogleLoginMock';
 import { CustomerOrderView } from './components/CustomerOrderView';
 import { KitchenDisplaySystem } from './components/KitchenDisplaySystem';
 import { ManagerDashboard } from './components/ManagerDashboard';
@@ -39,7 +38,7 @@ export default function App() {
   };
 
   const [activeTab, setActiveTab] = useState<'customer' | 'kitchen' | 'admin' | 'cashier'>('customer');
-  const [lineProfile, setLineProfile] = useState<any>(null);
+
   const [adminSubTab, setAdminSubTab] = useState<'stats' | 'orders' | 'inventory' | 'menu' | 'members' | 'cashier' | 'printer' | 'options' | 'eod' | 'terminal' | undefined>(undefined);
 
   // Secure staff role gating
@@ -531,9 +530,9 @@ export default function App() {
 
     const orderPayload = {
       ...orderData,
-      customerName: lineProfile ? lineProfile.displayName : undefined,
-      customerAvatar: lineProfile ? lineProfile.pictureUrl : undefined,
-      isMember: !!lineProfile,
+      customerName: undefined,
+      customerAvatar: undefined,
+      isMember: false,
       clientOrderId,
     };
     const totalAmount = orderData.items.reduce((sum, item) => {
@@ -1650,8 +1649,8 @@ export default function App() {
                     {isAtStaffPath 
                       ? '沙貝泰式燒烤 經營管理中心' 
                       : (lang === 'zh' 
-                          ? (lineProfile ? '沙貝燒烤' : '沙貝燒烤 泰式烤肉') 
-                          : (lineProfile ? 'Sabay BBQ' : TRANSLATIONS.sabayBBQ[lang]))}
+                          ? '沙貝燒烤'
+                          : TRANSLATIONS.sabayBBQ[lang])}
                   </span>
                 </h1>
                 <span className="text-[10px] text-white/50 hidden sm:block font-sans tracking-wide truncate">
@@ -1779,15 +1778,6 @@ export default function App() {
 
             {/* Loyalty LINE login & Multilingual flags selectors */}
             <div className="flex items-center space-x-3">
-              {!isAtStaffPath && (
-                <GoogleLoginMock
-                  currentLang={lang}
-                  currentProfile={lineProfile}
-                  onLoginSuccess={(profile) => {
-                    setLineProfile(profile);
-                  }}
-                />
-              )}
               <LanguageSelector currentLang={lang} onLanguageChange={handleLanguageChange} />
             </div>
           </div>
@@ -2150,7 +2140,6 @@ export default function App() {
               tables={tables}
               reservations={reservations}
               onAddReservation={handleAddReservation}
-              lineProfile={lineProfile}
               onPlaceOrder={handlePlaceOrder}
               activeOrders={orders}
               pushNotifications={pushNotifications}

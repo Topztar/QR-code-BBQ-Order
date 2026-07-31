@@ -1,5 +1,5 @@
 import { apiFetch } from "../lib/api";
-import React, { Component, useState, useEffect, useMemo } from 'react';
+import React, { Component, useState, useEffect, useMemo, useCallback } from 'react';
 import { Ingredient, Language, Category, TableConfig, Order, OrderStatus, Reservation } from '../types';
 import { getLocalizedText } from '../utils/i18n';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
@@ -209,7 +209,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   onUpdateOrderStatus,
   onRestock,
 
-  onSendPromoPush,
+
   onToggleMenuItemAvailability,
   menuItems,
   onAddMenuItem,
@@ -253,8 +253,6 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   printerIp = '192.168.123.100',
   onPrintTestPage,
   onAddIngredient,
-  servicePaused = false,
-  onToggleServicePause,
   memberPointsRatio = 20,
   memberRewards = [],
   onUpdateMemberConfig,
@@ -649,37 +647,49 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     return resDateInput <= maxThreeMonthsDateStr;
   }, [resDateInput, maxThreeMonthsDateStr, restDays]);
 
-  const isResTimeValid = useMemo(() => {
-    if (restDays && restDays.includes(resDateInput)) return false;
-    if (!operatingHours || operatingHours.length === 0) return true;
-    const activeSlots = operatingHours.filter(s => s && s.isActive);
-    if (activeSlots.length === 0) return true;
+  const generateCandidateSlots = useCallback((dateStr: string) => {
+    const slots: string[] = [];
+    if (!dateStr) return slots;
+    if (restDays && restDays.includes(dateStr)) return slots;
+    if (!operatingHours || operatingHours.length === 0) {
+      return ['11:00', '11:30', '12:00', '12:30', '13:00', '13:30', '14:00', '17:00', '17:30', '18:00', '18:30', '19:00', '19:30', '20:00', '20:30', '21:00', '21:30'];
+    }
 
-    const [y, m, d] = resDateInput.split('-').map(Number);
-    if (!y || !m || !d) return true;
+    const [y, m, d] = dateStr.split('-').map(Number);
+    if (!y || !m || !d) return slots;
     const localDate = new Date(y, m - 1, d);
     const dayOfWeek = localDate.getDay();
 
-    const [resH, resM] = resTimeInput.split(':').map(Number);
-    const resTotalMinutes = resH * 60 + resM;
-
-    for (const slot of activeSlots) {
-      if (slot.days && Array.isArray(slot.days) && !slot.days.includes(dayOfWeek)) {
-        continue;
-      }
+    const activeSlots = operatingHours.filter(s => s && s.isActive);
+    activeSlots.forEach(slot => {
+      if (slot.days && Array.isArray(slot.days) && !slot.days.includes(dayOfWeek)) return;
       const [startH, startM] = (slot.start || '00:00').split(':').map(Number);
-      const [endH, endM] = (slot.end || '23:59').split(':').map(Number);
+      let [endH, endM] = (slot.end || '23:59').split(':').map(Number);
       const startTotal = startH * 60 + startM;
-      const endTotal = endH * 60 + endM;
+      let endTotal = endH * 60 + endM;
 
-      if (startTotal <= endTotal) {
-        if (resTotalMinutes >= startTotal && resTotalMinutes <= endTotal) return true;
-      } else {
-        if (resTotalMinutes >= startTotal || resTotalMinutes <= endTotal) return true;
+      if (endTotal < startTotal) {
+        endTotal += 24 * 60;
       }
-    }
-    return false;
-  }, [operatingHours, resDateInput, resTimeInput]);
+
+      for (let mins = startTotal; mins <= endTotal; mins += 30) {
+        const h = Math.floor(mins / 60) % 24;
+        const min = mins % 60;
+        const timeStr = `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+        if (!slots.includes(timeStr)) slots.push(timeStr);
+      }
+    });
+
+    return slots.sort();
+  }, [operatingHours, restDays]);
+
+  const isResTimeValid = useMemo(() => {
+    if (restDays && restDays.includes(resDateInput)) return false;
+    const slots = generateCandidateSlots(resDateInput);
+    if (slots.length === 0) return false;
+    if (!operatingHours || operatingHours.length === 0) return true;
+    return slots.includes(resTimeInput);
+  }, [resDateInput, resTimeInput, generateCandidateSlots, restDays, operatingHours]);
 
   const generateReservationNo = (dateStr: string, existingRes: Reservation[]) => {
     const cleanDate = (dateStr || new Date().toISOString().split('T')[0]).replace(/-/g, '');
@@ -2063,12 +2073,6 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   // Google Members state and points database
   const [membersList, setMembersList] = useState<any[]>([]);
 
-  // Push notifications state
-  const [promoTitle, setPromoTitle] = useState('沙貝宵夜慶典｜香烤雞皮限量大特惠！');
-  const [promoMessage, setPromoMessage] = useState('今日九點後，到店綁定會員下單，兩串炭烤雞肉串免費送，數量有限點完為止！');
-  const [promoBadge, setPromoBadge] = useState('🔥 限量狂狂');
-  const [pushSentConfirm, setPushSentConfirm] = useState(false);
-
   // Option Rules States
   const [globalRules, setGlobalRules] = useState<any[]>([]);
   const [newRuleName, setNewRuleName] = useState('');
@@ -2972,13 +2976,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     alert('🎉 餐點設定資訊儲存成功！');
   };
 
-  const handleSendPush = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!promoTitle || !promoMessage) return;
-    await onSendPromoPush({ title: promoTitle, message: promoMessage, badge: promoBadge });
-    setPushSentConfirm(true);
-    setTimeout(() => setPushSentConfirm(false), 4500);
-  };
+
 
   // Ingredient Recipe Maps definition for local recipe cards auditing 
   const recipeCompositionMap: { [key: string]: { name: string; qty: string }[] } = {
@@ -3156,7 +3154,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                         dataKey="營業額 NT$"
                         nameKey="name"
                       >
-                        {chartCategoryData.map((entry, index) => {
+                        {chartCategoryData.map((_entry, index) => {
                           const colors = ['#E5B453', '#FFA500', '#F3CD78', '#D4AF37', '#FF8C00', '#FFD700', '#CD7F32'];
                           return (
                             <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
@@ -8572,27 +8570,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
             </div>
           </div>
 
-          {/* Marketing push notification dispatch tools */}
-          <div className="bg-[#161616] border border-white/10 rounded-xl p-5 text-left text-xs">
-            <h4 className="font-bold text-sm text-[#E5B453] mb-1">🎁 虛擬行銷與桌上驚喜快遞 simulation dispatcher</h4>
-            <p className="text-white/40 mb-3 leading-snug">此模擬工具可針對現正入店顧客桌面的平板推播限定驚喜，以提高點單流速與庫存流轉率：</p>
-            <form onSubmit={handleSendPush} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end bg-black/20 p-4 rounded-xl border border-white/5">
-              <div className="space-y-1">
-                <label className="text-zinc-400">推播徽章標題 Badge</label>
-                <input type="text" value={promoBadge} onChange={(e) => setPromoBadge(e.target.value)} className="w-full bg-[#1e1e1e] border border-white/10 rounded px-2 px-2.5 py-1.5 text-white" />
-              </div>
-              <div className="space-y-1 md:col-span-2">
-                <label className="text-zinc-400">推播文字內容 Message</label>
-                <input type="text" value={promoMessage} onChange={(e) => setPromoMessage(e.target.value)} className="w-full bg-[#1e1e1e] border border-white/10 rounded px-2.5 py-1.5 text-white" />
-              </div>
-              <div>
-                <button type="submit" className="w-full py-1.5 bg-[#E5B453] hover:bg-amber-400 text-slate-900 font-black rounded active:scale-95 transition cursor-pointer text-xs">
-                  ⚡ 立即發送全店面板廣播
-                </button>
-              </div>
-            </form>
-            {pushSentConfirm && <div className="mt-2.5 text-emerald-400 font-bold animate-pulse text-[11px]">🎉 模擬廣播推播已成功發送！全店面板將同步收到提示通知。</div>}
-          </div>
+
         </div>
       )}
 
@@ -11899,7 +11877,15 @@ ${customerDetails}
                         <span className="text-rose-500 font-bold text-xs">{restDays && restDays.includes(resDateInput) ? '公休日無法訂位' : '無效或超過3個月'}</span>
                       )}
                     </span>
-                    <input type="date" required min={todayDateStr} max={maxThreeMonthsDateStr} value={resDateInput} onChange={(e) => setResDateInput(e.target.value)} className={`w-full bg-[#1e1e1e] border ${!isResDateValid ? 'border-rose-500 text-rose-500 focus:border-rose-400' : 'border-white/10 focus:border-[#E5B453] text-white'} rounded px-2.5 py-1.5 font-mono outline-none transition-all`} />
+                    <input type="date" required min={todayDateStr} max={maxThreeMonthsDateStr} value={resDateInput} onChange={(e) => {
+                      const newDate = e.target.value;
+                      setResDateInput(newDate);
+                      if (!newDate) return;
+                      const candidateSlots = generateCandidateSlots(newDate);
+                      if (candidateSlots.length > 0 && !candidateSlots.includes(resTimeInput)) {
+                        setResTimeInput(candidateSlots[0]);
+                      }
+                    }} className={`w-full bg-[#1e1e1e] border ${!isResDateValid ? 'border-rose-500 text-rose-500 focus:border-rose-400' : 'border-white/10 focus:border-[#E5B453] text-white'} rounded px-2.5 py-1.5 font-mono outline-none transition-all`} />
                   </div>
                   <div className="space-y-1">
                     <span className="text-zinc-500 font-sans text-[10px] flex items-center justify-between">
@@ -11908,7 +11894,11 @@ ${customerDetails}
                         <span className="text-rose-500 font-bold">非營業時間</span>
                       )}
                     </span>
-                    <input type="time" required value={resTimeInput} onChange={(e) => setResTimeInput(e.target.value)} className={`w-full bg-[#1e1e1e] border ${!isResTimeValid ? 'border-rose-500 focus:border-rose-400 text-rose-500' : 'border-white/10 focus:border-[#E5B453] text-white'} rounded px-2.5 py-1.5 font-mono outline-none transition-all`} />
+                    <select required value={resTimeInput} onChange={(e) => setResTimeInput(e.target.value)} disabled={!resDateInput || (restDays && restDays.includes(resDateInput))} className={`w-full bg-[#1e1e1e] border ${!isResTimeValid ? 'border-rose-500 focus:border-rose-400 text-rose-500' : 'border-white/10 focus:border-[#E5B453] text-white'} rounded px-2.5 py-1.5 font-mono outline-none transition-all`}>
+                      {generateCandidateSlots(resDateInput).map(time => (
+                        <option key={time} value={time}>{time}</option>
+                      ))}
+                    </select>
                   </div>
                 </div>
 
