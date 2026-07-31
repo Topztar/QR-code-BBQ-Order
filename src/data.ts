@@ -638,7 +638,164 @@ export const CAT_NAMES: { [key: string]: { [lang in Language]: string } } = {
   drinks: { zh: '南洋飲品 Drinks', en: 'Drinks', ko: '음료', ja: 'ドリンク', th: 'เครื่องดื่ม', vi: 'Thức uống' },
 };
 
-export const INITIAL_CATEGORIES: any[] = undefined;
+export const INITIAL_CATEGORIES: any[] = [
+  {
+    "name": {
+      "zh": "小費及折扣",
+      "en": "Tips & Discounts",
+      "ko": "팁 및 할인",
+      "th": "ทิปและส่วนลด",
+      "vi": "Tiền tip & Giảm giá",
+      "ja": "チップ・割引"
+    },
+    "orderIndex": 0,
+    "showOnCustomerPage": false,
+    "id": "cat-svadcb"
+  },
+  {
+    "orderIndex": 1,
+    "name": {
+      "zh": "冰櫃酒水 🧊",
+      "en": "Refrigerated Drinks & Alcohol 🍺",
+      "th": "เครื่องดื่มและสุราแช่เย็น 🍺",
+      "ko": "냉장 음료 및 주류 🍺",
+      "ja": "冷蔵ドリンク・お酒 🍺",
+      "vi": "Đồ uống & Rượu lạnh 🍺"
+    },
+    "id": "cat-7cvvkq",
+    "showOnCustomerPage": false
+  },
+  {
+    "showOnCustomerPage": true,
+    "id": "tomyum",
+    "name": {
+      "en": "Tom Yum Series 🍜",
+      "zh": "冬蔭功系列 🍜",
+      "vi": "Dòng súp Tom Yum 🍜",
+      "ja": "トムヤムシリーズ 🍜",
+      "ko": "똠얌 수프 시리즈 🍜",
+      "th": "ชุดต้มยำสุดแซ่บ 🍜"
+    },
+    "orderIndex": 2
+  },
+  {
+    "orderIndex": 3,
+    "name": {
+      "zh": "熱湯 🥢越南牛肉河粉",
+      "en": "Hot Soups & Beef Pho 🥢",
+      "vi": "Súp nóng & Phở bò Việt Nam 🥢",
+      "ja": "温かいスープ・ベトナム牛肉フォー 🥢",
+      "ko": "따뜻한 수프 및 베트남 소고기 쌀국수 🥢",
+      "th": "ซุปร้อนและเฝอเนื้อเวียดนาม 🥢"
+    },
+    "id": "noodles",
+    "showOnCustomerPage": true
+  },
+  {
+    "orderIndex": 4,
+    "name": {
+      "zh": "精選套餐 🍱優惠",
+      "en": "Chef's Special Combos 🍱",
+      "th": "เซตเมนูสุดคุ้ม 🍱",
+      "ko": "셰프 추천 특선 세트 🍱",
+      "vi": "Combo đặc biệt 🍱",
+      "ja": "主理人厳選お得セット 🍱"
+    },
+    "id": "combos",
+    "showOnCustomerPage": true
+  },
+  {
+    "orderIndex": 5,
+    "name": {
+      "en": "Signature Thai Seafood 🦐",
+      "zh": "招牌泰式海鮮 🦐",
+      "vi": "Hải sản nướng Thái Lan 🦐",
+      "ja": "本格タイ風炭火焼きシーフード 🦐",
+      "th": "อาหารทะเลเผาสูตรเด็ด 🦐",
+      "ko": "시그니처 태국식 해산물 🦐"
+    },
+    "id": "seafood",
+    "showOnCustomerPage": true
+  },
+  {
+    "id": "veggies",
+    "showOnCustomerPage": true,
+    "orderIndex": 6,
+    "name": {
+      "en": "Farm Fresh Vegetables 🥬",
+      "zh": "小農鮮蔬菜 🥬",
+      "ko": "신선한 채소 구이 🥬",
+      "th": "ผักสดฟาร์มย่าง 🥬",
+      "ja": "地元新鮮野菜焼き 🥬",
+      "vi": "Rau củ tươi sạch 🥬"
+    }
+  },
+  {
+    "id": "skewers",
+    "showOnCustomerPage": true,
+    "orderIndex": 7,
+    "name": {
+      "en": "Charcoal BBQ Skewers & Others 🍢",
+      "zh": "碳烤肉類 🍢其他",
+      "ko": "오리지널 숯불 고기 꼬치 및 기타 🍢",
+      "th": "บาร์บีคิวเสียบไม้ย่างและอื่นๆ 🍢",
+      "ja": "タイ風肉串炭火焼き・その他 🍢",
+      "vi": "Thịt nướng xiên & Khác 🍢"
+    }
+  },
+  {
+    "id": "sweets",
+    "showOnCustomerPage": true,
+    "orderIndex": 8,
+    "name": {
+      "ja": "タイ風特製デザート 🍰",
+      "vi": "Tráng miệng kiểu Thái 🍰",
+      "th": "ขนมหวานและพุดดิ้งสูตรพิเศษ 🍰",
+      "ko": "태국식 달콤 디저트 🍰",
+      "en": "Thai Desserts & Sweets 🍰",
+      "zh": "泰式特色甜品 🍰"
+    }
+  },
+  {
+    "id": "drinks",
+    "showOnCustomerPage": true,
+    "orderIndex": 9,
+    "name": {
+      "th": "เครื่องดื่มดับร้อนรสสดชื่น 🍹",
+      "ko": "태국식 청량 음료 🍹",
+      "ja": "タイ風さわやかドリンク 🍹",
+      "vi": "Đồ uống lạnh kiểu Thái 🍹",
+      "zh": "泰特色沁涼飲品 🍹",
+      "en": "Refreshing Thai Cold Drinks 🍹"
+    }
+  },
+  {
+    "showOnCustomerPage": true,
+    "id": "cat-zene8j",
+    "name": {
+      "vi": "Nước sốt độc quyền 🥫",
+      "ja": "秘伝の特製タレ・ソース 🥫",
+      "ko": "단독 수제 특제 소스 🥫",
+      "th": "ซอสสูตรลับพิเศษ 🥫",
+      "zh": "獨家醬料 🥫",
+      "en": "Exclusive Secret Sauces 🥫"
+    },
+    "orderIndex": 10
+  },
+  {
+    "showOnCustomerPage": true,
+    "id": "cat-6ovxss",
+    "name": {
+      "ja": "成人向けお酒エリア (18+) 🔞",
+      "vi": "Khu vực đồ uống có cồn cho người lớn (18+) 🔞",
+      "th": "โซนเครื่องดื่มแอลกอฮอล์สำหรับผู้ใหญ่ (18+) 🔞",
+      "ko": "성인 주류 전용 구역 (18+) 🔞",
+      "en": "Adult Alcoholic Beverages (18+) 🔞",
+      "zh": "成人酒品專區 🔞"
+    },
+    "orderIndex": 11
+  }
+];
 
 export const INITIAL_MENU: any[] = [
   {

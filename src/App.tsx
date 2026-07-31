@@ -105,8 +105,9 @@ export default function App() {
   // Helper to enrich menu items with missing translations
   const enrichMenuItems = (items: MenuItem[]): MenuItem[] => {
     if (!Array.isArray(items)) return [];
+    const defaults = INITIAL_MENU || [];
     return items.map(item => {
-      const defaultItem = INITIAL_MENU.find(x => x.id === item.id);
+      const defaultItem = defaults.find(x => x.id === item.id);
       if (defaultItem) {
         const cleanName = { ...item.name };
         const cleanDesc = { ...item.description };
@@ -125,8 +126,9 @@ export default function App() {
   // Helper to enrich categories with missing translations
   const enrichCategories = (cats: Category[]): Category[] => {
     if (!Array.isArray(cats)) return [];
+    const defaults = INITIAL_CATEGORIES || [];
     return cats.map(cat => {
-      const defaultCat = INITIAL_CATEGORIES.find(c => c.id === cat.id);
+      const defaultCat = defaults.find(c => c.id === cat.id);
       if (defaultCat) {
         const name = { ...defaultCat.name, ...cat.name };
         return { ...cat, name };
