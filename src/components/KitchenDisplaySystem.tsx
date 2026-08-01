@@ -2194,7 +2194,7 @@ ${specLines}
                                     title="點擊可取消已備餐狀態"
                                   >
                                     <ChefHat size={12} />
-                                    <span>已備餐</span>
+                                    <span>{t('itemPreparedBtn')}</span>
                                   </button>
 
                                   <button
@@ -2207,7 +2207,7 @@ ${specLines}
                                     className="h-10 px-3.5 rounded-xl text-xs font-black transition-all duration-200 shadow-sm flex items-center justify-center gap-1 border cursor-pointer bg-[#1e1e1e] hover:bg-[#252525] text-emerald-400 hover:text-emerald-300 border-emerald-500/35 hover:border-emerald-500 shadow-black/20"
                                     title="標示為製作完成 (Mark as Completed)"
                                   >
-                                    <span>製作完成</span>
+                                    <span>{t('itemMakeCompleteBtn')}</span>
                                   </button>
                                 </>
                               )}
@@ -2224,7 +2224,7 @@ ${specLines}
                                   title="標示為未完成 (Mark as Pending)"
                                 >
                                   <Check size={14} className="stroke-[3]" />
-                                  <span>已完成</span>
+                                  <span>{t('itemCompletedBtn')}</span>
                                 </button>
                               )}
                             </div>
@@ -3271,7 +3271,7 @@ ${specLines}
                                   title="點擊可取消已備餐狀態"
                                 >
                                   <ChefHat size={12} />
-                                  <span>已備餐</span>
+                                  <span>{t('itemPreparedBtn')}</span>
                                 </button>
 
                                 <button
@@ -3284,7 +3284,7 @@ ${specLines}
                                   className="h-10 px-3.5 rounded-xl text-xs font-black transition-all duration-200 shadow-sm flex items-center justify-center gap-1 border cursor-pointer bg-[#1e1e1e] hover:bg-[#252525] text-emerald-400 hover:text-emerald-300 border-emerald-500/35 hover:border-emerald-500 shadow-black/20"
                                   title="標示為製作完成 (Mark as Completed)"
                                 >
-                                  <span>製作完成</span>
+                                  <span>{t('itemMakeCompleteBtn')}</span>
                                 </button>
                               </>
                             )}
@@ -3301,7 +3301,7 @@ ${specLines}
                                 title="標示為未完成 (Mark as Pending)"
                               >
                                 <Check size={14} className="stroke-[3]" />
-                                <span>已完成</span>
+                                <span>{t('itemCompletedBtn')}</span>
                               </button>
                             )}
                           </div>

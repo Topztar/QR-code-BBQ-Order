@@ -238,6 +238,22 @@ export const TRANSLATIONS: { [key: string]: { [lang in Language]: string } } = {
     th: 'เตรียมวัตถุดิบแล้ว',
     vi: 'Đã chuẩn bị món'
   },
+  itemMakeCompleteBtn: {
+    zh: '製作完成',
+    en: 'Cooking Done',
+    ko: '조리 완료',
+    ja: '調理完了',
+    th: 'ปรุงเสร็จแล้ว',
+    vi: 'Nấu xong'
+  },
+  itemCompletedBtn: {
+    zh: '已完成',
+    en: 'Completed',
+    ko: '완료됨',
+    ja: '完了',
+    th: 'เสร็จสิ้น',
+    vi: 'Đã hoàn thành'
+  },
   declineOrderBtn: {
     zh: '拒絕訂單',
     en: 'Decline Order',
