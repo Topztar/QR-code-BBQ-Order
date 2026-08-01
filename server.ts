@@ -1585,8 +1585,10 @@ app.post('/api/printer/pin', (req, res) => {
 // Google Cloud Storage Image Stream & Upload Endpoints (@google-cloud/storage)
 // -----------------------------------------------------------------
 
-// Direct streaming of image files from Google Cloud Storage via File Stream
+// Direct streaming of image files from Google Cloud Storage via File Stream (with HTTP proxying & fallback support)
 app.get(['/api/images/:path(*)', '/api/images'], async (req, res) => {
+  const DEFAULT_FALLBACK_IMAGE = 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=600';
+
   try {
     let rawPath = (req.params as any)?.path || (req.query.path as string) || (req.query.file as string) || (req.query.name as string) || '';
     if (!rawPath && req.query.url) {
@@ -1600,17 +1602,25 @@ app.get(['/api/images/:path(*)', '/api/images'], async (req, res) => {
         if (match && match[1]) {
           rawPath = decodeURIComponent(match[1]);
         }
+      } else if (urlStr.startsWith('http://') || urlStr.startsWith('https://')) {
+        return res.redirect(302, urlStr);
       }
     }
 
     if (!rawPath) {
-      return res.status(400).json({ error: 'Missing image file path / 缺少圖片路徑' });
+      return res.redirect(302, DEFAULT_FALLBACK_IMAGE);
+    }
+
+    // Handle full external URLs directly
+    if (rawPath.startsWith('http://') || rawPath.startsWith('https://')) {
+      return res.redirect(302, rawPath);
     }
 
     let cleanPath = decodeURIComponent(String(rawPath)).replace(/^\/+/, '').replace(/\.\.\//g, '');
 
     if (!gcsBucket) {
-      return res.status(503).json({ error: 'Google Cloud Storage not initialized / 雲端儲存空間尚未就緒' });
+      console.warn('[Sabay Storage] GCS bucket not initialized. Redirecting to fallback image.');
+      return res.redirect(302, DEFAULT_FALLBACK_IMAGE);
     }
 
     let file = gcsBucket.file(cleanPath);
@@ -1637,7 +1647,8 @@ app.get(['/api/images/:path(*)', '/api/images'], async (req, res) => {
     }
 
     if (!exists) {
-      return res.status(404).json({ error: `Image not found in storage / 雲端儲存中找不到圖片: ${cleanPath}` });
+      console.warn(`[Sabay Storage] Image not found in storage: ${cleanPath}. Redirecting to fallback image.`);
+      return res.redirect(302, DEFAULT_FALLBACK_IMAGE);
     }
 
     const [metadata] = await file.getMetadata().catch(() => [{}]);
@@ -1656,7 +1667,7 @@ app.get(['/api/images/:path(*)', '/api/images'], async (req, res) => {
     readStream.on('error', (err: any) => {
       console.error('[Sabay Storage Stream Error]:', err);
       if (!res.headersSent) {
-        res.status(500).json({ error: 'Failed to stream image', details: err?.message });
+        res.redirect(302, DEFAULT_FALLBACK_IMAGE);
       }
     });
 
@@ -1664,7 +1675,7 @@ app.get(['/api/images/:path(*)', '/api/images'], async (req, res) => {
   } catch (error: any) {
     console.error('[Sabay Storage Error]:', error);
     if (!res.headersSent) {
-      res.status(500).json({ error: 'Internal storage error', details: error?.message });
+      res.redirect(302, DEFAULT_FALLBACK_IMAGE);
     }
   }
 });

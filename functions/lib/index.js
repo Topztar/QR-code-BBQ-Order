@@ -50,6 +50,7 @@ const del = (routePath, handler) => {
     app.delete([`/api${routePath}`, routePath], handler);
 };
 app.get(['/api/images/:path(*)', '/images/:path(*)', '/api/images', '/images'], async (req, res) => {
+    const DEFAULT_FALLBACK_IMAGE = 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=600';
     try {
         let rawPath = req.params?.path || req.query.path || req.query.file || req.query.name || '';
         if (!rawPath && req.query.url) {
@@ -65,9 +66,15 @@ app.get(['/api/images/:path(*)', '/images/:path(*)', '/api/images', '/images'], 
                     rawPath = decodeURIComponent(match[1]);
                 }
             }
+            else if (urlStr.startsWith('http://') || urlStr.startsWith('https://')) {
+                return res.redirect(302, urlStr);
+            }
         }
         if (!rawPath) {
-            return res.status(400).json({ error: 'Missing image file path / 缺少圖片路徑' });
+            return res.redirect(302, DEFAULT_FALLBACK_IMAGE);
+        }
+        if (rawPath.startsWith('http://') || rawPath.startsWith('https://')) {
+            return res.redirect(302, rawPath);
         }
         let cleanPath = decodeURIComponent(String(rawPath)).replace(/^\/+/, '').replace(/\.\.\//g, '');
         let file = storageBucket.file(cleanPath);
@@ -91,7 +98,8 @@ app.get(['/api/images/:path(*)', '/images/:path(*)', '/api/images', '/images'], 
             }
         }
         if (!exists) {
-            return res.status(404).json({ error: `Image not found in storage / 雲端儲存中找不到圖片: ${cleanPath}` });
+            console.warn(`[Cloud Functions Storage] Image not found: ${cleanPath}. Redirecting to fallback image.`);
+            return res.redirect(302, DEFAULT_FALLBACK_IMAGE);
         }
         const [metadata] = await file.getMetadata().catch(() => [{}]);
         const contentType = metadata?.contentType || getMimeTypeFromExt(cleanPath) || 'image/jpeg';
@@ -107,7 +115,7 @@ app.get(['/api/images/:path(*)', '/images/:path(*)', '/api/images', '/images'], 
         readStream.on('error', (err) => {
             console.error('[Cloud Functions Storage Stream Error]:', err);
             if (!res.headersSent) {
-                res.status(500).json({ error: 'Failed to stream image', details: err?.message });
+                res.redirect(302, DEFAULT_FALLBACK_IMAGE);
             }
         });
         readStream.pipe(res);
@@ -115,7 +123,7 @@ app.get(['/api/images/:path(*)', '/images/:path(*)', '/api/images', '/images'], 
     catch (error) {
         console.error('[Cloud Functions Storage Error]:', error);
         if (!res.headersSent) {
-            res.status(500).json({ error: 'Internal storage error', details: error?.message });
+            res.redirect(302, DEFAULT_FALLBACK_IMAGE);
         }
     }
 });
