@@ -3,6 +3,7 @@ import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import net from 'net';
+import { Storage } from '@google-cloud/storage';
 import { initializeApp as initializeClientApp, getApps as getClientApps } from 'firebase/app';
 import { getFirestore as getClientFirestore, collection, doc, deleteDoc, getDoc, getDocs, setDoc, writeBatch } from 'firebase/firestore';
 import { createServer as createViteServer } from 'vite';
@@ -14,6 +15,43 @@ import {
   printKitchenTicket,
   printCustomerReceipt
 } from './hardware/printerDriver';
+
+const STORAGE_BUCKET_NAME = 'sabay-bbq-order.firebasestorage.app';
+let gcsStorage: Storage | null = null;
+let gcsBucket: any = null;
+
+try {
+  gcsStorage = new Storage({
+    projectId: 'sabay-bbq-order'
+  });
+  gcsBucket = gcsStorage.bucket(STORAGE_BUCKET_NAME);
+  console.log(`[Sabay Storage] Initialized @google-cloud/storage bucket: ${STORAGE_BUCKET_NAME}`);
+} catch (err: any) {
+  console.warn('[Sabay Storage] @google-cloud/storage initialization note:', err?.message);
+}
+
+function getMimeTypeFromExt(filePath: string): string {
+  const ext = path.extname(filePath).toLowerCase();
+  switch (ext) {
+    case '.jpg':
+    case '.jpeg':
+      return 'image/jpeg';
+    case '.png':
+      return 'image/png';
+    case '.webp':
+      return 'image/webp';
+    case '.gif':
+      return 'image/gif';
+    case '.svg':
+      return 'image/svg+xml';
+    case '.bmp':
+      return 'image/bmp';
+    case '.ico':
+      return 'image/x-icon';
+    default:
+      return 'image/jpeg';
+  }
+}
 
 function getGeminiClient(): GoogleGenAI | null {
   if (!process.env.GEMINI_API_KEY) {
@@ -1541,6 +1579,154 @@ app.post('/api/printer/pin', (req, res) => {
   liveStaffPin = newPin;
   saveStateToDisk();
   res.json({ success: true, message: '員工解鎖金鑰已成功變更！' });
+});
+
+// -----------------------------------------------------------------
+// Google Cloud Storage Image Stream & Upload Endpoints (@google-cloud/storage)
+// -----------------------------------------------------------------
+
+// Direct streaming of image files from Google Cloud Storage via File Stream
+app.get(['/api/images/:path(*)', '/api/images'], async (req, res) => {
+  try {
+    let rawPath = (req.params as any)?.path || (req.query.path as string) || (req.query.file as string) || (req.query.name as string) || '';
+    if (!rawPath && req.query.url) {
+      const urlStr = String(req.query.url);
+      if (urlStr.startsWith('gs://')) {
+        const parts = urlStr.replace('gs://', '').split('/');
+        parts.shift(); // remove bucket name
+        rawPath = parts.join('/');
+      } else if (urlStr.includes('firebasestorage.googleapis.com') || urlStr.includes('storage.googleapis.com')) {
+        const match = urlStr.match(/\/o\/([^?]+)/) || urlStr.match(/storage\.googleapis\.com\/[^/]+\/(.+)/);
+        if (match && match[1]) {
+          rawPath = decodeURIComponent(match[1]);
+        }
+      }
+    }
+
+    if (!rawPath) {
+      return res.status(400).json({ error: 'Missing image file path / 缺少圖片路徑' });
+    }
+
+    let cleanPath = decodeURIComponent(String(rawPath)).replace(/^\/+/, '').replace(/\.\.\//g, '');
+
+    if (!gcsBucket) {
+      return res.status(503).json({ error: 'Google Cloud Storage not initialized / 雲端儲存空間尚未就緒' });
+    }
+
+    let file = gcsBucket.file(cleanPath);
+    let [exists] = await file.exists().catch(() => [false]);
+
+    if (!exists && !cleanPath.startsWith('dishes/')) {
+      const dishFile = gcsBucket.file(`dishes/${cleanPath}`);
+      const [dishExists] = await dishFile.exists().catch(() => [false]);
+      if (dishExists) {
+        file = dishFile;
+        exists = true;
+        cleanPath = `dishes/${cleanPath}`;
+      }
+    }
+
+    if (!exists && !cleanPath.startsWith('images/')) {
+      const imgFile = gcsBucket.file(`images/${cleanPath}`);
+      const [imgExists] = await imgFile.exists().catch(() => [false]);
+      if (imgExists) {
+        file = imgFile;
+        exists = true;
+        cleanPath = `images/${cleanPath}`;
+      }
+    }
+
+    if (!exists) {
+      return res.status(404).json({ error: `Image not found in storage / 雲端儲存中找不到圖片: ${cleanPath}` });
+    }
+
+    const [metadata] = await file.getMetadata().catch(() => [{}]);
+    const contentType = metadata.contentType || getMimeTypeFromExt(cleanPath) || 'image/jpeg';
+
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
+    if (metadata.size) {
+      res.setHeader('Content-Length', metadata.size);
+    }
+    if (metadata.etag) {
+      res.setHeader('ETag', metadata.etag);
+    }
+
+    const readStream = file.createReadStream();
+    readStream.on('error', (err: any) => {
+      console.error('[Sabay Storage Stream Error]:', err);
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Failed to stream image', details: err?.message });
+      }
+    });
+
+    readStream.pipe(res);
+  } catch (error: any) {
+    console.error('[Sabay Storage Error]:', error);
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Internal storage error', details: error?.message });
+    }
+  }
+});
+
+// Upload image to Google Cloud Storage
+app.post('/api/images/upload', async (req, res) => {
+  try {
+    const { base64, data, filename, contentType, folder = 'dishes' } = req.body;
+    const rawData = base64 || data;
+    if (!rawData) {
+      return res.status(400).json({ error: 'Missing image data (base64) / 缺少圖片資料' });
+    }
+
+    let mime = contentType || 'image/jpeg';
+    let base64Clean = rawData;
+    if (rawData.includes(';base64,')) {
+      const parts = rawData.split(';base64,');
+      const mimeMatch = parts[0].match(/data:(.*?)$/);
+      if (mimeMatch) mime = mimeMatch[1];
+      base64Clean = parts[1];
+    }
+
+    const buffer = Buffer.from(base64Clean, 'base64');
+    const ext = mime.split('/')[1] || 'jpg';
+    const cleanExt = ext === 'jpeg' ? 'jpg' : ext;
+    const targetFilename = filename ? filename.replace(/[^a-zA-Z0-9._-]/g, '') : `dish-${Date.now()}.${cleanExt}`;
+    const targetPath = `${folder}/${targetFilename}`.replace(/^\/+/, '');
+
+    if (gcsBucket) {
+      const file = gcsBucket.file(targetPath);
+      await file.save(buffer, {
+        metadata: {
+          contentType: mime,
+          cacheControl: 'public, max-age=86400, stale-while-revalidate=604800'
+        },
+        resumable: false
+      });
+
+      const publicUrl = `/api/images/${targetPath}`;
+      return res.json({
+        success: true,
+        url: publicUrl,
+        path: targetPath,
+        filename: targetFilename,
+        size: buffer.length,
+        contentType: mime
+      });
+    } else {
+      // Local development fallback
+      return res.json({
+        success: true,
+        url: `data:${mime};base64,${base64Clean}`,
+        path: targetPath,
+        filename: targetFilename,
+        size: buffer.length,
+        contentType: mime
+      });
+    }
+  } catch (error: any) {
+    console.error('[Sabay Storage Upload Error]:', error);
+    res.status(500).json({ error: 'Failed to upload image to storage', details: error?.message });
+  }
 });
 
 // -----------------------------------------------------------------

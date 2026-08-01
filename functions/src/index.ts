@@ -3,6 +3,7 @@ import * as admin from 'firebase-admin';
 import * as express from 'express';
 import * as cors from 'cors';
 import * as net from 'net';
+import * as path from 'path';
 import { getFirestore } from 'firebase-admin/firestore';
 
 admin.initializeApp();
@@ -10,24 +11,178 @@ admin.initializeApp();
 
 // Connect to the specific named Firestore database
 const db = getFirestore('ai-studio-sabaythaibbqtabl-84418196-9d0c-459c-bced-ddc424dfba07');
+const storageBucket = admin.storage().bucket('sabay-bbq-order.firebasestorage.app');
 const app = express();
 
 app.use(cors({ origin: true }));
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
+
+function getMimeTypeFromExt(filePath: string): string {
+  const ext = path.extname(filePath).toLowerCase();
+  switch (ext) {
+    case '.jpg':
+    case '.jpeg':
+      return 'image/jpeg';
+    case '.png':
+      return 'image/png';
+    case '.webp':
+      return 'image/webp';
+    case '.gif':
+      return 'image/gif';
+    case '.svg':
+      return 'image/svg+xml';
+    case '.bmp':
+      return 'image/bmp';
+    case '.ico':
+      return 'image/x-icon';
+    default:
+      return 'image/jpeg';
+  }
+}
 
 // Helper functions to register routes under both '/api/path' and '/path'
-const get = (path: string, handler: express.RequestHandler) => {
-  app.get([`/api${path}`, path], handler);
+const get = (routePath: string, handler: express.RequestHandler) => {
+  app.get([`/api${routePath}`, routePath], handler);
 };
-const post = (path: string, handler: express.RequestHandler) => {
-  app.post([`/api${path}`, path], handler);
+const post = (routePath: string, handler: express.RequestHandler) => {
+  app.post([`/api${routePath}`, routePath], handler);
 };
-const put = (path: string, handler: express.RequestHandler) => {
-  app.put([`/api${path}`, path], handler);
+const put = (routePath: string, handler: express.RequestHandler) => {
+  app.put([`/api${routePath}`, routePath], handler);
 };
-const del = (path: string, handler: express.RequestHandler) => {
-  app.delete([`/api${path}`, path], handler);
+const del = (routePath: string, handler: express.RequestHandler) => {
+  app.delete([`/api${routePath}`, routePath], handler);
 };
+
+// --- Google Cloud Storage Image Stream & Upload APIs ---
+// 1. Direct Image File Streaming via @google-cloud/storage
+app.get(['/api/images/:path(*)', '/images/:path(*)', '/api/images', '/images'], async (req, res) => {
+  try {
+    let rawPath = (req.params as any)?.path || (req.query.path as string) || (req.query.file as string) || (req.query.name as string) || '';
+    if (!rawPath && req.query.url) {
+      const urlStr = String(req.query.url);
+      if (urlStr.startsWith('gs://')) {
+        const parts = urlStr.replace('gs://', '').split('/');
+        parts.shift(); // remove bucket name
+        rawPath = parts.join('/');
+      } else if (urlStr.includes('firebasestorage.googleapis.com') || urlStr.includes('storage.googleapis.com')) {
+        const match = urlStr.match(/\/o\/([^?]+)/) || urlStr.match(/storage\.googleapis\.com\/[^/]+\/(.+)/);
+        if (match && match[1]) {
+          rawPath = decodeURIComponent(match[1]);
+        }
+      }
+    }
+
+    if (!rawPath) {
+      return res.status(400).json({ error: 'Missing image file path / 缺少圖片路徑' });
+    }
+
+    let cleanPath = decodeURIComponent(String(rawPath)).replace(/^\/+/, '').replace(/\.\.\//g, '');
+
+    let file = storageBucket.file(cleanPath);
+    let [exists] = await file.exists().catch(() => [false]);
+
+    if (!exists && !cleanPath.startsWith('dishes/')) {
+      const dishFile = storageBucket.file(`dishes/${cleanPath}`);
+      const [dishExists] = await dishFile.exists().catch(() => [false]);
+      if (dishExists) {
+        file = dishFile;
+        exists = true;
+        cleanPath = `dishes/${cleanPath}`;
+      }
+    }
+
+    if (!exists && !cleanPath.startsWith('images/')) {
+      const imgFile = storageBucket.file(`images/${cleanPath}`);
+      const [imgExists] = await imgFile.exists().catch(() => [false]);
+      if (imgExists) {
+        file = imgFile;
+        exists = true;
+        cleanPath = `images/${cleanPath}`;
+      }
+    }
+
+    if (!exists) {
+      return res.status(404).json({ error: `Image not found in storage / 雲端儲存中找不到圖片: ${cleanPath}` });
+    }
+
+    const [metadata]: [any, ...any[]] = await file.getMetadata().catch(() => [{}] as any);
+    const contentType = metadata?.contentType || getMimeTypeFromExt(cleanPath) || 'image/jpeg';
+
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
+    if (metadata?.size) {
+      res.setHeader('Content-Length', metadata.size);
+    }
+    if (metadata?.etag) {
+      res.setHeader('ETag', metadata.etag);
+    }
+
+    const readStream = file.createReadStream();
+    readStream.on('error', (err: any) => {
+      console.error('[Cloud Functions Storage Stream Error]:', err);
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Failed to stream image', details: err?.message });
+      }
+    });
+
+    readStream.pipe(res);
+  } catch (error: any) {
+    console.error('[Cloud Functions Storage Error]:', error);
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Internal storage error', details: error?.message });
+    }
+  }
+});
+
+// 2. Upload Image to Google Cloud Storage
+post('/images/upload', async (req, res) => {
+  try {
+    const { base64, data, filename, contentType, folder = 'dishes' } = req.body;
+    const rawData = base64 || data;
+    if (!rawData) {
+      return res.status(400).json({ error: 'Missing image data (base64) / 缺少圖片資料' });
+    }
+
+    let mime = contentType || 'image/jpeg';
+    let base64Clean = rawData;
+    if (rawData.includes(';base64,')) {
+      const parts = rawData.split(';base64,');
+      const mimeMatch = parts[0].match(/data:(.*?)$/);
+      if (mimeMatch) mime = mimeMatch[1];
+      base64Clean = parts[1];
+    }
+
+    const buffer = Buffer.from(base64Clean, 'base64');
+    const ext = mime.split('/')[1] || 'jpg';
+    const cleanExt = ext === 'jpeg' ? 'jpg' : ext;
+    const targetFilename = filename ? filename.replace(/[^a-zA-Z0-9._-]/g, '') : `dish-${Date.now()}.${cleanExt}`;
+    const targetPath = `${folder}/${targetFilename}`.replace(/^\/+/, '');
+
+    const file = storageBucket.file(targetPath);
+    await file.save(buffer, {
+      metadata: {
+        contentType: mime,
+        cacheControl: 'public, max-age=86400, stale-while-revalidate=604800'
+      },
+      resumable: false
+    });
+
+    const publicUrl = `/api/images/${targetPath}`;
+    return res.json({
+      success: true,
+      url: publicUrl,
+      path: targetPath,
+      filename: targetFilename,
+      size: buffer.length,
+      contentType: mime
+    });
+  } catch (error: any) {
+    console.error('[Cloud Functions Storage Upload Error]:', error);
+    res.status(500).json({ error: 'Failed to upload image to storage', details: error?.message });
+  }
+});
 
 // --- GET APIs ---
 

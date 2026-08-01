@@ -11407,23 +11407,47 @@ ${customerDetails}
                   <label className="text-amber-400 font-bold block text-[11.5px] tracking-wider uppercase">🎨 菜品照片設定 Custom Photo Settings</label>
                 </div>
 
-                {/* File Upload (Local file with Base64 converter) */}
+                {/* File Upload (Local file with Storage Upload & Base64 Fallback) */}
                 <div className="space-y-1 mt-1">
-                  <span className="text-zinc-400 block text-[10px] font-medium">1. 📤 上傳本機照片 (Upload Local File)</span>
+                  <span className="text-zinc-400 block text-[10px] font-medium">1. 📤 上傳本機照片 (Upload to Storage)</span>
                   <input
                     type="file"
                     accept="image/*"
-                    onChange={(e) => {
+                    onChange={async (e) => {
                       const file = e.target.files?.[0];
                       if (file) {
-                        if (file.size > 2 * 1024 * 1024) {
-                          alert('⚠️ 圖片檔案過大（上限 2MB），建議壓縮後再上傳！');
+                        if (file.size > 5 * 1024 * 1024) {
+                          alert('⚠️ 圖片檔案過大（上限 5MB），建議壓縮後再上傳！');
                           return;
                         }
                         const reader = new FileReader();
-                        reader.onloadend = () => {
+                        reader.onloadend = async () => {
                           if (typeof reader.result === 'string') {
-                            setItemImage(reader.result);
+                            const base64Data = reader.result;
+                            try {
+                              const cleanName = file.name.replace(/[^a-zA-Z0-9._-]/g, '');
+                              const res = await fetch('/api/images/upload', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                  base64: base64Data,
+                                  filename: `${Date.now()}-${cleanName}`,
+                                  contentType: file.type,
+                                  folder: 'dishes'
+                                })
+                              });
+                              if (res.ok) {
+                                const data = await res.json();
+                                if (data?.url) {
+                                  setItemImage(data.url);
+                                  return;
+                                }
+                              }
+                            } catch (uploadErr) {
+                              console.warn('Storage upload fallback to base64:', uploadErr);
+                            }
+                            // Fallback to local DataURL
+                            setItemImage(base64Data);
                           }
                         };
                         reader.readAsDataURL(file);
