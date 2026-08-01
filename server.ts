@@ -1755,12 +1755,13 @@ app.post('/api/menu', (req, res) => {
     return res.status(400).json({ error: 'Missing required fields (category, name, price)' });
   }
 
+  const cleanImage = typeof image === 'string' ? image.trim() : (image || '');
   const newItem: MenuItem = {
     id: `dish-${Date.now()}`,
     category,
     name: typeof name === 'object' ? name : { zh: name || '', en: name || '', ko: name || '', ja: name || '', th: name || '', vi: name || '' },
     price: Number(price),
-    image: image || 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=400',
+    image: cleanImage || 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=400',
     description: typeof description === 'object' ? description : { zh: description || '', en: description || '', ko: description || '', ja: description || '', th: description || '', vi: description || '' },
     available: true,
     isSetMeal: !!isSetMeal,
@@ -1817,12 +1818,13 @@ app.put('/api/menu/:id', (req, res) => {
   
   const itemIndex = liveMenu.findIndex(m => m.id === id);
   if (itemIndex > -1) {
+    const cleanImage = image !== undefined ? (typeof image === 'string' ? image.trim() : image) : liveMenu[itemIndex].image;
     const updated = {
       ...liveMenu[itemIndex],
       category: category || liveMenu[itemIndex].category,
       name: name !== undefined ? (typeof name === 'object' ? name : { zh: name || '', en: name || '', ko: name || '', ja: name || '', th: name || '', vi: name || '' }) : liveMenu[itemIndex].name,
       price: price !== undefined ? Number(price) : liveMenu[itemIndex].price,
-      image: image || liveMenu[itemIndex].image,
+      image: cleanImage,
       description: description !== undefined ? (typeof description === 'object' ? description : { zh: description || '', en: description || '', ko: description || '', ja: description || '', th: description || '', vi: description || '' }) : liveMenu[itemIndex].description,
       available: available !== undefined ? !!available : liveMenu[itemIndex].available,
       isSetMeal: isSetMeal !== undefined ? !!isSetMeal : liveMenu[itemIndex].isSetMeal,

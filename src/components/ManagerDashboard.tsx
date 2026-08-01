@@ -2941,6 +2941,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
       alert('請填載正確餐點名稱及有效金額！');
       return;
     }
+    const cleanImage = typeof itemImage === 'string' ? itemImage.trim() : (itemImage || '');
     const payload = {
       name: { 
         ...(typeof editingItem?.name === 'object' ? editingItem.name : {}), 
@@ -2948,14 +2949,14 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
         ...(itemNameEn ? { en: itemNameEn } : {})
       },
       price: Number(itemPrice),
-      image: itemImage,
+      image: cleanImage,
       description: { 
         ...(typeof editingItem?.description === 'object' ? editingItem.description : {}), 
         zh: itemDescZh, 
         ...(itemDescEn ? { en: itemDescEn } : {})
       },
       category: itemCategory,
-      available: true,
+      available: editingItem ? (editingItem.available !== undefined ? editingItem.available : true) : true,
       hasNoodlesOption: hasNoodles,
       isNotSpicy: isNotSpicy,
       isTakeoutAvailable: isTakeoutAvailable,
@@ -11348,7 +11349,7 @@ ${customerDetails}
               <div className="w-full h-36 rounded-xl overflow-hidden relative border border-white/10 [content-visibility:auto] bg-neutral-900/40">
                 {itemImage ? (
                   <>
-                    <img src={itemImage} alt="dish mockup preview" className="w-full h-full object-cover bg-neutral-950" referrerPolicy="no-referrer" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
+                    <img key={itemImage} src={itemImage} alt="dish mockup preview" className="w-full h-full object-cover bg-neutral-950" referrerPolicy="no-referrer" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent flex items-end justify-between p-2.5">
                       <span className="text-[10px] text-zinc-300 font-bold font-sans">🖼️ 菜品圖片預覽 Dish Photo Preview</span>
                       <button
@@ -11461,10 +11462,11 @@ ${customerDetails}
                 <div className="space-y-1 mt-1">
                   <span className="text-zinc-400 block text-[10px] font-medium">2. 🔗 輸入外部圖片網址 (Custom URL)</span>
                   <input
-                    type="url"
-                    placeholder="https://example.com/food.jpg"
+                    type="text"
+                    placeholder="https://example.com/food.jpg 或 /api/images/dishes/..."
                     value={itemImage}
                     onChange={(e) => setItemImage(e.target.value)}
+                    onBlur={(e) => setItemImage(e.target.value.trim())}
                     className="w-full bg-[#1e1e1e] border border-white/10 rounded px-2.5 py-1 text-white font-mono text-[10.5px]"
                   />
                 </div>
