@@ -5,7 +5,7 @@ import { getLocalizedText } from '../utils/i18n';
 import { TRANSLATIONS } from '../data';
 import { safeStorage } from '../lib/safeStorage';
 import { ChefHat, Printer, Trash2, Check, Ban, RefreshCw, Volume2, Wifi, Edit, Settings, X, Clock, AlertTriangle, Mic, Flag, Eye, Search, Timer, Download, ChevronUp, ChevronDown } from 'lucide-react';
-import { ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+
 import { KdsHourlyChart } from './KdsHourlyChart';
 import { useRetry } from '../hooks/useRetry';
 import { InlineRetryMessage } from './InlineRetryMessage';
@@ -31,7 +31,7 @@ interface KitchenDisplaySystemProps {
   operatingHours?: any[];
   servicePaused?: boolean;
   onToggleServicePause?: (paused: boolean) => Promise<void>;
-  onToggleOrderItemComplete?: (orderId: string, itemId: string, isCompleted: boolean, isPrepared?: boolean) => Promise<void>;
+
   reservations?: Reservation[];
 }
 
@@ -56,7 +56,7 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
   operatingHours = [],
   servicePaused = false,
   onToggleServicePause,
-  onToggleOrderItemComplete,
+
   reservations = [],
 }) => {
   // Translation helper
@@ -493,14 +493,6 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
   // Search state for active orders filtering (ID or table number)
   const [searchQuery, setSearchQuery] = useState<string>('');
 
-  // Real-time ticker to make elapsed time count up live in seconds
-  const [secondsTick, setSecondsTick] = useState<number>(0);
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setSecondsTick(prev => prev + 1);
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
 
   // Printer real-time health indicator state
   const { run: pingRun } = useRetry(async () => {

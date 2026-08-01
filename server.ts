@@ -204,6 +204,9 @@ interface InventoryLog {
 
 let inventoryLogs: InventoryLog[] = [];
 
+// Track timeouts for automatic table status release (15 min after checkout)
+const tableCheckoutTimeouts = new Map<string, NodeJS.Timeout>();
+
 let liveCategories: Category[] = [...INITIAL_CATEGORIES];
 
 const defaultCategories = [...liveCategories];
@@ -2698,6 +2701,10 @@ app.post('/api/orders', (req, res) => {
     const tblId = String(mappedTableNumber).trim();
     const tb = liveTables.find(t => t.id.toString().trim() === tblId);
     if (tb) {
+      if (tableCheckoutTimeouts.has(tblId)) {
+        clearTimeout(tableCheckoutTimeouts.get(tblId)!);
+        tableCheckoutTimeouts.delete(tblId);
+      }
       tb.status = 'in_use';
     }
   }
@@ -2977,8 +2984,25 @@ app.put('/api/orders/:id/checkout', (req, res) => {
     const tb = liveTables.find(t => t.id.toString().trim() === tblId);
     if (tb) {
       if (order.isPaid) {
-        tb.status = 'available';
-        tb.preservedFor = '';
+        if (tblId.toLowerCase() !== 'takeout' && tblId !== '外帶' && tblId !== '') {
+          tb.status = 'cleaning';
+          tb.preservedFor = '';
+          if (tableCheckoutTimeouts.has(tblId)) {
+            clearTimeout(tableCheckoutTimeouts.get(tblId)!);
+          }
+          const timer = setTimeout(() => {
+            const table = liveTables.find(t => t.id.toString().trim() === tblId);
+            if (table && table.status === 'cleaning') {
+              table.status = 'available';
+              saveStateToDisk();
+            }
+            tableCheckoutTimeouts.delete(tblId);
+          }, 15 * 60 * 1000); // 15 minutes
+          tableCheckoutTimeouts.set(tblId, timer);
+        } else {
+          tb.status = 'available';
+          tb.preservedFor = '';
+        }
       } else {
         tb.status = 'pending_checkout';
       }
@@ -3041,8 +3065,25 @@ app.put('/api/orders/:id/pay', async (req, res) => {
     const tblId = String(order.tableNumber).trim();
     const tb = liveTables.find(t => t.id.toString().trim() === tblId);
     if (tb) {
-      tb.status = 'available';
-      tb.preservedFor = '';
+      if (tblId.toLowerCase() !== 'takeout' && tblId !== '外帶' && tblId !== '') {
+        tb.status = 'cleaning';
+        tb.preservedFor = '';
+        if (tableCheckoutTimeouts.has(tblId)) {
+          clearTimeout(tableCheckoutTimeouts.get(tblId)!);
+        }
+        const timer = setTimeout(() => {
+          const table = liveTables.find(t => t.id.toString().trim() === tblId);
+          if (table && table.status === 'cleaning') {
+            table.status = 'available';
+            saveStateToDisk();
+          }
+          tableCheckoutTimeouts.delete(tblId);
+        }, 15 * 60 * 1000); // 15 minutes
+        tableCheckoutTimeouts.set(tblId, timer);
+      } else {
+        tb.status = 'available';
+        tb.preservedFor = '';
+      }
     }
     const matchingRes = liveReservations.find(r =>
       (order.reservationNo && (r.id === order.reservationNo || (r as any).reservationNo === order.reservationNo)) ||
