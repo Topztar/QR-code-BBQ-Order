@@ -1750,8 +1750,12 @@ app.post('/api/images/upload', async (req, res) => {
 
     const buffer = Buffer.from(base64Clean, 'base64');
     const ext = mime.split('/')[1] || 'jpg';
-    const cleanExt = ext === 'jpeg' ? 'jpg' : ext;
-    const targetFilename = filename ? filename.replace(/[^a-zA-Z0-9._-]/g, '') : `dish-${Date.now()}.${cleanExt}`;
+    const cleanExt = ext === 'jpeg' ? 'jpg' : ext.replace(/[^a-zA-Z0-9]/g, '') || 'jpg';
+    let targetFilename = filename ? filename.replace(/[^a-zA-Z0-9._-]/g, '') : `dish-${Date.now()}.${cleanExt}`;
+    targetFilename = targetFilename.replace(/-+\./g, '.').replace(/\.+/g, '.').replace(/^-+|-+$/g, '');
+    if (!targetFilename.includes('.')) {
+      targetFilename = `${targetFilename}.${cleanExt}`;
+    }
     const targetPath = `${folder}/${targetFilename}`.replace(/^\/+/, '');
 
     if (gcsBucket) {

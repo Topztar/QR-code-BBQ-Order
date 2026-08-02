@@ -146,7 +146,9 @@ post('/images/upload', async (req, res) => {
         const buffer = Buffer.from(base64Clean, 'base64');
         const ext = mime.split('/')[1] || 'jpg';
         const cleanExt = ext === 'jpeg' ? 'jpg' : ext;
-        const targetFilename = filename ? filename.replace(/[^a-zA-Z0-9._-]/g, '') : `dish-${Date.now()}.${cleanExt}`;
+        const targetFilename = filename
+            ? filename.replace(/[^a-zA-Z0-9._-]/g, '').replace(/^-+|-+$/g, '')
+            : `dish-${Date.now()}.${cleanExt}`;
         const targetPath = `${folder}/${targetFilename}`.replace(/^\/+/, '');
         const file = storageBucket.file(targetPath);
         await file.save(buffer, {
