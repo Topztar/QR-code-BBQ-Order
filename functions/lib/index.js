@@ -184,9 +184,54 @@ get('/categories', async (_req, res) => {
 });
 get('/menu', async (_req, res) => {
     try {
+        const now = new Date();
         const snapshot = await db.collection('menu').orderBy('orderIndex').get();
-        const items = snapshot.docs.map(doc => doc.data());
-        res.json(items);
+        const items = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return { ...data, _docId: doc.id };
+        });
+        const updatePromises = [];
+        const processedItems = items.map((item) => {
+            if (item.available === false) {
+                if (!item.soldOutAt) {
+                    const soldOutAt = now.toISOString();
+                    item.soldOutAt = soldOutAt;
+                    const docId = item._docId || item.id;
+                    if (docId) {
+                        updatePromises.push(db.collection('menu').doc(docId).set({ soldOutAt }, { merge: true }));
+                    }
+                }
+                else {
+                    const soldDate = new Date(item.soldOutAt);
+                    if (!isNaN(soldDate.getTime())) {
+                        const restoreTime = new Date(soldDate);
+                        restoreTime.setDate(restoreTime.getDate() + 1);
+                        restoreTime.setHours(12, 0, 0, 0);
+                        if (now.getTime() >= restoreTime.getTime()) {
+                            item.available = true;
+                            item.soldOutAt = null;
+                            const docId = item._docId || item.id;
+                            if (docId) {
+                                updatePromises.push(db.collection('menu').doc(docId).set({ available: true, soldOutAt: null }, { merge: true }));
+                            }
+                        }
+                    }
+                }
+            }
+            else if (item.soldOutAt) {
+                item.soldOutAt = null;
+                const docId = item._docId || item.id;
+                if (docId) {
+                    updatePromises.push(db.collection('menu').doc(docId).set({ soldOutAt: null }, { merge: true }));
+                }
+            }
+            delete item._docId;
+            return item;
+        });
+        if (updatePromises.length > 0) {
+            Promise.all(updatePromises).catch(err => console.error('Cloud Functions menu auto-restore write error:', err));
+        }
+        res.json(processedItems);
     }
     catch (error) {
         console.error('Error fetching menu:', error);
@@ -207,11 +252,36 @@ get('/ingredients', async (_req, res) => {
 post('/menu', async (req, res) => {
     try {
         const data = req.body;
-        const docRef = await db.collection('menu').add(data);
-        res.json({ id: docRef.id });
+        const isAvail = data.available !== undefined ? !!data.available : true;
+        const newItem = {
+            id: `dish-${Date.now()}`,
+            ...data,
+            available: isAvail,
+            soldOutAt: !isAvail ? new Date().toISOString() : null,
+            orderIndex: data.orderIndex !== undefined ? data.orderIndex : 999
+        };
+        await db.collection('menu').doc(newItem.id).set(newItem);
+        res.status(201).json(newItem);
     }
     catch (error) {
         console.error('Error creating menu:', error);
+        res.status(500).send(error);
+    }
+});
+put('/menu/reorder', async (req, res) => {
+    const { order } = req.body;
+    if (!Array.isArray(order))
+        return res.status(400).json({ error: 'Invalid order parameter' });
+    try {
+        const batch = db.batch();
+        order.forEach((id, index) => {
+            const ref = db.collection('menu').doc(id);
+            batch.update(ref, { orderIndex: index });
+        });
+        await batch.commit();
+        res.json({ success: true });
+    }
+    catch (error) {
         res.status(500).send(error);
     }
 });
@@ -219,6 +289,14 @@ put('/menu/:id', async (req, res) => {
     try {
         const id = req.params.id;
         const data = req.body;
+        if (data.available !== undefined) {
+            if (data.available === false && !data.soldOutAt) {
+                data.soldOutAt = new Date().toISOString();
+            }
+            else if (data.available === true) {
+                data.soldOutAt = null;
+            }
+        }
         await db.collection('menu').doc(id).set(data, { merge: true });
         res.json({ success: true });
     }
@@ -256,8 +334,9 @@ post('/menu/toggle-available', async (req, res) => {
         if (docSnap.exists) {
             const currentData = docSnap.data();
             const newAvailable = !(currentData?.available ?? true);
-            await docRef.set({ available: newAvailable }, { merge: true });
-            const updatedItem = { ...currentData, available: newAvailable };
+            const newSoldOutAt = !newAvailable ? new Date().toISOString() : null;
+            await docRef.set({ available: newAvailable, soldOutAt: newSoldOutAt }, { merge: true });
+            const updatedItem = { ...currentData, available: newAvailable, soldOutAt: newSoldOutAt };
             return res.json({ success: true, item: updatedItem, available: newAvailable });
         }
         return res.status(404).json({ error: 'Menu item not found' });
@@ -849,20 +928,6 @@ const handleSavePrinterIp = async (req, res) => {
 };
 put('/printer/config', handleSavePrinterIp);
 post('/printer/config', handleSavePrinterIp);
-post('/menu/toggle-available', async (req, res) => {
-    const { id } = req.body;
-    const menuRef = db.collection('menu').doc(id);
-    try {
-        await db.runTransaction(async (t) => {
-            const docSnap = await t.get(menuRef);
-            t.update(menuRef, { isAvailable: !docSnap.data()?.isAvailable });
-        });
-        res.json({ success: true });
-    }
-    catch (error) {
-        res.status(500).send(error);
-    }
-});
 post('/staff/pin/verify', async (req, res) => {
     const { pin } = req.body;
     try {
@@ -1033,59 +1098,6 @@ post('/admin/clear-test-data', async (req, res) => {
     }
     catch (error) {
         console.error('Error clearing test data:', error);
-        res.status(500).send(error);
-    }
-});
-post('/menu', async (req, res) => {
-    const data = req.body;
-    const newItem = {
-        id: `dish-${Date.now()}`,
-        ...data,
-        orderIndex: data.orderIndex || 999
-    };
-    try {
-        await db.collection('menu').doc(newItem.id).set(newItem);
-        res.status(201).json(newItem);
-    }
-    catch (error) {
-        res.status(500).send(error);
-    }
-});
-put('/menu/reorder', async (req, res) => {
-    const { order } = req.body;
-    if (!Array.isArray(order))
-        return res.status(400).json({ error: 'Invalid order parameter' });
-    try {
-        const batch = db.batch();
-        order.forEach((id, index) => {
-            const ref = db.collection('menu').doc(id);
-            batch.update(ref, { orderIndex: index });
-        });
-        await batch.commit();
-        res.json({ success: true });
-    }
-    catch (error) {
-        res.status(500).send(error);
-    }
-});
-put('/menu/:id', async (req, res) => {
-    const id = req.params.id;
-    const updates = req.body;
-    try {
-        await db.collection('menu').doc(id).update(updates);
-        res.json({ success: true });
-    }
-    catch (error) {
-        res.status(500).send(error);
-    }
-});
-del('/menu/:id', async (req, res) => {
-    const id = req.params.id;
-    try {
-        await db.collection('menu').doc(id).delete();
-        res.json({ success: true });
-    }
-    catch (error) {
         res.status(500).send(error);
     }
 });

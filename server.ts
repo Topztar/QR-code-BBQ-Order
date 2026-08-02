@@ -943,6 +943,55 @@ function sanitizeMenu(menu: MenuItem[]) {
   });
 }
 
+/**
+ * Automatically check and restore menu items marked as SOLD OUT (available: false)
+ * Rule: Automatically restore to available (available: true) after 12:00 PM (noon) the next day.
+ */
+function checkAndRestoreSoldOutMenuItems(): boolean {
+  const now = new Date();
+  let changed = false;
+
+  liveMenu.forEach((item) => {
+    if (item.available === false) {
+      if (!item.soldOutAt) {
+        // If an item is marked sold out but has no timestamp recorded, record now
+        item.soldOutAt = now.toISOString();
+        changed = true;
+        return;
+      }
+
+      const soldDate = new Date(item.soldOutAt);
+      if (isNaN(soldDate.getTime())) {
+        item.soldOutAt = now.toISOString();
+        changed = true;
+        return;
+      }
+
+      // Calculate next day 12:00:00.000 (noon)
+      const restoreTime = new Date(soldDate);
+      restoreTime.setDate(restoreTime.getDate() + 1);
+      restoreTime.setHours(12, 0, 0, 0);
+
+      if (now.getTime() >= restoreTime.getTime()) {
+        const dishName = typeof item.name === 'object' ? (item.name.zh || item.name.en || item.id) : item.name;
+        console.log(`[Sabay Menu Auto-Restore] 🍲 餐點 [${item.id} - ${dishName}] 於 ${item.soldOutAt} 設為沽清，已過隔日 12:00，系統自動恢復為「販售中 (Supply)」！`);
+        item.available = true;
+        item.soldOutAt = null;
+        changed = true;
+      }
+    } else if (item.soldOutAt) {
+      // Clean up leftover timestamp if item is available
+      item.soldOutAt = null;
+      changed = true;
+    }
+  });
+
+  if (changed) {
+    saveStateToDisk();
+  }
+  return changed;
+}
+
 async function loadStateFromFirestore(): Promise<boolean> {
   if (!firestoreDb) {
     console.log('[Sabay Firebase] Firestore is not initialized, skipping cloud load.');
@@ -1286,6 +1335,7 @@ async function initializeState() {
     console.log('[Sabay Server] Firestore load not successful, loading from disk...');
     loadStateFromDisk();
   }
+  checkAndRestoreSoldOutMenuItems();
   cleanupUnlistedReservationData();
   syncTableStatusesWithTodayReservations();
   saveStateToDisk();
@@ -1744,17 +1794,19 @@ app.post('/api/images/upload', async (req, res) => {
 
 // 1. Get Live Menu Items
 app.get('/api/menu', (_req, res) => {
+  checkAndRestoreSoldOutMenuItems();
   res.json(liveMenu);
 });
 
 // Create live menu item
 app.post('/api/menu', (req, res) => {
-  const { category, name, price, image, description, isSetMeal, requiredSaucesOption, hasNoodlesOption, hasCoconutsMilkOption, containsBeef, containsPork, containsSeafood, isNotSpicy, isTakeoutAvailable, customAddOns, recipe } = req.body;
+  const { category, name, price, image, description, available, isSetMeal, requiredSaucesOption, hasNoodlesOption, hasCoconutsMilkOption, containsBeef, containsPork, containsSeafood, isNotSpicy, isTakeoutAvailable, customAddOns, recipe } = req.body;
   
   if (!category || !name || !price) {
     return res.status(400).json({ error: 'Missing required fields (category, name, price)' });
   }
 
+  const isAvail = available !== undefined ? !!available : true;
   const cleanImage = typeof image === 'string' ? image.trim() : (image || '');
   const newItem: MenuItem = {
     id: `dish-${Date.now()}`,
@@ -1763,7 +1815,8 @@ app.post('/api/menu', (req, res) => {
     price: Number(price),
     image: cleanImage || 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=400',
     description: typeof description === 'object' ? description : { zh: description || '', en: description || '', ko: description || '', ja: description || '', th: description || '', vi: description || '' },
-    available: true,
+    available: isAvail,
+    soldOutAt: !isAvail ? new Date().toISOString() : null,
     isSetMeal: !!isSetMeal,
     requiredSaucesOption: !!requiredSaucesOption,
     hasNoodlesOption: !!hasNoodlesOption,
@@ -1819,6 +1872,16 @@ app.put('/api/menu/:id', (req, res) => {
   const itemIndex = liveMenu.findIndex(m => m.id === id);
   if (itemIndex > -1) {
     const cleanImage = image !== undefined ? (typeof image === 'string' ? image.trim() : image) : liveMenu[itemIndex].image;
+    const targetAvailable = available !== undefined ? !!available : liveMenu[itemIndex].available;
+    let targetSoldOutAt = liveMenu[itemIndex].soldOutAt;
+    if (!targetAvailable) {
+      if (!targetSoldOutAt) {
+        targetSoldOutAt = new Date().toISOString();
+      }
+    } else {
+      targetSoldOutAt = null;
+    }
+
     const updated = {
       ...liveMenu[itemIndex],
       category: category || liveMenu[itemIndex].category,
@@ -1826,7 +1889,8 @@ app.put('/api/menu/:id', (req, res) => {
       price: price !== undefined ? Number(price) : liveMenu[itemIndex].price,
       image: cleanImage,
       description: description !== undefined ? (typeof description === 'object' ? description : { zh: description || '', en: description || '', ko: description || '', ja: description || '', th: description || '', vi: description || '' }) : liveMenu[itemIndex].description,
-      available: available !== undefined ? !!available : liveMenu[itemIndex].available,
+      available: targetAvailable,
+      soldOutAt: targetSoldOutAt,
       isSetMeal: isSetMeal !== undefined ? !!isSetMeal : liveMenu[itemIndex].isSetMeal,
       requiredSaucesOption: requiredSaucesOption !== undefined ? !!requiredSaucesOption : liveMenu[itemIndex].requiredSaucesOption,
       hasNoodlesOption: hasNoodlesOption !== undefined ? !!hasNoodlesOption : liveMenu[itemIndex].hasNoodlesOption,
@@ -1848,12 +1912,17 @@ app.put('/api/menu/:id', (req, res) => {
   res.status(404).json({ error: 'Item not found' });
 });
 
-// Toggle item availability
+// Toggle item availability (設為沽清 / 恢復販售)
 app.post('/api/menu/toggle-available', (req, res) => {
   const { id } = req.body;
   const item = liveMenu.find(m => m.id === id);
   if (item) {
     item.available = !item.available;
+    if (!item.available) {
+      item.soldOutAt = new Date().toISOString();
+    } else {
+      item.soldOutAt = null;
+    }
     saveStateToDisk();
     return res.json({ success: true, item });
   }
@@ -3942,6 +4011,15 @@ async function main() {
         console.error('[Reservation Auto-Check Error]', checkErr);
       }
     }, 15000); // Check every 15 seconds for real-time transitions
+
+    // Background Task: Automatically restore SOLD OUT menu items after next-day 12:00 PM
+    setInterval(() => {
+      try {
+        checkAndRestoreSoldOutMenuItems();
+      } catch (menuErr) {
+        console.error('[Menu Auto-Restore Check Error]', menuErr);
+      }
+    }, 15000); // Check every 15 seconds
   } catch (err) {
     console.error('[Sabay Server] Failed to initialize state on boot, falling back to disk:', err);
     loadStateFromDisk();

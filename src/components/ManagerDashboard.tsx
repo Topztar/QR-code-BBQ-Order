@@ -7203,7 +7203,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
             <div className="flex justify-between items-center border-b border-white/5 pb-3 flex-wrap gap-3">
               <div>
                 <h4 className="font-bold text-sm text-white font-serif">🍜 菜單全品編輯與可售狀態 Availability Dashboard</h4>
-                <p className="text-white/40 text-xs mt-1">變更餐點是否沽清、客製配料或上下架，保障線上顧客不點錯沒料的菜品。</p>
+                <p className="text-white/40 text-xs mt-1">變更餐點是否沽清、客製配料或上下架（設為沽清之品項將於隔日中午12:00自動恢復販售）。</p>
               </div>
               <div className="flex items-center gap-2 flex-wrap">
                 {onReorderMenuItems && (
@@ -7350,13 +7350,20 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                         
                         {/* 可售狀態 */}
                         <td className="p-2.5 border-r border-white/10 text-center">
-                          <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            item.available
-                              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                              : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
-                          }`}>
-                            {item.available ? '● 販售中 Supply' : '✕ 沽清 Sold Out'}
-                          </span>
+                          <div className="flex flex-col items-center justify-center gap-0.5">
+                            <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              item.available
+                                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                            }`}>
+                              {item.available ? '● 販售中 Supply' : '✕ 沽清 Sold Out'}
+                            </span>
+                            {!item.available && (
+                              <span className="text-[9px] text-amber-300/80 tracking-tight" title="隔日中午 12:00 將自動恢復販售">
+                                ⏰ 隔日12:00自動恢復
+                              </span>
+                            )}
+                          </div>
                         </td>
                         
                         {/* 附加規格 */}

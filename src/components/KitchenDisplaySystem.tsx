@@ -1868,16 +1868,31 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
                   })()}
 
                   {/* Card Header */}
-                  <div className="p-4 border-b border-white/5 flex items-center justify-between bg-black/25 shrink-0 gap-3">
-                    {/* Left Side: Order Identifiers */}
-                    <div className="flex-1">
-                      <div className="flex items-center space-x-2">
-                        <span className="bg-white/5 border border-white/10 text-[#E5B453] font-mono font-bold text-xs px-2.5 py-0.5 rounded">
+                  <div className="p-3.5 sm:p-4 border-b border-white/5 flex items-center justify-between bg-black/25 shrink-0 gap-2 sm:gap-3">
+                    {/* Left Side: Order Identifiers & Collapse Toggle */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center space-x-2 flex-wrap gap-y-1">
+                        {/* 縮小/收合按鈕 (置於左方，避免手機版寬度不足無法點擊) */}
+                        <button
+                          type="button"
+                          onClick={() => toggleOrderCollapse(order.id)}
+                          className="p-1.5 bg-white/10 hover:bg-white/20 active:scale-95 rounded-lg border border-white/15 text-white/90 hover:text-white transition cursor-pointer shrink-0 flex items-center justify-center shadow-sm"
+                          title={collapsedOrders.has(order.id) ? "展開訂單 (Expand)" : "縮小/收合訂單 (Collapse)"}
+                          aria-label={collapsedOrders.has(order.id) ? "展開訂單" : "縮小/收合訂單"}
+                        >
+                          {collapsedOrders.has(order.id) ? <ChevronDown size={15} /> : <ChevronUp size={15} />}
+                        </button>
+                        <span className="bg-white/5 border border-white/10 text-[#E5B453] font-mono font-bold text-xs px-2.5 py-0.5 rounded shrink-0">
                           {order.id}
                         </span>
                         {order.isPaid && (
-                          <span className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-[10px] font-black px-2 py-0.5 rounded shadow-[0_0_10px_rgba(16,185,129,0.2)]">
+                          <span className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-[10px] font-black px-2 py-0.5 rounded shadow-[0_0_10px_rgba(16,185,129,0.2)] shrink-0">
                             💳 櫃檯已結帳 (Paid)
+                          </span>
+                        )}
+                        {collapsedOrders.has(order.id) && (
+                          <span className="text-[10px] text-amber-300/90 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded font-bold shrink-0">
+                            已收合 ({order.items.reduce((sum, item) => sum + item.qty, 0)} 份)
                           </span>
                         )}
                         {editingOrderId === order.id ? (
@@ -2068,20 +2083,10 @@ ${specLines}
                     </div>
 
                     {/* Right Side: Urgency Status Badge & Special Attention Flag */}
-                    <div className="text-right flex flex-col items-end justify-center gap-1.5 min-w-[100px]">
-                      <div className="flex items-center justify-end gap-2 w-full">
-                        <button
-                          type="button"
-                          onClick={() => toggleOrderCollapse(order.id)}
-                          className="p-1 bg-white/5 hover:bg-white/10 rounded border border-white/10 text-white/70 transition cursor-pointer"
-                          title={collapsedOrders.has(order.id) ? "展開訂單 (Expand)" : "摺疊訂單 (Collapse)"}
-                        >
-                          {collapsedOrders.has(order.id) ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
-                        </button>
-                        <span className={`text-[11px] font-bold px-2 py-1 rounded-lg border ${urg.style}`}>
+                    <div className="text-right flex flex-col items-end justify-center gap-1.5 min-w-[70px] shrink-0">
+                      <span className={`text-[11px] font-bold px-2 py-1 rounded-lg border ${urg.style}`}>
                         {urg.text}
-                        </span>
-                      </div>
+                      </span>
                       <button
                         type="button"
                         onClick={() => toggleFlagState(order.id, !!order.isFlagged, order.flagReason || '')}

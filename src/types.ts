@@ -38,6 +38,7 @@ export interface MenuItem {
   recipe?: { ingredientId: string; amount: number }[];
   orderIndex?: number;
   isTakeoutAvailable?: boolean;
+  soldOutAt?: string | null;
 }
 
 export interface OrderItem {
