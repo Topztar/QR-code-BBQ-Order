@@ -145,10 +145,14 @@ post('/images/upload', async (req, res) => {
         }
         const buffer = Buffer.from(base64Clean, 'base64');
         const ext = mime.split('/')[1] || 'jpg';
-        const cleanExt = ext === 'jpeg' ? 'jpg' : ext;
-        const targetFilename = filename
-            ? filename.replace(/[^a-zA-Z0-9._-]/g, '').replace(/^-+|-+$/g, '')
+        const cleanExt = ext === 'jpeg' ? 'jpg' : ext.replace(/[^a-zA-Z0-9]/g, '') || 'jpg';
+        let targetFilename = filename
+            ? filename.replace(/[^a-zA-Z0-9._-]/g, '')
             : `dish-${Date.now()}.${cleanExt}`;
+        targetFilename = targetFilename.replace(/-+\./g, '.').replace(/\.+/g, '.').replace(/^-+|-+$/g, '');
+        if (!targetFilename.includes('.')) {
+            targetFilename = `${targetFilename}.${cleanExt}`;
+        }
         const targetPath = `${folder}/${targetFilename}`.replace(/^\/+/, '');
         const file = storageBucket.file(targetPath);
         await file.save(buffer, {
@@ -419,7 +423,26 @@ del('/ingredients/:id', async (req, res) => {
 get('/tables', async (_req, res) => {
     try {
         const snapshot = await db.collection('tables').get();
-        const tables = snapshot.docs.map(doc => doc.data());
+        const nowMs = Date.now();
+        const updatePromises = [];
+        const tables = snapshot.docs.map(doc => {
+            const tb = doc.data();
+            if (tb.status === 'cleaning') {
+                let cleaningStartMs = tb.cleaningStartedAt ? new Date(tb.cleaningStartedAt).getTime() : 0;
+                if (!cleaningStartMs || isNaN(cleaningStartMs)) {
+                    cleaningStartMs = nowMs - (16 * 60 * 1000);
+                }
+                if (nowMs - cleaningStartMs >= 15 * 60 * 1000) {
+                    tb.status = 'available';
+                    tb.cleaningStartedAt = null;
+                    updatePromises.push(doc.ref.update({ status: 'available', cleaningStartedAt: null }));
+                }
+            }
+            return tb;
+        });
+        if (updatePromises.length > 0) {
+            Promise.all(updatePromises).catch(err => console.error('[Cloud Functions] Tables auto-clean write error:', err));
+        }
         res.json(tables);
     }
     catch (error) {
@@ -640,6 +663,14 @@ post('/orders', async (req, res) => {
             status: orderData.status || 'pending',
             createdAt: orderData.createdAt || new Date().toISOString(),
         });
+        if (orderData.tableNumber && !String(orderData.tableNumber).includes('外帶') && String(orderData.tableNumber).toLowerCase() !== 'takeout') {
+            const tblId = String(orderData.tableNumber).trim();
+            const tableRef = db.collection('tables').doc(tblId);
+            const tableSnap = await tableRef.get();
+            if (tableSnap.exists) {
+                await tableRef.update({ status: 'in_use', cleaningStartedAt: null });
+            }
+        }
         res.status(201).json({ success: true, id: orderId });
     }
     catch (error) {
@@ -718,6 +749,18 @@ put('/orders/:id/checkout', async (req, res) => {
             isPaid: true,
             status: 'paid'
         });
+        if (orderData && orderData.tableNumber && !String(orderData.tableNumber).includes('外帶') && String(orderData.tableNumber).toLowerCase() !== 'takeout') {
+            const tblId = String(orderData.tableNumber).trim();
+            const tableRef = db.collection('tables').doc(tblId);
+            const tableSnap = await tableRef.get();
+            if (tableSnap.exists) {
+                await tableRef.update({
+                    status: 'cleaning',
+                    preservedFor: '',
+                    cleaningStartedAt: new Date().toISOString()
+                });
+            }
+        }
         if (orderData && orderData.reservationNo) {
             const resQuery = await db.collection('reservations').where('reservationNo', '==', orderData.reservationNo).get();
             if (!resQuery.empty) {
@@ -1165,6 +1208,12 @@ put('/tables/:id', async (req, res) => {
     const id = req.params.id;
     const updates = req.body;
     try {
+        if (updates.status === 'cleaning' && updates.cleaningStartedAt === undefined) {
+            updates.cleaningStartedAt = new Date().toISOString();
+        }
+        else if (updates.status && updates.status !== 'cleaning') {
+            updates.cleaningStartedAt = null;
+        }
         await db.collection('tables').doc(id).update(updates);
         res.json({ success: true });
     }
@@ -1283,7 +1332,21 @@ put('/orders/:id/pay', async (req, res) => {
     const id = req.params.id;
     const { isPaid } = req.body;
     try {
+        const orderDoc = await db.collection('orders').doc(id).get();
+        const orderData = orderDoc.data();
         await db.collection('orders').doc(id).update({ isPaid });
+        if (isPaid && orderData && orderData.tableNumber && !String(orderData.tableNumber).includes('外帶') && String(orderData.tableNumber).toLowerCase() !== 'takeout') {
+            const tblId = String(orderData.tableNumber).trim();
+            const tableRef = db.collection('tables').doc(tblId);
+            const tableSnap = await tableRef.get();
+            if (tableSnap.exists) {
+                await tableRef.update({
+                    status: 'cleaning',
+                    preservedFor: '',
+                    cleaningStartedAt: new Date().toISOString()
+                });
+            }
+        }
         res.json({ success: true });
     }
     catch (error) {

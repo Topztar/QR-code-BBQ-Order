@@ -1708,7 +1708,12 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
       if (onUpdateTableStatus) {
         for (const tid of mergedTableIds) {
           if (tid && !tid.includes('外帶')) {
-            await onUpdateTableStatus(tid, { status: 'cleaning', preservedFor: '', mergedWith: '' });
+            await onUpdateTableStatus(tid, {
+              status: 'cleaning',
+              preservedFor: '',
+              mergedWith: '',
+              cleaningStartedAt: new Date().toISOString()
+            });
           }
         }
       }

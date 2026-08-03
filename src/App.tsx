@@ -443,68 +443,117 @@ export default function App() {
   useEffect(() => {
     if (!tables || tables.length === 0) return;
 
-    setTables(prevTables => {
-      let hasChanges = false;
-      const newTables = prevTables.map(tb => {
-        const tblId = String(tb.id).trim();
+    const checkAndSyncTables = () => {
+      const nowMs = Date.now();
+      const now = new Date();
+      const yr = now.getFullYear();
+      const mo = String(now.getMonth() + 1).padStart(2, '0');
+      const dy = String(now.getDate()).padStart(2, '0');
+      const todayStr = `${yr}-${mo}-${dy}`;
 
-        // 1. 該桌目前尚未結帳/取消的有效訂單
-        const activeOrders = orders.filter(o => 
-          String(o.tableNumber).trim() === tblId && 
-          o.status !== 'cancelled'
-        );
+      setTables(prevTables => {
+        let hasChanges = false;
+        const newTables = prevTables.map(tb => {
+          const tblId = String(tb.id).trim();
 
-        const unpaidActiveOrders = activeOrders.filter(o => !o.isPaid && o.status !== 'completed' && o.status !== 'paid');
+          // 1. 該桌目前尚未結帳/取消的有效訂單
+          const activeOrders = orders.filter(o => 
+            String(o.tableNumber).trim() === tblId && 
+            o.status !== 'cancelled'
+          );
 
-        if (unpaidActiveOrders.length > 0) {
-          const targetStatus = tb.status === 'pending_checkout' ? 'pending_checkout' : 'in_use';
-          if (tb.status !== targetStatus || tb.preservedFor) {
-            hasChanges = true;
-            return { ...tb, status: targetStatus, preservedFor: '' };
+          const unpaidActiveOrders = activeOrders.filter(o => !o.isPaid && o.status !== 'completed' && o.status !== 'paid');
+
+          if (unpaidActiveOrders.length > 0) {
+            const targetStatus = tb.status === 'pending_checkout' ? 'pending_checkout' : 'in_use';
+            if (tb.status !== targetStatus || tb.preservedFor || tb.cleaningStartedAt) {
+              hasChanges = true;
+              return { ...tb, status: targetStatus, preservedFor: '', cleaningStartedAt: null };
+            }
+            return tb;
           }
-          return tb;
-        }
 
-        // 2. 原本為入座或待結帳，但已無未付款的有效訂單 -> 自動轉為「清潔中」
-        if (tb.status === 'in_use' || tb.status === 'pending_checkout') {
-          hasChanges = true;
-          return { ...tb, status: 'cleaning' };
-        }
-
-        // 3. 若處於清潔中，保持清潔中（等待員工手動清理完成）
-        if (tb.status === 'cleaning') {
-          return tb;
-        }
-
-        // 4. 檢查今日是否有預約訂位
-        const now = new Date();
-        const yr = now.getFullYear();
-        const mo = String(now.getMonth() + 1).padStart(2, '0');
-        const dy = String(now.getDate()).padStart(2, '0');
-        const todayStr = `${yr}-${mo}-${dy}`;
-
-        const todayPendingRes = reservations.find(r => 
-          String(r.tableNumber).trim() === tblId &&
-          (r.status === 'pending' || r.status === 'upcoming' || r.status === 'confirmed') &&
-          r.date.trim() === todayStr
-        );
-
-        if (todayPendingRes) {
-          const presText = `${todayPendingRes.customerName} (${todayPendingRes.time})`;
-          if (tb.status !== 'preserved' || tb.preservedFor !== presText) {
+          // 2. 原本為入座或待結帳，但已無未付款的有效訂單 -> 自動轉為「清潔中」15 分鐘緩衝
+          if (tb.status === 'in_use' || tb.status === 'pending_checkout') {
             hasChanges = true;
-            return { ...tb, status: 'preserved', preservedFor: presText };
+            return {
+              ...tb,
+              status: 'cleaning',
+              cleaningStartedAt: tb.cleaningStartedAt || new Date().toISOString()
+            };
           }
-        } else if (tb.status === 'preserved') {
-          hasChanges = true;
-          return { ...tb, status: 'available', preservedFor: '' };
-        }
 
-        return tb;
+          // 3. 若處於清潔中，檢查是否已超過 15 分鐘無新訂單
+          if (tb.status === 'cleaning') {
+            let cleaningStartMs = tb.cleaningStartedAt ? new Date(tb.cleaningStartedAt).getTime() : 0;
+            if (!cleaningStartMs || isNaN(cleaningStartMs)) {
+              // Fallback to latest paid order timestamp
+              const latestOrder = activeOrders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+              if (latestOrder && latestOrder.createdAt) {
+                cleaningStartMs = new Date(latestOrder.createdAt).getTime();
+              } else {
+                cleaningStartMs = nowMs;
+              }
+            }
+
+            // 15 分鐘 (900,000 毫秒) 緩衝結束且無新訂單 -> 自動轉為「空桌」或「預約」
+            if (nowMs - cleaningStartMs >= 15 * 60 * 1000) {
+              // 檢查今日後續是否有預約
+              const todayPendingRes = reservations.find(r => 
+                String(r.tableNumber).trim() === tblId &&
+                (r.status === 'pending' || r.status === 'upcoming' || r.status === 'confirmed') &&
+                r.date.trim() === todayStr
+              );
+
+              hasChanges = true;
+              if (todayPendingRes) {
+                return {
+                  ...tb,
+                  status: 'preserved',
+                  preservedFor: `${todayPendingRes.customerName} (${todayPendingRes.time})`,
+                  cleaningStartedAt: null
+                };
+              }
+              return {
+                ...tb,
+                status: 'available',
+                preservedFor: '',
+                cleaningStartedAt: null
+              };
+            }
+
+            // 仍在 15 分鐘清潔緩衝期中
+            return tb;
+          }
+
+          // 4. 檢查今日是否有預約訂位
+          const todayPendingRes = reservations.find(r => 
+            String(r.tableNumber).trim() === tblId &&
+            (r.status === 'pending' || r.status === 'upcoming' || r.status === 'confirmed') &&
+            r.date.trim() === todayStr
+          );
+
+          if (todayPendingRes) {
+            const presText = `${todayPendingRes.customerName} (${todayPendingRes.time})`;
+            if (tb.status !== 'preserved' || tb.preservedFor !== presText) {
+              hasChanges = true;
+              return { ...tb, status: 'preserved', preservedFor: presText, cleaningStartedAt: null };
+            }
+          } else if (tb.status === 'preserved') {
+            hasChanges = true;
+            return { ...tb, status: 'available', preservedFor: '', cleaningStartedAt: null };
+          }
+
+          return tb;
+        });
+
+        return hasChanges ? newTables : prevTables;
       });
+    };
 
-      return hasChanges ? newTables : prevTables;
-    });
+    checkAndSyncTables();
+    const interval = setInterval(checkAndSyncTables, 10000);
+    return () => clearInterval(interval);
   }, [orders, reservations]);
 
   // 1. Submit Online Order
@@ -527,7 +576,7 @@ export default function App() {
     activeOrderSubmissionsRef.current.add(clientOrderId);
 
     if (orderData.tableNumber && orderData.tableNumber !== '外帶' && orderData.tableNumber !== 'takeout') {
-      handleUpdateTableStatus(orderData.tableNumber, { status: 'in_use', preservedFor: '' });
+      handleUpdateTableStatus(orderData.tableNumber, { status: 'in_use', preservedFor: '', cleaningStartedAt: null });
     }
 
     const orderPayload = {
@@ -849,7 +898,10 @@ export default function App() {
       if (targetOrder.tableNumber && targetOrder.tableNumber !== '外帶' && targetOrder.tableNumber !== 'takeout') {
         const remainingUnpaid = orders.filter(o => o.tableNumber === targetOrder.tableNumber && o.id !== orderId && !o.isPaid && o.status !== 'cancelled');
         if (remainingUnpaid.length === 0) {
-          handleUpdateTableStatus(targetOrder.tableNumber, { status: 'cleaning' });
+          handleUpdateTableStatus(targetOrder.tableNumber, {
+            status: 'cleaning',
+            cleaningStartedAt: new Date().toISOString()
+          });
         }
       }
       const resNo = targetOrder.reservationNo;

@@ -120,6 +120,7 @@ export interface TableConfig {
   positionY?: number;
   isOfflinePending?: boolean;
   maxCapacity?: number;
+  cleaningStartedAt?: string | null;
 }
 
 export interface Reservation {

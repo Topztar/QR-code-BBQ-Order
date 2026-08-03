@@ -578,6 +578,7 @@ function syncTableStatusesWithTodayReservations() {
       if (tb.status !== 'pending_checkout') {
         tb.status = 'in_use';
         tb.preservedFor = '';
+        tb.cleaningStartedAt = null;
       }
       return;
     }
@@ -585,12 +586,41 @@ function syncTableStatusesWithTodayReservations() {
     // If table was in_use or pending_checkout but has no unpaid active orders left
     if (tb.status === 'in_use' || tb.status === 'pending_checkout') {
       tb.status = 'cleaning';
+      if (!tb.cleaningStartedAt) {
+        tb.cleaningStartedAt = new Date().toISOString();
+      }
       return;
     }
 
-    // Keep cleaning status until staff explicitly clears it to available/preserved
+    // 15-min cleaning buffer check: auto-switch to available if no new orders received
     if (tb.status === 'cleaning') {
-      return;
+      const nowMs = Date.now();
+      let cleaningStartMs = tb.cleaningStartedAt ? new Date(tb.cleaningStartedAt).getTime() : 0;
+      
+      // If cleaningStartedAt is missing, check latest paid order timestamp as fallback
+      if (!cleaningStartMs || isNaN(cleaningStartMs)) {
+        const latestOrder = activeOrders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+        if (latestOrder && latestOrder.createdAt) {
+          cleaningStartMs = new Date(latestOrder.createdAt).getTime();
+        } else {
+          cleaningStartMs = nowMs;
+          tb.cleaningStartedAt = new Date(cleaningStartMs).toISOString();
+        }
+      }
+
+      // If 15 minutes (15 * 60 * 1000 ms) have passed without new unpaid orders
+      if (nowMs - cleaningStartMs >= 15 * 60 * 1000) {
+        console.log(`[Table Auto-Release] Table #${tblId} 15-min cleaning buffer completed. Auto-switching to available.`);
+        tb.status = 'available';
+        tb.cleaningStartedAt = null;
+        if (tableCheckoutTimeouts.has(tblId)) {
+          clearTimeout(tableCheckoutTimeouts.get(tblId)!);
+          tableCheckoutTimeouts.delete(tblId);
+        }
+      } else {
+        // Still within the 15-minute cleaning buffer
+        return;
+      }
     }
 
     // Find pending or upcoming reservation for THIS TABLE for TODAY
@@ -2316,7 +2346,7 @@ app.post('/api/tables', (req, res) => {
 
 app.put('/api/tables/:id', (req, res) => {
   const { id } = req.params;
-  const { qrCodeUrl, status, preservedFor, mergedWith, positionX, positionY, maxCapacity } = req.body;
+  const { qrCodeUrl, status, preservedFor, mergedWith, positionX, positionY, maxCapacity, cleaningStartedAt } = req.body;
   const decodedId = decodeURIComponent(id).trim();
   const tableIndex = liveTables.findIndex(t => t.id.toString().trim() === decodedId);
   if (tableIndex > -1) {
@@ -2325,6 +2355,18 @@ app.put('/api/tables/:id', (req, res) => {
     }
     if (status !== undefined) {
       liveTables[tableIndex].status = status;
+      if (status === 'cleaning' && cleaningStartedAt === undefined && !liveTables[tableIndex].cleaningStartedAt) {
+        liveTables[tableIndex].cleaningStartedAt = new Date().toISOString();
+      } else if (status !== 'cleaning') {
+        liveTables[tableIndex].cleaningStartedAt = null;
+        if (tableCheckoutTimeouts.has(decodedId)) {
+          clearTimeout(tableCheckoutTimeouts.get(decodedId)!);
+          tableCheckoutTimeouts.delete(decodedId);
+        }
+      }
+    }
+    if (cleaningStartedAt !== undefined) {
+      liveTables[tableIndex].cleaningStartedAt = cleaningStartedAt;
     }
     if (preservedFor !== undefined) {
       liveTables[tableIndex].preservedFor = preservedFor;
@@ -2978,6 +3020,7 @@ app.post('/api/orders', (req, res) => {
         tableCheckoutTimeouts.delete(tblId);
       }
       tb.status = 'in_use';
+      tb.cleaningStartedAt = null;
     }
   }
 
@@ -3259,14 +3302,21 @@ app.put('/api/orders/:id/checkout', (req, res) => {
         if (tblId.toLowerCase() !== 'takeout' && tblId !== '外帶' && tblId !== '') {
           tb.status = 'cleaning';
           tb.preservedFor = '';
+          tb.cleaningStartedAt = new Date().toISOString();
           if (tableCheckoutTimeouts.has(tblId)) {
             clearTimeout(tableCheckoutTimeouts.get(tblId)!);
           }
           const timer = setTimeout(() => {
             const table = liveTables.find(t => t.id.toString().trim() === tblId);
             if (table && table.status === 'cleaning') {
-              table.status = 'available';
-              saveStateToDisk();
+              const activeUnpaid = liveOrders.some(o => String(o.tableNumber).trim() === tblId && !o.isPaid && o.status !== 'cancelled' && o.status !== 'completed' && o.status !== 'paid');
+              if (!activeUnpaid) {
+                table.status = 'available';
+                table.cleaningStartedAt = null;
+                syncTableStatusesWithTodayReservations();
+                saveStateToDisk();
+                console.log(`[Table Auto-Release] Table #${tblId} 15-min timeout fired: switched to available.`);
+              }
             }
             tableCheckoutTimeouts.delete(tblId);
           }, 15 * 60 * 1000); // 15 minutes
@@ -3274,6 +3324,7 @@ app.put('/api/orders/:id/checkout', (req, res) => {
         } else {
           tb.status = 'available';
           tb.preservedFor = '';
+          tb.cleaningStartedAt = null;
         }
       } else {
         tb.status = 'pending_checkout';
@@ -3340,14 +3391,21 @@ app.put('/api/orders/:id/pay', async (req, res) => {
       if (tblId.toLowerCase() !== 'takeout' && tblId !== '外帶' && tblId !== '') {
         tb.status = 'cleaning';
         tb.preservedFor = '';
+        tb.cleaningStartedAt = new Date().toISOString();
         if (tableCheckoutTimeouts.has(tblId)) {
           clearTimeout(tableCheckoutTimeouts.get(tblId)!);
         }
         const timer = setTimeout(() => {
           const table = liveTables.find(t => t.id.toString().trim() === tblId);
           if (table && table.status === 'cleaning') {
-            table.status = 'available';
-            saveStateToDisk();
+            const activeUnpaid = liveOrders.some(o => String(o.tableNumber).trim() === tblId && !o.isPaid && o.status !== 'cancelled' && o.status !== 'completed' && o.status !== 'paid');
+            if (!activeUnpaid) {
+              table.status = 'available';
+              table.cleaningStartedAt = null;
+              syncTableStatusesWithTodayReservations();
+              saveStateToDisk();
+              console.log(`[Table Auto-Release] Table #${tblId} 15-min timeout fired: switched to available.`);
+            }
           }
           tableCheckoutTimeouts.delete(tblId);
         }, 15 * 60 * 1000); // 15 minutes
@@ -3355,6 +3413,7 @@ app.put('/api/orders/:id/pay', async (req, res) => {
       } else {
         tb.status = 'available';
         tb.preservedFor = '';
+        tb.cleaningStartedAt = null;
       }
     }
     const matchingRes = liveReservations.find(r =>
@@ -4010,6 +4069,9 @@ async function main() {
               }
             });
           }
+        } else {
+          // Check and auto-release 15-min cleaning tables periodically
+          syncTableStatusesWithTodayReservations();
         }
       } catch (checkErr) {
         console.error('[Reservation Auto-Check Error]', checkErr);
