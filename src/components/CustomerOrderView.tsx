@@ -2312,33 +2312,41 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
         const isAccepted = trackedStatus === 'preparing' || trackedStatus === 'completed';
 
         return (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[150] p-4 animate-fade-in" id="order-success-indicator">
+          <div 
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[150] p-4 animate-fade-in" 
+            id="order-success-indicator"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                setOrderSentSuccess(null);
+              }
+            }}
+          >
             <div className={`rounded-3xl max-w-sm w-full p-6 text-center shadow-2xl border flex flex-col items-center space-y-4 animate-scale-up relative ${
               isSimplifiedMode 
                 ? 'bg-white text-black border-emerald-500 border-4' 
                 : 'bg-[#191919] border-[#E5B453]/35 text-white'
             }`}>
-              {/* Only allow closing if it is accepted or cancelled */}
-              {!isPending && (
-                <button
-                  type="button"
-                  onClick={() => setOrderSentSuccess(null)}
-                  className={`absolute top-4 right-4 p-1.5 rounded-full transition cursor-pointer active:scale-90 ${
-                    isSimplifiedMode ? 'hover:bg-zinc-100 text-zinc-500' : 'hover:bg-white/10 text-zinc-400 hover:text-white'
-                  }`}
-                >
-                  <X size={18} />
-                </button>
-              )}
+              {/* Always allow closing via top-right X button */}
+              <button
+                type="button"
+                id="close-order-success-modal"
+                onClick={() => setOrderSentSuccess(null)}
+                className={`absolute top-4 right-4 p-2 rounded-full transition cursor-pointer active:scale-90 z-10 ${
+                  isSimplifiedMode ? 'hover:bg-zinc-200 text-zinc-600' : 'hover:bg-white/10 text-zinc-400 hover:text-white'
+                }`}
+                aria-label="Close"
+              >
+                <X size={20} />
+              </button>
 
               {/* Dynamic Status Icon */}
               {isPending && (
                 <div className="relative flex items-center justify-center shrink-0">
-                  <div className="absolute inset-0 rounded-full bg-amber-500/20 animate-ping" />
+                  <div className="absolute inset-0 rounded-full bg-amber-500/20 animate-pulse" />
                   <div className={`w-14 h-14 rounded-full flex items-center justify-center shrink-0 relative ${
-                    isSimplifiedMode ? 'bg-amber-100' : 'bg-amber-500/15 border border-amber-500/30'
+                    isSimplifiedMode ? 'bg-amber-100 border border-amber-300' : 'bg-amber-500/15 border border-amber-500/30'
                   }`}>
-                    <Loader2 size={28} className="text-amber-500 animate-spin" />
+                    <Check size={28} className="text-amber-400" />
                   </div>
                 </div>
               )}
@@ -2347,7 +2355,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                 <div className="relative flex items-center justify-center shrink-0">
                   <div className="absolute inset-0 rounded-full bg-emerald-500/20 animate-pulse" />
                   <div className={`w-14 h-14 rounded-full flex items-center justify-center shrink-0 relative ${
-                    isSimplifiedMode ? 'bg-emerald-100' : 'bg-emerald-500/15 border border-emerald-500/30'
+                    isSimplifiedMode ? 'bg-emerald-100 border border-emerald-300' : 'bg-emerald-500/15 border border-emerald-500/30'
                   }`}>
                     <Check size={28} className="text-emerald-500" />
                   </div>
@@ -2356,29 +2364,48 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
 
               {isCancelled && (
                 <div className={`w-14 h-14 rounded-full flex items-center justify-center shrink-0 ${
-                  isSimplifiedMode ? 'bg-rose-100' : 'bg-rose-500/15 border border-rose-500/30'
+                  isSimplifiedMode ? 'bg-rose-100 border border-rose-300' : 'bg-rose-500/15 border border-rose-500/30'
                 }`}>
                   <X size={28} className="text-rose-500" />
                 </div>
               )}
 
-              {/* Dynamic Title and Subtitles */}
-              <div className="space-y-1.5">
-                <h5 className={`font-black text-base sm:text-lg leading-tight ${isSimplifiedMode ? 'text-black' : 'text-zinc-100'}`}>
-                  {isPending && (TRANSLATIONS.waitingForAcceptance[currentLang] || '⏳ 餐廳正等待接單中...')}
-                  {isAccepted && (TRANSLATIONS.orderAcceptedTitle[currentLang] || '🎉 已接受訂單！')}
-                  {isCancelled && (TRANSLATIONS.orderCancelledTitle[currentLang] || '❌ 訂單已被取消/拒絕')}
+              {/* Dynamic Title and Status Badges */}
+              <div className="space-y-1.5 w-full">
+                <h5 className={`font-black text-lg sm:text-xl leading-tight ${isSimplifiedMode ? 'text-black' : 'text-zinc-100'}`}>
+                  {isCancelled 
+                    ? (TRANSLATIONS.orderCancelledTitle[currentLang] || '❌ 訂單已被取消/拒絕')
+                    : (isPending 
+                        ? (currentLang === 'zh' ? '🎉 訂單已成功送出！' : TRANSLATIONS.orderSentSuccessTitle?.[currentLang] || '🎉 Order Submitted Successfully!')
+                        : (TRANSLATIONS.orderAcceptedTitle[currentLang] || '🎉 廚房已接單製餐！'))}
                 </h5>
-                <p className="text-[10px] text-zinc-500 font-mono tracking-wider uppercase">
-                  {isPending && 'Waiting for Kitchen to Accept'}
-                  {isAccepted && 'Order Confirmed & In Preparation'}
-                  {isCancelled && 'Order Cancelled or Declined'}
-                </p>
+
+                {/* Status Badge */}
+                <div className="flex items-center justify-center gap-1.5 pt-0.5">
+                  {isPending && (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                      <Loader2 size={12} className="animate-spin" />
+                      <span>{currentLang === 'zh' ? '廚房接收中・等待備餐' : 'Kitchen Receiving Order'}</span>
+                    </span>
+                  )}
+                  {isAccepted && (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                      <Check size={12} />
+                      <span>{currentLang === 'zh' ? '廚房已接單・製餐中' : 'Kitchen Preparing'}</span>
+                    </span>
+                  )}
+                  {isCancelled && (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30">
+                      <X size={12} />
+                      <span>{currentLang === 'zh' ? '訂單已取消' : 'Cancelled'}</span>
+                    </span>
+                  )}
+                </div>
               </div>
 
               {/* Order ID Panel */}
-              <div className={`p-4 rounded-xl border text-left space-y-2.5 w-full ${
-                isSimplifiedMode ? 'bg-zinc-50 border-zinc-200' : 'bg-black/40 border-white/5'
+              <div className={`p-4 rounded-2xl border text-left space-y-2.5 w-full ${
+                isSimplifiedMode ? 'bg-zinc-50 border-zinc-200' : 'bg-black/40 border-white/10'
               }`}>
                 <div className="flex flex-col items-center space-y-1 text-center py-1">
                   <span className="text-[10px] tracking-wider uppercase font-bold text-zinc-400">
@@ -2387,45 +2414,42 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                   <span className={`text-xl sm:text-2xl font-black font-mono leading-none tracking-widest ${
                     isSimplifiedMode 
                       ? 'text-emerald-700 bg-emerald-100/50 px-3 py-1.5 rounded-lg border border-emerald-250' 
-                      : 'text-[#E5B453] bg-amber-500/10 px-3 py-1.5 rounded-lg border border-amber-500/15'
+                      : 'text-[#E5B453] bg-amber-500/10 px-3.5 py-1.5 rounded-xl border border-amber-500/20'
                   }`}>
                     {orderSentSuccess}
                   </span>
                 </div>
                 
-                <p className={`text-xs text-center leading-relaxed ${isSimplifiedMode ? 'text-zinc-700 font-bold' : 'text-zinc-300'}`}>
-                  {isPending && (TRANSLATIONS.waitingForAcceptanceDesc[currentLang] || '系統已將您的訂餐訊息送出！待店內後台人員確認後，即會自動為您印單配菜、送至廚房配餐。')}
+                <p className={`text-xs text-center leading-relaxed ${isSimplifiedMode ? 'text-zinc-700 font-medium' : 'text-zinc-300'}`}>
+                  {isPending && (TRANSLATIONS.waitingForAcceptanceDesc[currentLang] || '系統已將您的點餐資訊送達廚房！您可以隨時關閉此視窗繼續瀏覽菜單或加點。')}
                   {isAccepted && (TRANSLATIONS.orderAcceptedDesc[currentLang] || '廚房已開始為您製餐，請耐心等候！')}
                   {isCancelled && (TRANSLATIONS.orderCancelledDesc[currentLang] || '抱歉，您的訂單已被取消或拒絕，詳情請洽店內人員。')}
                 </p>
               </div>
 
-              {/* Action Button: Show loading/disabled on pending, and show confirm button on accepted or cancelled */}
-              {isPending ? (
-                <div className="w-full flex items-center justify-center space-x-2 py-3 bg-amber-500/10 text-amber-500 rounded-xl text-xs font-bold border border-amber-500/20 animate-pulse">
-                  <Loader2 size={14} className="animate-spin" />
-                  <span>
-                    {currentLang === 'zh' ? '請保留此畫面，等待廚房接單...' : 
-                     currentLang === 'en' ? 'Please keep this screen open, waiting...' :
-                     currentLang === 'ko' ? '이 화면을 유지하며 대기해 주세요...' :
-                     currentLang === 'ja' ? 'この画面のまま、しばらくお待ちください...' :
-                     currentLang === 'th' ? 'โปรดเปิดหน้านี้ไว้ รอรับออเดอร์...' :
-                     'Vui lòng giữ nguyên màn hình này, đang đợi...'}
-                  </span>
-                </div>
-              ) : (
+              {/* Action Button: Always active and dismissible */}
+              <div className="w-full space-y-2">
                 <button
                   type="button"
+                  id="confirm-order-success-btn"
                   onClick={() => setOrderSentSuccess(null)}
-                  className={`w-full py-3 px-4 rounded-xl font-bold text-sm transition active:scale-95 cursor-pointer shadow-md leading-none ${
-                    isSimplifiedMode
-                      ? 'bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold border-2 border-emerald-800'
-                      : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black shadow-emerald-500/10'
+                  className={`w-full py-3.5 px-4 rounded-xl font-black text-sm transition active:scale-95 cursor-pointer shadow-lg flex items-center justify-center gap-2 ${
+                    isCancelled
+                      ? 'bg-zinc-700 hover:bg-zinc-600 text-white'
+                      : isSimplifiedMode
+                        ? 'bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold border-2 border-emerald-800'
+                        : 'bg-gradient-to-r from-[#E5B453] to-[#F0C46B] text-black hover:opacity-95 shadow-amber-500/10'
                   }`}
                 >
-                  {TRANSLATIONS.confirmBtnText[currentLang] || '確認 (關閉對話框)'}
+                  <Check size={16} className="stroke-[3]" />
+                  <span>{TRANSLATIONS.confirmBtnText?.[currentLang] || (currentLang === 'zh' ? '好的，我知道了 (返回菜單)' : 'Got it (Back to Menu)')}</span>
                 </button>
-              )}
+                {isPending && (
+                  <p className="text-[11px] text-zinc-400 text-center">
+                    💡 訂單已在背景排程處理中，您可隨時查看點餐進度
+                  </p>
+                )}
+              </div>
             </div>
           </div>
         );
