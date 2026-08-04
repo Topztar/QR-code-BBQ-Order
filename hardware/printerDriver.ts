@@ -20,7 +20,7 @@ export interface CashDrawerSettings {
 
 export interface PrinterDeviceSettings {
   enabled?: boolean;
-  connectionType?: 'IP' | 'USB' | 'LPT';
+  connectionType?: 'IP' | 'USB' | 'LPT' | 'serial';
   ip?: string;
   port?: number;
   usbPort?: string;
@@ -31,6 +31,42 @@ export interface PrinterDeviceSettings {
   cashDrawerEnabled?: boolean;
   cashDrawerDriver?: 'OPOS' | 'POS_NET' | 'ESC_POS_RAW';
   cashDrawerEscPosCommand?: string;
+}
+
+export interface HardwarePrinterConfig {
+  connectionType: 'IP' | 'USB' | 'LPT' | 'serial';
+  portName?: string;
+  baudRate?: number;
+  ipAddress?: string;
+  tcpPort?: number;
+  paperWidthMm?: number;
+  characterSet?: string;
+}
+
+/**
+ * Universal print job execution helper for Windows Backend & Server API
+ */
+export async function executePrintJob(
+  ticketText: string,
+  config: HardwarePrinterConfig
+): Promise<PrinterDriverResult> {
+  const isNetwork = config.connectionType === 'IP';
+  const cleanTicketText = sanitizeTextForThermalPrinter(ticketText);
+  const encoding = (config.characterSet || 'big5').toLowerCase();
+  
+  const ticketBuffer = Buffer.concat([
+    ESC_POS_INIT,
+    iconv.encode(cleanTicketText, encoding as any),
+    Buffer.from('\n\n\n\n', 'utf-8'),
+    ESC_POS_CUT
+  ]);
+
+  if (isNetwork) {
+    return await sendToNetworkPrinter(config.ipAddress || '127.0.0.1', config.tcpPort || 9100, ticketBuffer);
+  } else {
+    const targetPort = config.portName || 'COM1';
+    return await sendToSerialPrinter(targetPort, ticketBuffer, { baudRate: config.baudRate || 9600 });
+  }
 }
 
 // ESC/POS Command Buffers
