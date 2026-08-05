@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Language, MenuItem, Ingredient, Order, OrderStatus, OrderItem, Category, TableConfig, OperatingHourSlot, Reservation } from './types';
-import { getOfflineQueue, addRequestToQueue, clearOfflineQueue, processOfflineQueue, QueuedRequest } from './lib/offlineQueue';
+import { getOfflineQueue, addRequestToQueue, clearOfflineQueue, removeOrderRequestsFromQueue, processOfflineQueue, QueuedRequest } from './lib/offlineQueue';
 import { safeStorage } from './lib/safeStorage';
 import { apiFetch } from './lib/api';
 import { db, isFirebaseSyncEnabled } from './lib/firebase';
@@ -204,6 +204,7 @@ export default function App() {
 
   const pollingCycleRef = useRef<number>(0);
   const activeOrderSubmissionsRef = useRef<Set<string>>(new Set());
+  const recentStatusTransitionsRef = useRef<Map<string, { status: OrderStatus; timestamp: number }>>(new Map());
 
   // Offline sync queue states
   const [offlineQueue, setOfflineQueue] = useState<QueuedRequest[]>(getOfflineQueue());
@@ -337,8 +338,25 @@ export default function App() {
       const resveData = await safeJson(results[6], [], 'reservations');
       const servicePauseData = await safeJson(results[7], { servicePaused: false }, 'service-pause');
 
+      const nowMs = Date.now();
+      // Purge status transition locks older than 20 seconds
+      for (const [tId, tRecord] of recentStatusTransitionsRef.current.entries()) {
+        if (nowMs - tRecord.timestamp > 20000) {
+          recentStatusTransitionsRef.current.delete(tId);
+        }
+      }
+
+      // Reconcile remote orders with recent local transitions to avoid stale polling overwrites
+      const reconciledOrders = Array.isArray(ordData) ? ordData.map((ord: Order) => {
+        const transition = recentStatusTransitionsRef.current.get(ord.id);
+        if (transition && ord.status !== transition.status) {
+          return { ...ord, status: transition.status, isOfflinePending: false };
+        }
+        return ord;
+      }) : [];
+
       setIngredients(ingData);
-      setOrders(ordData);
+      setOrders(reconciledOrders);
       setPrintLogs(printData);
       setTables(tablesData);
       setReservations(resveData);
@@ -697,22 +715,31 @@ export default function App() {
       return;
     }
 
+    // ONLINE MODE:
+    // 1. Immediately purge any queued offline/stale requests for this order
+    removeOrderRequestsFromQueue(orderId);
+
+    // 2. Lock in-memory status transition timestamp to prevent polling race condition overwrites
+    recentStatusTransitionsRef.current.set(orderId, { status, timestamp: Date.now() });
+
+    // 3. Instant Optimistic local UI update (0ms latency for kitchen screen)
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status, isOfflinePending: false } : o));
+
+    // 4. Synchronize immediately with backend API
     try {
-      const res = await apiFetch(`/api/orders/${orderId}/status`, {
+      apiFetch(`/api/orders/${orderId}/status`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status }),
+      }).then(async (res) => {
+        if (!res.ok) {
+          console.warn(`[KDS Sync] Server returned status ${res.status}, keeping optimistic update`);
+        }
+      }).catch(err => {
+        console.warn('[KDS Sync] Failed to sync order status to server in background:', err);
       });
-      if (res.ok) {
-        await fetchData();
-      } else {
-        addRequestToQueue(`/api/orders/${orderId}/status`, 'PUT', { status }, description);
-        setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status, isOfflinePending: true } : o));
-      }
     } catch (err) {
-      console.warn('[Offline Fallback] Update Order Status failed, queued:', err);
-      addRequestToQueue(`/api/orders/${orderId}/status`, 'PUT', { status }, description);
-      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status, isOfflinePending: true } : o));
+      console.warn('[KDS Sync Error]', err);
     }
   };
 

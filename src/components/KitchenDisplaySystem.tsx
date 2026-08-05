@@ -31,6 +31,7 @@ interface KitchenDisplaySystemProps {
   operatingHours?: any[];
   servicePaused?: boolean;
   onToggleServicePause?: (paused: boolean) => Promise<void>;
+  onToggleOrderItemComplete?: (orderId: string, itemId: string, isCompleted: boolean, isPrepared?: boolean) => Promise<void>;
 
   reservations?: Reservation[];
 }
@@ -56,6 +57,7 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
   operatingHours = [],
   servicePaused = false,
   onToggleServicePause,
+  onToggleOrderItemComplete,
 
   reservations = [],
 }) => {
@@ -151,6 +153,9 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
   const [togglingMenuId, setTogglingMenuId] = useState<string | null>(null);
   const [adjustingIngredientId, setAdjustingIngredientId] = useState<string | null>(null);
   const [ingredientManualQty, setIngredientManualQty] = useState<{ [key: string]: string }>({});
+
+  // 🔄 訂單狀態即時處理中鎖定 (避免重複點擊與輪詢延遲)
+  const [processingOrderIds, setProcessingOrderIds] = useState<Set<string>>(new Set());
 
   // Table number editing in KDS modal state
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
@@ -820,12 +825,36 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
       return;
     }
 
-    // Play sound & Web Audio status beep
+    if (processingOrderIds.has(id)) {
+      return; // 避免重複連點
+    }
+
+    // 檢查網際網路連線狀態
+    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+    if (!isOnline) {
+      console.warn('[KDS Sync] 目前系統處於離線狀態，狀態變更已自動加入本機離線隊列。');
+    }
+
+    // 立即加入處理中鎖定
+    setProcessingOrderIds(prev => new Set(prev).add(id));
+
+    // 播放語音/音效提示
     playStatusBeepSound();
     setBeepSim(true);
     setTimeout(() => setBeepSim(false), 800);
 
-    await onUpdateOrderStatus(id, nextStatus);
+    try {
+      await onUpdateOrderStatus(id, nextStatus);
+    } finally {
+      // 500ms 後解除本地按鈕鎖定
+      setTimeout(() => {
+        setProcessingOrderIds(prev => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+      }, 500);
+    }
   };
 
   const handleItemStatusToggle = (orderId: string, itemId: string, isCompleted: boolean, isPrepared?: boolean) => {
@@ -833,8 +862,8 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
       alert('【權限不足】僅有「廚房」角色可以更改餐點狀態，店員僅能瀏覽。');
       return;
     }
-    if (true) {
-      handleItemStatusToggle(orderId, itemId, isCompleted, isPrepared);
+    if (onToggleOrderItemComplete) {
+      onToggleOrderItemComplete(orderId, itemId, isCompleted, isPrepared);
     }
   };
 
@@ -2436,16 +2465,31 @@ ${specLines}
                           <button
                             id={`kds-accept-btn-${order.id}`}
                             onClick={() => handleStatusChange(order.id, 'preparing')}
-                            className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-3.5 py-1.5 rounded-lg font-black text-xs flex items-center space-x-1 transition cursor-pointer animate-pulse ring-2 ring-emerald-400/60 shadow-lg shadow-emerald-500/20"
+                            disabled={processingOrderIds.has(order.id)}
+                            className={`bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-3.5 py-1.5 rounded-lg font-black text-xs flex items-center space-x-1 transition cursor-pointer ring-2 ring-emerald-400/60 shadow-lg shadow-emerald-500/20 ${
+                              processingOrderIds.has(order.id) ? 'opacity-60 cursor-not-allowed' : 'animate-pulse'
+                            }`}
                           >
-                            <Check size={13} className="stroke-[3]" />
-                            <span>{t('acceptOrderBtn')}</span>
+                            {processingOrderIds.has(order.id) ? (
+                              <>
+                                <RefreshCw size={13} className="animate-spin stroke-[3]" />
+                                <span>同步中...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Check size={13} className="stroke-[3]" />
+                                <span>{t('acceptOrderBtn')}</span>
+                              </>
+                            )}
                           </button>
                           
                           <button
                             id={`kds-decline-btn-${order.id}`}
                             onClick={() => handleStatusChange(order.id, 'cancelled')}
-                            className="bg-rose-500/10 hover:bg-rose-500/25 text-rose-500 border border-rose-500/20 px-3.5 py-1.5 rounded-lg font-black text-xs flex items-center space-x-1 transition cursor-pointer"
+                            disabled={processingOrderIds.has(order.id)}
+                            className={`bg-rose-500/10 hover:bg-rose-500/25 text-rose-500 border border-rose-500/20 px-3.5 py-1.5 rounded-lg font-black text-xs flex items-center space-x-1 transition cursor-pointer ${
+                              processingOrderIds.has(order.id) ? 'opacity-50 cursor-not-allowed' : ''
+                            }`}
                           >
                             <X size={13} className="stroke-[3]" />
                             <span>{t('declineOrderBtn')}</span>

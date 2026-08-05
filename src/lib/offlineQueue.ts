@@ -74,11 +74,31 @@ export function clearOfflineQueue() {
   window.dispatchEvent(new CustomEvent('offline_queue_changed', { detail: [] }));
 }
 
+// Remove all queued requests related to a specific order ID
+export function removeOrderRequestsFromQueue(orderId: string) {
+  if (!orderId) return;
+  const queue = getOfflineQueue();
+  const filtered = queue.filter(item => {
+    const isTargetOrder = item.url.includes(`/api/orders/${orderId}`) || 
+                          (item.body && item.body.includes(orderId));
+    return !isTargetOrder;
+  });
+  if (filtered.length !== queue.length) {
+    saveOfflineQueue(filtered);
+    window.dispatchEvent(new CustomEvent('offline_queue_changed', { detail: filtered }));
+  }
+}
+
 // Execute a queued request
 async function executeRequest(item: QueuedRequest): Promise<Response> {
+  const token = typeof localStorage !== 'undefined' ? localStorage.getItem('sabay_jwt_token') : null;
+  const authHeaders = token ? { 'Authorization': `Bearer ${token}` } : {};
   return fetch(item.url, {
     method: item.method,
-    headers: item.headers,
+    headers: {
+      ...item.headers,
+      ...authHeaders
+    },
     body: item.body
   });
 }
