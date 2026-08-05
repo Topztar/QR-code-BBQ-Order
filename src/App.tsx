@@ -12,6 +12,7 @@ import { KitchenDisplaySystem } from './components/KitchenDisplaySystem';
 import { ManagerDashboard } from './components/ManagerDashboard';
 import { StaffLoginGate } from './components/StaffLoginGate';
 import { ChefHat, Smartphone, BarChart3, UtensilsCrossed, LogOut, Lock, Phone, MapPin, Eye, EyeOff, Coins, Monitor } from 'lucide-react';
+import { printViaBridge } from './lib/posBridgeClient';
 
 interface AnalyticsData {
   totalRevenue: number;
@@ -1659,6 +1660,27 @@ export default function App() {
     try {
       let data: any = null;
       const targetVal = typeof target === 'string' ? target : 'all';
+      
+      // Step 1: Direct Local POS Bridge print attempt (http://127.0.0.1:8060)
+      let bridgePrinted = false;
+      if (typeof window !== 'undefined') {
+        try {
+          const sampleText = `================================\n  沙貝燒烤 SABAY BBQ 測試列印\n================================\n類別: ${targetVal === 'kitchen' ? '廚房KDS備餐單' : '前台收銀結帳單'}\n時間: ${new Date().toLocaleString()}\n狀態: 系統連線與驅動測試正常\n================================\n`;
+          const bRes = await printViaBridge({
+            text: sampleText,
+            port: 'LPT1:',
+            autoOpenDrawer: targetVal === 'bill'
+          });
+          if (bRes.success) {
+            bridgePrinted = true;
+            console.log('[Print test page bridge success]', bRes.message);
+          }
+        } catch {
+          // Local bridge unreachable
+        }
+      }
+
+      // Step 2: Server API dispatch & log recording
       const res = await apiFetch('/api/printer/test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1668,28 +1690,13 @@ export default function App() {
         data = await res.json();
       }
 
-      // If running on hosted environment, attempt local PC bridge relay if active
-      if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-        try {
-          await fetch('http://localhost:3000/api/printer/test', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ target: targetVal }),
-            signal: AbortSignal.timeout(1000)
-          }).catch(() => {});
-        } catch (e) {
-          // Local bridge offline
-        }
-      }
-
-      if (data && data.success) {
+      if ((data && data.success) || bridgePrinted) {
         await fetchData();
-
-        // Note: Real physical ESC/POS thermal receipt print was handled directly by server 
-        // (via IP TCP Socket or LPT parallel port). 
-        // Browser window.print() is intentionally disabled for direct hardware dispatch 
-        // to prevent OS system default printer hijacking.
-        return { success: true, message: data.message, tcpLog: data.hardwareLogs?.kitchen || data.hardwareLogs?.bill };
+        return { 
+          success: true, 
+          message: data?.message || '測試頁已透過本機 POS 橋接器成功送印！', 
+          tcpLog: data?.hardwareLogs?.kitchen || data?.hardwareLogs?.bill || 'LOCAL-PRINTER-POS-BRIDGE (127.0.0.1:8060) LPT1: 成功寫入' 
+        };
       } else {
         const text = res ? await res.text() : '';
         let errorMsg = '列印測試頁失敗';

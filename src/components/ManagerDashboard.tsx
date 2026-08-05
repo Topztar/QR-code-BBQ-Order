@@ -3,11 +3,17 @@ import React, { Component, useState, useEffect, useMemo, useCallback } from 'rea
 import { Ingredient, Language, Category, TableConfig, Order, OrderStatus, Reservation } from '../types';
 import { getLocalizedText } from '../utils/i18n';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
-import { TrendingUp, Package, AlertTriangle, Layers, Sparkles, Coins, Lock, Unlock, QrCode, Trash2, Plus, Edit, Download, Calendar, FileText, ShoppingBag, ShoppingCart, Copy, Check, ExternalLink, Minus, Flame, Printer, Maximize2, Minimize2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { TrendingUp, Package, AlertTriangle, Layers, Sparkles, Coins, Lock, Unlock, QrCode, Trash2, Plus, Edit, Download, Calendar, FileText, ShoppingBag, ShoppingCart, Copy, Check, ExternalLink, Minus, Flame, Printer, Maximize2, Minimize2, ChevronLeft, ChevronRight, RefreshCw, Cpu } from 'lucide-react';
 import { db, isFirebaseSyncEnabled } from '../lib/firebase';
 import { safeStorage } from '../lib/safeStorage';
 import { doc, setDoc } from 'firebase/firestore';
 import PrintLogsD3Chart from './PrintLogsD3Chart';
+import {
+  checkPOSBridgeHealth,
+  openCashDrawerViaBridge,
+  printViaBridge,
+  DEFAULT_POS_BRIDGE_URL
+} from '../lib/posBridgeClient';
 
 const localStorage = safeStorage;
 
@@ -1733,23 +1739,24 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
         isCashier: true
       });
 
-      // Cash drawer interlock linkage
+      // Cash drawer interlock linkage via LOCAL-PRINTER-POS-BRIDGE & Server API
       if (billPrinter.cashDrawerEnabled) {
+        // Direct local bridge dispatch (works on localhost, LAN, and Firebase Hosting)
+        openCashDrawerViaBridge(billPrinter.usbPort || 'LPT1:', posBridgeUrl)
+          .then(bRes => {
+            if (bRes.success) {
+              console.log('[Cash Drawer Bridge Success]', bRes.message);
+            }
+          })
+          .catch(e => console.warn('[Cash Drawer Bridge Warning]', e));
+
+        // Server API logging and execution
         apiFetch('/api/printer/open-drawer', { method: 'POST' })
           .then(res => res.json())
           .then(data => {
-            console.log('[Cash Drawer Interlock Cloud Log]', data.log);
+            console.log('[Cash Drawer Server Log]', data.log);
           })
-          .catch(e => console.error('[Cash Drawer Interlock Error]', e));
-
-        // Hosted Firebase environment local PC bridge relay
-        if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-          fetch('http://localhost:3000/api/printer/open-drawer', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            signal: AbortSignal.timeout(1000)
-          }).catch(() => {});
-        }
+          .catch(e => console.error('[Cash Drawer Server Error]', e));
       }
 
     } catch (err: any) {
@@ -1762,40 +1769,28 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
 
   const handleManualOpenDrawer = async () => {
     try {
-      let data: any = null;
-      const res = await apiFetch('/api/printer/open-drawer', {
-        method: 'POST'
-      });
-      if (res.ok) {
-        data = await res.json();
-      }
+      const port = billPrinter.usbPort || 'LPT1:';
+      
+      // Step 1: Direct Local POS Bridge Call (http://127.0.0.1:8060)
+      const bridgeRes = await openCashDrawerViaBridge(port, posBridgeUrl);
 
-      // Hosted Firebase environment local PC bridge relay fallback
-      let bridgeSuccess = false;
-      let bridgeLog = '';
-      if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-        try {
-          const bRes = await fetch('http://localhost:3000/api/printer/open-drawer', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            signal: AbortSignal.timeout(1200)
-          });
-          if (bRes.ok) {
-            const bData = await bRes.json();
-            bridgeSuccess = bData.success;
-            bridgeLog = bData.log;
-          }
-        } catch {
-          // Local bridge not running or unreachable
+      // Step 2: Server API Call
+      let serverData: any = null;
+      try {
+        const res = await apiFetch('/api/printer/open-drawer', { method: 'POST' });
+        if (res.ok) {
+          serverData = await res.json();
         }
+      } catch (err) {
+        console.warn('[Server Drawer Trigger Warning]', err);
       }
 
-      if ((data && data.success) || bridgeSuccess) {
-        const logMsg = bridgeLog || (data ? data.log : '') || 'ESC/POS 脈衝指令觸發成功';
-        alert(`✓ 🔓 實體收銀箱抽屜已成功彈開！\n\n【硬體通訊日誌】:\n${logMsg}`);
+      if (bridgeRes.success) {
+        alert(`✓ 🔓 實體收銀箱抽屜已成功彈開！\n\n【本機橋接器通訊】: ${bridgeRes.message} (埠口: ${bridgeRes.port || port})\n${serverData?.log ? `【伺服器記錄】:\n${serverData.log}` : ''}`);
+      } else if (serverData && serverData.success) {
+        alert(`✓ 🔓 實體收銀箱抽屜已成功彈開！\n\n【伺服器驅動日誌】:\n${serverData.log}`);
       } else {
-        const errDetail = (data && data.log) || '請確認 58mm 印表機線路與系統通訊埠設定';
-        alert(`⚠️ 開啟收銀箱結果回應:\n${errDetail}`);
+        alert(`⚠️ 開啟收銀箱結果回應:\n${bridgeRes.message}\n\n💡 提示: 若您在 Windows 上直接控制實體錢箱，請確認已啟動 LOCAL-PRINTER-POS-BRIDGE (pos_bridge.exe) 於 127.0.0.1:8060`);
       }
     } catch (e: any) {
       console.error('[Manual open cash drawer error]', e);
@@ -2117,6 +2112,80 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   });
 
   const [printerSaveSuccess, setPrinterSaveSuccess] = useState<string | null>(null);
+
+  // LOCAL-PRINTER-POS-BRIDGE (http://127.0.0.1:8060) State
+  const [posBridgeUrl, setPosBridgeUrl] = useState<string>(() => {
+    return localStorage.getItem('pos-bridge-url') || DEFAULT_POS_BRIDGE_URL;
+  });
+  const [posBridgeStatus, setPosBridgeStatus] = useState<{
+    online: boolean;
+    checking: boolean;
+    lastChecked?: string;
+    details?: any;
+    error?: string;
+  }>({ online: false, checking: false });
+  const [posBridgeTesting, setPosBridgeTesting] = useState<boolean>(false);
+  const [posBridgeTestResult, setPosBridgeTestResult] = useState<string | null>(null);
+
+  const checkBridgeStatus = useCallback(async () => {
+    setPosBridgeStatus(prev => ({ ...prev, checking: true }));
+    const result = await checkPOSBridgeHealth(posBridgeUrl, 1200);
+    setPosBridgeStatus({
+      online: result.online,
+      checking: false,
+      lastChecked: new Date().toLocaleTimeString(),
+      details: result.data,
+      error: result.error
+    });
+  }, [posBridgeUrl]);
+
+  useEffect(() => {
+    checkBridgeStatus();
+    const interval = setInterval(checkBridgeStatus, 15000);
+    return () => clearInterval(interval);
+  }, [checkBridgeStatus]);
+
+  const handleTestBridgeOpenDrawer = async () => {
+    setPosBridgeTesting(true);
+    setPosBridgeTestResult(null);
+    try {
+      const port = billPrinter.usbPort || 'LPT1:';
+      const res = await openCashDrawerViaBridge(port, posBridgeUrl);
+      if (res.success) {
+        setPosBridgeTestResult(`✓ 成功觸發實體開錢箱脈衝 (${res.port || port})！`);
+      } else {
+        setPosBridgeTestResult(`⚠️ 觸發失敗: ${res.message}`);
+      }
+    } catch (e: any) {
+      setPosBridgeTestResult(`⚠️ 錯誤: ${e?.message || e}`);
+    } finally {
+      setPosBridgeTesting(false);
+    }
+  };
+
+  const handleTestBridgePrintLPT1 = async () => {
+    setPosBridgeTesting(true);
+    setPosBridgeTestResult(null);
+    try {
+      const port = billPrinter.usbPort || 'LPT1:';
+      const sampleText = `================================\n   SABAY BBQ 本機橋接測試單\n================================\n時間: ${new Date().toLocaleString()}\n連接埠: ${port}\n狀態: LOCAL-PRINTER-POS-BRIDGE 正常\n================================\n`;
+      const res = await printViaBridge({
+        text: sampleText,
+        port: port,
+        autoOpenDrawer: false
+      }, posBridgeUrl);
+
+      if (res.success) {
+        setPosBridgeTestResult(`✓ 成功發送測試列印指令至 ${res.port || port}！`);
+      } else {
+        setPosBridgeTestResult(`⚠️ 列印失敗: ${res.message}`);
+      }
+    } catch (e: any) {
+      setPosBridgeTestResult(`⚠️ 錯誤: ${e?.message || e}`);
+    } finally {
+      setPosBridgeTesting(false);
+    }
+  };
 
   const fetchGlobalRules = async () => {
     try {
@@ -8246,6 +8315,111 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                 {printerSaveSuccess}
               </div>
             )}
+
+            {/* 0. LOCAL-PRINTER-POS-BRIDGE (127.0.0.1:8060) Dedicated Hardware Bridge Card */}
+            <div className="bg-gradient-to-r from-zinc-950 via-zinc-900 to-black border border-cyan-500/30 rounded-xl p-4.5 space-y-3.5 shadow-lg relative overflow-hidden">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/10 pb-3">
+                <div className="flex items-center space-x-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-400">
+                    <Cpu size={16} />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-black text-cyan-400 tracking-wider">🖨️ 本機 Windows POS 橋接器服務 (LOCAL-PRINTER-POS-BRIDGE)</span>
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                        posBridgeStatus.online
+                          ? 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-300'
+                          : 'bg-rose-500/20 border border-rose-500/40 text-rose-300'
+                      }`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${posBridgeStatus.online ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'}`}></span>
+                        {posBridgeStatus.online ? '🟢 橋接服務連線正常' : '🔴 未偵測到橋接服務'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-zinc-400 mt-0.5">
+                      提供 Windows 瀏覽器端穿透安全沙盒，直接控制 <span className="text-cyan-300 font-mono">LPT1:</span> / <span className="text-cyan-300 font-mono">COM</span> 實體印表機出單與開錢箱脈衝。
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={checkBridgeStatus}
+                    disabled={posBridgeStatus.checking}
+                    className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 active:scale-95 border border-white/10 text-zinc-300 font-bold rounded-lg text-xs transition cursor-pointer flex items-center gap-1.5"
+                  >
+                    <RefreshCw size={12} className={posBridgeStatus.checking ? 'animate-spin text-cyan-400' : 'text-zinc-400'} />
+                    <span>{posBridgeStatus.checking ? '探測中...' : '重新偵測 (Probe)'}</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                <div>
+                  <label className="text-zinc-400 block mb-1">橋接服務位址 (Bridge URL)</label>
+                  <input
+                    type="text"
+                    value={posBridgeUrl}
+                    onChange={(e) => {
+                      setPosBridgeUrl(e.target.value);
+                      localStorage.setItem('pos-bridge-url', e.target.value);
+                    }}
+                    className="w-full bg-zinc-950 border border-white/10 rounded-lg p-2 text-cyan-300 font-mono text-xs"
+                    placeholder="http://127.0.0.1:8060"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-zinc-400 block mb-1">預設實體硬體埠 (Target Hardware Port)</label>
+                  <input
+                    type="text"
+                    value={billPrinter.usbPort || 'LPT1:'}
+                    onChange={(e) => setBillPrinter({ ...billPrinter, usbPort: e.target.value })}
+                    className="w-full bg-zinc-950 border border-white/10 rounded-lg p-2 text-white font-mono text-xs"
+                    placeholder="例如: LPT1: 或 COM1"
+                  />
+                </div>
+
+                <div className="flex flex-col justify-end">
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={handleTestBridgeOpenDrawer}
+                      disabled={posBridgeTesting}
+                      className="flex-1 py-2 bg-rose-500/15 hover:bg-rose-500/25 active:scale-95 border border-rose-500/30 text-rose-300 font-extrabold rounded-lg text-xs transition cursor-pointer flex items-center justify-center gap-1"
+                    >
+                      <Unlock size={12} className="text-rose-400" />
+                      <span>⚡ 測試開錢箱</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleTestBridgePrintLPT1}
+                      disabled={posBridgeTesting}
+                      className="flex-1 py-2 bg-cyan-500/15 hover:bg-cyan-500/25 active:scale-95 border border-cyan-500/30 text-cyan-300 font-extrabold rounded-lg text-xs transition cursor-pointer flex items-center justify-center gap-1"
+                    >
+                      <Printer size={12} className="text-cyan-400" />
+                      <span>🖨️ 測試 LPT1 出單</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {posBridgeTestResult && (
+                <div className={`p-2.5 rounded-lg border text-xs font-mono transition animate-fadeIn ${
+                  posBridgeTestResult.startsWith('✓')
+                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+                    : 'bg-rose-500/10 border-rose-500/30 text-rose-300'
+                }`}>
+                  {posBridgeTestResult}
+                </div>
+              )}
+
+              {!posBridgeStatus.online && (
+                <div className="p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-lg text-[11px] text-amber-300/90 leading-relaxed">
+                  💡 <strong>小提示</strong>：若要在本機 Windows 點餐機控制 LPT1: 熱感應印表機與收銀抽屜，請至 <code className="text-white bg-black/60 px-1 py-0.5 rounded font-mono">LOCAL-PRINTER-POS-BRIDGE</code> 目錄下啟動 <code className="text-white bg-black/60 px-1 py-0.5 rounded font-mono">pos_bridge.exe</code>（或執行 <code className="text-white bg-black/60 px-1 py-0.5 rounded font-mono">python pos_bridge.py</code>），服務將自動常駐於 <code className="text-cyan-300 font-mono">127.0.0.1:8060</code>。
+                </div>
+              )}
+            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* 1. KDS Kitchen Printer config */}

@@ -144,18 +144,66 @@ export async function sendToNetworkPrinter(
 }
 
 /**
- * Sends binary buffer to Serial / USB Printer via SerialPort
+ * Sends binary buffer to LOCAL-PRINTER-POS-BRIDGE (http://127.0.0.1:8060)
+ */
+export async function sendToPosBridgeService(
+  data: Buffer,
+  targetPort: string = 'LPT1:',
+  autoOpenDrawer: boolean = false
+): Promise<PrinterDriverResult | null> {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 1200);
+
+    const res = await fetch('http://127.0.0.1:8060/print', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        base64: data.toString('base64'),
+        port: targetPort,
+        autoOpenDrawer: autoOpenDrawer
+      }),
+      signal: controller.signal
+    });
+    clearTimeout(timer);
+
+    if (res.ok) {
+      const result: any = await res.json();
+      if (result.success) {
+        return {
+          success: true,
+          log: `[POS Bridge 127.0.0.1:8060] ${result.message || 'Successfully sent via LOCAL-PRINTER-POS-BRIDGE'}`
+        };
+      }
+    }
+    return null;
+  } catch (err: any) {
+    // POS Bridge offline or not listening on 8060
+    return null;
+  }
+}
+
+/**
+ * Sends binary buffer to Serial / USB / LPT Printer via LOCAL-PRINTER-POS-BRIDGE or SerialPort
  */
 export async function sendToSerialPrinter(
   portName: string,
   data: Buffer | string,
-  options: { baudRate?: number } = {}
+  options: { baudRate?: number; autoOpenDrawer?: boolean } = {}
 ): Promise<PrinterDriverResult> {
   const baudRate = options.baudRate ?? 9600;
   const bufferData = Buffer.isBuffer(data) ? data : Buffer.from(data, 'utf-8');
   const targetPort = resolvePortName(portName);
-  const logPrefix = `[Real Hardware Serial ${targetPort}]`;
+  const logPrefix = `[Real Hardware Serial/LPT ${targetPort}]`;
 
+  // Step 1: Check and send via LOCAL-PRINTER-POS-BRIDGE (http://127.0.0.1:8060)
+  const bridgeRes = await sendToPosBridgeService(bufferData, targetPort, options.autoOpenDrawer ?? false);
+  if (bridgeRes && bridgeRes.success) {
+    console.log(`${logPrefix} Dispatched successfully via LOCAL-PRINTER-POS-BRIDGE.`);
+    return bridgeRes;
+  }
+
+  // Step 2: Native Windows Parallel Port (LPT1:) direct stream
   if (targetPort.toUpperCase().startsWith('LPT')) {
     return new Promise((resolve) => {
       console.log(`${logPrefix} Writing directly to Parallel Port (${targetPort})...`);
@@ -164,7 +212,7 @@ export async function sendToSerialPrinter(
           console.warn(`${logPrefix} Parallel port write error:`, err.message);
           resolve({
             success: true,
-            log: `[Simulated Parallel Port Fallback] Parallel port write error: ${err.message}`
+            log: `[Simulated Parallel Port Fallback] Parallel port write error: ${err.message} (Ensure pos_bridge.exe is running on 127.0.0.1:8060)`
           });
         } else {
           console.log(`${logPrefix} Successfully written ${bufferData.length} bytes to ${targetPort}.`);
@@ -271,15 +319,45 @@ function resolvePortName(userPort: string): string {
 }
 
 /**
- * Triggers Real Physical Cash Drawer via ESC/POS pulse signal or logs OPOS/POS_NET simulation
+ * Triggers Real Physical Cash Drawer via ESC/POS pulse signal or LOCAL-PRINTER-POS-BRIDGE
  */
 export async function triggerRealCashDrawer(settings: CashDrawerSettings): Promise<PrinterDriverResult> {
   const driver = settings.cashDrawerDriver || 'ESC_POS_RAW';
   const rawCommandHex = settings.cashDrawerEscPosCommand || '1B700019FA';
-  const portName = settings.usbPort || 'USB002';
+  const portName = settings.usbPort || 'LPT1:';
   const targetIp = settings.ip || '192.168.123.100';
   const targetPort = settings.port || 9100;
   const isNetwork = settings.connectionType === 'IP';
+
+  // If not network, attempt direct call to LOCAL-PRINTER-POS-BRIDGE /open-drawer first
+  if (!isNetwork) {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 1200);
+      const res = await fetch('http://127.0.0.1:8060/open-drawer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'open_drawer',
+          port: portName
+        }),
+        signal: controller.signal
+      });
+      clearTimeout(timer);
+
+      if (res.ok) {
+        const result: any = await res.json();
+        if (result.success) {
+          return {
+            success: true,
+            log: `[POS Bridge 127.0.0.1:8060] ${result.message || '實體錢箱脈衝已透過 LOCAL-PRINTER-POS-BRIDGE 順利觸發'}`
+          };
+        }
+      }
+    } catch {
+      // Bridge not reachable, proceed to serial/file stream fallback
+    }
+  }
 
   let drawerBuffer: Buffer;
   try {

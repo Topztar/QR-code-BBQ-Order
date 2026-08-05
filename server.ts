@@ -1511,7 +1511,27 @@ app.put('/api/printer/config', (req, res) => {
   res.json({ ip: livePrinterIp });
 });
 
-// Helper function to simulate hardware cash drawer trigger (OPOS / POS for .NET / Win32 RAW Direct Write)
+// Check LOCAL-PRINTER-POS-BRIDGE (http://127.0.0.1:8060) health from server side
+app.get('/api/printer/bridge/health', async (_req, res) => {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 1000);
+    const bridgeRes = await fetch('http://127.0.0.1:8060/health', {
+      headers: { 'Accept': 'application/json' },
+      signal: controller.signal
+    });
+    clearTimeout(timer);
+
+    if (bridgeRes.ok) {
+      const data = await bridgeRes.json();
+      return res.json({ online: true, service: 'LOCAL-PRINTER-POS-BRIDGE', bridgeUrl: 'http://127.0.0.1:8060', data });
+    }
+    return res.json({ online: false, message: `Bridge returned status ${bridgeRes.status}` });
+  } catch (err: any) {
+    return res.json({ online: false, message: 'LOCAL-PRINTER-POS-BRIDGE is offline or not running on 127.0.0.1:8060', error: err.message });
+  }
+});
+
 // Helper function to trigger hardware cash drawer (via real serial/socket driver or simulated OPOS)
 async function triggerCashDrawerOpen(settings: any): Promise<{ success: boolean; log: string }> {
   return await triggerRealCashDrawer({
