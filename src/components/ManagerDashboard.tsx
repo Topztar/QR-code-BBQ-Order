@@ -789,6 +789,8 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     changeProvided: number;
     paymentMethod: string;
     isCashier: boolean;
+    mergedCount?: number;
+    checkoutScope?: string;
   } | null>(null);
   const [checkoutPrintLoading, setCheckoutPrintLoading] = useState(false);
   const [checkoutPrintSuccess, setCheckoutPrintSuccess] = useState<string | null>(null);
@@ -1335,6 +1337,9 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   const [cashierListFilter, setCashierListFilter] = useState<'all' | 'completed' | 'dinein' | 'takeout'>('all');
   const [isAdjustingDiscount, setIsAdjustingDiscount] = useState<boolean>(false);
   const [isAdjustingSurcharge, setIsAdjustingSurcharge] = useState<boolean>(false);
+  // Checkout merge scope: 'single' (獨立結帳) | 'same_table' (同桌合併) | 'all_merged' (跨桌全併) | 'custom' (自訂勾選)
+  const [cashierCheckoutScope, setCashierCheckoutScope] = useState<'single' | 'same_table' | 'all_merged' | 'custom'>('single');
+  const [cashierSelectedMergeOrderIds, setCashierSelectedMergeOrderIds] = useState<string[]>([]);
 
   // Auto-scaling width and fit screen boundary state & logic
   const [cashierPanelWidth, setCashierPanelWidth] = useState<number>(48);
@@ -1442,6 +1447,8 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
       setCashierDiscountType('percent');
       setIsAdjustingDiscount(false);
       setIsAdjustingSurcharge(false);
+      setCashierCheckoutScope('single');
+      setCashierSelectedMergeOrderIds([cashierSelectedOrder.id]);
       
       const method = cashierSelectedOrder.paymentMethod === 'credit' ? 'credit' : 
                      cashierSelectedOrder.paymentMethod === 'member' ? 'member' :
@@ -1460,6 +1467,47 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     }
   }, [selectedCashierOrderId]);
 
+  // All candidate orders for the current table or merged tables
+  const cashierCandidateOrders = useMemo(() => {
+    if (!cashierSelectedOrder) {
+      return { sameTableOrders: [] as Order[], allConnectedOrders: [] as Order[], hasMergedTables: false };
+    }
+    
+    const curTableId = cashierSelectedOrder.tableNumber;
+    if (!curTableId || curTableId.includes('外帶')) {
+      return { 
+        sameTableOrders: [cashierSelectedOrder], 
+        allConnectedOrders: [cashierSelectedOrder], 
+        hasMergedTables: false 
+      };
+    }
+    
+    // Unpaid orders on the same table
+    const sameTable = orders.filter(
+      o => !o.isPaid && o.status !== 'cancelled' && String(o.tableNumber).trim() === String(curTableId).trim()
+    );
+
+    // Connected tables (mergedWith)
+    const curTableObj = tables.find(t => String(t.id).trim() === String(curTableId).trim());
+    const leadTableId = curTableObj?.mergedWith || curTableId;
+    
+    const mergedTableIds = tables
+      .filter(t => String(t.id).trim() === String(leadTableId).trim() || (t.mergedWith && String(t.mergedWith).trim() === String(leadTableId).trim()))
+      .map(t => String(t.id).trim());
+      
+    const allConnected = orders.filter(
+      o => !o.isPaid && o.status !== 'cancelled' && o.tableNumber && mergedTableIds.includes(String(o.tableNumber).trim())
+    );
+
+    const hasMerged = mergedTableIds.length > 1 || (curTableObj?.mergedWith !== undefined && curTableObj.mergedWith !== '');
+
+    return {
+      sameTableOrders: sameTable.length > 0 ? sameTable : [cashierSelectedOrder],
+      allConnectedOrders: allConnected.length > 0 ? allConnected : [cashierSelectedOrder],
+      hasMergedTables: hasMerged
+    };
+  }, [cashierSelectedOrder, orders, tables]);
+
   const cashierMergedOrders = useMemo(() => {
     if (!cashierSelectedOrder) return [];
     
@@ -1468,20 +1516,29 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
       return [cashierSelectedOrder];
     }
     
-    const curTableObj = tables.find(t => t.id === curTableId);
-    const leadTableId = curTableObj?.mergedWith || curTableId;
-    
-    const mergedTableIds = tables
-      .filter(t => t.id === leadTableId || t.mergedWith === leadTableId)
-      .map(t => t.id);
-      
-    const unpaidMerged = orders.filter(o => !o.isPaid && mergedTableIds.includes(o.tableNumber));
-    
-    if (unpaidMerged.length === 0 || !unpaidMerged.find(o => o.id === cashierSelectedOrder.id)) {
+    if (cashierCheckoutScope === 'single') {
       return [cashierSelectedOrder];
     }
-    return unpaidMerged;
-  }, [cashierSelectedOrder, orders, tables]);
+    
+    if (cashierCheckoutScope === 'same_table') {
+      return cashierCandidateOrders.sameTableOrders;
+    }
+    
+    if (cashierCheckoutScope === 'all_merged') {
+      return cashierCandidateOrders.allConnectedOrders;
+    }
+    
+    if (cashierCheckoutScope === 'custom') {
+      const selectedSet = new Set(cashierSelectedMergeOrderIds);
+      if (!selectedSet.has(cashierSelectedOrder.id)) {
+        selectedSet.add(cashierSelectedOrder.id);
+      }
+      const customList = cashierCandidateOrders.allConnectedOrders.filter(o => selectedSet.has(o.id));
+      return customList.length > 0 ? customList : [cashierSelectedOrder];
+    }
+    
+    return [cashierSelectedOrder];
+  }, [cashierSelectedOrder, cashierCheckoutScope, cashierSelectedMergeOrderIds, cashierCandidateOrders]);
 
   const handleCombinedQtyChange = async (orderId: string, itemId: string, delta: number) => {
     if (!onUpdateOrderItems) return;
@@ -1710,25 +1767,36 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
         }
       }
 
-      // Releases all merged tables
+      // Smart Table Status Release: Only release table to 'cleaning' if NO other unpaid non-cancelled orders remain for that table
       if (onUpdateTableStatus) {
-        for (const tid of mergedTableIds) {
+        const uniqueTableIds = Array.from(new Set(mergedTableIds));
+        for (const tid of uniqueTableIds) {
           if (tid && !tid.includes('外帶')) {
-            await onUpdateTableStatus(tid, {
-              status: 'cleaning',
-              preservedFor: '',
-              mergedWith: '',
-              cleaningStartedAt: new Date().toISOString()
-            });
+            const remainingUnpaidForTable = orders.filter(
+              o => String(o.tableNumber).trim() === String(tid).trim() &&
+              !staticMergedOrders.some(m => m.id === o.id) &&
+              !o.isPaid &&
+              o.status !== 'cancelled'
+            );
+            if (remainingUnpaidForTable.length === 0) {
+              await onUpdateTableStatus(tid, {
+                status: 'cleaning',
+                preservedFor: '',
+                mergedWith: '',
+                cleaningStartedAt: new Date().toISOString()
+              });
+            }
           }
         }
       }
       
       setSelectedCashierOrderId(null);
       
+      const distinctTableDisplay = Array.from(new Set(staticMergedOrders.map(o => o.tableNumber))).join(' + ');
+      
       setCheckoutSuccessData({
         id: cashierSelectedOrder.id,
-        tableNumber: cashierSelectedOrder.tableNumber,
+        tableNumber: distinctTableDisplay || cashierSelectedOrder.tableNumber,
         subtotal: checkoutRecord.subtotal,
         discount: checkoutRecord.discount,
         serviceCharge: checkoutRecord.serviceCharge,
@@ -1736,7 +1804,9 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
         amountPaid: checkoutRecord.amountPaid,
         changeProvided: checkoutRecord.changeProvided,
         paymentMethod: checkoutRecord.paymentMethod,
-        isCashier: true
+        isCashier: true,
+        mergedCount: staticMergedOrders.length,
+        checkoutScope: cashierCheckoutScope
       });
 
       // Cash drawer interlock linkage via LOCAL-PRINTER-POS-BRIDGE & Server API
@@ -3674,6 +3744,9 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                         
                         // Calculate minimum spend warning criteria & order total fallback
                         const isDineIn = !(order.tableNumber && order.tableNumber.includes('外帶'));
+                        const sameTableUnpaidCount = orders.filter(
+                          o => !o.isPaid && o.status !== 'cancelled' && o.tableNumber && String(o.tableNumber).trim() === String(order.tableNumber).trim()
+                        ).length;
                         const orderGuests = order.guestCount || 1;
                         const itemsSubtotal = computeOrderItemsSubtotal(order.items || [], menuItems);
                         const rawComputedTotal = (order.subtotal !== undefined && order.subtotal !== null ? order.subtotal : itemsSubtotal) + (order.serviceCharge || 0) - (order.discount || 0);
@@ -3732,8 +3805,13 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                                       {(order.tableNumber && order.tableNumber.includes('外帶')) ? '🛍️ 外帶' : `🪑 客出席`}
                                     </span>
                                   </div>
-                                  <h6 className="font-bold text-sm text-white/95 mt-1">
-                                    桌次: {order.tableNumber || 'N/A'} 桌 {isDineIn && <span className="text-zinc-400 font-normal text-xs">({orderGuests} 人)</span>}
+                                  <h6 className="font-bold text-sm text-white/95 mt-1 flex items-center flex-wrap gap-1">
+                                    <span>桌次: {order.tableNumber || 'N/A'} 桌 {isDineIn && <span className="text-zinc-400 font-normal text-xs">({orderGuests} 人)</span>}</span>
+                                    {isDineIn && sameTableUnpaidCount > 1 && (
+                                      <span className="text-[9px] font-mono bg-amber-500/15 text-amber-300 border border-amber-500/30 px-1.5 py-0.2 rounded font-bold">
+                                        同桌共 {sameTableUnpaidCount} 單
+                                      </span>
+                                    )}
                                   </h6>
                                 </div>
                                 <div className="text-right space-y-1">
@@ -4048,6 +4126,243 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                         return null;
                       })()}
 
+                      {/* 📋 結帳範圍與訂單合併選擇 (Checkout Scope Selection) */}
+                      {(() => {
+                        const { sameTableOrders, allConnectedOrders, hasMergedTables } = cashierCandidateOrders;
+                        const hasMultipleCandidates = allConnectedOrders.length > 1;
+                        
+                        return (
+                          <div className="bg-[#151515] border border-amber-500/30 rounded-xl p-4 space-y-3 font-sans text-left shadow-lg">
+                            <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-black text-[#E5B453] flex items-center gap-1.5">
+                                  <span>🧾 結帳範圍與訂單合併模式 Checkout Mode</span>
+                                </span>
+                                {hasMultipleCandidates && (
+                                  <span className="text-[10px] bg-amber-500/15 border border-amber-500/30 text-amber-300 px-2 py-0.5 rounded-full font-bold">
+                                    相關未結單共 {allConnectedOrders.length} 筆
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-[10px] text-zinc-400 font-mono">
+                                {cashierCheckoutScope === 'single' && '🔹 獨立單一訂單結帳'}
+                                {cashierCheckoutScope === 'same_table' && `🔸 同桌合併結帳 (${cashierMergedOrders.length} 筆)`}
+                                {cashierCheckoutScope === 'all_merged' && `🔷 跨桌併桌全併 (${cashierMergedOrders.length} 筆)`}
+                                {cashierCheckoutScope === 'custom' && `⚙️ 自訂勾選結帳 (${cashierMergedOrders.length} 筆)`}
+                              </span>
+                            </div>
+
+                            {/* Mode Option Buttons */}
+                            <div className={`grid gap-2 ${hasMultipleCandidates ? (hasMergedTables && allConnectedOrders.length > sameTableOrders.length ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4' : 'grid-cols-1 sm:grid-cols-3') : 'grid-cols-1'}`}>
+                              {/* 1. 獨立單一訂單結帳 */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setCashierCheckoutScope('single');
+                                  setCashierSelectedMergeOrderIds([cashierSelectedOrder.id]);
+                                }}
+                                className={`p-3 rounded-xl border text-left flex flex-col justify-between transition active:scale-98 cursor-pointer ${
+                                  cashierCheckoutScope === 'single'
+                                    ? 'bg-[#E5B453]/15 border-[#E5B453] text-white shadow-sm ring-1 ring-[#E5B453]/50'
+                                    : 'bg-black/30 border-white/10 text-zinc-400 hover:border-white/20 hover:text-zinc-200'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="font-extrabold text-xs text-[#E5B453] flex items-center gap-1">
+                                    <span>🔹 獨立單一結帳</span>
+                                  </span>
+                                  <span className="text-[9px] font-mono bg-white/10 px-1.5 py-0.5 rounded text-white/80">單筆 1 單</span>
+                                </div>
+                                <div className="text-[10px] text-zinc-300 leading-tight">
+                                  僅結當前所選單號 <span className="font-mono text-[#E5B453]">#{cashierSelectedOrder.id.slice(-6)}</span>
+                                </div>
+                                <div className="text-[11px] font-mono font-bold text-amber-400 mt-2 pt-1 border-t border-white/5 flex justify-between items-center">
+                                  <span className="text-[10px] text-zinc-500 font-sans">本單金額:</span>
+                                  <span>NT$ {(computeOrderItemsSubtotal(cashierSelectedOrder.items || [], menuItems) + (cashierSelectedOrder.serviceCharge || 0) - (cashierSelectedOrder.discount || 0)).toLocaleString()}</span>
+                                </div>
+                              </button>
+
+                              {/* 2. 同桌全部合併 (若同一桌有多筆未結訂單) */}
+                              {hasMultipleCandidates && sameTableOrders.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setCashierCheckoutScope('same_table');
+                                    setCashierSelectedMergeOrderIds(sameTableOrders.map(o => o.id));
+                                  }}
+                                  className={`p-3 rounded-xl border text-left flex flex-col justify-between transition active:scale-98 cursor-pointer ${
+                                    cashierCheckoutScope === 'same_table'
+                                      ? 'bg-[#E5B453]/15 border-[#E5B453] text-white shadow-sm ring-1 ring-[#E5B453]/50'
+                                      : 'bg-black/30 border-white/10 text-zinc-400 hover:border-white/20 hover:text-zinc-200'
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-between mb-1">
+                                    <span className="font-extrabold text-xs text-amber-300 flex items-center gap-1">
+                                      <span>🔸 同桌合併結帳</span>
+                                    </span>
+                                    <span className="text-[9px] font-mono bg-white/10 px-1.5 py-0.5 rounded text-white/80">{sameTableOrders.length} 筆</span>
+                                  </div>
+                                  <div className="text-[10px] text-zinc-300 leading-tight">
+                                    合併第 <span className="font-bold text-white">{cashierSelectedOrder.tableNumber}</span> 桌所有未結單
+                                  </div>
+                                  <div className="text-[11px] font-mono font-bold text-amber-400 mt-2 pt-1 border-t border-white/5 flex justify-between items-center">
+                                    <span className="text-[10px] text-zinc-500 font-sans">同桌合計:</span>
+                                    <span>NT$ {sameTableOrders.reduce((sum, o) => sum + (computeOrderItemsSubtotal(o.items || [], menuItems) + (o.serviceCharge || 0) - (o.discount || 0)), 0).toLocaleString()}</span>
+                                  </div>
+                                </button>
+                              )}
+
+                              {/* 3. 跨桌併桌全併 (若有設定併桌) */}
+                              {hasMultipleCandidates && hasMergedTables && allConnectedOrders.length > sameTableOrders.length && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setCashierCheckoutScope('all_merged');
+                                    setCashierSelectedMergeOrderIds(allConnectedOrders.map(o => o.id));
+                                  }}
+                                  className={`p-3 rounded-xl border text-left flex flex-col justify-between transition active:scale-98 cursor-pointer ${
+                                    cashierCheckoutScope === 'all_merged'
+                                      ? 'bg-[#E5B453]/15 border-[#E5B453] text-white shadow-sm ring-1 ring-[#E5B453]/50'
+                                      : 'bg-black/30 border-white/10 text-zinc-400 hover:border-white/20 hover:text-zinc-200'
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-between mb-1">
+                                    <span className="font-extrabold text-xs text-sky-300 flex items-center gap-1">
+                                      <span>🔷 跨桌全併結帳</span>
+                                    </span>
+                                    <span className="text-[9px] font-mono bg-white/10 px-1.5 py-0.5 rounded text-white/80">{allConnectedOrders.length} 筆</span>
+                                  </div>
+                                  <div className="text-[10px] text-zinc-300 leading-tight">
+                                    合併所有跨桌關聯之未結單
+                                  </div>
+                                  <div className="text-[11px] font-mono font-bold text-amber-400 mt-2 pt-1 border-t border-white/5 flex justify-between items-center">
+                                    <span className="text-[10px] text-zinc-500 font-sans">跨桌合計:</span>
+                                    <span>NT$ {allConnectedOrders.reduce((sum, o) => sum + (computeOrderItemsSubtotal(o.items || [], menuItems) + (o.serviceCharge || 0) - (o.discount || 0)), 0).toLocaleString()}</span>
+                                  </div>
+                                </button>
+                              )}
+
+                              {/* 4. 自訂勾選合併 (若有多筆相關訂單) */}
+                              {hasMultipleCandidates && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setCashierCheckoutScope('custom');
+                                    if (!cashierSelectedMergeOrderIds.includes(cashierSelectedOrder.id)) {
+                                      setCashierSelectedMergeOrderIds([cashierSelectedOrder.id]);
+                                    }
+                                  }}
+                                  className={`p-3 rounded-xl border text-left flex flex-col justify-between transition active:scale-98 cursor-pointer ${
+                                    cashierCheckoutScope === 'custom'
+                                      ? 'bg-[#E5B453]/15 border-[#E5B453] text-white shadow-sm ring-1 ring-[#E5B453]/50'
+                                      : 'bg-black/30 border-white/10 text-zinc-400 hover:border-white/20 hover:text-zinc-200'
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-between mb-1">
+                                    <span className="font-extrabold text-xs text-purple-300 flex items-center gap-1">
+                                      <span>⚙️ 自訂勾選合併</span>
+                                    </span>
+                                    <span className="text-[9px] font-mono bg-white/10 px-1.5 py-0.5 rounded text-white/80">自選</span>
+                                  </div>
+                                  <div className="text-[10px] text-zinc-300 leading-tight">
+                                    自選指定哪幾筆訂單一同結算
+                                  </div>
+                                  <div className="text-[11px] font-mono font-bold text-purple-400 mt-2 pt-1 border-t border-white/5 flex justify-between items-center">
+                                    <span className="text-[10px] text-zinc-500 font-sans">已選數量:</span>
+                                    <span>已勾選 {cashierMergedOrders.length} 筆</span>
+                                  </div>
+                                </button>
+                              )}
+                            </div>
+
+                            {/* Custom Selection Checkbox List (shown when in 'custom' mode) */}
+                            {cashierCheckoutScope === 'custom' && hasMultipleCandidates && (
+                              <div className="bg-black/40 border border-white/10 rounded-xl p-3.5 space-y-2.5 mt-2">
+                                <div className="flex items-center justify-between text-[11px] text-zinc-400 pb-2 border-b border-white/5">
+                                  <span className="font-bold text-zinc-200">請勾選本次要一併結算的訂單 (至少需勾選 1 筆)：</span>
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => setCashierSelectedMergeOrderIds(allConnectedOrders.map(o => o.id))}
+                                      className="text-[10px] text-[#E5B453] hover:underline font-bold"
+                                    >
+                                      全部選取
+                                    </button>
+                                    <span>·</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => setCashierSelectedMergeOrderIds([cashierSelectedOrder.id])}
+                                      className="text-[10px] text-zinc-400 hover:underline"
+                                    >
+                                      僅選當前主單
+                                    </button>
+                                  </div>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                                  {allConnectedOrders.map((candidate) => {
+                                    const isChecked = cashierSelectedMergeOrderIds.includes(candidate.id);
+                                    const isMainSelected = candidate.id === cashierSelectedOrder.id;
+                                    const candSubtotal = computeOrderItemsSubtotal(candidate.items || [], menuItems) + (candidate.serviceCharge || 0) - (candidate.discount || 0);
+                                    
+                                    return (
+                                      <label
+                                        key={candidate.id}
+                                        className={`flex items-start gap-3 p-2.5 rounded-lg border cursor-pointer transition select-none ${
+                                          isChecked
+                                            ? 'bg-[#E5B453]/10 border-[#E5B453]/50 text-white shadow-xs'
+                                            : 'bg-[#181818] border-white/5 text-zinc-400 hover:bg-white/5'
+                                        }`}
+                                      >
+                                        <input
+                                          type="checkbox"
+                                          checked={isChecked}
+                                          onChange={(e) => {
+                                            if (e.target.checked) {
+                                              setCashierSelectedMergeOrderIds(prev => Array.from(new Set([...prev, candidate.id])));
+                                            } else {
+                                              if (cashierSelectedMergeOrderIds.length > 1) {
+                                                setCashierSelectedMergeOrderIds(prev => prev.filter(id => id !== candidate.id));
+                                              } else {
+                                                alert('結帳至少需保留一筆選取的訂單！');
+                                              }
+                                            }
+                                          }}
+                                          className="mt-1 accent-[#E5B453] w-4 h-4 rounded cursor-pointer shrink-0"
+                                        />
+                                        <div className="flex-1 min-w-0 text-xs">
+                                          <div className="flex items-center justify-between">
+                                            <span className="font-mono font-bold text-[#E5B453] text-[11px]">
+                                              #{candidate.id.slice(-6)}
+                                              {isMainSelected && (
+                                                <span className="ml-1.5 text-[9px] bg-amber-500/20 text-amber-300 px-1 py-0.2 rounded font-sans">當前主單</span>
+                                              )}
+                                            </span>
+                                            <span className="font-mono font-extrabold text-amber-400">NT$ {candSubtotal.toLocaleString()}</span>
+                                          </div>
+                                          <div className="flex items-center gap-1.5 text-[10px] text-zinc-400 mt-0.5">
+                                            <span>第 {candidate.tableNumber} 桌</span>
+                                            <span>·</span>
+                                            <span>{new Date(candidate.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                            <span>·</span>
+                                            <span>{candidate.items?.length || 0} 個品項</span>
+                                          </div>
+                                          <div className="text-[10px] text-zinc-400 truncate mt-1">
+                                            {(candidate.items || []).map(it => {
+                                              const pName = it.name ? (typeof it.name === 'object' ? ((getLocalizedText(it.name, currentLang) || '未命名')) : it.name) : '未命名';
+                                              return `${pName}x${it.qty || 0}`;
+                                            }).join(', ')}
+                                          </div>
+                                        </div>
+                                      </label>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+
                       {/* Table Status & Merging Control panel */}
                       {(() => {
                         const isDineIn = !(cashierSelectedOrder.tableNumber && cashierSelectedOrder.tableNumber.includes('外帶'));
@@ -4160,9 +4475,16 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
 
                       {/* Items Brief */}
                       <div className="bg-black/30 border border-white/5 rounded-xl p-3 space-y-3">
-                        <span className="text-[10px] text-zinc-500 block font-bold tracking-wider uppercase">
-                          🍽️ 點餐菜品明細 (合併計 {cashierMergedOrders.reduce((sum, o) => sum + (o.items?.length || 0), 0)} 項)
-                        </span>
+                        <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                          <span className="text-[10px] text-zinc-400 block font-bold tracking-wider uppercase">
+                            🍽️ 點餐菜品明細 {cashierMergedOrders.length > 1 ? `(合併共 ${cashierMergedOrders.length} 筆訂單 · 計 ${cashierMergedOrders.reduce((sum, o) => sum + (o.items?.length || 0), 0)} 項)` : `(本單共 ${cashierMergedOrders[0]?.items?.length || 0} 項)`}
+                          </span>
+                          {cashierMergedOrders.length > 1 && (
+                            <span className="text-[10px] text-[#E5B453] font-bold font-mono">
+                              已合併 {Array.from(new Set(cashierMergedOrders.map(o => o.tableNumber))).join(' + ')} 桌
+                            </span>
+                          )}
+                        </div>
                         <div className="space-y-4 divide-y divide-white/5 text-xs">
                           {cashierMergedOrders.map((ord, oidx) => (
                             <div key={ord.id} className={oidx > 0 ? "pt-3.5" : ""}>
@@ -12018,7 +12340,18 @@ ${customerDetails}
                 <div className="flex justify-between items-center text-zinc-400">
                   <span>結帳桌號 Table(s)</span>
                   <span className="text-white font-mono font-bold bg-slate-800 border border-slate-700 px-2 py-0.5 rounded-md">
-                    {cashierMergedOrders.map(o => o.tableNumber).join(' + ')} 桌
+                    {Array.from(new Set(cashierMergedOrders.map(o => o.tableNumber))).join(' + ')} 桌
+                  </span>
+                </div>
+
+                <div className="flex justify-between items-center text-zinc-400">
+                  <span>結帳單數 Orders</span>
+                  <span className="text-amber-300 font-mono font-bold">
+                    {cashierMergedOrders.length} 筆訂單
+                    {cashierCheckoutScope === 'single' && ' (單一獨立)'}
+                    {cashierCheckoutScope === 'same_table' && ' (同桌合併)'}
+                    {cashierCheckoutScope === 'all_merged' && ' (跨桌全併)'}
+                    {cashierCheckoutScope === 'custom' && ' (自選合併)'}
                   </span>
                 </div>
 
@@ -12249,6 +12582,14 @@ ${customerDetails}
                     {checkoutSuccessData.tableNumber} 桌
                   </span>
                 </div>
+                {checkoutSuccessData.orderCount && checkoutSuccessData.orderCount > 1 && (
+                  <div className="flex justify-between items-center text-zinc-300 text-[11px]">
+                    <span className="text-zinc-500 font-sans">結帳模式 Mode:</span>
+                    <span className="bg-amber-500/15 text-amber-300 font-bold px-2 py-0.5 rounded text-[10px]">
+                      合併 {checkoutSuccessData.orderCount} 筆訂單 ({checkoutSuccessData.scope === 'same_table' ? '同桌合併' : checkoutSuccessData.scope === 'all_merged' ? '跨桌全併' : '自選合併'})
+                    </span>
+                  </div>
+                )}
                 <div className="flex justify-between items-center text-zinc-300 text-[11px]">
                   <span className="text-zinc-500 font-sans">原始原價 Subtotal:</span>
                   <span className="font-mono text-white/95">NT$ {checkoutSuccessData.subtotal}</span>
