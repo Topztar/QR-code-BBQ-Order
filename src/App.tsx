@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { Language, MenuItem, Ingredient, Order, OrderStatus, OrderItem, Category, TableConfig, OperatingHourSlot, Reservation } from './types';
 import { getOfflineQueue, addRequestToQueue, clearOfflineQueue, removeOrderRequestsFromQueue, processOfflineQueue, QueuedRequest } from './lib/offlineQueue';
 import { safeStorage } from './lib/safeStorage';
@@ -7,12 +7,22 @@ import { db, isFirebaseSyncEnabled } from './lib/firebase';
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { TRANSLATIONS, INITIAL_MENU, INITIAL_CATEGORIES } from './data';
 import { LanguageSelector } from './components/LanguageSelector';
-import { CustomerOrderView } from './components/CustomerOrderView';
-import { KitchenDisplaySystem } from './components/KitchenDisplaySystem';
-import { ManagerDashboard } from './components/ManagerDashboard';
-import { StaffLoginGate } from './components/StaffLoginGate';
 import { ChefHat, Smartphone, BarChart3, UtensilsCrossed, LogOut, Lock, Phone, MapPin, Eye, EyeOff, Coins, Monitor } from 'lucide-react';
 import { printViaBridge } from './lib/posBridgeClient';
+
+const CustomerOrderView = lazy(() => import('./components/CustomerOrderView').then(m => ({ default: m.CustomerOrderView })));
+const KitchenDisplaySystem = lazy(() => import('./components/KitchenDisplaySystem').then(m => ({ default: m.KitchenDisplaySystem })));
+const ManagerDashboard = lazy(() => import('./components/ManagerDashboard').then(m => ({ default: m.ManagerDashboard })));
+const StaffLoginGate = lazy(() => import('./components/StaffLoginGate').then(m => ({ default: m.StaffLoginGate })));
+
+const ViewLoadingFallback = () => (
+  <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
+    <div className="w-10 h-10 border-3 border-[#E5B453]/20 border-t-[#E5B453] rounded-full animate-spin" />
+    <p className="text-xs text-[#E5B453]/80 font-mono tracking-widest uppercase animate-pulse">
+      載入中 Loading System...
+    </p>
+  </div>
+);
 
 interface AnalyticsData {
   totalRevenue: number;
@@ -2120,133 +2130,139 @@ export default function App() {
                   本頁面為管理階層專屬之獨立防護選單。已與顧客共用選單安全防禦硬化，防止任何未授權之側錄、入侵或探測。
                 </p>
               </div>
-              <StaffLoginGate
-                onLoginSuccess={() => {
-                  setIsStaff(true);
-                  setActiveTab('admin');
-                }}
-                onCancel={() => {
-                  navigateTo('/');
-                }}
-              />
+              <Suspense fallback={<ViewLoadingFallback />}>
+                <StaffLoginGate
+                  onLoginSuccess={() => {
+                    setIsStaff(true);
+                    setActiveTab('admin');
+                  }}
+                  onCancel={() => {
+                    navigateTo('/');
+                  }}
+                />
+              </Suspense>
             </div>
           ) : (
             <div>
-              {activeTab === 'kitchen' ? (
-                <KitchenDisplaySystem
-                  currentLang={lang}
-                  orders={orders}
-                  onUpdateOrderStatus={handleUpdateOrderStatus}
-                  printLogs={printLogs}
-                  onClearPrintLogs={handleClearPrintLogs}
-                  printerIp={printerIp}
-                  onUpdatePrinterIp={handleUpdatePrinterIp}
-                  onPrintTestPage={handlePrintTestPage}
-                  onUpdateTableNumber={handleUpdateTableNumber}
-                  onUpdateQuickNotes={handleUpdateQuickNotes}
-                  onToggleOrderFlag={handleToggleOrderFlag}
-                  tables={tables}
-                  menuItems={menuItems}
-                  categories={categories}
-                  onToggleMenuItemAvailability={handleToggleMenuItemAvailability}
-                  ingredients={ingredients}
-                  onAdjustIngredientStock={handleAdjustIngredientStock}
-                  operatingHours={operatingHours}
-                  servicePaused={servicePaused}
-                  onToggleServicePause={handleToggleServicePause}
-                  onToggleOrderItemComplete={handleToggleOrderItemComplete}
-                  reservations={reservations}
-                />
-              ) : (
-                <ManagerDashboard
-                  currentLang={lang}
-                  analytics={analytics}
-                  ingredients={ingredients}
-                  orders={orders}
-                  onUpdateOrderStatus={handleUpdateOrderStatus}
-                  onRestock={handleRestock}
+              <Suspense fallback={<ViewLoadingFallback />}>
+                {activeTab === 'kitchen' ? (
+                  <KitchenDisplaySystem
+                    currentLang={lang}
+                    orders={orders}
+                    onUpdateOrderStatus={handleUpdateOrderStatus}
+                    printLogs={printLogs}
+                    onClearPrintLogs={handleClearPrintLogs}
+                    printerIp={printerIp}
+                    onUpdatePrinterIp={handleUpdatePrinterIp}
+                    onPrintTestPage={handlePrintTestPage}
+                    onUpdateTableNumber={handleUpdateTableNumber}
+                    onUpdateQuickNotes={handleUpdateQuickNotes}
+                    onToggleOrderFlag={handleToggleOrderFlag}
+                    tables={tables}
+                    menuItems={menuItems}
+                    categories={categories}
+                    onToggleMenuItemAvailability={handleToggleMenuItemAvailability}
+                    ingredients={ingredients}
+                    onAdjustIngredientStock={handleAdjustIngredientStock}
+                    operatingHours={operatingHours}
+                    servicePaused={servicePaused}
+                    onToggleServicePause={handleToggleServicePause}
+                    onToggleOrderItemComplete={handleToggleOrderItemComplete}
+                    reservations={reservations}
+                  />
+                ) : (
+                  <ManagerDashboard
+                    currentLang={lang}
+                    analytics={analytics}
+                    ingredients={ingredients}
+                    orders={orders}
+                    onUpdateOrderStatus={handleUpdateOrderStatus}
+                    onRestock={handleRestock}
 
-                  onToggleMenuItemAvailability={handleToggleMenuItemAvailability}
-                  onSendPromoPush={handleSendPromoPush}
-                  menuItems={menuItems}
-                  onAddMenuItem={handleAddMenuItem}
-                  onEditMenuItem={handleEditMenuItem}
-                  onDeleteMenuItem={handleDeleteMenuItem}
-                  categories={categories}
-                  onAddCategory={handleAddCategory}
-                  onEditCategory={handleEditCategory}
-                  onDeleteCategory={handleDeleteCategory}
-                  onReorderCategories={handleReorderCategories}
-                  onReorderMenuItems={handleReorderMenuItems}
-                  tables={tables}
-                  onAddTable={handleAddTable}
-                  onEditTable={handleEditTable}
-                  onDeleteTable={handleDeleteTable}
-                  onUpdateTableStatus={handleUpdateTableStatus}
-                  reservations={reservations}
-                  onAddReservation={handleAddReservation}
-                  onEditReservation={handleUpdateReservation}
-                  onDeleteReservation={handleDeleteReservation}
-                  onPayOrder={handlePayOrder}
-                  onPlaceOrder={handlePlaceOrder}
-                  onDeleteOrder={handleDeleteOrder}
-                  onUpdateTableNumber={handleUpdateTableNumber}
-                  onUpdateOrderItems={handleUpdateOrderItems}
-                  defaultSubTab={adminSubTab || (activeTab === 'cashier' ? 'cashier' : 'stats')}
-                  onSubTabChange={(subTab) => setAdminSubTab(subTab)}
-                  minSpend={minSpend}
-                  onUpdateMinSpend={handleUpdateMinSpend}
-                  promoCombo={promoCombo}
-                  onSavePromoCombo={handleSavePromoComboConfig}
-                  operatingHours={operatingHours}
-                  restDays={restDays}
-                  isOpen={isOpen}
-                  onUpdateOperatingHours={handleUpdateOperatingHours}
-                  customerNotice={customerNotice}
-                  onUpdateCustomerNotice={handleUpdateCustomerNotice}
-                  staffPin={staffPin}
-                  popularItemIds={popularItemIds}
-                  onUpdatePopularItemIds={handleUpdatePopularItemIds}
-                  printerIp={printerIp}
-                  onPrintTestPage={handlePrintTestPage}
-                  onAddIngredient={handleAddIngredient}
-                  servicePaused={servicePaused}
-                  onToggleServicePause={handleToggleServicePause}
-                  memberPointsRatio={memberPointsRatio}
-                  memberRewards={memberRewards}
-                  onUpdateMemberConfig={fetchData}
-                />
-              )}
+                    onToggleMenuItemAvailability={handleToggleMenuItemAvailability}
+                    onSendPromoPush={handleSendPromoPush}
+                    menuItems={menuItems}
+                    onAddMenuItem={handleAddMenuItem}
+                    onEditMenuItem={handleEditMenuItem}
+                    onDeleteMenuItem={handleDeleteMenuItem}
+                    categories={categories}
+                    onAddCategory={handleAddCategory}
+                    onEditCategory={handleEditCategory}
+                    onDeleteCategory={handleDeleteCategory}
+                    onReorderCategories={handleReorderCategories}
+                    onReorderMenuItems={handleReorderMenuItems}
+                    tables={tables}
+                    onAddTable={handleAddTable}
+                    onEditTable={handleEditTable}
+                    onDeleteTable={handleDeleteTable}
+                    onUpdateTableStatus={handleUpdateTableStatus}
+                    reservations={reservations}
+                    onAddReservation={handleAddReservation}
+                    onEditReservation={handleUpdateReservation}
+                    onDeleteReservation={handleDeleteReservation}
+                    onPayOrder={handlePayOrder}
+                    onPlaceOrder={handlePlaceOrder}
+                    onDeleteOrder={handleDeleteOrder}
+                    onUpdateTableNumber={handleUpdateTableNumber}
+                    onUpdateOrderItems={handleUpdateOrderItems}
+                    defaultSubTab={adminSubTab || (activeTab === 'cashier' ? 'cashier' : 'stats')}
+                    onSubTabChange={(subTab) => setAdminSubTab(subTab)}
+                    minSpend={minSpend}
+                    onUpdateMinSpend={handleUpdateMinSpend}
+                    promoCombo={promoCombo}
+                    onSavePromoCombo={handleSavePromoComboConfig}
+                    operatingHours={operatingHours}
+                    restDays={restDays}
+                    isOpen={isOpen}
+                    onUpdateOperatingHours={handleUpdateOperatingHours}
+                    customerNotice={customerNotice}
+                    onUpdateCustomerNotice={handleUpdateCustomerNotice}
+                    staffPin={staffPin}
+                    popularItemIds={popularItemIds}
+                    onUpdatePopularItemIds={handleUpdatePopularItemIds}
+                    printerIp={printerIp}
+                    onPrintTestPage={handlePrintTestPage}
+                    onAddIngredient={handleAddIngredient}
+                    servicePaused={servicePaused}
+                    onToggleServicePause={handleToggleServicePause}
+                    memberPointsRatio={memberPointsRatio}
+                    memberRewards={memberRewards}
+                    onUpdateMemberConfig={fetchData}
+                  />
+                )}
+              </Suspense>
             </div>
           )
         ) : (
           <div>
-            <CustomerOrderView
-              currentLang={lang}
-              menuItems={menuItems}
-              categories={categories}
-              tables={tables}
-              reservations={reservations}
-              onAddReservation={handleAddReservation}
-              onPlaceOrder={handlePlaceOrder}
-              activeOrders={orders}
-              pushNotifications={pushNotifications}
-              onMarkNotificationRead={handleMarkNotificationRead}
-              inventoryWarnings={analytics.stockWarnings}
-              minSpend={minSpend}
-              isOpen={isOpen}
-              customerNotice={customerNotice}
-              operatingHours={operatingHours}
-              restDays={restDays}
-              promoCombo={promoCombo}
-              ingredients={ingredients}
-              onToggleMenuItemAvailability={handleToggleMenuItemAvailability}
-              onAdjustIngredientStock={handleAdjustIngredientStock}
-              popularItemIds={popularItemIds}
-              servicePaused={servicePaused}
-              memberPointsRatio={memberPointsRatio}
-              memberRewards={memberRewards}
-            />
+            <Suspense fallback={<ViewLoadingFallback />}>
+              <CustomerOrderView
+                currentLang={lang}
+                menuItems={menuItems}
+                categories={categories}
+                tables={tables}
+                reservations={reservations}
+                onAddReservation={handleAddReservation}
+                onPlaceOrder={handlePlaceOrder}
+                activeOrders={orders}
+                pushNotifications={pushNotifications}
+                onMarkNotificationRead={handleMarkNotificationRead}
+                inventoryWarnings={analytics.stockWarnings}
+                minSpend={minSpend}
+                isOpen={isOpen}
+                customerNotice={customerNotice}
+                operatingHours={operatingHours}
+                restDays={restDays}
+                promoCombo={promoCombo}
+                ingredients={ingredients}
+                onToggleMenuItemAvailability={handleToggleMenuItemAvailability}
+                onAdjustIngredientStock={handleAdjustIngredientStock}
+                popularItemIds={popularItemIds}
+                servicePaused={servicePaused}
+                memberPointsRatio={memberPointsRatio}
+                memberRewards={memberRewards}
+              />
+            </Suspense>
           </div>
         )}
       </main>

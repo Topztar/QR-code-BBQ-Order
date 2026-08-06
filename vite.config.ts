@@ -14,6 +14,19 @@ export default defineConfig({
       }
     }
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom'],
+          'vendor-icons': ['lucide-react'],
+          'vendor-charts': ['recharts', 'd3'],
+          'vendor-firebase': ['firebase/app', 'firebase/firestore', 'firebase/auth'],
+        }
+      }
+    },
+    chunkSizeWarningLimit: 1000
+  },
   test: {
     environment: 'jsdom',
     globals: true

@@ -1769,7 +1769,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
 
       // Smart Table Status Release: Only release table to 'cleaning' if NO other unpaid non-cancelled orders remain for that table
       if (onUpdateTableStatus) {
-        const uniqueTableIds = Array.from(new Set(mergedTableIds));
+        const uniqueTableIds: string[] = Array.from(new Set<string>(mergedTableIds));
         for (const tid of uniqueTableIds) {
           if (tid && !tid.includes('外帶')) {
             const remainingUnpaidForTable = orders.filter(
