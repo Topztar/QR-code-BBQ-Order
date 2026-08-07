@@ -632,6 +632,7 @@ export default function App() {
       console.log('[Sabay Offline] Intercepting order submission offline...');
       addRequestToQueue('/api/orders', 'POST', orderPayload, description);
       
+      const offlineSvc = (orderData.paymentMethod === 'credit' || orderData.paymentMethod === 'twqr') ? Math.round(totalAmount * 0.1) : 0;
       const completedOrder: Order = {
         id: tempId,
         tableNumber: orderData.tableNumber,
@@ -640,8 +641,8 @@ export default function App() {
         status: 'pending',
         createdAt: new Date().toISOString(),
         subtotal: totalAmount,
-        serviceCharge: 0,
-        total: totalAmount,
+        serviceCharge: offlineSvc,
+        total: totalAmount + offlineSvc,
         customerName: orderPayload.customerName || '',
         customerAvatar: orderPayload.customerAvatar || '',
         isMember: orderPayload.isMember || false,
@@ -687,6 +688,7 @@ export default function App() {
       console.warn('[Sabay Ordering failed, falling back to cache queue]', err);
       addRequestToQueue('/api/orders', 'POST', orderPayload, description);
       
+      const offlineSvc = (orderData.paymentMethod === 'credit' || orderData.paymentMethod === 'twqr') ? Math.round(totalAmount * 0.1) : 0;
       const completedOrder: Order = {
         id: tempId,
         tableNumber: orderData.tableNumber,
@@ -695,8 +697,8 @@ export default function App() {
         status: 'pending',
         createdAt: new Date().toISOString(),
         subtotal: totalAmount,
-        serviceCharge: 0,
-        total: totalAmount,
+        serviceCharge: offlineSvc,
+        total: totalAmount + offlineSvc,
         customerName: orderPayload.customerName || '',
         customerAvatar: orderPayload.customerAvatar || '',
         isMember: orderPayload.isMember || false,
@@ -1671,11 +1673,11 @@ export default function App() {
       let data: any = null;
       const targetVal = typeof target === 'string' ? target : 'all';
       
-      // Step 1: Direct Local POS Bridge print attempt (http://127.0.0.1:8060)
+      // Step 1: Direct Local POS Bridge print attempt (http://127.0.0.1:8060) - ONLY for bill/all
       let bridgePrinted = false;
-      if (typeof window !== 'undefined') {
+      if (typeof window !== 'undefined' && (targetVal === 'bill' || targetVal === 'all')) {
         try {
-          const sampleText = `================================\n  沙貝燒烤 SABAY BBQ 測試列印\n================================\n類別: ${targetVal === 'kitchen' ? '廚房KDS備餐單' : '前台收銀結帳單'}\n時間: ${new Date().toLocaleString()}\n狀態: 系統連線與驅動測試正常\n================================\n`;
+          const sampleText = `================================\n  沙貝燒烤 SABAY BBQ 測試列印\n================================\n類別: 前台收銀結帳單 (LPT1:)\n時間: ${new Date().toLocaleString()}\n狀態: 系統連線與驅動測試正常\n================================\n`;
           const bRes = await printViaBridge({
             text: sampleText,
             port: 'LPT1:',
@@ -1704,8 +1706,8 @@ export default function App() {
         await fetchData();
         return { 
           success: true, 
-          message: data?.message || '測試頁已透過本機 POS 橋接器成功送印！', 
-          tcpLog: data?.hardwareLogs?.kitchen || data?.hardwareLogs?.bill || 'LOCAL-PRINTER-POS-BRIDGE (127.0.0.1:8060) LPT1: 成功寫入' 
+          message: data?.message || (targetVal === 'kitchen' ? '廚房印表機 (IP) 測試指令已送出' : '測試頁已透過本機 POS 橋接器 (LPT1:) 成功送印！'), 
+          tcpLog: targetVal === 'kitchen' ? (data?.hardwareLogs?.kitchen || 'IP 印表機通訊成功') : (data?.hardwareLogs?.bill || 'LOCAL-PRINTER-POS-BRIDGE (127.0.0.1:8060) LPT1: 成功寫入')
         };
       } else {
         const text = res ? await res.text() : '';

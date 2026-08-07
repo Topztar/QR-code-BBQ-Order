@@ -448,37 +448,37 @@ let livePromoCombo = {
 };
 let livePromoCombos: any[] = [];
 let livePrinterSettings = {
-          "bill": {
-            "cashDrawerOposName": "CashDrawer1",
-            "printTelephone": "0966626408",
-            "connectionType": "LPT",
-            "printTimeEnabled": true,
-            "footerSuffix": "謝謝光臨，歡迎再度光臨！",
-            "restaurantName": "沙貝燒烤 SABAY BBQ",
-            "cashDrawerEscPosCommand": "1B700119FA",
-            "cashDrawerDriver": "ESC_POS_RAW",
-            "fontSizeFactor": 0.8,
-            "cashDrawerEnabled": true,
-            "printAddress": "桃園市大園區高鐵北路二段198號1樓",
-            "width": "58mm",
-            "usbPort": "LPT1",
-            "ip": "192.168.123.100",
-            "headerPrefix": "★★★ 顧客結帳明細單 ★★★"
-          },
-          "kitchen": {
-            "connectionType": "IP",
-            "width": "80mm",
-            "printTelephone": "0966626408",
-            "printAddress": "桃園市大園區高鐵北路二段198號1樓",
-            "headerPrefix": "★★★ 廚房工作備餐單 ★★★",
-            "fontSizeFactor": 1,
-            "usbPort": "USB001",
-            "ip": "192.168.123.100",
-            "restaurantName": "沙貝燒烤",
-            "footerSuffix": "請主廚盡速配餐出餐！",
-            "printTimeEnabled": true
-          }
-        };
+  "bill": {
+    "cashDrawerOposName": "CashDrawer1",
+    "printTelephone": "0966626408",
+    "connectionType": "LPT",
+    "printTimeEnabled": true,
+    "footerSuffix": "謝謝光臨，歡迎再度光臨！",
+    "restaurantName": "沙貝燒烤 SABAY BBQ",
+    "cashDrawerEscPosCommand": "1B700119FA",
+    "cashDrawerDriver": "ESC_POS_RAW",
+    "fontSizeFactor": 0.8,
+    "cashDrawerEnabled": true,
+    "printAddress": "桃園市大園區高鐵北路二段198號1樓",
+    "width": "58mm",
+    "usbPort": "LPT1:",
+    "ip": "192.168.1.102",
+    "headerPrefix": "★★★ 顧客結帳明細單 ★★★"
+  },
+  "kitchen": {
+    "connectionType": "IP",
+    "width": "80mm",
+    "printTelephone": "0966626408",
+    "printAddress": "桃園市大園區高鐵北路二段198號1樓",
+    "headerPrefix": "★★★ 廚房工作備餐單 ★★★",
+    "fontSizeFactor": 1,
+    "usbPort": "USB001",
+    "ip": "192.168.123.100",
+    "restaurantName": "沙貝燒烤",
+    "footerSuffix": "請主廚盡速配餐出餐！",
+    "printTimeEnabled": true
+  }
+};
 
 export function calculatePromoDiscount(items: any[]): number {
   let promoDiscount = 0;
@@ -1328,7 +1328,21 @@ function loadStateFromDisk() {
           liveOptionRules = parsed.liveOptionRules;
         }
         if (parsed.livePrinterSettings && !Array.isArray(parsed.livePrinterSettings)) {
-          livePrinterSettings = parsed.livePrinterSettings;
+          livePrinterSettings = {
+            kitchen: {
+              ...livePrinterSettings.kitchen,
+              ...(parsed.livePrinterSettings.kitchen || {})
+            },
+            bill: {
+              ...livePrinterSettings.bill,
+              ...(parsed.livePrinterSettings.bill || {})
+            }
+          };
+          if (livePrinterSettings.bill?.connectionType === 'LPT' || livePrinterSettings.bill?.usbPort?.toUpperCase().startsWith('LPT')) {
+            if (livePrinterSettings.bill.usbPort && !livePrinterSettings.bill.usbPort.includes(':')) {
+              livePrinterSettings.bill.usbPort = `${livePrinterSettings.bill.usbPort.toUpperCase()}:`;
+            }
+          }
         }
         if (parsed.livePromoCombo) {
           livePromoCombo = parsed.livePromoCombo;
@@ -1547,20 +1561,80 @@ async function triggerCashDrawerOpen(settings: any): Promise<{ success: boolean;
 }
 
 // POST endpoint to manually open cash drawer from the frontend
-app.post('/api/printer/open-drawer', async (_req, res) => {
-  const settings = livePrinterSettings.bill;
-  const result = await triggerCashDrawerOpen(settings);
+app.post('/api/printer/open-drawer', async (req, res) => {
+  const customSettings = req.body?.settings;
+  const settings = {
+    ...livePrinterSettings.bill,
+    ...(customSettings || {})
+  };
+  const isLpt = settings.connectionType === 'LPT' || (settings.usbPort && settings.usbPort.toUpperCase().startsWith('LPT'));
+  const portName = isLpt ? (settings.usbPort?.includes(':') ? settings.usbPort.toUpperCase() : `${settings.usbPort?.toUpperCase() || 'LPT1'}:`) : (settings.usbPort || 'USB002');
+  
+  const result = await triggerCashDrawerOpen({
+    ...settings,
+    usbPort: portName
+  });
   
   printLogs.push({
     id: `pr-${Date.now()}-manual-drawer`,
     timestamp: new Date().toLocaleTimeString(),
-    content: `========================================\n         SABAY BBQ 手動開啟收銀抽屜\n========================================\n觸發方式: 櫃檯員工手動點擊觸發\n實體埠口: ${settings.usbPort || 'USB002'}\n執行日誌:\n${result.log}\n========================================`,
+    content: `========================================\n         SABAY BBQ 開啟收銀抽屜\n========================================\n連線型態: ${isLpt ? 'LPT (並列埠 / POS Bridge)' : (settings.connectionType || 'USB')}\n實體埠口: ${portName}\n執行日誌:\n${result.log}\n========================================`,
     orderId: 'MANUAL-TRIGGER',
     type: 'customer'
   });
   
   saveStateToDisk();
-  res.json({ success: result.success, log: result.log });
+  res.json({ success: result.success, log: result.log, port: portName });
+});
+
+// Unified endpoint to print arbitrary formatted receipt / ticket / EOD
+app.post('/api/printer/print-receipt', async (req, res) => {
+  const { target = 'bill', text, settings: clientSettings, autoOpenDrawer = false, title = '單據出單' } = req.body || {};
+  
+  if (!text) {
+    return res.status(400).json({ success: false, error: '缺少列印內容' });
+  }
+
+  const isBill = target === 'bill' || target === 'customer' || target === 'eod';
+  const effectiveSettings = isBill 
+    ? { ...livePrinterSettings.bill, ...(clientSettings || {}) }
+    : { ...livePrinterSettings.kitchen, ...(clientSettings || {}) };
+
+  let printRes = { success: false, log: '' };
+  if (isBill) {
+    printRes = await printCustomerReceipt(text, {
+      ip: effectiveSettings.ip || livePrinterIp,
+      port: effectiveSettings.port || 9100,
+      connectionType: effectiveSettings.connectionType || 'LPT',
+      usbPort: effectiveSettings.usbPort || 'LPT1:',
+      cashDrawerEnabled: autoOpenDrawer || effectiveSettings.cashDrawerEnabled,
+      cashDrawerDriver: effectiveSettings.cashDrawerDriver,
+      cashDrawerEscPosCommand: effectiveSettings.cashDrawerEscPosCommand
+    });
+  } else {
+    printRes = await printKitchenTicket(text, {
+      ip: effectiveSettings.ip || livePrinterIp,
+      port: effectiveSettings.port || 9100,
+      connectionType: effectiveSettings.connectionType || 'IP',
+      usbPort: effectiveSettings.usbPort || 'USB001'
+    });
+  }
+
+  printLogs.push({
+    id: `pr-${Date.now()}-${target}`,
+    timestamp: new Date().toLocaleTimeString(),
+    content: `${text}\n\n[實體${isBill ? '前台 (LPT/POS Bridge)' : '廚房 (IP)'}印表機出單日誌]:\n${printRes.log}`,
+    orderId: req.body?.orderId || (target === 'eod' ? 'EOD-REPORT' : 'RECEIPT-PRINT'),
+    type: isBill ? 'customer' : 'kitchen'
+  });
+
+  saveStateToDisk();
+  res.json({
+    success: printRes.success,
+    log: printRes.log,
+    target,
+    title
+  });
 });
 
 // Generate and trigger real physical test print receipt
@@ -1576,7 +1650,7 @@ app.post('/api/printer/test', async (req, res) => {
 ----------------------------------------
 現金收銀抽屜連動: 啟用 🟢
 觸發驅動: ${livePrinterSettings.bill.cashDrawerDriver}
-實體埠口: ${livePrinterSettings.bill.usbPort || 'USB002'}
+實體埠口: ${livePrinterSettings.bill.usbPort || 'LPT1:'}
 執行日誌:
 ${drawerRes.log}
 `;
@@ -1584,7 +1658,7 @@ ${drawerRes.log}
     printLogs.push({
       id: `pr-${Date.now()}-drawer-test`,
       timestamp: new Date().toLocaleTimeString(),
-      content: `========================================\n         SABAY BBQ 收銀箱測試開啟\n========================================\n觸發方式: 測試列印連動觸發\n執行日誌:\n${drawerRes.log}\n========================================`,
+      content: `========================================\n         SABAY BBQ 收銀箱測試開啟\n========================================\n觸發方式: 測試列印連動觸發\n實體埠口: ${livePrinterSettings.bill.usbPort || 'LPT1:'}\n執行日誌:\n${drawerRes.log}\n========================================`,
       orderId: 'TEST-PAGE',
       type: 'customer'
     });
@@ -1608,7 +1682,7 @@ ${drawerRes.log}
 測試狀態: 連線成功 🟢
 主機來源: ${req.ip || '127.0.0.1'}
 廚房印表機 IP: ${livePrinterSettings.kitchen?.ip || livePrinterIp} (${livePrinterSettings.kitchen?.connectionType || 'IP'})
-前台印表機 Port: ${livePrinterSettings.bill?.usbPort || 'LPT1'} (${livePrinterSettings.bill?.connectionType || 'LPT'})
+前台印表機 Port: ${livePrinterSettings.bill?.usbPort || 'LPT1:'} (${livePrinterSettings.bill?.connectionType || 'LPT'})
 列印時間: ${new Date().toLocaleString()}
 ----------------------------------------
 字型測試 / Font Test:
@@ -1635,7 +1709,7 @@ ${drawerRes.log}
       ip: livePrinterSettings.bill?.ip || livePrinterIp,
       port: (livePrinterSettings.bill as any)?.port || 9100,
       connectionType: (livePrinterSettings.bill?.connectionType as 'IP' | 'USB' | 'LPT') || 'LPT',
-      usbPort: livePrinterSettings.bill?.usbPort || 'LPT1',
+      usbPort: livePrinterSettings.bill?.usbPort || 'LPT1:',
       cashDrawerEnabled: false
     });
   }
@@ -1663,6 +1737,7 @@ ${drawerRes.log}
     target
   });
 });
+
 
 // Update printer/staff authentication PIN (used from Manager dashboard)
 app.post('/api/printer/pin', (req, res) => {
@@ -3127,7 +3202,6 @@ app.put('/api/orders/:id/status', (req, res) => {
     const kitchenDetails = order.items.map(it => {
       const spec = [
         it.customization.spiciness === 0 ? '不辣' : (it.customization.spiciness === 1 ? '小辣' : (it.customization.spiciness === 2 ? '中辣' : '泰辣(+10)')),
-        it.customization.sweetness === 0 ? '無糖' : (it.customization.sweetness === 1 ? '微糖' : (it.customization.sweetness === 2 ? '正常糖' : '多糖')),
         it.customization.noodleType === 'rice-noodle' ? '河粉' : (it.customization.noodleType === 'vermicelli' ? '米線' : ''),
         it.customization.soupBase === 'coconut-milk' ? '加椰奶(+50)' : '',
         it.customization.notes ? `備註: ${it.customization.notes}` : ''

@@ -123,6 +123,41 @@ export const computeOrderItemsSubtotal = (items: any[], menuItemsList: any[] = [
   }, 0);
 };
 
+export const calculateOrderTotalWithPayment = (order: Partial<Order> | null | undefined, menuItemsList: any[] = []): { subtotal: number; serviceCharge: number; discount: number; total: number } => {
+  if (!order) return { subtotal: 0, serviceCharge: 0, discount: 0, total: 0 };
+  const itemsSub = computeOrderItemsSubtotal(order.items || [], menuItemsList);
+  const subtotal = (order.subtotal !== undefined && order.subtotal !== null && order.subtotal > 0) ? order.subtotal : itemsSub;
+  const pm = order.paymentMethod;
+  const isCreditOrTwqr = pm === 'credit' || pm === 'twqr';
+  const defaultSvc = isCreditOrTwqr ? Math.round(subtotal * 0.1) : 0;
+  const serviceCharge = (typeof order.serviceCharge === 'number' && order.serviceCharge > 0) ? order.serviceCharge : defaultSvc;
+  const discount = order.discount || 0;
+  
+  let total = Math.max(0, subtotal + serviceCharge - discount);
+  if (typeof order.total === 'number' && !isNaN(order.total) && order.total > 0) {
+    if (isCreditOrTwqr && (order.serviceCharge === 0 || order.serviceCharge === undefined) && order.total === subtotal) {
+      total = order.total + defaultSvc;
+    } else {
+      total = order.total;
+    }
+  }
+  return { subtotal, serviceCharge, discount, total };
+};
+
+export const getLocalDateString = (d: Date = new Date()): string => {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+export const isOrderOnLocalDate = (createdAt: string | undefined | null, targetDateStr: string): boolean => {
+  if (!createdAt) return false;
+  const d = new Date(createdAt);
+  if (isNaN(d.getTime())) return false;
+  return getLocalDateString(d) === targetDateStr;
+};
+
 
 interface ManagerDashboardProps {
   currentLang: Language;
@@ -265,6 +300,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
 }) => {
   // Navigation Tabs
   const [activeSubTab, setActiveSubTab] = useState<'stats' | 'orders' | 'inventory' | 'menu' | 'members' | 'cashier' | 'printer' | 'options' | 'eod'>(defaultSubTab || 'stats');
+  const [eodSelectedDate, setEodSelectedDate] = useState<string>(() => getLocalDateString());
 
   const prevMemberPointsRatioRef = React.useRef<number>(memberPointsRatio);
   const prevMemberRewardsRef = React.useRef<string>(JSON.stringify(memberRewards));
@@ -845,11 +881,6 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
         const itemSummaries = order.items.map((it) => {
           const customizationDetails: string[] = [];
 
-          // Sweetness
-          if (it.customization?.sweetness !== undefined) {
-            const sweet = it.customization.sweetness === 0 ? '無糖' : (it.customization.sweetness === 1 ? '三分甜' : (it.customization.sweetness === 2 ? '半糖' : '正常甜'));
-            customizationDetails.push(`甜：${sweet}`);
-          }
           // Spiciness
           if (it.customization?.spiciness !== undefined) {
             const spice = it.customization.spiciness === 0 ? '不辣' : (it.customization.spiciness === 1 ? '小辣' : (it.customization.spiciness === 2 ? '中辣' : '泰大辣'));
@@ -1208,7 +1239,6 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
           price: dish.price,
           qty: 1,
           customization: {
-            sweetness: 2,
             spiciness: 1,
             notes: '已結帳後台手動補加 / Post-payment added',
           }
@@ -1428,7 +1458,6 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
         price: dish.price,
         qty: 1,
         customization: {
-          sweetness: 2,
           spiciness: 1,
           notes: '櫃檯收銀加點',
         }
@@ -1616,8 +1645,12 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     }
     
     let surcharge = 0;
+    const isCreditOrTwqr = cashierPaymentMethod === 'credit' || cashierPaymentMethod === 'twqr';
     if (cashierSurchargeType === 'percent') {
-      surcharge = Math.round(sub * (cashierSurchargeRate / 100));
+      const effectiveRate = isCreditOrTwqr && cashierSurchargeRate === 0 && cashierSurchargeFlat === 0
+        ? 10
+        : cashierSurchargeRate;
+      surcharge = Math.round(sub * (effectiveRate / 100));
     } else {
       surcharge = Math.round(cashierSurchargeFlat);
     }
@@ -1638,7 +1671,18 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
       surcharge,
       total: finalTotal
     };
-  }, [cashierSelectedOrder, cashierMergedOrders, cashierDiscountType, cashierDiscountRate, cashierDiscountFlat, cashierSurchargeType, cashierSurchargeRate, cashierSurchargeFlat]);
+  }, [
+    cashierSelectedOrder, 
+    cashierMergedOrders, 
+    cashierDiscountType, 
+    cashierDiscountRate, 
+    cashierDiscountFlat, 
+    cashierSurchargeType, 
+    cashierSurchargeRate, 
+    cashierSurchargeFlat,
+    cashierPaymentMethod,
+    menuItems
+  ]);
 
   useEffect(() => {
     if (cashierCalculatedTotals) {
@@ -1811,8 +1855,9 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
 
       // Cash drawer interlock linkage via LOCAL-PRINTER-POS-BRIDGE & Server API
       if (billPrinter.cashDrawerEnabled) {
-        // Direct local bridge dispatch (works on localhost, LAN, and Firebase Hosting)
-        openCashDrawerViaBridge(billPrinter.usbPort || 'LPT1:', posBridgeUrl)
+        // Direct local bridge dispatch (works on localhost, LAN, and Windows POS Bridge)
+        const targetPort = billPrinter.usbPort?.includes(':') ? billPrinter.usbPort.toUpperCase() : `${billPrinter.usbPort?.toUpperCase() || 'LPT1'}:`;
+        openCashDrawerViaBridge(targetPort, posBridgeUrl)
           .then(bRes => {
             if (bRes.success) {
               console.log('[Cash Drawer Bridge Success]', bRes.message);
@@ -1821,7 +1866,11 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
           .catch(e => console.warn('[Cash Drawer Bridge Warning]', e));
 
         // Server API logging and execution
-        apiFetch('/api/printer/open-drawer', { method: 'POST' })
+        apiFetch('/api/printer/open-drawer', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ settings: billPrinter })
+        })
           .then(res => res.json())
           .then(data => {
             console.log('[Cash Drawer Server Log]', data.log);
@@ -1839,15 +1888,20 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
 
   const handleManualOpenDrawer = async () => {
     try {
-      const port = billPrinter.usbPort || 'LPT1:';
+      const isLpt = billPrinter.connectionType === 'LPT' || (billPrinter.usbPort && billPrinter.usbPort.toUpperCase().startsWith('LPT'));
+      const port = isLpt ? (billPrinter.usbPort?.includes(':') ? billPrinter.usbPort.toUpperCase() : `${billPrinter.usbPort?.toUpperCase() || 'LPT1'}:`) : (billPrinter.usbPort || 'USB002');
       
       // Step 1: Direct Local POS Bridge Call (http://127.0.0.1:8060)
       const bridgeRes = await openCashDrawerViaBridge(port, posBridgeUrl);
 
-      // Step 2: Server API Call
+      // Step 2: Server API Call with full printer settings
       let serverData: any = null;
       try {
-        const res = await apiFetch('/api/printer/open-drawer', { method: 'POST' });
+        const res = await apiFetch('/api/printer/open-drawer', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ settings: { ...billPrinter, usbPort: port } })
+        });
         if (res.ok) {
           serverData = await res.json();
         }
@@ -1933,7 +1987,6 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
         price: dish.price,
         qty: 1,
         customization: {
-          sweetness: 2,
           spiciness: 1,
           notes: '後台手動加點 / Added by admin',
         }
@@ -2164,21 +2217,21 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     footerSuffix: '請主廚盡速配餐出餐！'
   });
   const [billPrinter, setBillPrinter] = useState({
-    connectionType: 'USB',
+    connectionType: 'LPT',
     ip: '192.168.1.102',
-    usbPort: 'USB002',
+    usbPort: 'LPT1:',
     width: '58mm',
     fontSizeFactor: 0.8,
     restaurantName: '沙貝燒烤 SABAY BBQ',
-    printTelephone: '02-1234-5678',
-    printAddress: '台北市信義區泰式一番街8號',
+    printTelephone: '0966626408',
+    printAddress: '桃園市大園區高鐵北路二段198號1樓',
     printTimeEnabled: true,
     headerPrefix: '★★★ 顧客結帳明細單 ★★★',
     footerSuffix: '謝謝光臨，歡迎再度光臨！',
     cashDrawerEnabled: true,
     cashDrawerDriver: 'ESC_POS_RAW', // 'OPOS' | 'POS_NET' | 'ESC_POS_RAW'
     cashDrawerOposName: 'CashDrawer1',
-    cashDrawerEscPosCommand: '1B700019FA'
+    cashDrawerEscPosCommand: '1B700119FA'
   });
 
   const [printerSaveSuccess, setPrinterSaveSuccess] = useState<string | null>(null);
@@ -3748,11 +3801,8 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                           o => !o.isPaid && o.status !== 'cancelled' && o.tableNumber && String(o.tableNumber).trim() === String(order.tableNumber).trim()
                         ).length;
                         const orderGuests = order.guestCount || 1;
-                        const itemsSubtotal = computeOrderItemsSubtotal(order.items || [], menuItems);
-                        const rawComputedTotal = (order.subtotal !== undefined && order.subtotal !== null ? order.subtotal : itemsSubtotal) + (order.serviceCharge || 0) - (order.discount || 0);
-                        const orderDisplayTotal = (typeof order.total === 'number' && !isNaN(order.total) && order.total >= 0 && order.total !== null)
-                          ? order.total
-                          : Math.max(0, rawComputedTotal);
+                        const orderCalculated = calculateOrderTotalWithPayment(order, menuItems);
+                        const orderDisplayTotal = orderCalculated.total;
                         const avgAmt = orderDisplayTotal / orderGuests;
                         const orderCreatedAtTime = new Date(order.createdAt).getTime();
                         const timeElapsedMs = Date.now() - orderCreatedAtTime;
@@ -4099,11 +4149,8 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                       {(() => {
                         const isDineIn = !(cashierSelectedOrder.tableNumber && cashierSelectedOrder.tableNumber.includes('外帶'));
                         const orderGuests = cashierSelectedOrder.guestCount || 1;
-                        const selOrderItemsSub = computeOrderItemsSubtotal(cashierSelectedOrder.items || [], menuItems);
-                        const selOrderRawTot = (cashierSelectedOrder.subtotal !== undefined && cashierSelectedOrder.subtotal !== null ? cashierSelectedOrder.subtotal : selOrderItemsSub) + (cashierSelectedOrder.serviceCharge || 0) - (cashierSelectedOrder.discount || 0);
-                        const selOrderDisplayTotal = (typeof cashierSelectedOrder.total === 'number' && !isNaN(cashierSelectedOrder.total) && cashierSelectedOrder.total >= 0 && cashierSelectedOrder.total !== null)
-                          ? cashierSelectedOrder.total
-                          : Math.max(0, selOrderRawTot);
+                        const selOrderCalcs = calculateOrderTotalWithPayment(cashierSelectedOrder, menuItems);
+                        const selOrderDisplayTotal = selOrderCalcs.total;
                         const avgAmt = selOrderDisplayTotal / orderGuests;
                         const orderCreatedAtTime = new Date(cashierSelectedOrder.createdAt).getTime();
                         const timeElapsedMs = Date.now() - orderCreatedAtTime;
@@ -4178,7 +4225,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                                 </div>
                                 <div className="text-[11px] font-mono font-bold text-amber-400 mt-2 pt-1 border-t border-white/5 flex justify-between items-center">
                                   <span className="text-[10px] text-zinc-500 font-sans">本單金額:</span>
-                                  <span>NT$ {(computeOrderItemsSubtotal(cashierSelectedOrder.items || [], menuItems) + (cashierSelectedOrder.serviceCharge || 0) - (cashierSelectedOrder.discount || 0)).toLocaleString()}</span>
+                                  <span>NT$ {calculateOrderTotalWithPayment(cashierSelectedOrder, menuItems).total.toLocaleString()}</span>
                                 </div>
                               </button>
 
@@ -4207,7 +4254,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                                   </div>
                                   <div className="text-[11px] font-mono font-bold text-amber-400 mt-2 pt-1 border-t border-white/5 flex justify-between items-center">
                                     <span className="text-[10px] text-zinc-500 font-sans">同桌合計:</span>
-                                    <span>NT$ {sameTableOrders.reduce((sum, o) => sum + (computeOrderItemsSubtotal(o.items || [], menuItems) + (o.serviceCharge || 0) - (o.discount || 0)), 0).toLocaleString()}</span>
+                                    <span>NT$ {sameTableOrders.reduce((sum, o) => sum + calculateOrderTotalWithPayment(o, menuItems).total, 0).toLocaleString()}</span>
                                   </div>
                                 </button>
                               )}
@@ -4237,7 +4284,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                                   </div>
                                   <div className="text-[11px] font-mono font-bold text-amber-400 mt-2 pt-1 border-t border-white/5 flex justify-between items-center">
                                     <span className="text-[10px] text-zinc-500 font-sans">跨桌合計:</span>
-                                    <span>NT$ {allConnectedOrders.reduce((sum, o) => sum + (computeOrderItemsSubtotal(o.items || [], menuItems) + (o.serviceCharge || 0) - (o.discount || 0)), 0).toLocaleString()}</span>
+                                    <span>NT$ {allConnectedOrders.reduce((sum, o) => sum + calculateOrderTotalWithPayment(o, menuItems).total, 0).toLocaleString()}</span>
                                   </div>
                                 </button>
                               )}
@@ -4302,7 +4349,8 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                                   {allConnectedOrders.map((candidate) => {
                                     const isChecked = cashierSelectedMergeOrderIds.includes(candidate.id);
                                     const isMainSelected = candidate.id === cashierSelectedOrder.id;
-                                    const candSubtotal = computeOrderItemsSubtotal(candidate.items || [], menuItems) + (candidate.serviceCharge || 0) - (candidate.discount || 0);
+                                    const candCalculated = calculateOrderTotalWithPayment(candidate, menuItems);
+                                    const candSubtotal = candCalculated.total;
                                     
                                     return (
                                       <label
@@ -4503,7 +4551,6 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                                   const itemRowTotal = effectiveUnitPrice * (it.qty || 0);
 
                                   const spicinessName = ['不辣', '微辣', '中辣', '泰式大辣 (+NT$ 10)'][it.customization?.spiciness || 0];
-                                  const sweetnessName = ['無糖', '減糖', '標準', '多糖'][it.customization?.sweetness || 0];
                                   const noodleName = it.customization?.noodleType === 'rice-noodle' ? '河粉' : (it.customization?.noodleType === 'vermicelli' ? '米線' : null);
                                   const soupBaseName = it.customization?.soupBase === 'coconut-milk' ? '升級奶香冬蔭 (+NT$ 50)' : null;
                                   const addOns = it.customization?.selectedAddOns || [];
@@ -4585,9 +4632,6 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                                             )}
                                             <span className="bg-zinc-800 border border-white/10 text-zinc-300 px-2 py-0.5 rounded font-medium">
                                               🌶️ {spicinessName}
-                                            </span>
-                                            <span className="bg-zinc-800 border border-white/10 text-zinc-300 px-2 py-0.5 rounded font-medium">
-                                              🍬 {sweetnessName}
                                             </span>
                                           </div>
 
@@ -4907,13 +4951,10 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                                     setCashierSurchargeRate(10);
                                     setCashierSurchargeFlat(0);
                                     setCashierSurchargeType('percent');
-                                    setCashierDiscountRate(0);
-                                    setCashierDiscountFlat(0);
                                   } else {
                                     setCashierSurchargeRate(0);
                                     setCashierSurchargeFlat(0);
-                                    setCashierDiscountRate(0);
-                                    setCashierDiscountFlat(0);
+                                    setCashierSurchargeType('percent');
                                   }
                                 }}
                                 className={`text-left rounded-xl p-2.5 border cursor-pointer flex flex-col justify-between transition-all active:scale-95 duration-100 ${
@@ -9172,13 +9213,13 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                       onClick={() => {
                         setPrintConfirmData({
                           title: `🧾 前台收銀印表機測試列印 (${billPrinter.restaurantName})`,
-                          ip: billPrinter.ip || '192.168.123.100',
+                          ip: billPrinter.connectionType === 'IP' ? (billPrinter.ip || '192.168.1.102') : (billPrinter.usbPort || 'LPT1:'),
                           onConfirm: async () => {
                             if (onPrintTestPage) {
                               try {
                                 const res = await onPrintTestPage('bill');
                                 if (res.success) {
-                                  alert('✓ 🧾 前台收銀測試列印請求已成功發送至 LPT 埠印表機！');
+                                  alert('✓ 🧾 前台收銀測試列印請求已成功發送至 LPT 埠 (LPT1:)！');
                                 } else {
                                   alert(`⚠️ 列印失敗: ${res.error || '無法存取設備'}`);
                                 }
@@ -9790,15 +9831,21 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
 
       {/* ==================== SCREEN SUBTAB: EOD DAILY CHECKOUT ==================== */}
       {activeSubTab === 'eod' && (() => {
-        const paidOrders = orders.filter(o => o.isPaid);
-        const unpaidOrders = orders.filter(o => !o.isPaid && o.status !== 'cancelled');
-        const totalRev = paidOrders.reduce((sum, ord) => sum + ord.total, 0);
-        const cashSum = paidOrders.filter(o => o.paymentMethod === 'cash').reduce((sum, ord) => sum + ord.total, 0);
-        const creditSum = paidOrders.filter(o => o.paymentMethod === 'credit').reduce((sum, ord) => sum + ord.total, 0);
-        const twqrSum = paidOrders.filter(o => o.paymentMethod === 'twqr').reduce((sum, ord) => sum + ord.total, 0);
-        const memberSum = paidOrders.filter(o => o.paymentMethod === 'member').reduce((sum, ord) => sum + ord.total, 0);
+        const todayStr = getLocalDateString();
+        const isToday = eodSelectedDate === todayStr;
 
-        // Calculate quantities of each item sold
+        // Filter orders strictly for the selected settlement date (defaulting to today)
+        const dailyOrders = orders.filter(o => isOrderOnLocalDate(o.createdAt, eodSelectedDate));
+        const paidOrders = dailyOrders.filter(o => o.isPaid);
+        const unpaidOrders = dailyOrders.filter(o => !o.isPaid && o.status !== 'cancelled');
+
+        const totalRev = paidOrders.reduce((sum, ord) => sum + calculateOrderTotalWithPayment(ord, menuItems).total, 0);
+        const cashSum = paidOrders.filter(o => o.paymentMethod === 'cash').reduce((sum, ord) => sum + calculateOrderTotalWithPayment(ord, menuItems).total, 0);
+        const creditSum = paidOrders.filter(o => o.paymentMethod === 'credit').reduce((sum, ord) => sum + calculateOrderTotalWithPayment(ord, menuItems).total, 0);
+        const twqrSum = paidOrders.filter(o => o.paymentMethod === 'twqr').reduce((sum, ord) => sum + calculateOrderTotalWithPayment(ord, menuItems).total, 0);
+        const memberSum = paidOrders.filter(o => o.paymentMethod === 'member').reduce((sum, ord) => sum + calculateOrderTotalWithPayment(ord, menuItems).total, 0);
+
+        // Calculate quantities of each item sold ON THIS SETTLEMENT DAY
         const itemQuants: { [name: string]: { zh: string; qty: number } } = {};
         paidOrders.forEach(o => {
           o.items.forEach(it => {
@@ -9810,7 +9857,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
           });
         });
 
-        // Calculate standard ingredient consumption based on recipes
+        // Calculate standard ingredient consumption based on recipes FOR THIS SETTLEMENT DAY
         const calculatedDeductions: { [ingId: string]: number } = {};
         ingredients.forEach(ig => {
           calculatedDeductions[ig.id] = 0;
@@ -9818,7 +9865,8 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
 
         paidOrders.forEach(o => {
           o.items.forEach(it => {
-            const recipe = recipeCompositionMap[it.id];
+            const targetKey = it.menuItemId || it.id;
+            const recipe = recipeCompositionMap[targetKey] || recipeCompositionMap[it.id];
             if (recipe) {
               recipe.forEach(rec => {
                 const ingObj = ingredients.find(ig => getLocalizedText(ig.name, 'zh') === rec.name || ig.id === rec.name);
@@ -9844,7 +9892,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                   body: JSON.stringify({
                     ingredientId: ig.id,
                     quantityChanged: -consumption,
-                    note: `EOD 每日關帳自動扣減：已售餐品配方消耗核銷`
+                    note: `EOD 每日關帳自動扣減 (${eodSelectedDate})：已售餐品配方消耗核銷`
                   })
                 });
                 if (res.ok) {
@@ -9852,7 +9900,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                 }
               }
             }
-            alert(`🎉 庫存連動扣除成功！已為您同步自動化核銷對應 ${successCount} 項餐品配方食材物料流向。`);
+            alert(`🎉 庫存連動扣除成功！已為您同步自動化核銷對應 ${successCount} 項餐品配方食材物料流向 (${eodSelectedDate})。`);
             if (ingredients.length > 0) {
               await onRestock(ingredients[0].id, 0); // Sync parent state
             }
@@ -9867,7 +9915,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
           const lines = Object.entries(itemQuants).map(([lbl, val]) => `  • ${lbl.padEnd(16)} x${val.qty}`).join('\n');
           const ingredientLines = ingredients.map(ig => {
             const consumption = calculatedDeductions[ig.id] || 0;
-            return `  • ${getLocalizedText(ig.name, 'zh').padEnd(12)}: 剩餘 ${ig.stock} ${ig.unit} (今日已扣減 ${consumption} ${ig.unit})`;
+            return `  • ${getLocalizedText(ig.name, 'zh').padEnd(12)}: 剩餘 ${ig.stock} ${ig.unit} (當日已扣減 ${consumption} ${ig.unit})`;
           }).join('\n');
 
           const receiptBody = `
@@ -9875,10 +9923,10 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
        沙貝燒烤 (每日營業結算日報表)
 ========================================
 列印時間: ${new Date().toLocaleString()}
-報表日期: ${new Date().toLocaleDateString()}
+結算日期: ${eodSelectedDate} ${isToday ? '(今日)' : ''}
 -----------------------------------------
-【今日營業數據加總】
-今日實收總額 (Net Revenue): NT$ ${totalRev} 元
+【${isToday ? '今日' : eodSelectedDate} 營業數據加總】
+實收總額 (Net Revenue): NT$ ${totalRev} 元
 成功收款單數 (Paid Bills): ${paidOrders.length} 筆
 未收細單單數 (Unpaid Bills): ${unpaidOrders.length} 筆
 
@@ -9889,7 +9937,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   - 👤 會員儲值 (Member): NT$ ${memberSum} 元
 -----------------------------------------
 【餐點熱銷排行明細】
-${lines || '  (今天尚無完成收銀單商品)'}
+${lines || `  (${isToday ? '今日' : eodSelectedDate} 尚無完成收銀單商品)`}
 -----------------------------------------
 【連動數據庫存原料位變動】
 ${ingredientLines || '  (尚無庫存異動記錄)'}
@@ -9900,6 +9948,25 @@ ${ingredientLines || '  (尚無庫存異動記錄)'}
 ========================================
           `.trim();
 
+          // Direct POS bridge / backend print dispatch
+          const targetPort = billPrinter.usbPort?.includes(':') ? billPrinter.usbPort.toUpperCase() : `${billPrinter.usbPort?.toUpperCase() || 'LPT1'}:`;
+          printViaBridge({
+            text: receiptBody,
+            port: targetPort,
+            autoOpenDrawer: false
+          }, posBridgeUrl).catch(() => {});
+
+          apiFetch('/api/printer/print-receipt', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              target: 'eod',
+              text: receiptBody,
+              settings: { ...billPrinter, usbPort: targetPort },
+              title: `每日結算日報表 (${eodSelectedDate})`
+            })
+          }).catch(() => {});
+
           const pWin = window.open();
           if (pWin) {
             pWin.document.write(`
@@ -9907,7 +9974,7 @@ ${ingredientLines || '  (尚無庫存異動記錄)'}
               <html>
                 <head>
                   <meta charset="UTF-8">
-                  <title>SABAY 每日結帳報表 (EOD)</title>
+                  <title>SABAY 每日結帳報表 (EOD) - ${eodSelectedDate}</title>
                   <style>
                     body {
                       font-family: "Microsoft JhengHei", "PingFang TC", "Heiti TC", "Noto Sans TC", "Segoe UI", sans-serif, monospace;
@@ -9942,22 +10009,63 @@ ${ingredientLines || '  (尚無庫存異動記錄)'}
         return (
           <div className="space-y-6 animate-fadeIn text-left font-sans" id="subtab-section-eod">
             <div className="bg-[#161616] border border-white/10 rounded-xl p-5 space-y-4">
-              <div className="flex items-center space-x-2 border-b border-white/5 pb-2">
-                <span className="text-xl">🏁</span>
-                <div>
-                  <h4 className="font-bold text-sm text-white">沙貝每日關帳結核系統 (Daily Business EOD Checkout Portal)</h4>
-                  <p className="text-white/40 text-xs">執行每日店面關帳結算，一鍵更新餐點銷售與原料配銷，產印熱感報表與結存變更，強化營運動能。</p>
+              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-white/5 pb-4">
+                <div className="flex items-center space-x-2">
+                  <span className="text-2xl">🏁</span>
+                  <div>
+                    <h4 className="font-bold text-sm text-white">沙貝每日關帳結核系統 (Daily Business EOD Checkout Portal)</h4>
+                    <p className="text-white/40 text-xs">執行每日店面關帳結算，一鍵更新餐點銷售與原料配銷，產印熱感報表與結存變更，強化營運動能。</p>
+                  </div>
+                </div>
+
+                {/* Settlement Date Selector */}
+                <div className="flex flex-wrap items-center gap-2 bg-black/40 border border-white/10 p-1.5 rounded-xl text-xs">
+                  <span className="text-zinc-400 font-semibold pl-1.5 flex items-center gap-1">
+                    <Calendar size={13} className="text-[#E5B453]" />
+                    結算日期:
+                  </span>
+                  <input
+                    type="date"
+                    value={eodSelectedDate}
+                    onChange={(e) => {
+                      if (e.target.value) setEodSelectedDate(e.target.value);
+                    }}
+                    className="bg-zinc-900 border border-white/10 text-[#E5B453] font-mono font-bold px-2 py-1 rounded-lg text-xs outline-none focus:border-[#E5B453]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setEodSelectedDate(todayStr)}
+                    className={`px-2 py-1 rounded-lg font-bold transition text-xs cursor-pointer ${
+                      isToday ? 'bg-[#E5B453] text-black' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+                    }`}
+                  >
+                    今日 (Today)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const y = new Date(Date.now() - 24 * 3600 * 1000);
+                      setEodSelectedDate(getLocalDateString(y));
+                    }}
+                    className={`px-2 py-1 rounded-lg font-bold transition text-xs cursor-pointer ${
+                      !isToday && eodSelectedDate === getLocalDateString(new Date(Date.now() - 24 * 3600 * 1000))
+                        ? 'bg-[#E5B453] text-black'
+                        : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+                    }`}
+                  >
+                    昨日 (Yesterday)
+                  </button>
                 </div>
               </div>
 
               {/* Stats KPI Card in Checkout Panel */}
               <div className="grid grid-cols-2 md:grid-cols-5 gap-3 bg-black/30 p-4 rounded-xl border border-white/5">
                 <div className="text-center p-2.5 bg-zinc-900 border border-white/5 rounded-lg">
-                  <span className="text-[10px] text-zinc-500 block font-semibold">今日關帳實收金額</span>
+                  <span className="text-[10px] text-zinc-500 block font-semibold">{isToday ? '今日' : eodSelectedDate} 關帳實收金額</span>
                   <span className="text-lg font-mono font-black text-[#E5B453]">NT$ {totalRev}</span>
                 </div>
                 <div className="text-center p-2.5 bg-zinc-900 border border-white/5 rounded-lg">
-                  <span className="text-[10px] text-zinc-500 block font-semibold">已收款單數</span>
+                  <span className="text-[10px] text-zinc-500 block font-semibold">已收款單數 ({isToday ? '今日' : '當日'})</span>
                   <span className="text-lg font-mono font-black text-white">{paidOrders.length} 筆</span>
                 </div>
                 <div className="text-center p-2.5 bg-zinc-900 border border-white/5 rounded-lg">
@@ -9982,44 +10090,47 @@ ${ingredientLines || '  (尚無庫存異動記錄)'}
                       <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping"></span>
                       ⏱️ 待核銷未收細單明細 ({unpaidOrders.length})
                     </h5>
-                    <p className="text-[10px] text-zinc-500">此為今日仍維持未結帳狀態之點單，關帳前可一鍵變更支付方式或進行收銀狀態流轉。</p>
+                    <p className="text-[10px] text-zinc-500">此為 {isToday ? '今日' : eodSelectedDate} 仍維持未結帳狀態之點單，關帳前可一鍵變更支付方式或進行收銀狀態流轉。</p>
                   </div>
                   
                   <div className="space-y-2 max-h-96 overflow-y-auto">
                     {unpaidOrders.length === 0 ? (
                       <div className="text-center py-8 text-xs text-zinc-500 italic">
-                        🎉 太棒了！今日已無任何未結帳點單。
+                        🎉 太棒了！{isToday ? '今日' : eodSelectedDate} 已無任何未結帳點單。
                       </div>
                     ) : (
-                      unpaidOrders.map(ord => (
-                        <div key={ord.id} className="p-3 bg-zinc-900/80 rounded-lg border border-white/5 text-xs text-zinc-300 space-y-2">
-                          <div className="flex justify-between items-center">
-                            <span className="font-mono font-bold text-white">{ord.id.slice(-6).toUpperCase()} ({ord.tableNumber} 桌)</span>
-                            <span className="font-mono text-[#E5B453] font-black">NT$ {ord.total}</span>
+                      unpaidOrders.map(ord => {
+                        const ordTot = calculateOrderTotalWithPayment(ord, menuItems).total;
+                        return (
+                          <div key={ord.id} className="p-3 bg-zinc-900/80 rounded-lg border border-white/5 text-xs text-zinc-300 space-y-2">
+                            <div className="flex justify-between items-center">
+                              <span className="font-mono font-bold text-white">{ord.id.slice(-6).toUpperCase()} ({ord.tableNumber} 桌)</span>
+                              <span className="font-mono text-[#E5B453] font-black">NT$ {ordTot}</span>
+                            </div>
+                            
+                            <div className="flex gap-1.5 pt-1 border-t border-white/5">
+                              {(['cash', 'credit', 'twqr'] as const).map(pm => (
+                                <button
+                                  key={pm}
+                                  type="button"
+                                  onClick={async () => {
+                                    if (onPayOrder) {
+                                      await onPayOrder(ord.id, {
+                                        paymentMethod: pm,
+                                        isPaid: true
+                                      });
+                                      alert(`💸 已將點單 ${ord.id.slice(-6).toUpperCase()} 修改為【已結款 (${pm === 'cash' ? '現金' : pm === 'credit' ? '信用卡' : 'TWQR'})】`);
+                                    }
+                                  }}
+                                  className="flex-1 py-1 rounded bg-zinc-800 hover:bg-[#E5B453] hover:text-black transition-colors text-[9px] font-black cursor-pointer"
+                                >
+                                  {pm === 'cash' ? '現結' : pm === 'credit' ? '刷卡' : 'TWQR'}
+                                </button>
+                              ))}
+                            </div>
                           </div>
-                          
-                          <div className="flex gap-1.5 pt-1 border-t border-white/5">
-                            {(['cash', 'credit', 'twqr'] as const).map(pm => (
-                              <button
-                                key={pm}
-                                type="button"
-                                onClick={async () => {
-                                  if (onPayOrder) {
-                                    await onPayOrder(ord.id, {
-                                      paymentMethod: pm,
-                                      isPaid: true
-                                    });
-                                    alert(`💸 已將點單 ${ord.id.slice(-6).toUpperCase()} 修改為【已結款 (${pm === 'cash' ? '現金' : pm === 'credit' ? '信用卡' : 'TWQR'})】`);
-                                  }
-                                }}
-                                className="flex-1 py-1 rounded bg-zinc-800 hover:bg-[#E5B453] hover:text-black transition-colors text-[9px] font-black"
-                              >
-                                {pm === 'cash' ? '現結' : pm === 'credit' ? '刷卡' : 'TWQR'}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      ))
+                        );
+                      })
                     )}
                   </div>
                 </div>
@@ -10028,9 +10139,9 @@ ${ingredientLines || '  (尚無庫存異動記錄)'}
                 <div className="bg-black/20 border border-white/5 rounded-xl p-4 space-y-4">
                   <div className="space-y-0.5 border-b border-white/5 pb-2">
                     <h5 className="font-bold text-xs text-white uppercase tracking-wider">
-                      📦 連動「數據庫存」今日配餐配銷扣減
+                      📦 連動「數據庫存」{isToday ? '今日' : eodSelectedDate} 配餐配銷扣減
                     </h5>
-                    <p className="text-[10px] text-zinc-500">系統即時比對已收款餐品之食材配方，模擬計算當日營業流失的理論庫存量。</p>
+                    <p className="text-[10px] text-zinc-500">系統即時比對 {isToday ? '今日' : eodSelectedDate} 已收款餐品之食材配方，模擬計算當日營業流失的理論庫存量。</p>
                   </div>
 
                   <div className="space-y-2.5 text-xs text-zinc-300">
@@ -10042,7 +10153,7 @@ ${ingredientLines || '  (尚無庫存異動記錄)'}
                           <div key={ig.id} className="flex justify-between items-center border-b border-white/5 pb-1">
                             <span>{getLocalizedText(ig.name, 'zh')}</span>
                             <div className="text-right font-mono text-[11px]">
-                              <span className="text-zinc-500">今日應扣: </span>
+                              <span className="text-zinc-500">{isToday ? '今日' : '當日'}應扣: </span>
                               <span className="text-amber-400 font-bold pr-2">{consumption} {ig.unit}</span>
                               <span className="text-zinc-500">預估剩餘: </span>
                               <span className={isWarning ? 'text-rose-400 font-black' : 'text-zinc-300'}>
@@ -10076,15 +10187,20 @@ ${ingredientLines || '  (尚無庫存異動記錄)'}
                   {/* Thermal paper simulator */}
                   <div className="bg-zinc-950 border border-white/15 p-4 rounded-xl text-[10px] font-mono text-zinc-300 pointer-events-none select-none max-h-64 overflow-y-auto space-y-1 leading-tight">
                     <p className="text-center font-bold text-white">沙貝燒烤 每日營業日報表</p>
+                    <p className="text-[9px] text-[#E5B453] text-center font-bold">結算日期: {eodSelectedDate} {isToday ? '(今日)' : ''}</p>
                     <p className="text-[9px] text-zinc-500 text-center">列印時間: {new Date().toLocaleDateString()} {new Date().toLocaleTimeString()}</p>
                     <div className="border-t border-dashed border-zinc-700 my-1"></div>
                     <div className="flex justify-between">
-                      <span>今日實收總額 (Net):</span>
+                      <span>{isToday ? '今日' : '當日'}實收總額 (Net):</span>
                       <span className="font-bold text-[#E5B453]">NT$ {totalRev}</span>
                     </div>
                     <div className="flex justify-between">
                       <span>成功收款單數:</span>
                       <span>{paidOrders.length} 筆</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>未收細單單數:</span>
+                      <span>{unpaidOrders.length} 筆</span>
                     </div>
                     <div className="border-t border-dashed border-zinc-700 my-1"></div>
                     <p className="text-[9px] text-[#E5B453] uppercase font-bold">付款方式細點明細:</p>
@@ -10093,9 +10209,9 @@ ${ingredientLines || '  (尚無庫存異動記錄)'}
                     <p>  🖥️ 行動支付 (TWQR):   NT$ {twqrSum}元</p>
                     <p>  👤 会員帳抵 (Member): NT$ {memberSum}元</p>
                     <div className="border-t border-dashed border-zinc-700 my-1"></div>
-                    <p className="text-[9px] text-[#E5B453] uppercase font-bold">餐點累計熱售排行:</p>
+                    <p className="text-[9px] text-[#E5B453] uppercase font-bold">{isToday ? '今日' : '當日'}餐點熱售排行:</p>
                     {Object.entries(itemQuants).length === 0 ? (
-                      <p className="italic text-zinc-650">  (今日尚無完成結帳商品)</p>
+                      <p className="italic text-zinc-650">  ({isToday ? '今日' : eodSelectedDate} 尚無完成結帳商品)</p>
                     ) : (
                       Object.entries(itemQuants).map(([lbl, val]) => (
                         <p key={lbl}>  • {lbl.slice(0, 10).padEnd(12)} x{val.qty}</p>
@@ -10109,7 +10225,7 @@ ${ingredientLines || '  (尚無庫存異動記錄)'}
                       const lines = Object.entries(itemQuants).map(([lbl, val]) => `  • ${lbl.padEnd(16)} x${val.qty}`).join('\n');
                       const ingredientLines = ingredients.map(ig => {
                         const consumption = calculatedDeductions[ig.id] || 0;
-                        return `  • ${getLocalizedText(ig.name, 'zh').padEnd(12)}: 剩餘 ${ig.stock} ${ig.unit} (今日已扣減 ${consumption} ${ig.unit})`;
+                        return `  • ${getLocalizedText(ig.name, 'zh').padEnd(12)}: 剩餘 ${ig.stock} ${ig.unit} (當日已扣減 ${consumption} ${ig.unit})`;
                       }).join('\n');
 
                       const receiptBody = `
@@ -10117,10 +10233,10 @@ ${ingredientLines || '  (尚無庫存異動記錄)'}
        沙貝燒烤 (每日營業結算日報表)
 ========================================
 列印時間: ${new Date().toLocaleString()}
-報表日期: ${new Date().toLocaleDateString()}
+結算日期: ${eodSelectedDate} ${isToday ? '(今日)' : ''}
 -----------------------------------------
-【今日營業數據加總】
-今日實收總額 (Net Revenue): NT$ ${totalRev} 元
+【${isToday ? '今日' : eodSelectedDate} 營業數據加總】
+實收總額 (Net Revenue): NT$ ${totalRev} 元
 成功收款單數 (Paid Bills): ${paidOrders.length} 筆
 未收細單單數 (Unpaid Bills): ${unpaidOrders.length} 筆
 
@@ -10131,7 +10247,7 @@ ${ingredientLines || '  (尚無庫存異動記錄)'}
   - 👤 會員儲值 (Member): NT$ ${memberSum} 元
 -----------------------------------------
 【餐點熱銷排行明細】
-${lines || '  (今天尚無完成收銀單商品)'}
+${lines || `  (${isToday ? '今日' : eodSelectedDate} 尚無完成收銀單商品)`}
 -----------------------------------------
 【連動數據庫存原料位變動】
 ${ingredientLines || '  (尚無庫存異動記錄)'}
@@ -10142,7 +10258,7 @@ ${ingredientLines || '  (尚無庫存異動記錄)'}
 ========================================`.trim();
 
                       setPrintConfirmData({
-                        title: '列印每日營業結算日報表 (EOD)',
+                        title: `列印每日營業結算日報表 (${eodSelectedDate})`,
                         ip: printerIp,
                         receiptType: 'eod',
                         receiptBody: receiptBody,
@@ -10368,7 +10484,7 @@ ${ingredientLines || '  (尚無庫存異動記錄)'}
                                                name: item.name,
                                                price: item.price,
                                                qty: 1,
-                                               customization: { sweetness: 2, spiciness: 0, notes: "" }
+                                               customization: { spiciness: 0, notes: "" }
                                             }];
                                          });
                                       }}
@@ -10627,7 +10743,6 @@ ${ingredientLines || '  (尚無庫存異動記錄)'}
                         const specLines = selectedOrder.items.map(it => {
                           const spec = [
                             it.customization.spiciness === 0 ? '不辣 (Non-Spicy)' : (it.customization.spiciness === 1 ? '小辣 (Mild)' : (it.customization.spiciness === 2 ? '中辣 (Med)' : '泰辣 (Hot)')),
-                            it.customization.sweetness === 0 ? '無糖 (0%)' : (it.customization.sweetness === 1 ? '微糖 (30%)' : (it.customization.sweetness === 2 ? '半糖 (50%)' : '正常 (100%)')),
                             it.customization.noodleType === 'rice-noodle' ? '河粉' : (it.customization.noodleType === 'vermicelli' ? '米線' : ''),
                             it.customization.soupBase === 'coconut-milk' ? '加椰奶(+50)' : '',
                             it.customization.notes ? `備註: ${it.customization.notes}` : ''
@@ -10727,7 +10842,6 @@ ${customerDetails}
                         }
                         const spec = [
                           it.customization?.spiciness === 0 ? '不辣' : (it.customization?.spiciness === 1 ? '小辣' : (it.customization?.spiciness === 2 ? '中辣' : '泰辣(+10)')),
-                          it.customization?.sweetness === 0 ? '無糖' : (it.customization?.sweetness === 1 ? '微糖' : (it.customization?.sweetness === 2 ? '正常甜' : '多糖')),
                           it.customization?.noodleType === 'rice-noodle' ? '河粉' : (it.customization?.noodleType === 'vermicelli' ? '米線' : ''),
                           it.customization?.soupBase === 'coconut-milk' ? '升級奶香冬蔭(+50)' : '',
                           addOnsStr,
@@ -11030,7 +11144,6 @@ ${customerDetails}
                           const specLines = selectedOrder.items.map(it => {
                             const spec = [
                               it.customization.spiciness === 0 ? '不辣 (Non-Spicy)' : (it.customization.spiciness === 1 ? '小辣 (Mild)' : (it.customization.spiciness === 2 ? '中辣 (Med)' : '泰辣 (Hot)')),
-                              it.customization.sweetness === 0 ? '無糖 (0%)' : (it.customization.sweetness === 1 ? '微糖 (30%)' : (it.customization.sweetness === 2 ? '半糖 (50%)' : '正常 (100%)')),
                               it.customization.noodleType === 'rice-noodle' ? '河粉' : (it.customization.noodleType === 'vermicelli' ? '米線' : ''),
                               it.customization.soupBase === 'coconut-milk' ? '加椰奶(+50)' : '',
                               it.customization.notes ? `備註: ${it.customization.notes}` : ''
@@ -11124,7 +11237,6 @@ ${customerDetails}
                       {selectedOrder.items.map((it: any) => {
                         const spec = [
                           it.customization?.spiciness === 0 ? '不辣' : (it.customization?.spiciness === 1 ? '小辣' : (it.customization?.spiciness === 2 ? '中辣' : '泰辣')),
-                          it.customization?.sweetness === 0 ? '無糖' : (it.customization?.sweetness === 1 ? '微糖' : (it.customization?.sweetness === 2 ? '正常甜' : '多糖')),
                           it.customization?.noodleType === 'rice-noodle' ? '河粉' : (it.customization?.noodleType === 'vermicelli' ? '米線' : ''),
                           it.customization?.soupBase === 'coconut-milk' ? '升級奶香冬蔭' : '',
                           it.customization?.notes ? `客備：${it.customization?.notes}` : ''
@@ -11265,7 +11377,6 @@ ${customerDetails}
                           const specLines = selectedOrder.items.map(it => {
                             const spec = [
                               it.customization.spiciness === 0 ? '不辣 (Non-Spicy)' : (it.customization.spiciness === 1 ? '小辣 (Mild)' : (it.customization.spiciness === 2 ? '中辣 (Med)' : '泰辣 (Hot)')),
-                              it.customization.sweetness === 0 ? '無糖 (0%)' : (it.customization.sweetness === 1 ? '微糖 (30%)' : (it.customization.sweetness === 2 ? '半糖 (50%)' : '正常 (100%)')),
                               it.customization.noodleType === 'rice-noodle' ? '河粉' : (it.customization.noodleType === 'vermicelli' ? '米線' : ''),
                               it.customization.soupBase === 'coconut-milk' ? '加椰奶(+50)' : '',
                               it.customization.notes ? `備註: ${it.customization.notes}` : ''

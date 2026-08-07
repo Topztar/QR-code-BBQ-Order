@@ -1712,9 +1712,6 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
 
                               {/* customization specifications */}
                               <div className="flex flex-wrap gap-1">
-                                <span className="bg-white/5 text-white/70 border border-white/10 text-[9px] font-medium px-1 rounded">
-                                  {t('sweet')}: {oi.customization.sweetness === 0 ? t('sugarFree') : (oi.customization.sweetness === 1 ? t('sweet30') : (oi.customization.sweetness === 2 ? t('sweet50') : t('sweet100')))}
-                                </span>
                                 <span className="bg-[#FF4D4D]/5 text-[#FF4D4D] border border-[#FF4D4D]/10 text-[9px] font-medium px-1 rounded">
                                   {t('spicyPrefix')}: {oi.customization.spiciness === 0 ? t('notSpicy') : (oi.customization.spiciness === 1 ? t('mildSpicy') : (oi.customization.spiciness === 2 ? t('mediumSpicy') : t('thaiSpicy')))}
                                 </span>
@@ -2036,7 +2033,6 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
                             const specLines = order.items.map(it => {
                               const spec = [
                                 it.customization.spiciness === 0 ? t('notSpicy') : (it.customization.spiciness === 1 ? t('mildSpicy') : (it.customization.spiciness === 2 ? t('mediumSpicy') : t('thaiSpicy'))),
-                                it.customization.sweetness === 0 ? t('sugarFree') : (it.customization.sweetness === 1 ? t('sweet30') : (it.customization.sweetness === 2 ? t('sweet50') : t('sweet100'))),
                                 it.customization.noodleType === 'rice-noodle' ? t('riceNoodle') : (it.customization.noodleType === 'vermicelli' ? t('vermicelli') : ''),
                                 it.customization.soupBase === 'coconut-milk' ? t('coconutMilkAdd') : '',
                                 it.customization.notes ? `${t('notesLabel')}: ${it.customization.notes}` : ''
@@ -2160,9 +2156,6 @@ ${specLines}
 
                               {/* customize modifiers indicator */}
                               <div className="flex flex-wrap gap-1 mt-1.5">
-                                <span className="bg-white/5 text-white/85 border border-white/15 text-[10px] font-semibold px-1 rounded font-sans">
-                                  {t('sweet')}: {it.customization.sweetness === 0 ? t('sugarFree') : (it.customization.sweetness === 1 ? t('sweet30') : (it.customization.sweetness === 2 ? t('sweet50') : t('sweet100')))}
-                                </span>
                                 <span className="bg-[#FF4D4D]/10 text-[#FF4D4D] border border-[#FF4D4D]/20 text-[10px] font-semibold px-1 rounded font-mono">
                                   {t('spicyPrefix')}: {it.customization.spiciness === 0 ? t('notSpicy') : (it.customization.spiciness === 1 ? t('mildSpicy') : (it.customization.spiciness === 2 ? t('mediumSpicy') : t('thaiSpicy')))}
                                 </span>
@@ -3260,7 +3253,6 @@ ${specLines}
                 
                 <div className="space-y-3">
                   {quickViewOrder.items.map((it, idx) => {
-                    const sweetnessText = it.customization.sweetness === 0 ? t('sugarFree') : (it.customization.sweetness === 1 ? t('sweet30') : (it.customization.sweetness === 2 ? t('sweet50') : t('sweet100')));
                     const spicinessText = it.customization.spiciness === 0 ? t('notSpicy') : (it.customization.spiciness === 1 ? t('mildSpicy') : (it.customization.spiciness === 2 ? t('mediumSpicy') : t('thaiSpicy')));
                     
                     return (
@@ -3350,15 +3342,6 @@ ${specLines}
 
                         {/* Customization Details Grid with High Contrast blocks */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2">
-                          {/* Sweetness Block */}
-                          <div className={`p-2.5 rounded-lg border text-xs ${
-                            it.customization.sweetness === 0
-                              ? 'bg-zinc-900 border-zinc-800 text-zinc-400'
-                              : 'bg-white/5 border-white/10 text-white'
-                          }`}>
-                            <span className="text-[10px] text-zinc-500 font-bold block uppercase mb-1">{t('sweetness')} Sweetness</span>
-                            <span className="font-extrabold text-xs">{sweetnessText}</span>
-                          </div>
 
                           {/* Spiciness Block - highlight red for high spiciness */}
                           <div className={`p-2.5 rounded-lg border text-xs ${
@@ -3435,7 +3418,6 @@ ${specLines}
                     const specLines = quickViewOrder.items.map(it => {
                       const spec = [
                         it.customization.spiciness === 0 ? t('notSpicy') : (it.customization.spiciness === 1 ? t('mildSpicy') : (it.customization.spiciness === 2 ? t('mediumSpicy') : t('thaiSpicy'))),
-                        it.customization.sweetness === 0 ? t('sugarFree') : (it.customization.sweetness === 1 ? t('sweet30') : (it.customization.sweetness === 2 ? t('sweet50') : t('sweet100'))),
                         it.customization.noodleType === 'rice-noodle' ? t('riceNoodle') : (it.customization.noodleType === 'vermicelli' ? t('vermicelli') : ''),
                         it.customization.soupBase === 'coconut-milk' ? t('coconutMilkAdd') : '',
                         it.customization.notes ? `${t('notesLabel')}: ${it.customization.notes}` : ''

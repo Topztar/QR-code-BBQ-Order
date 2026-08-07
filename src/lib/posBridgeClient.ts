@@ -26,6 +26,18 @@ export interface POSPrintOptions {
 export const DEFAULT_POS_BRIDGE_URL = 'http://127.0.0.1:8060';
 
 /**
+ * 標準化本機硬體埠口名稱 (例如將 LPT1 轉為 LPT1:)
+ */
+export function normalizePort(port?: string): string {
+  if (!port || !port.trim()) return 'LPT1:';
+  const clean = port.trim();
+  if (clean.toUpperCase().startsWith('LPT')) {
+    return clean.includes(':') ? clean.toUpperCase() : `${clean.toUpperCase()}:`;
+  }
+  return clean;
+}
+
+/**
  * 探測本機 POS 橋接服務 (LOCAL-PRINTER-POS-BRIDGE) 是否在線運行中
  * @param baseUrl 預設為 http://127.0.0.1:8060
  * @param timeoutMs 逾時毫秒數 (預設 1000ms)
@@ -72,6 +84,7 @@ export async function openCashDrawerViaBridge(
   port: string = 'LPT1:',
   baseUrl: string = DEFAULT_POS_BRIDGE_URL
 ): Promise<POSBridgeResponse> {
+  const targetPort = normalizePort(port);
   try {
     const cleanUrl = baseUrl.replace(/\/+$/, '');
     const controller = new AbortController();
@@ -82,7 +95,7 @@ export async function openCashDrawerViaBridge(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         action: 'open_drawer',
-        port: port || 'LPT1:'
+        port: targetPort
       }),
       signal: controller.signal
     });
@@ -93,14 +106,15 @@ export async function openCashDrawerViaBridge(
       success: !!data.success,
       message: data.message || '收銀抽屜脈衝已發送至本機硬體埠',
       bytesSent: data.bytesSent,
-      port: data.port || port,
+      port: data.port || targetPort,
       drawerOpened: true
     };
   } catch (err: any) {
     console.warn('[POS Bridge Client] openCashDrawer error:', err);
     return {
       success: false,
-      message: `無法連線至本機 POS 橋接器 (${baseUrl}): ${err?.message || err}`
+      message: `無法連線至本機 POS 橋接器 (${baseUrl}): ${err?.message || err}`,
+      port: targetPort
     };
   }
 }
@@ -114,6 +128,7 @@ export async function printViaBridge(
   options: POSPrintOptions,
   baseUrl: string = DEFAULT_POS_BRIDGE_URL
 ): Promise<POSBridgeResponse> {
+  const targetPort = normalizePort(options.port);
   try {
     const cleanUrl = baseUrl.replace(/\/+$/, '');
     const controller = new AbortController();
@@ -126,7 +141,7 @@ export async function printViaBridge(
         text: options.text,
         hex: options.hex,
         base64: options.base64,
-        port: options.port || 'LPT1:',
+        port: targetPort,
         autoOpenDrawer: options.autoOpenDrawer ?? false
       }),
       signal: controller.signal
@@ -138,14 +153,30 @@ export async function printViaBridge(
       success: !!data.success,
       message: data.message || '列印指令已成功寫入本機印表機埠口',
       bytesSent: data.bytesSent,
-      port: data.port || options.port,
+      port: data.port || targetPort,
       drawerOpened: data.drawerOpened
     };
   } catch (err: any) {
     console.warn('[POS Bridge Client] printViaBridge error:', err);
     return {
       success: false,
-      message: `本機 POS 橋接器列印失敗 (${baseUrl}): ${err?.message || err}`
+      message: `本機 POS 橋接器列印失敗 (${baseUrl}): ${err?.message || err}`,
+      port: targetPort
     };
   }
 }
+
+/**
+ * 格式化文字並直接透過本機 POS Bridge 印出收據
+ */
+export async function printReceiptViaBridge(
+  receiptText: string,
+  options: { port?: string; autoOpenDrawer?: boolean; bridgeUrl?: string } = {}
+): Promise<POSBridgeResponse> {
+  return await printViaBridge({
+    text: receiptText,
+    port: normalizePort(options.port || 'LPT1:'),
+    autoOpenDrawer: options.autoOpenDrawer ?? false
+  }, options.bridgeUrl || DEFAULT_POS_BRIDGE_URL);
+}
+

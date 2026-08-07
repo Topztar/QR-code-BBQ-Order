@@ -296,11 +296,11 @@ export async function sendToSerialPrinter(
  * Cross-platform port resolution (e.g. 'USB002' -> 'COM3' or '/dev/ttyUSB0' fallback on Linux)
  */
 function resolvePortName(userPort: string): string {
-  if (!userPort) return process.platform === 'win32' ? 'COM3' : '/dev/ttyUSB0';
+  if (!userPort) return process.platform === 'win32' ? 'LPT1:' : '/dev/ttyUSB0';
   const cleanPort = userPort.trim();
   if (process.platform === 'win32') {
     if (cleanPort.toUpperCase().startsWith('LPT')) {
-      return cleanPort.toUpperCase(); // Direct LPT port mapping on Windows
+      return cleanPort.includes(':') ? cleanPort.toUpperCase() : `${cleanPort.toUpperCase()}:`;
     }
     if (cleanPort.toUpperCase().startsWith('USB')) {
       // Map virtual USB002 -> COM3 if raw USB virtual COM port is mapped
@@ -309,7 +309,7 @@ function resolvePortName(userPort: string): string {
     return cleanPort;
   } else {
     if (cleanPort.toUpperCase().startsWith('LPT')) {
-      return cleanPort; // Keep as is for linux/mac if LPT passed
+      return cleanPort;
     }
     if (cleanPort.toUpperCase().startsWith('COM') || cleanPort.toUpperCase().startsWith('USB')) {
       return '/dev/ttyUSB0';
@@ -324,16 +324,17 @@ function resolvePortName(userPort: string): string {
 export async function triggerRealCashDrawer(settings: CashDrawerSettings): Promise<PrinterDriverResult> {
   const driver = settings.cashDrawerDriver || 'ESC_POS_RAW';
   const rawCommandHex = settings.cashDrawerEscPosCommand || '1B700019FA';
-  const portName = settings.usbPort || 'LPT1:';
+  const isLpt = settings.connectionType === 'LPT' || (settings.usbPort && settings.usbPort.toUpperCase().startsWith('LPT'));
+  const portName = isLpt ? resolvePortName(settings.usbPort || 'LPT1:') : (settings.usbPort || 'USB002');
   const targetIp = settings.ip || '192.168.123.100';
   const targetPort = settings.port || 9100;
-  const isNetwork = settings.connectionType === 'IP';
+  const isNetwork = settings.connectionType === 'IP' && !isLpt;
 
-  // If not network, attempt direct call to LOCAL-PRINTER-POS-BRIDGE /open-drawer first
+  // If not network (e.g. LPT or USB), attempt direct call to LOCAL-PRINTER-POS-BRIDGE /open-drawer first
   if (!isNetwork) {
     try {
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 1200);
+      const timer = setTimeout(() => controller.abort(), 1500);
       const res = await fetch('http://127.0.0.1:8060/open-drawer', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -350,7 +351,7 @@ export async function triggerRealCashDrawer(settings: CashDrawerSettings): Promi
         if (result.success) {
           return {
             success: true,
-            log: `[POS Bridge 127.0.0.1:8060] ${result.message || '實體錢箱脈衝已透過 LOCAL-PRINTER-POS-BRIDGE 順利觸發'}`
+            log: `[POS Bridge 127.0.0.1:8060] ${result.message || '實體錢箱脈衝已透過 LOCAL-PRINTER-POS-BRIDGE 順利觸發'} (埠口: ${portName})`
           };
         }
       }
@@ -370,11 +371,11 @@ export async function triggerRealCashDrawer(settings: CashDrawerSettings): Promi
   }
 
   // Real physical cash drawer ESC/POS driver execution for all driver configurations (OPOS / POS_NET / ESC_POS_RAW)
-  console.log(`[Real Hardware Cash Drawer] Triggering ESC/POS drawer pulse hex [${rawCommandHex}] (Driver: ${driver})`);
+  console.log(`[Real Hardware Cash Drawer] Triggering ESC/POS drawer pulse hex [${rawCommandHex}] on ${isNetwork ? `IP ${targetIp}:${targetPort}` : `Port ${portName}`} (Driver: ${driver})`);
   if (isNetwork) {
     return await sendToNetworkPrinter(targetIp, targetPort, drawerBuffer);
   } else {
-    return await sendToSerialPrinter(portName, drawerBuffer);
+    return await sendToSerialPrinter(portName, drawerBuffer, { autoOpenDrawer: true });
   }
 }
 
@@ -385,9 +386,10 @@ export async function printKitchenTicket(
   ticketText: string,
   settings: PrinterDeviceSettings = {}
 ): Promise<PrinterDriverResult> {
+  const isLpt = settings.connectionType === 'LPT' || (settings.usbPort && settings.usbPort.toUpperCase().startsWith('LPT'));
   const host = settings.ip || '192.168.123.100';
   const port = settings.port || 9100;
-  const isNetwork = settings.connectionType === 'IP';
+  const isNetwork = (settings.connectionType === 'IP' || !settings.connectionType) && !isLpt;
 
   const cleanTicketText = sanitizeTextForThermalPrinter(ticketText);
   const ticketBuffer = Buffer.concat([
@@ -400,7 +402,7 @@ export async function printKitchenTicket(
   if (isNetwork) {
     return await sendToNetworkPrinter(host, port, ticketBuffer);
   } else {
-    const portName = settings.usbPort || (settings.connectionType === 'LPT' ? 'LPT1' : 'USB001');
+    const portName = isLpt ? resolvePortName(settings.usbPort || 'LPT1:') : (settings.usbPort || 'USB001');
     return await sendToSerialPrinter(portName, ticketBuffer);
   }
 }
@@ -412,9 +414,10 @@ export async function printCustomerReceipt(
   receiptText: string,
   settings: PrinterDeviceSettings = {}
 ): Promise<PrinterDriverResult> {
-  const portName = settings.usbPort || (settings.connectionType === 'LPT' ? 'LPT1' : 'USB002');
+  const isLpt = settings.connectionType === 'LPT' || (settings.usbPort && settings.usbPort.toUpperCase().startsWith('LPT'));
+  const portName = isLpt ? resolvePortName(settings.usbPort || 'LPT1:') : (settings.usbPort || 'USB002');
   const host = settings.ip || '192.168.123.100';
-  const isNetwork = settings.connectionType === 'IP';
+  const isNetwork = settings.connectionType === 'IP' && !isLpt;
 
   const cleanReceiptText = sanitizeTextForThermalPrinter(receiptText);
   const receiptBuffer = Buffer.concat([
@@ -428,11 +431,11 @@ export async function printCustomerReceipt(
   if (isNetwork) {
     printRes = await sendToNetworkPrinter(host, settings.port || 9100, receiptBuffer);
   } else {
-    printRes = await sendToSerialPrinter(portName, receiptBuffer);
+    printRes = await sendToSerialPrinter(portName, receiptBuffer, { autoOpenDrawer: !!settings.cashDrawerEnabled });
   }
 
   // Trigger cash drawer if enabled for counter printer
-  if (settings.cashDrawerEnabled) {
+  if (settings.cashDrawerEnabled && isNetwork) {
     const drawerRes = await triggerRealCashDrawer({
       cashDrawerDriver: settings.cashDrawerDriver || 'ESC_POS_RAW',
       cashDrawerEscPosCommand: settings.cashDrawerEscPosCommand || '1B700019FA',

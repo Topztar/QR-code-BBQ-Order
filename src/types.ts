@@ -9,7 +9,6 @@ export interface CustomAddOn {
 }
 
 export interface FoodCustomization {
-  sweetness: number; // 0=No, 1=Less, 2=Regular, 3=Extra
   spiciness: number; // 0=None, 1=Mild (小辣), 2=Medium (中辣), 3=Thai Spicy (大辣, +10)
   noodleType?: 'rice-noodle' | 'vermicelli' | 'none'; // for Tom Yum noodles
   soupBase?: 'plain' | 'coconut-milk'; // +50

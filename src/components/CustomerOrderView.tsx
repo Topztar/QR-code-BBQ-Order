@@ -1078,7 +1078,6 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
 
   // Customization selection state
   const [isSimplifiedMode, setIsSimplifiedMode] = useState<boolean>(false);
-  const [sweetness, setSweetness] = useState<number>(2); // regular
   const [spiciness, setSpiciness] = useState<number>(1); // mild/小辣
   const [noodleType, setNoodleType] = useState<'rice-noodle' | 'vermicelli' | 'none'>('rice-noodle');
   const [soupBase, setSoupBase] = useState<'plain' | 'coconut-milk'>('plain');
@@ -1318,7 +1317,6 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
         price: menuItem ? menuItem.price : oldItem.price,
         qty: oldItem.qty,
         customization: {
-          sweetness: 2,
           spiciness: 1,
           notes: '由歷史訂單一鍵加點 (Quick reordered from past orders)',
         }
@@ -1395,7 +1393,6 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
       price: 0,
       qty: 1,
       customization: {
-        sweetness: 2,
         spiciness: 0,
         noodleType: undefined,
         soupBase: undefined,
@@ -1436,7 +1433,6 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
     if (!item.available) return;
     setSelectedDetailItem(item);
     setQty(1);
-    setSweetness(item.category === 'drinks' || item.category === 'sweets' ? 2 : 2); // Default to less sugar / regular
     setSpiciness(item.category === 'tomyum' || item.category === 'noodles' || item.category === 'skewers' ? 1 : 0); // Default to small spicy/none
     setNoodleType('rice-noodle');
     setSoupBase('plain');
@@ -1465,7 +1461,6 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
       price: selectedDetailItem.price, // standard
       qty,
       customization: {
-        sweetness,
         spiciness,
         noodleType: selectedDetailItem.hasNoodlesOption ? noodleType : undefined,
         soupBase: selectedDetailItem.hasCoconutsMilkOption ? soupBase : undefined,
@@ -1497,7 +1492,6 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
   const handleQuickAddToCart = (item: MenuItem) => {
     if (!isStoreCurrentlyOpen) return;
     const isSpicyCategory = !item.isNotSpicy;
-    const isSweetCategory = item.category === 'drinks' || item.category === 'sweets';
     
     const newOrderItem: OrderItem = {
       id: `cart-quick-${Math.floor(1000 + Math.random() * 9000)}-${Date.now()}`,
@@ -1506,7 +1500,6 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
       price: item.price,
       qty: 1,
       customization: {
-        sweetness: isSweetCategory ? 2 : 2,
         spiciness: isSpicyCategory ? 1 : 0,
         noodleType: item.hasNoodlesOption ? 'rice-noodle' : undefined,
         soupBase: item.hasCoconutsMilkOption ? 'plain' : undefined,
@@ -3976,9 +3969,6 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                                     </div>
                                     {it.customization && (
                                       <div className="text-[11px] text-white/40 mt-0.5 space-y-0.5 pl-2">
-                                        {it.customization.sweetness !== undefined && (
-                                          <div>• {t('sweetness') || '甜度'}: {['無糖', '微糖', '正常糖', '多糖'][it.customization.sweetness]}</div>
-                                        )}
                                         {it.customization.spiciness !== undefined && (
                                           <div>
                                             • {t('spiciness') || '辣度'}: {['不辣', '微辣', '中辣', '大辣(+10)'][it.customization.spiciness]}
@@ -4307,9 +4297,6 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                                   </div>
                                   {it.customization && (
                                     <div className="text-[11px] text-white/40 mt-0.5 space-y-0.5 pl-3">
-                                      {it.customization.sweetness !== undefined && (
-                                        <div>• {t('sweetness') || '甜度'}: {['無糖', '微糖', '正常糖', '多糖'][it.customization.sweetness]}</div>
-                                      )}
                                       {it.customization.spiciness !== undefined && (
                                         <div>
                                           • {t('spiciness') || '辣度'}: {['不辣', '微辣', '中辣', '大辣(+10)'][it.customization.spiciness]}
