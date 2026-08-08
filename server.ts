@@ -1921,9 +1921,40 @@ app.post('/api/images/upload', async (req, res) => {
 
 // -----------------------------------------------------------------
 
+// 0. Consolidated Bootstrap endpoint for fast initial load
+app.get('/api/bootstrap', (_req, res) => {
+  checkAndRestoreSoldOutMenuItems();
+  syncTableStatusesWithTodayReservations();
+  res.setHeader('Cache-Control', 'public, max-age=15, s-maxage=60, stale-while-revalidate=300');
+  res.json({
+    menu: liveMenu,
+    categories: liveCategories,
+    tables: liveTables,
+    operatingHours: {
+      slots: liveOperatingHours,
+      restDays: liveRestDays,
+      isOpen: isStoreOpen(),
+      currentTime: new Date().toISOString()
+    },
+    customerNotice: { notice: liveCustomerNotice },
+    promoCombo: livePromoCombo,
+    popularItemIds: livePopularItemIds,
+    minSpend: { minSpend: liveMinSpendPerPerson },
+    membersConfig: {
+      pointsRatio: liveMemberPointsRatio,
+      rewards: liveMemberRewards
+    },
+    servicePaused: { servicePaused: liveServicePaused },
+    printerConfig: { ip: livePrinterIp },
+    ingredients: liveIngredients,
+    reservations: liveReservations
+  });
+});
+
 // 1. Get Live Menu Items
 app.get('/api/menu', (_req, res) => {
   checkAndRestoreSoldOutMenuItems();
+  res.setHeader('Cache-Control', 'public, max-age=15, s-maxage=60, stale-while-revalidate=300');
   res.json(liveMenu);
 });
 
@@ -2075,6 +2106,7 @@ app.delete('/api/menu/:id', (req, res) => {
 
 // 1.5 Get categories
 app.get('/api/categories', (_req, res) => {
+  res.setHeader('Cache-Control', 'public, max-age=15, s-maxage=60, stale-while-revalidate=300');
   res.json(liveCategories);
 });
 

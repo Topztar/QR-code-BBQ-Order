@@ -119,6 +119,7 @@ interface CustomerOrderViewProps {
   memberPointsRatio?: number;
   memberRewards?: any[];
   autoOpenReservationModal?: boolean;
+  isOrderRoute?: boolean;
 }
 
 export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
@@ -140,6 +141,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
   restDays = [],
   promoCombo = { enabled: true, requiredQty: 10, discountAmount: 20, eligibleItemIds: [], combos: [] } as any,
   autoOpenReservationModal = false,
+  isOrderRoute = false,
   ingredients = [],
   onToggleMenuItemAvailability,
   onAdjustIngredientStock,
@@ -343,8 +345,14 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
     const params = new URLSearchParams(window.location.search);
     const hasTakeoutParam = params.has('takeout');
     const tableClean = (selectedTable || '').toLowerCase();
-    return hasTakeoutParam || tableClean.includes('takeout') || tableClean.includes('外帶') || tableClean.includes('take-out');
-  }, [selectedTable]);
+    return isOrderRoute || hasTakeoutParam || tableClean.includes('takeout') || tableClean.includes('外帶') || tableClean.includes('take-out');
+  }, [selectedTable, isOrderRoute]);
+
+  useEffect(() => {
+    if (isOrderRoute) {
+      setSelectedTable('外帶');
+    }
+  }, [isOrderRoute]);
   const [selectedCategory, setSelectedCategory] = useState('tomyum');
   const [cart, setCart] = useState<OrderItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -2174,6 +2182,24 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
           </div>
           <p className="text-rose-200 text-[11px] sm:text-xs leading-relaxed font-sans">
             此預約專屬通道已由店家取消、數據已刪除或訂單已結帳完成。為保障系統安全，此專屬通道已自動關閉失效，無法再使用此通道進行點餐。
+          </p>
+        </div>
+      )}
+
+      {/* 🛍️ Google 商家線上點餐專用通道 Banner */}
+      {(isOrderRoute || (typeof window !== 'undefined' && (window.location.pathname.includes('/order') || window.location.search.includes('order')))) && !validUrlReservationParams?.reservationNo && (
+        <div className="bg-gradient-to-r from-cyan-950/80 via-zinc-900 to-blue-950/80 border border-cyan-500/40 rounded-2xl p-3.5 sm:p-4 text-left space-y-1.5 shadow-xl animate-fade-in my-3">
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-extrabold text-cyan-400 text-xs sm:text-sm flex items-center gap-1.5 font-display">
+              <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span>
+              🛍️ Google 商家線上點餐專用通道 (Google Place Actions Online Ordering)
+            </span>
+            <span className="text-[10px] bg-cyan-500/20 text-cyan-300 font-bold px-2 py-0.5 rounded border border-cyan-500/30 shrink-0">
+              審查合格獨立通道 • 線上預訂自取
+            </span>
+          </div>
+          <p className="text-zinc-300 text-[11px] sm:text-xs leading-relaxed font-sans">
+            歡迎使用 Google 商家線上點餐！您可直接瀏覽即時菜單、選購餐點，送出訂單後系統將即時發送至廚房製餐並提供取餐編號。
           </p>
         </div>
       )}

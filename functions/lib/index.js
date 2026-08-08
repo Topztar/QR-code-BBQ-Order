@@ -177,8 +177,116 @@ post('/images/upload', async (req, res) => {
         res.status(500).json({ error: 'Failed to upload image to storage', details: error?.message });
     }
 });
+get('/bootstrap', async (_req, res) => {
+    try {
+        res.setHeader('Cache-Control', 'public, max-age=15, s-maxage=60, stale-while-revalidate=300');
+        const [categoriesSnap, menuSnap, tablesSnap, systemDoc, ingredientsSnap, reservationsSnap] = await Promise.all([
+            db.collection('categories').orderBy('orderIndex').get(),
+            db.collection('menu').orderBy('orderIndex').get(),
+            db.collection('tables').get(),
+            db.collection('settings').doc('system').get(),
+            db.collection('ingredients').get(),
+            db.collection('reservations').get()
+        ]);
+        const now = new Date();
+        const items = menuSnap.docs.map(doc => {
+            const data = doc.data();
+            return { ...data, _docId: doc.id };
+        });
+        const updatePromises = [];
+        const processedItems = items.map((item) => {
+            if (item.available === false) {
+                if (!item.soldOutAt) {
+                    const soldOutAt = now.toISOString();
+                    item.soldOutAt = soldOutAt;
+                    const docId = item._docId || item.id;
+                    if (docId) {
+                        updatePromises.push(db.collection('menu').doc(docId).set({ soldOutAt }, { merge: true }));
+                    }
+                }
+                else {
+                    const soldDate = new Date(item.soldOutAt);
+                    if (!isNaN(soldDate.getTime())) {
+                        const restoreTime = new Date(soldDate);
+                        restoreTime.setDate(restoreTime.getDate() + 1);
+                        restoreTime.setHours(12, 0, 0, 0);
+                        if (now.getTime() >= restoreTime.getTime()) {
+                            item.available = true;
+                            item.soldOutAt = null;
+                            const docId = item._docId || item.id;
+                            if (docId) {
+                                updatePromises.push(db.collection('menu').doc(docId).set({ available: true, soldOutAt: null }, { merge: true }));
+                            }
+                        }
+                    }
+                }
+            }
+            else if (item.soldOutAt) {
+                item.soldOutAt = null;
+                const docId = item._docId || item.id;
+                if (docId) {
+                    updatePromises.push(db.collection('menu').doc(docId).set({ soldOutAt: null }, { merge: true }));
+                }
+            }
+            delete item._docId;
+            return item;
+        });
+        if (updatePromises.length > 0) {
+            Promise.all(updatePromises).catch(err => console.error('Cloud Functions bootstrap menu auto-restore write error:', err));
+        }
+        const nowMs = Date.now();
+        const tableUpdatePromises = [];
+        const tables = tablesSnap.docs.map(doc => {
+            const tb = doc.data();
+            if (tb.status === 'cleaning') {
+                let cleaningStartMs = tb.cleaningStartedAt ? new Date(tb.cleaningStartedAt).getTime() : 0;
+                if (!cleaningStartMs || isNaN(cleaningStartMs)) {
+                    cleaningStartMs = nowMs - (16 * 60 * 1000);
+                }
+                if (nowMs - cleaningStartMs >= 15 * 60 * 1000) {
+                    tb.status = 'available';
+                    tb.cleaningStartedAt = null;
+                    tableUpdatePromises.push(doc.ref.update({ status: 'available', cleaningStartedAt: null }));
+                }
+            }
+            return tb;
+        });
+        if (tableUpdatePromises.length > 0) {
+            Promise.all(tableUpdatePromises).catch(err => console.error('[Cloud Functions] Bootstrap tables auto-clean write error:', err));
+        }
+        const sysData = systemDoc.data() || {};
+        const isOpen = isStoreOpenFromData(sysData);
+        res.json({
+            menu: processedItems,
+            categories: categoriesSnap.docs.map(doc => doc.data()),
+            tables,
+            operatingHours: {
+                slots: sysData.liveOperatingHours || [],
+                restDays: sysData.liveRestDays || [],
+                isOpen
+            },
+            customerNotice: { notice: sysData.liveCustomerNotice || '' },
+            promoCombo: sysData.livePromoCombo || { enabled: false, requiredQty: 0, discountAmount: 0, eligibleItemIds: [] },
+            popularItemIds: sysData.livePopularItemIds || [],
+            minSpend: { minSpend: sysData.liveMinSpendPerPerson ?? 200 },
+            membersConfig: {
+                pointsRatio: sysData.liveMemberPointsRatio ?? 20,
+                rewards: sysData.liveMemberRewards || []
+            },
+            servicePaused: { servicePaused: sysData.liveServicePaused || false },
+            printerConfig: { ip: sysData.livePrinterIp || '192.168.123.100' },
+            ingredients: ingredientsSnap.docs.map(doc => doc.data()),
+            reservations: reservationsSnap.docs.map(doc => doc.data())
+        });
+    }
+    catch (error) {
+        console.error('Error fetching bootstrap data:', error);
+        res.status(500).send(error);
+    }
+});
 get('/categories', async (_req, res) => {
     try {
+        res.setHeader('Cache-Control', 'public, max-age=15, s-maxage=60, stale-while-revalidate=300');
         const snapshot = await db.collection('categories').orderBy('orderIndex').get();
         const categories = snapshot.docs.map(doc => doc.data());
         res.json(categories);
@@ -190,6 +298,7 @@ get('/categories', async (_req, res) => {
 });
 get('/menu', async (_req, res) => {
     try {
+        res.setHeader('Cache-Control', 'public, max-age=15, s-maxage=60, stale-while-revalidate=300');
         const now = new Date();
         const snapshot = await db.collection('menu').orderBy('orderIndex').get();
         const items = snapshot.docs.map(doc => {

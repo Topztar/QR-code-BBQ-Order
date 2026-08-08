@@ -327,106 +327,114 @@ export default function App() {
       const isFullCycle = forceFull || pollingCycleRef.current === 0 || pollingCycleRef.current % 5 === 0;
       pollingCycleRef.current = pollingCycleRef.current + 1;
 
-      const promises: Promise<any>[] = [
-        safeFetch('/api/ingredients', []),
-        safeFetch('/api/orders', []),
-        safeFetch('/api/print-logs', []),
-        safeFetch('/api/push-notifications', []),
-        safeFetch('/api/analytics', fallbackAnalytics),
-        safeFetch('/api/tables', []),
-        safeFetch('/api/reservations', []),
-        safeFetch('/api/settings/service-pause', { servicePaused: false }),
-      ];
-
-      if (isFullCycle) {
-        promises.push(
-          safeFetch('/api/menu', []),
-          safeFetch('/api/categories', []),
-          safeFetch('/api/printer/config', {}),
-          safeFetch('/api/settings/min-spend', { minSpend: 200 }),
-          safeFetch('/api/settings/operating-hours', {}),
-          safeFetch('/api/settings/customer-notice', {}),
-          safeFetch('/api/promo-combo', { enabled: true, requiredQty: 10, discountAmount: 20, eligibleItemIds: [] }),
-          safeFetch('/api/settings/popular-item-ids', ['ty-01', 'nd-01', 'sk-02', 'sk-01']),
-          safeFetch('/api/settings/members-config', { pointsRatio: 20, rewards: [] })
-        );
-      }
-
-      const results = await Promise.all(promises);
-
-      const safeJson = async (res: Response, fallback: any, _label: string) => {
+      const safeJson = async (res: Response, fallback: any) => {
         try {
-          if (!res.ok) return fallback;
-          const contentType = res.headers.get('content-type');
-          if (!contentType || !contentType.includes('application/json')) return fallback;
+          if (!res || !res.ok) return fallback;
+          const contentType = res.headers?.get ? res.headers.get('content-type') : null;
+          if (contentType && !contentType.includes('application/json')) return fallback;
           return await res.json();
         } catch (e) {
           return fallback;
         }
       };
 
-      const ingData = await safeJson(results[0], [], 'ingredients');
-      const ordData = await safeJson(results[1], [], 'orders');
-      const printData = await safeJson(results[2], [], 'print-logs');
-      const notifData = await safeJson(results[3], [], 'push-notifications');
-      const alyData = await safeJson(results[4], fallbackAnalytics, 'analytics');
-      const tablesData = await safeJson(results[5], [], 'tables');
-      const resveData = await safeJson(results[6], [], 'reservations');
-      const servicePauseData = await safeJson(results[7], { servicePaused: false }, 'service-pause');
+      if (isFullCycle) {
+        const [bootstrapRes, ordersRes, notifRes, printLogsRes, analyticsRes] = await Promise.all([
+          safeFetch('/api/bootstrap', null),
+          safeFetch('/api/orders', []),
+          safeFetch('/api/push-notifications', []),
+          safeFetch('/api/print-logs', []),
+          safeFetch('/api/analytics', fallbackAnalytics)
+        ]);
 
-      const nowMs = Date.now();
-      // Purge status transition locks older than 20 seconds
-      for (const [tId, tRecord] of recentStatusTransitionsRef.current.entries()) {
-        if (nowMs - tRecord.timestamp > 20000) {
-          recentStatusTransitionsRef.current.delete(tId);
+        const bootstrapData = await safeJson(bootstrapRes, null);
+        const ordData = await safeJson(ordersRes, []);
+        const notifData = await safeJson(notifRes, []);
+        const printData = await safeJson(printLogsRes, []);
+        const alyData = await safeJson(analyticsRes, fallbackAnalytics);
+
+        const nowMs = Date.now();
+        for (const [tId, tRecord] of recentStatusTransitionsRef.current.entries()) {
+          if (nowMs - tRecord.timestamp > 20000) {
+            recentStatusTransitionsRef.current.delete(tId);
+          }
         }
-      }
 
-      // Reconcile remote orders with recent local transitions to avoid stale polling overwrites
-      const reconciledOrders = Array.isArray(ordData) ? ordData.map((ord: Order) => {
-        const transition = recentStatusTransitionsRef.current.get(ord.id);
-        if (transition && ord.status !== transition.status) {
-          return { ...ord, status: transition.status, isOfflinePending: false };
+        const reconciledOrders = Array.isArray(ordData) ? ordData.map((ord: Order) => {
+          const transition = recentStatusTransitionsRef.current.get(ord.id);
+          if (transition && ord.status !== transition.status) {
+            return { ...ord, status: transition.status, isOfflinePending: false };
+          }
+          return ord;
+        }) : [];
+
+        setOrders(reconciledOrders);
+        setPrintLogs(printData);
+        setAnalytics(alyData);
+        if (Array.isArray(notifData)) setPushNotifications(notifData.filter((n: any) => !n.isRead));
+
+        if (bootstrapData) {
+          if (bootstrapData.ingredients) setIngredients(bootstrapData.ingredients);
+          if (bootstrapData.tables) setTables(bootstrapData.tables);
+          if (bootstrapData.reservations) setReservations(bootstrapData.reservations);
+          if (bootstrapData.servicePaused) setServicePaused(!!bootstrapData.servicePaused.servicePaused);
+          if (bootstrapData.menu && (bypassReorderLock || fetchStartTime > lastMenuReorderTimeRef.current)) {
+            setMenuItems(bootstrapData.menu);
+          }
+          if (bootstrapData.categories && (bypassReorderLock || fetchStartTime > lastCategoryReorderTimeRef.current)) {
+            setCategories(bootstrapData.categories);
+          }
+          if (bootstrapData.printerConfig?.ip) setPrinterIp(bootstrapData.printerConfig.ip);
+          if (Array.isArray(bootstrapData.popularItemIds)) setPopularItemIds(bootstrapData.popularItemIds);
+          if (bootstrapData.membersConfig) {
+            if (bootstrapData.membersConfig.pointsRatio !== undefined) setMemberPointsRatio(bootstrapData.membersConfig.pointsRatio);
+            if (bootstrapData.membersConfig.rewards) setMemberRewards(bootstrapData.membersConfig.rewards);
+          }
+          if (bootstrapData.promoCombo) setPromoCombo(bootstrapData.promoCombo);
+          if (bootstrapData.minSpend?.minSpend !== undefined) setMinSpend(bootstrapData.minSpend.minSpend);
+          if (bootstrapData.operatingHours) {
+            if (bootstrapData.operatingHours.slots) setOperatingHours(bootstrapData.operatingHours.slots);
+            if (bootstrapData.operatingHours.restDays) setRestDays(bootstrapData.operatingHours.restDays);
+            setIsOpen(bootstrapData.operatingHours.isOpen ?? true);
+          }
+          if (bootstrapData.customerNotice?.notice !== undefined) setCustomerNotice(bootstrapData.customerNotice.notice);
         }
-        return ord;
-      }) : [];
+      } else {
+        // Lightweight polling cycle for active dynamic state
+        const [ordersRes, tablesRes, servicePauseRes, notifRes, ingRes] = await Promise.all([
+          safeFetch('/api/orders', []),
+          safeFetch('/api/tables', []),
+          safeFetch('/api/settings/service-pause', { servicePaused: false }),
+          safeFetch('/api/push-notifications', []),
+          safeFetch('/api/ingredients', [])
+        ]);
 
-      setIngredients(ingData);
-      setOrders(reconciledOrders);
-      setPrintLogs(printData);
-      setTables(tablesData);
-      setReservations(resveData);
-      setAnalytics(alyData);
-      if (servicePauseData) setServicePaused(!!servicePauseData.servicePaused);
-      if (Array.isArray(notifData)) setPushNotifications(notifData.filter((n: any) => !n.isRead));
+        const ordData = await safeJson(ordersRes, []);
+        const tablesData = await safeJson(tablesRes, []);
+        const servicePauseData = await safeJson(servicePauseRes, { servicePaused: false });
+        const notifData = await safeJson(notifRes, []);
+        const ingData = await safeJson(ingRes, []);
 
-      if (isFullCycle && results.length > 8) {
-        const menuData = await safeJson(results[8], [], 'menu');
-        const catData = await safeJson(results[9], [], 'categories');
-        const printerData = await safeJson(results[10], {}, 'printer-config');
-        const minSpendData = await safeJson(results[11], { minSpend: 200 }, 'min-spend');
-        const opHoursData = await safeJson(results[12], {}, 'operating-hours');
-        const noticeData = await safeJson(results[13], {}, 'customer-notice');
-        const promoData = await safeJson(results[14], { enabled: false, requiredQty: 0, discountAmount: 0, eligibleItemIds: [] }, 'promo-combo');
-        const popularData = await safeJson(results[15], ['ty-01', 'nd-01', 'sk-02', 'sk-01'], 'popular-item-ids');
-        const memberConfigData = await safeJson(results[16], { pointsRatio: 20, rewards: [] }, 'members-config');
-
-        if (bypassReorderLock || fetchStartTime > lastMenuReorderTimeRef.current) setMenuItems(menuData);
-        setPrinterIp(printerData.ip || '192.168.123.100');
-        if (Array.isArray(popularData)) setPopularItemIds(popularData);
-        if (memberConfigData) {
-          if (memberConfigData.pointsRatio !== undefined) setMemberPointsRatio(memberConfigData.pointsRatio);
-          if (memberConfigData.rewards) setMemberRewards(memberConfigData.rewards);
+        const nowMs = Date.now();
+        for (const [tId, tRecord] of recentStatusTransitionsRef.current.entries()) {
+          if (nowMs - tRecord.timestamp > 20000) {
+            recentStatusTransitionsRef.current.delete(tId);
+          }
         }
-        if (promoData) setPromoCombo(promoData);
-        if (minSpendData && minSpendData.minSpend !== undefined) setMinSpend(minSpendData.minSpend);
-        if (opHoursData) {
-          if (opHoursData.slots) setOperatingHours(opHoursData.slots);
-          if (opHoursData.restDays) setRestDays(opHoursData.restDays);
-          setIsOpen(opHoursData.isOpen ?? true);
-        }
-        if (noticeData && noticeData.notice !== undefined) setCustomerNotice(noticeData.notice);
-        if (bypassReorderLock || fetchStartTime > lastCategoryReorderTimeRef.current) setCategories(catData);
+
+        const reconciledOrders = Array.isArray(ordData) ? ordData.map((ord: Order) => {
+          const transition = recentStatusTransitionsRef.current.get(ord.id);
+          if (transition && ord.status !== transition.status) {
+            return { ...ord, status: transition.status, isOfflinePending: false };
+          }
+          return ord;
+        }) : [];
+
+        setOrders(reconciledOrders);
+        if (Array.isArray(tablesData)) setTables(tablesData);
+        if (Array.isArray(ingData)) setIngredients(ingData);
+        if (servicePauseData) setServicePaused(!!servicePauseData.servicePaused);
+        if (Array.isArray(notifData)) setPushNotifications(notifData.filter((n: any) => !n.isRead));
       }
 
       if (window.location.pathname === '/FSY20260606') {
@@ -2315,6 +2323,7 @@ export default function App() {
                 memberPointsRatio={memberPointsRatio}
                 memberRewards={memberRewards}
                 autoOpenReservationModal={isReserveRoute}
+                isOrderRoute={isOrderRoute}
               />
             </Suspense>
           </div>
