@@ -4215,35 +4215,51 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                         return null;
                       })()}
 
-                      {/* 📋 結帳範圍與訂單合併選擇 (Checkout Scope Selection) */}
+                      {/* 📋 結帳規則：同桌獨立單筆結帳 / 合併結帳選擇 (Checkout Scope Selection) */}
                       {(() => {
                         const { sameTableOrders, allConnectedOrders, hasMergedTables } = cashierCandidateOrders;
                         const hasMultipleCandidates = allConnectedOrders.length > 1;
+                        const hasMultipleSameTable = sameTableOrders.length > 1;
                         
                         return (
                           <div className="bg-[#151515] border border-amber-500/30 rounded-xl p-4 space-y-3 font-sans text-left shadow-lg">
                             <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
                               <div className="flex items-center gap-2">
                                 <span className="text-xs font-black text-[#E5B453] flex items-center gap-1.5">
-                                  <span>🧾 結帳範圍與訂單合併模式 Checkout Mode</span>
+                                  <span>🧾 結帳範圍與併桌規則 (Checkout Mode)</span>
                                 </span>
-                                {hasMultipleCandidates && (
-                                  <span className="text-[10px] bg-amber-500/15 border border-amber-500/30 text-amber-300 px-2 py-0.5 rounded-full font-bold">
-                                    相關未結單共 {allConnectedOrders.length} 筆
+                                {hasMultipleSameTable && (
+                                  <span className="text-[10px] bg-amber-500/20 border border-amber-500/40 text-amber-300 px-2 py-0.5 rounded-full font-bold">
+                                    第 {cashierSelectedOrder.tableNumber} 桌有 {sameTableOrders.length} 筆未結單
                                   </span>
                                 )}
                               </div>
                               <span className="text-[10px] text-zinc-400 font-mono">
-                                {cashierCheckoutScope === 'single' && '🔹 獨立單一訂單結帳'}
+                                {cashierCheckoutScope === 'single' && '🔹 獨立單一訂單結帳 (不影響同桌他單)'}
                                 {cashierCheckoutScope === 'same_table' && `🔸 同桌合併結帳 (${cashierMergedOrders.length} 筆)`}
                                 {cashierCheckoutScope === 'all_merged' && `🔷 跨桌併桌全併 (${cashierMergedOrders.length} 筆)`}
                                 {cashierCheckoutScope === 'custom' && `⚙️ 自訂勾選結帳 (${cashierMergedOrders.length} 筆)`}
                               </span>
                             </div>
 
+                            {/* 💡 同桌多單獨立 vs 合併結帳提示 (Helpful Alert Banner) */}
+                            {hasMultipleSameTable && (
+                              <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 text-xs text-amber-200 flex items-start gap-2.5">
+                                <span className="text-base shrink-0">💡</span>
+                                <div className="space-y-1">
+                                  <div className="font-extrabold text-amber-400">
+                                    同桌多單獨立結帳說明：第 {cashierSelectedOrder.tableNumber} 桌共有 {sameTableOrders.length} 筆未結訂單
+                                  </div>
+                                  <div className="text-[11px] text-zinc-300 leading-relaxed">
+                                    預設為<strong>【獨立單一訂單結帳】</strong>，僅結當前單號 <span className="font-mono text-amber-300">#{cashierSelectedOrder.id.slice(-6)}</span>，同桌其他訂單維持未結，讓顧客能<strong>分開獨立買單</strong>！若整桌要一次付清，請切換為<strong>【同桌合併結帳】</strong>或<strong>【自訂勾選合併】</strong>。
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
                             {/* Mode Option Buttons */}
                             <div className={`grid gap-2 ${hasMultipleCandidates ? (hasMergedTables && allConnectedOrders.length > sameTableOrders.length ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4' : 'grid-cols-1 sm:grid-cols-3') : 'grid-cols-1'}`}>
-                              {/* 1. 獨立單一訂單結帳 */}
+                              {/* 1. 獨立單一訂單結帳 (預設/獨立買單) */}
                               <button
                                 type="button"
                                 onClick={() => {
@@ -4260,10 +4276,11 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                                   <span className="font-extrabold text-xs text-[#E5B453] flex items-center gap-1">
                                     <span>🔹 獨立單一結帳</span>
                                   </span>
-                                  <span className="text-[9px] font-mono bg-white/10 px-1.5 py-0.5 rounded text-white/80">單筆 1 單</span>
+                                  <span className="text-[9px] font-mono bg-[#E5B453]/20 text-amber-300 px-1.5 py-0.5 rounded font-bold">單筆 1 單 (預設)</span>
                                 </div>
                                 <div className="text-[10px] text-zinc-300 leading-tight">
-                                  僅結當前所選單號 <span className="font-mono text-[#E5B453]">#{cashierSelectedOrder.id.slice(-6)}</span>
+                                  僅結主單 <span className="font-mono text-[#E5B453]">#{cashierSelectedOrder.id.slice(-6)}</span>
+                                  {hasMultipleSameTable && <span className="text-zinc-400 block mt-0.5">· 同桌其餘 {sameTableOrders.length - 1} 單不結算</span>}
                                 </div>
                                 <div className="text-[11px] font-mono font-bold text-amber-400 mt-2 pt-1 border-t border-white/5 flex justify-between items-center">
                                   <span className="text-[10px] text-zinc-500 font-sans">本單金額:</span>
@@ -4292,7 +4309,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                                     <span className="text-[9px] font-mono bg-white/10 px-1.5 py-0.5 rounded text-white/80">{sameTableOrders.length} 筆</span>
                                   </div>
                                   <div className="text-[10px] text-zinc-300 leading-tight">
-                                    合併第 <span className="font-bold text-white">{cashierSelectedOrder.tableNumber}</span> 桌所有未結單
+                                    合併第 <span className="font-bold text-white">{cashierSelectedOrder.tableNumber}</span> 桌所有未結單一併結算
                                   </div>
                                   <div className="text-[11px] font-mono font-bold text-amber-400 mt-2 pt-1 border-t border-white/5 flex justify-between items-center">
                                     <span className="text-[10px] text-zinc-500 font-sans">同桌合計:</span>
@@ -4331,7 +4348,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                                 </button>
                               )}
 
-                              {/* 4. 自訂勾選合併 (若有多筆相關訂單) */}
+                              {/* 4. 自訂勾選合併 (自由選擇哪幾單合併) */}
                               {hasMultipleCandidates && (
                                 <button
                                   type="button"
@@ -4354,7 +4371,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                                     <span className="text-[9px] font-mono bg-white/10 px-1.5 py-0.5 rounded text-white/80">自選</span>
                                   </div>
                                   <div className="text-[10px] text-zinc-300 leading-tight">
-                                    自選指定哪幾筆訂單一同結算
+                                    自選指定同桌或跨桌哪幾筆訂單一同結算
                                   </div>
                                   <div className="text-[11px] font-mono font-bold text-purple-400 mt-2 pt-1 border-t border-white/5 flex justify-between items-center">
                                     <span className="text-[10px] text-zinc-500 font-sans">已選數量:</span>
@@ -4372,19 +4389,29 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                                   <div className="flex items-center gap-2">
                                     <button
                                       type="button"
-                                      onClick={() => setCashierSelectedMergeOrderIds(allConnectedOrders.map(o => o.id))}
-                                      className="text-[10px] text-[#E5B453] hover:underline font-bold"
-                                    >
-                                      全部選取
-                                    </button>
-                                    <span>·</span>
-                                    <button
-                                      type="button"
                                       onClick={() => setCashierSelectedMergeOrderIds([cashierSelectedOrder.id])}
-                                      className="text-[10px] text-zinc-400 hover:underline"
+                                      className="text-[10px] text-zinc-300 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 px-2 py-0.5 rounded transition"
                                     >
                                       僅選當前主單
                                     </button>
+                                    {sameTableOrders.length > 1 && (
+                                      <button
+                                        type="button"
+                                        onClick={() => setCashierSelectedMergeOrderIds(sameTableOrders.map(o => o.id))}
+                                        className="text-[10px] text-amber-300 hover:text-amber-200 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 px-2 py-0.5 rounded transition font-bold"
+                                      >
+                                        選取同桌所有單 ({sameTableOrders.length})
+                                      </button>
+                                    )}
+                                    {hasMergedTables && allConnectedOrders.length > sameTableOrders.length && (
+                                      <button
+                                        type="button"
+                                        onClick={() => setCashierSelectedMergeOrderIds(allConnectedOrders.map(o => o.id))}
+                                        className="text-[10px] text-sky-300 hover:text-sky-200 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/30 px-2 py-0.5 rounded transition font-bold"
+                                      >
+                                        全選所有關聯單 ({allConnectedOrders.length})
+                                      </button>
+                                    )}
                                   </div>
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
@@ -4393,6 +4420,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                                     const isMainSelected = candidate.id === cashierSelectedOrder.id;
                                     const candCalculated = calculateOrderTotalWithPayment(candidate, menuItems);
                                     const candSubtotal = candCalculated.total;
+                                    const isSameTable = candidate.tableNumber === cashierSelectedOrder.tableNumber;
                                     
                                     return (
                                       <label
@@ -4425,6 +4453,9 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                                               #{candidate.id.slice(-6)}
                                               {isMainSelected && (
                                                 <span className="ml-1.5 text-[9px] bg-amber-500/20 text-amber-300 px-1 py-0.2 rounded font-sans">當前主單</span>
+                                              )}
+                                              {!isSameTable && (
+                                                <span className="ml-1.5 text-[9px] bg-sky-500/20 text-sky-300 px-1 py-0.2 rounded font-sans">跨桌併單</span>
                                               )}
                                             </span>
                                             <span className="font-mono font-extrabold text-amber-400">NT$ {candSubtotal.toLocaleString()}</span>
@@ -5663,6 +5694,17 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                         </div>
                       )}
                       
+                      {/* Checkout Scope Summary Badge */}
+                      <div className="bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-[11px] flex items-center justify-between text-zinc-300">
+                        <span className="text-zinc-400">結帳模式：</span>
+                        <span className="font-bold font-mono text-[#E5B453]">
+                          {cashierCheckoutScope === 'single' && '🔹 獨立單一結帳 (僅本單)'}
+                          {cashierCheckoutScope === 'same_table' && `🔸 同桌合併結帳 (${cashierMergedOrders.length} 筆)`}
+                          {cashierCheckoutScope === 'all_merged' && `🔷 跨桌全併結帳 (${cashierMergedOrders.length} 筆)`}
+                          {cashierCheckoutScope === 'custom' && `⚙️ 自訂勾選結帳 (${cashierMergedOrders.length} 筆)`}
+                        </span>
+                      </div>
+
                       {/* Giant Checkout Action Button */}
                       <div className="flex items-center space-x-2.5 pt-1">
                         <button
@@ -5715,7 +5757,11 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                           className="flex-1 py-2 text-xs font-black text-slate-900 bg-[#E5B453] hover:bg-amber-400 active:scale-[0.98] transition shadow-md shadow-[#E5B453]/10 cursor-pointer rounded-lg flex items-center justify-center gap-1.5"
                         >
                           <Coins size={14} />
-                          <span>🎯 確認收銀並將桌號設為「已付清」 (NT$ {cashierCalculatedTotals.total})</span>
+                          <span>
+                            {cashierCheckoutScope === 'single'
+                              ? `🎯 確認本單獨立收銀 (NT$ ${cashierCalculatedTotals.total})`
+                              : `🎯 確認合併收銀 (${cashierMergedOrders.length} 筆 · NT$ ${cashierCalculatedTotals.total})`}
+                          </span>
                         </button>
                       </div>
                     </div>
@@ -12770,8 +12816,12 @@ ${customerDetails}
                 </div>
               </div>
 
-              <p className="text-[10px] text-zinc-500 text-center leading-relaxed">
-                ℹ️ 請確認款項點收無誤。點選上方「確認結清」後，系統將會儲存收銀紀錄，並將此桌席與連屬訂單更改為「已付清並釋放空桌」。
+              <p className="text-[10px] text-zinc-400 text-center leading-relaxed">
+                {cashierCheckoutScope === 'single'
+                  ? 'ℹ️ 目前為【獨立單一訂單結帳】，僅結算此筆點單。同桌其他訂單不受影響，該桌席在所有訂單結清前將持續保留。'
+                  : cashierMergedOrders.length > 1
+                  ? `ℹ️ 目前為【合併結帳模式】，將一併結清已選取的 ${cashierMergedOrders.length} 筆訂單，確認無誤後請點擊下方結清。`
+                  : 'ℹ️ 請確認款項點收無誤。點選下方「確認結清」後，系統將會儲存收銀紀錄並標記為已結清。'}
               </p>
             </div>
 
@@ -12804,7 +12854,13 @@ ${customerDetails}
                 {isCheckoutSubmitting && (
                   <span className="w-3 h-3 border-2 border-slate-900 border-t-transparent rounded-full animate-spin"></span>
                 )}
-                <span>{isCheckoutSubmitting ? '處理中...' : '🎯 確認結清並放桌'}</span>
+                <span>
+                  {isCheckoutSubmitting
+                    ? '處理中...'
+                    : cashierCheckoutScope === 'single'
+                    ? '🎯 確認此單獨立結清 (不影響同桌他單)'
+                    : `🎯 確認結清已選 ${cashierMergedOrders.length} 筆訂單`}
+                </span>
               </button>
             </div>
           </div>

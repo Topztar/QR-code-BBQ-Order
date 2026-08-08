@@ -238,9 +238,90 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [showContactDetails, setShowContactDetails] = useState(false);
 
+  interface RecentOrderTransition {
+    status?: OrderStatus;
+    items?: any[];
+    tableNumber?: string;
+    quickNotes?: string;
+    isFlagged?: boolean;
+    flagReason?: string;
+    isPaid?: boolean;
+    timestamp: number;
+  }
+
   const pollingCycleRef = useRef<number>(0);
   const activeOrderSubmissionsRef = useRef<Set<string>>(new Set());
-  const recentStatusTransitionsRef = useRef<Map<string, { status: OrderStatus; timestamp: number }>>(new Map());
+  const recentStatusTransitionsRef = useRef<Map<string, RecentOrderTransition>>(new Map());
+
+  // 🛡️ 統一訂單異動對齊防護函式 (防止 Firestore onSnapshot 與定時輪詢覆寫樂觀狀態造成回滾/Lag)
+  const reconcileOrdersWithRecentTransitions = (incomingOrders: Order[]): Order[] => {
+    if (!Array.isArray(incomingOrders)) return [];
+    const nowMs = Date.now();
+
+    // 1. 清理超過 30 秒的過期暫態鎖定
+    for (const [tId, tRecord] of recentStatusTransitionsRef.current.entries()) {
+      if (nowMs - tRecord.timestamp > 30000) {
+        recentStatusTransitionsRef.current.delete(tId);
+      }
+    }
+
+    // 2. 比對並強制維持最新樂觀操作
+    return incomingOrders.map((ord: Order) => {
+      const transition = recentStatusTransitionsRef.current.get(ord.id);
+      if (!transition) return ord;
+
+      let reconciled = { ...ord };
+
+      // 防範訂單主狀態回滾
+      if (transition.status) {
+        if (ord.status === transition.status) {
+          reconciled.isOfflinePending = false;
+        } else {
+          reconciled.status = transition.status;
+          reconciled.isOfflinePending = false;
+        }
+      }
+
+      // 防範已付款狀態回滾
+      if (transition.isPaid !== undefined) {
+        reconciled.isPaid = transition.isPaid;
+      }
+
+      // 防範桌號回滾
+      if (transition.tableNumber !== undefined && ord.tableNumber !== transition.tableNumber) {
+        reconciled.tableNumber = transition.tableNumber;
+      }
+
+      // 防範語音/口述備註回滾
+      if (transition.quickNotes !== undefined && ord.quickNotes !== transition.quickNotes) {
+        reconciled.quickNotes = transition.quickNotes;
+      }
+
+      // 防範關注旗幟狀態回滾
+      if (transition.isFlagged !== undefined) {
+        reconciled.isFlagged = transition.isFlagged;
+        if (transition.flagReason !== undefined) reconciled.flagReason = transition.flagReason;
+      }
+
+      // 防範單品項備餐/出餐完成勾選回滾
+      if (transition.items && Array.isArray(transition.items)) {
+        const itemMap = new Map((transition.items as any[]).map((it: any) => [it.id, it]));
+        reconciled.items = ord.items.map(it => {
+          const transIt: any = itemMap.get(it.id);
+          if (transIt) {
+            return {
+              ...it,
+              isCompleted: transIt.isCompleted !== undefined ? transIt.isCompleted : it.isCompleted,
+              isPrepared: transIt.isPrepared !== undefined ? transIt.isPrepared : it.isPrepared
+            };
+          }
+          return it;
+        });
+      }
+
+      return reconciled;
+    });
+  };
 
   // Offline sync queue states
   const [offlineQueue, setOfflineQueue] = useState<QueuedRequest[]>(getOfflineQueue());
@@ -353,22 +434,7 @@ export default function App() {
         const printData = await safeJson(printLogsRes, []);
         const alyData = await safeJson(analyticsRes, fallbackAnalytics);
 
-        const nowMs = Date.now();
-        for (const [tId, tRecord] of recentStatusTransitionsRef.current.entries()) {
-          if (nowMs - tRecord.timestamp > 20000) {
-            recentStatusTransitionsRef.current.delete(tId);
-          }
-        }
-
-        const reconciledOrders = Array.isArray(ordData) ? ordData.map((ord: Order) => {
-          const transition = recentStatusTransitionsRef.current.get(ord.id);
-          if (transition && ord.status !== transition.status) {
-            return { ...ord, status: transition.status, isOfflinePending: false };
-          }
-          return ord;
-        }) : [];
-
-        setOrders(reconciledOrders);
+        setOrders(reconcileOrdersWithRecentTransitions(ordData));
         setPrintLogs(printData);
         setAnalytics(alyData);
         if (Array.isArray(notifData)) setPushNotifications(notifData.filter((n: any) => !n.isRead));
@@ -415,22 +481,7 @@ export default function App() {
         const notifData = await safeJson(notifRes, []);
         const ingData = await safeJson(ingRes, []);
 
-        const nowMs = Date.now();
-        for (const [tId, tRecord] of recentStatusTransitionsRef.current.entries()) {
-          if (nowMs - tRecord.timestamp > 20000) {
-            recentStatusTransitionsRef.current.delete(tId);
-          }
-        }
-
-        const reconciledOrders = Array.isArray(ordData) ? ordData.map((ord: Order) => {
-          const transition = recentStatusTransitionsRef.current.get(ord.id);
-          if (transition && ord.status !== transition.status) {
-            return { ...ord, status: transition.status, isOfflinePending: false };
-          }
-          return ord;
-        }) : [];
-
-        setOrders(reconciledOrders);
+        setOrders(reconcileOrdersWithRecentTransitions(ordData));
         if (Array.isArray(tablesData)) setTables(tablesData);
         if (Array.isArray(ingData)) setIngredients(ingData);
         if (servicePauseData) setServicePaused(!!servicePauseData.servicePaused);
@@ -470,7 +521,7 @@ export default function App() {
         const ordersQuery = query(collection(db, "orders"), orderBy("createdAt", "desc"));
         unsubscribeOrders = onSnapshot(ordersQuery, (snapshot) => {
           const updatedOrders = snapshot.docs.map(doc => ({ ...doc.data() } as Order));
-          setOrders(updatedOrders);
+          setOrders(reconcileOrdersWithRecentTransitions(updatedOrders));
         }, (error) => {
           console.warn('[Firebase Sync] Orders listener paused/disabled:', error);
         });
@@ -752,9 +803,10 @@ export default function App() {
   // 2. Kitchen Status Updater
   const handleUpdateOrderStatus = async (orderId: string, status: OrderStatus) => {
     const description = `更新 🥢 訂單 #${orderId.replace('offline_temp_', '離線')} 狀態至「${status}」`;
+    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
     
     // Check if offline
-    if (!navigator.onLine || orderId.startsWith('offline_temp_')) {
+    if (!isOnline || orderId.startsWith('offline_temp_')) {
       console.log('[Sabay Offline] Intercepting state change offline...');
       addRequestToQueue(`/api/orders/${orderId}/status`, 'PUT', { status }, description);
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status, isOfflinePending: true } : o));
@@ -766,7 +818,11 @@ export default function App() {
     removeOrderRequestsFromQueue(orderId);
 
     // 2. Lock in-memory status transition timestamp to prevent polling race condition overwrites
-    recentStatusTransitionsRef.current.set(orderId, { status, timestamp: Date.now() });
+    recentStatusTransitionsRef.current.set(orderId, {
+      ...recentStatusTransitionsRef.current.get(orderId),
+      status,
+      timestamp: Date.now()
+    });
 
     // 3. Instant Optimistic local UI update (0ms latency for kitchen screen)
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status, isOfflinePending: false } : o));
@@ -778,7 +834,9 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status }),
       }).then(async (res) => {
-        if (!res.ok) {
+        if (res.ok) {
+          console.log(`[KDS Sync] Order #${orderId} status synced to "${status}" successfully`);
+        } else {
           console.warn(`[KDS Sync] Server returned status ${res.status}, keeping optimistic update`);
         }
       }).catch(err => {
@@ -787,12 +845,21 @@ export default function App() {
     } catch (err) {
       console.warn('[KDS Sync Error]', err);
     }
+
+    // 5. If there are other items in offline queue, trigger background drain
+    if (getOfflineQueue().length > 0) {
+      processOfflineQueue().catch(() => {});
+    }
   };
 
   // 2.2.5 Toggle Single Order Item Complete / Prepared
   const handleToggleOrderItemComplete = async (orderId: string, itemId: string, isCompleted: boolean, isPrepared?: boolean) => {
     const description = `更新 🥢 訂單 #${orderId.replace('offline_temp_', '離線')} 內單一商品狀態`;
+    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
     
+    let nextStatus: OrderStatus | undefined;
+    let nextItems: any[] = [];
+
     // Optimistically update local orders state
     setOrders(prev => prev.map(o => {
       if (o.id === orderId) {
@@ -803,18 +870,29 @@ export default function App() {
           }
           return it;
         });
+        nextItems = updatedItems;
         const allCompleted = updatedItems.every(item => item.isCompleted);
         // Don't auto-complete paid orders — kitchen must explicitly press 出餐完成
         const status = allCompleted && o.status !== 'paid' ? 'completed' : (o.status === 'completed' ? 'preparing' : o.status);
-        return { ...o, items: updatedItems, status };
+        nextStatus = status;
+        return { ...o, items: updatedItems, status, isOfflinePending: !isOnline };
       }
       return o;
     }));
 
-    if (!navigator.onLine || orderId.startsWith('offline_temp_')) {
+    if (!isOnline || orderId.startsWith('offline_temp_')) {
       addRequestToQueue(`/api/orders/${orderId}/items/${itemId}/complete`, 'PUT', { isCompleted, isPrepared }, description);
       return;
     }
+
+    // ONLINE MODE:
+    removeOrderRequestsFromQueue(orderId);
+    recentStatusTransitionsRef.current.set(orderId, {
+      ...recentStatusTransitionsRef.current.get(orderId),
+      items: nextItems,
+      status: nextStatus,
+      timestamp: Date.now()
+    });
 
     try {
       const res = await apiFetch(`/api/orders/${orderId}/items/${itemId}/complete`, {
@@ -824,7 +902,7 @@ export default function App() {
       });
       if (res.ok) {
         const updatedOrder = await res.json();
-        setOrders(prev => prev.map(o => o.id === orderId ? updatedOrder : o));
+        setOrders(prev => prev.map(o => o.id === orderId ? { ...updatedOrder, isOfflinePending: false } : o));
       } else {
         addRequestToQueue(`/api/orders/${orderId}/items/${itemId}/complete`, 'PUT', { isCompleted, isPrepared }, description);
       }
@@ -832,17 +910,30 @@ export default function App() {
       console.warn('[Offline Fallback] Toggle order item state failed, queued:', err);
       addRequestToQueue(`/api/orders/${orderId}/items/${itemId}/complete`, 'PUT', { isCompleted, isPrepared }, description);
     }
+
+    if (getOfflineQueue().length > 0) {
+      processOfflineQueue().catch(() => {});
+    }
   };
 
   // 2.3 Order Table Number / Takeout Modifier (Admin/Cashier View Override)
   const handleUpdateTableNumber = async (orderId: string, tableNumber: string) => {
     const description = `修改 🥢 訂單 #${orderId.replace('offline_temp_', '離線')} 的桌號至 ${tableNumber} 桌`;
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, tableNumber, isOfflinePending: true } : o));
+    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, tableNumber, isOfflinePending: !isOnline } : o));
     
-    if (!navigator.onLine || orderId.startsWith('offline_temp_')) {
+    if (!isOnline || orderId.startsWith('offline_temp_')) {
       addRequestToQueue(`/api/orders/${orderId}/table-number`, 'PUT', { tableNumber }, description);
       return { success: true };
     }
+
+    // ONLINE MODE:
+    removeOrderRequestsFromQueue(orderId);
+    recentStatusTransitionsRef.current.set(orderId, {
+      ...recentStatusTransitionsRef.current.get(orderId),
+      tableNumber,
+      timestamp: Date.now()
+    });
 
     try {
       const res = await apiFetch(`/api/orders/${orderId}/table-number`, {
@@ -851,7 +942,6 @@ export default function App() {
         body: JSON.stringify({ tableNumber }),
       });
       if (res.ok) {
-        await fetchData();
         return { success: true };
       }
       addRequestToQueue(`/api/orders/${orderId}/table-number`, 'PUT', { tableNumber }, description);
@@ -866,12 +956,21 @@ export default function App() {
   // 2.3.5 Order Quick Notes Updater (Speech / Audio Text input on KDS)
   const handleUpdateQuickNotes = async (orderId: string, quickNotes: string) => {
     const description = `更新 🥢 訂單 #${orderId.replace('offline_temp_', '離線')} 備註: "${quickNotes}"`;
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, quickNotes, isOfflinePending: true } : o));
+    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, quickNotes, isOfflinePending: !isOnline } : o));
 
-    if (!navigator.onLine || orderId.startsWith('offline_temp_')) {
+    if (!isOnline || orderId.startsWith('offline_temp_')) {
       addRequestToQueue(`/api/orders/${orderId}/quick-notes`, 'PUT', { quickNotes }, description);
       return { success: true };
     }
+
+    // ONLINE MODE:
+    removeOrderRequestsFromQueue(orderId);
+    recentStatusTransitionsRef.current.set(orderId, {
+      ...recentStatusTransitionsRef.current.get(orderId),
+      quickNotes,
+      timestamp: Date.now()
+    });
 
     try {
       const res = await apiFetch(`/api/orders/${orderId}/quick-notes`, {
@@ -880,7 +979,6 @@ export default function App() {
         body: JSON.stringify({ quickNotes }),
       });
       if (res.ok) {
-        await fetchData();
         return { success: true };
       }
       addRequestToQueue(`/api/orders/${orderId}/quick-notes`, 'PUT', { quickNotes }, description);
@@ -895,12 +993,22 @@ export default function App() {
   // 2.3.6 Toggle Attention Flag status & update flagged custom reason on order
   const handleToggleOrderFlag = async (orderId: string, isFlagged: boolean, flagReason: string) => {
     const description = `設定 🥢 訂單 #${orderId.replace('offline_temp_', '離線')} 關注旗幟 ${isFlagged ? 'ON' : 'OFF'}`;
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, isFlagged, flagReason, isOfflinePending: true } : o));
+    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, isFlagged, flagReason, isOfflinePending: !isOnline } : o));
 
-    if (!navigator.onLine || orderId.startsWith('offline_temp_')) {
+    if (!isOnline || orderId.startsWith('offline_temp_')) {
       addRequestToQueue(`/api/orders/${orderId}/flag`, 'PUT', { isFlagged, flagReason }, description);
       return { success: true };
     }
+
+    // ONLINE MODE:
+    removeOrderRequestsFromQueue(orderId);
+    recentStatusTransitionsRef.current.set(orderId, {
+      ...recentStatusTransitionsRef.current.get(orderId),
+      isFlagged,
+      flagReason,
+      timestamp: Date.now()
+    });
 
     try {
       const res = await apiFetch(`/api/orders/${orderId}/flag`, {
@@ -909,7 +1017,6 @@ export default function App() {
         body: JSON.stringify({ isFlagged, flagReason }),
       });
       if (res.ok) {
-        await fetchData();
         return { success: true };
       }
       addRequestToQueue(`/api/orders/${orderId}/flag`, 'PUT', { isFlagged, flagReason }, description);
@@ -925,12 +1032,21 @@ export default function App() {
   const handleUpdateOrderItems = async (orderId: string, items: any[], refundLogs?: any[]) => {
     const description = `調整 🥢 訂單 #${orderId.replace('offline_temp_', '離線')} 品項數量`;
     const totalAmount = items.reduce((sum, item) => sum + (item.price * (item.qty || item.quantity || 0)), 0);
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, items, subtotal: totalAmount, total: totalAmount, isOfflinePending: true } : o));
+    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, items, subtotal: totalAmount, total: totalAmount, isOfflinePending: !isOnline } : o));
 
-    if (!navigator.onLine || orderId.startsWith('offline_temp_')) {
+    if (!isOnline || orderId.startsWith('offline_temp_')) {
       addRequestToQueue(`/api/orders/${orderId}/items`, 'PUT', { items, refundLogs }, description);
       return;
     }
+
+    // ONLINE MODE:
+    removeOrderRequestsFromQueue(orderId);
+    recentStatusTransitionsRef.current.set(orderId, {
+      ...recentStatusTransitionsRef.current.get(orderId),
+      items,
+      timestamp: Date.now()
+    });
 
     try {
       const res = await apiFetch(`/api/orders/${orderId}/items`, {
@@ -938,9 +1054,7 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ items, refundLogs }),
       });
-      if (res.ok) {
-        await fetchData();
-      } else {
+      if (!res.ok) {
         addRequestToQueue(`/api/orders/${orderId}/items`, 'PUT', { items, refundLogs }, description);
       }
     } catch (err) {
@@ -963,7 +1077,8 @@ export default function App() {
     skipRefresh?: boolean
   ) => {
     const description = `結帳 🥢 訂單 #${orderId.replace('offline_temp_', '離線')} 完成付款`;
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, isPaid: true, status: 'paid' as OrderStatus, isOfflinePending: true } : o));
+    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, isPaid: true, status: 'paid' as OrderStatus, isOfflinePending: !isOnline } : o));
 
     // 🔒 結帳完成後一併刪除相對應的「預約訂位點餐專屬通道」
     const targetOrder = orders.find(o => o.id === orderId);
@@ -988,10 +1103,19 @@ export default function App() {
       }
     }
 
-    if (!navigator.onLine || orderId.startsWith('offline_temp_')) {
+    if (!isOnline || orderId.startsWith('offline_temp_')) {
       addRequestToQueue(`/api/orders/${orderId}/checkout`, 'PUT', checkoutData || { isPaid: true }, description);
       return;
     }
+
+    // ONLINE MODE:
+    removeOrderRequestsFromQueue(orderId);
+    recentStatusTransitionsRef.current.set(orderId, {
+      ...recentStatusTransitionsRef.current.get(orderId),
+      isPaid: true,
+      status: 'paid' as OrderStatus,
+      timestamp: Date.now()
+    });
 
     try {
       const res = await apiFetch(`/api/orders/${orderId}/checkout`, {
@@ -1015,12 +1139,17 @@ export default function App() {
   // 2.4.5 Delete Order
   const handleDeleteOrder = async (orderId: string) => {
     const description = `刪除 🥢 訂單 #${orderId.replace('offline_temp_', '離線')}`;
+    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
     setOrders(prev => prev.filter(o => o.id !== orderId));
 
-    if (!navigator.onLine || orderId.startsWith('offline_temp_')) {
+    if (!isOnline || orderId.startsWith('offline_temp_')) {
       addRequestToQueue(`/api/orders/${orderId}`, 'DELETE', {}, description);
       return { success: true };
     }
+
+    // ONLINE MODE:
+    removeOrderRequestsFromQueue(orderId);
+    recentStatusTransitionsRef.current.delete(orderId);
 
     try {
       const res = await apiFetch(`/api/orders/${orderId}`, {
@@ -1028,7 +1157,6 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
       });
       if (res.ok) {
-        await fetchData();
         return { success: true };
       } else {
         addRequestToQueue(`/api/orders/${orderId}`, 'DELETE', {}, description);

@@ -74,19 +74,44 @@ export function clearOfflineQueue() {
   window.dispatchEvent(new CustomEvent('offline_queue_changed', { detail: [] }));
 }
 
-// Remove all queued requests related to a specific order ID
-export function removeOrderRequestsFromQueue(orderId: string) {
-  if (!orderId) return;
+// Remove all queued requests related to a specific order ID or list of order IDs
+export function removeOrderRequestsFromQueue(orderIdOrIds: string | string[]) {
+  if (!orderIdOrIds) return;
+  const targetIds = Array.isArray(orderIdOrIds) ? orderIdOrIds.filter(Boolean) : [orderIdOrIds];
+  if (targetIds.length === 0) return;
+
   const queue = getOfflineQueue();
   const filtered = queue.filter(item => {
-    const isTargetOrder = item.url.includes(`/api/orders/${orderId}`) || 
-                          (item.body && item.body.includes(orderId));
-    return !isTargetOrder;
+    const isTarget = targetIds.some(id => {
+      const plainId = String(id).trim();
+      const encodedId = encodeURIComponent(plainId);
+      return (
+        item.url.includes(`/api/orders/${plainId}`) ||
+        item.url.includes(`/api/orders/${encodedId}`) ||
+        (item.body && (item.body.includes(`"${plainId}"`) || item.body.includes(plainId)))
+      );
+    });
+    return !isTarget;
   });
+
   if (filtered.length !== queue.length) {
+    console.log(`[OfflineQueue] Cleared ${queue.length - filtered.length} offline queued requests for order(s):`, targetIds);
     saveOfflineQueue(filtered);
     window.dispatchEvent(new CustomEvent('offline_queue_changed', { detail: filtered }));
   }
+}
+
+// Check if there are any queued requests for a specific order
+export function hasPendingOrderRequests(orderId: string): boolean {
+  if (!orderId) return false;
+  const plainId = String(orderId).trim();
+  const encodedId = encodeURIComponent(plainId);
+  const queue = getOfflineQueue();
+  return queue.some(item => 
+    item.url.includes(`/api/orders/${plainId}`) ||
+    item.url.includes(`/api/orders/${encodedId}`) ||
+    (item.body && (item.body.includes(`"${plainId}"`) || item.body.includes(plainId)))
+  );
 }
 
 // Execute a queued request

@@ -430,7 +430,7 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
       }
     }
 
-    const pendingOrders = orders.filter(o => o.status === 'pending');
+    const pendingOrders = orders.filter(o => o.status === 'pending' && !processingOrderIds.has(o.id));
     if (pendingOrders.length === 0) {
       if ('speechSynthesis' in window && (window.speechSynthesis.speaking || window.speechSynthesis.pending)) {
         window.speechSynthesis.cancel();
@@ -439,8 +439,13 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
     }
 
     const announcePendingOrders = () => {
-      const currentPending = orders.filter(o => o.status === 'pending');
-      if (currentPending.length === 0) return;
+      const currentPending = orders.filter(o => o.status === 'pending' && !processingOrderIds.has(o.id));
+      if (currentPending.length === 0) {
+        if ('speechSynthesis' in window && (window.speechSynthesis.speaking || window.speechSynthesis.pending)) {
+          window.speechSynthesis.cancel();
+        }
+        return;
+      }
 
       const tableListStr = currentPending.map(o => {
         let tStr = o.tableNumber;
@@ -475,7 +480,7 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
         window.speechSynthesis.cancel();
       }
     };
-  }, [orders.filter(o => o.status === 'pending').map(o => `${o.id}:${o.status}`).join(','), ttsEnabled, autoScrollEnabled]);
+  }, [orders.filter(o => o.status === 'pending').map(o => `${o.id}:${o.status}`).join(','), processingOrderIds.size, ttsEnabled, autoScrollEnabled]);
 
   // Special Attention Flag States
   const [flaggingOrderId, setFlaggingOrderId] = useState<string | null>(null);
@@ -829,6 +834,11 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
       return; // 避免重複連點
     }
 
+    // 當接單或進入備餐/出餐完成時，立即中斷當前正在播報的新訂單廣播語音
+    if ('speechSynthesis' in window && (window.speechSynthesis.speaking || window.speechSynthesis.pending)) {
+      window.speechSynthesis.cancel();
+    }
+
     // 檢查網際網路連線狀態
     const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
     if (!isOnline) {
@@ -846,14 +856,14 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
     try {
       await onUpdateOrderStatus(id, nextStatus);
     } finally {
-      // 500ms 後解除本地按鈕鎖定
+      // 300ms 後解除本地按鈕鎖定
       setTimeout(() => {
         setProcessingOrderIds(prev => {
           const next = new Set(prev);
           next.delete(id);
           return next;
         });
-      }, 500);
+      }, 300);
     }
   };
 
@@ -2517,23 +2527,7 @@ ${specLines}
                         <>
                           <button
                             id={`kds-paid-complete-btn-${order.id}`}
-                            onClick={async () => {
-                              playStatusBeepSound();
-                              setBeepSim(true);
-                              setTimeout(() => setBeepSim(false), 800);
-                              try {
-                                const res = await apiFetch(`/api/orders/${order.id}/complete`, {
-                                  method: 'PUT',
-                                  headers: { 'Content-Type': 'application/json' },
-                                });
-                                if (res.ok) {
-                                  await onUpdateOrderStatus(order.id, 'completed');
-                                }
-                              } catch (err) {
-                                console.warn('[KDS] Complete paid order failed:', err);
-                                await onUpdateOrderStatus(order.id, 'completed');
-                              }
-                            }}
+                            onClick={() => handleStatusChange(order.id, 'completed')}
                             className="bg-[#00C300] hover:bg-emerald-500 text-[#0F0F0F] px-4 py-1.5 rounded-lg font-black text-xs flex items-center space-x-1.5 transition cursor-pointer animate-pulse ring-2 ring-emerald-400/60 shadow-lg shadow-emerald-500/20"
                           >
                             <Check size={13} className="stroke-[3]" />
