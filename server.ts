@@ -2525,24 +2525,44 @@ app.post('/api/reservations', (req, res) => {
   const targetMins = parseMins(time);
   
   const overlapping = liveReservations.filter(r => {
-    if (r.status === 'cancelled') return false;
+    if (r.status === 'cancelled' || (r as any).status === 'rejected') return false;
     if (r.date !== date.trim()) return false;
     const rMins = parseMins(r.time);
     return Math.abs(rMins - targetMins) < 180;
   });
 
-  // 1. Selected Tables Capacity Check
+  const newGuestCount = parseInt(guestCount, 10) || 1;
+
+  // 1. Total Store Window Capacity Check
+  const unavailableTableIds = new Set<string>();
+  let bookedGuestsInWindow = 0;
+  for (const r of overlapping) {
+    bookedGuestsInWindow += (Number(r.guestCount) || 0);
+    const rTables = String(r.tableNumber || '').split(',').map(t => t.trim()).filter(Boolean);
+    rTables.forEach(tId => unavailableTableIds.add(tId));
+  }
+  const availableTables = liveTables.filter(t => !unavailableTableIds.has(t.id.toString()));
+  const availableWindowCapacity = availableTables.reduce((sum, t) => sum + (t.maxCapacity || 4), 0);
+
+  if (availableTables.length === 0 || availableWindowCapacity <= 0) {
+    return res.status(400).json({ error: '該時段已額滿！全店客席在前後3小時內皆已有預約。' });
+  }
+
+  if (newGuestCount > availableWindowCapacity && availableWindowCapacity > 0) {
+    return res.status(400).json({ error: `用餐人數 (${newGuestCount}人) 超過該時段（含3小時用餐時段）可容納之剩餘客席上限 (${availableWindowCapacity}人)！` });
+  }
+
+  // 2. Selected Tables Capacity Check
   const requestedTables = String(tableNumber).split(',').map(t => t.trim()).filter(Boolean);
   const selectedTablesCapacity = liveTables
     .filter(t => requestedTables.includes(t.id.toString()))
-    .reduce((sum, t) => sum + (t.maxCapacity || 0), 0);
-  const newGuestCount = parseInt(guestCount, 10) || 1;
+    .reduce((sum, t) => sum + (t.maxCapacity || 4), 0);
   
-  if (selectedTablesCapacity < newGuestCount) {
+  if (selectedTablesCapacity > 0 && selectedTablesCapacity < newGuestCount) {
     return res.status(400).json({ error: `指定桌號加總人數上限 (${selectedTablesCapacity}人) 不足：不可低於用餐人數 (${newGuestCount}人)！` });
   }
 
-  // 2. Table Conflict Check
+  // 3. Table Conflict Check
   for (const r of overlapping) {
     const rTables = String(r.tableNumber || '').split(',').map(t => t.trim()).filter(Boolean);
     const conflictingTable = requestedTables.find(t => rTables.includes(t));
@@ -2613,24 +2633,42 @@ app.put('/api/reservations/:id', (req, res) => {
       
       const overlapping = liveReservations.filter(r => {
         if (r.id === existing.id || (r as any).reservationNo === existing.id) return false;
-        if (r.status === 'cancelled') return false;
+        if (r.status === 'cancelled' || (r as any).status === 'rejected') return false;
         if (r.date.trim() !== newDate) return false;
         const rMins = parseMins(r.time);
         return Math.abs(rMins - targetMins) < 180;
       });
 
-      // 1. Selected Tables Capacity Check
+      const updatedGuestCount = guestCount !== undefined ? parseInt(guestCount as any, 10) || 1 : existing.guestCount;
+
+      // 1. Total Store Window Capacity Check
+      const unavailableTableIds = new Set<string>();
+      for (const r of overlapping) {
+        const rTables = String(r.tableNumber || '').split(',').map(t => t.trim()).filter(Boolean);
+        rTables.forEach(tId => unavailableTableIds.add(tId));
+      }
+      const availableTables = liveTables.filter(t => !unavailableTableIds.has(t.id.toString()));
+      const availableWindowCapacity = availableTables.reduce((sum, t) => sum + (t.maxCapacity || 4), 0);
+
+      if (availableTables.length === 0 || availableWindowCapacity <= 0) {
+        return res.status(400).json({ error: '該時段已額滿！全店客席在前後3小時內皆已有預約。' });
+      }
+
+      if (updatedGuestCount > availableWindowCapacity && availableWindowCapacity > 0) {
+        return res.status(400).json({ error: `用餐人數 (${updatedGuestCount}人) 超過該時段（含3小時用餐時段）可容納之剩餘客席上限 (${availableWindowCapacity}人)！` });
+      }
+
+      // 2. Selected Tables Capacity Check
       const requestedTables = String(newTable).split(',').map(t => t.trim()).filter(Boolean);
       const selectedTablesCapacity = liveTables
         .filter(t => requestedTables.includes(t.id.toString()))
-        .reduce((sum, t) => sum + (t.maxCapacity || 0), 0);
-      const newGuestCount = guestCount !== undefined ? parseInt(guestCount as any, 10) || 1 : existing.guestCount;
+        .reduce((sum, t) => sum + (t.maxCapacity || 4), 0);
       
-      if (selectedTablesCapacity < newGuestCount) {
-        return res.status(400).json({ error: `指定桌號加總人數上限 (${selectedTablesCapacity}人) 不足：不可低於用餐人數 (${newGuestCount}人)！` });
+      if (selectedTablesCapacity > 0 && selectedTablesCapacity < updatedGuestCount) {
+        return res.status(400).json({ error: `指定桌號加總人數上限 (${selectedTablesCapacity}人) 不足：不可低於用餐人數 (${updatedGuestCount}人)！` });
       }
 
-      // 2. Table Conflict Check
+      // 3. Table Conflict Check
       for (const r of overlapping) {
         const rTables = String(r.tableNumber || '').split(',').map(t => t.trim()).filter(Boolean);
         const conflictingTable = requestedTables.find(t => rTables.includes(t));

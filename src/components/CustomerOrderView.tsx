@@ -503,9 +503,14 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
 
   // 3-Hour Reservation Window checking & Fully Booked slot detection
   const reservationAvailabilityInfo = useMemo(() => {
+    const totalStoreCapacity = (tables || []).reduce((sum, t) => sum + (t.maxCapacity || 4), 0);
+
     if (!resDate || !resTime || !tables || tables.length === 0) {
       return {
         isFullyBooked: false,
+        totalStoreCapacity,
+        bookedGuestsInWindow: 0,
+        availableWindowCapacity: totalStoreCapacity,
         availableTables: tables || [],
         occupiedTableIds: new Set<string>(),
         isCurrentTableOccupied: false,
@@ -515,21 +520,24 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
 
     const targetMins = parseTimeToMinutes(resTime);
     const dayReservations = (reservations || []).filter(
-      r => r.date === resDate && r.status !== 'cancelled'
+      r => r.date === resDate && r.status !== 'cancelled' && (r as any).status !== 'rejected'
     );
 
-    // Find occupied tables within 3 hours (180 minutes)
+    // Find occupied tables within 3 hours (180 minutes) and calculate total booked guests
     const occupiedTableIds = new Set<string>();
+    let bookedGuestsInWindow = 0;
     dayReservations.forEach(r => {
       const rMins = parseTimeToMinutes(r.time);
       if (Math.abs(rMins - targetMins) < 180) {
+        bookedGuestsInWindow += (Number(r.guestCount) || 0);
         const rTables = String(r.tableNumber || '').split(',').map(t => t.trim()).filter(Boolean);
         rTables.forEach(tId => occupiedTableIds.add(tId));
       }
     });
 
     const availableTables = tables.filter(t => !occupiedTableIds.has(t.id));
-    const isFullyBooked = availableTables.length === 0;
+    const availableWindowCapacity = availableTables.reduce((sum, t) => sum + (t.maxCapacity || 4), 0);
+    const isFullyBooked = availableTables.length === 0 || availableWindowCapacity <= 0;
 
     // Calculate suggested alternative time slots for this date where at least one table is free
     const candidateSlots = generateCandidateSlots(resDate);
@@ -561,11 +569,21 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
 
     return {
       isFullyBooked,
+      totalStoreCapacity,
+      bookedGuestsInWindow,
+      availableWindowCapacity,
       availableTables,
       occupiedTableIds,
       suggestedTimes: suggestedTimes.slice(0, 6)
     };
   }, [resDate, resTime, tables, reservations, generateCandidateSlots]);
+
+  const designatedTablesCapacity = useMemo(() => {
+    if (!tables || tables.length === 0 || resTableNumbers.length === 0) return 0;
+    return tables
+      .filter(t => resTableNumbers.includes(t.id))
+      .reduce((sum, t) => sum + (t.maxCapacity || 4), 0);
+  }, [tables, resTableNumbers]);
 
   const isResTimeValid = useMemo(() => {
     if (restDays && restDays.includes(resDate)) return false;
@@ -659,8 +677,24 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
       return;
     }
 
+    if (resGuests > reservationAvailabilityInfo.availableWindowCapacity && reservationAvailabilityInfo.availableWindowCapacity > 0) {
+      setResFeedback({
+        type: 'error',
+        msg: `⚠️ 用餐人數 (${resGuests}人) 超過該時段（含3小時用餐時段）可預約客席總容量上限 (${reservationAvailabilityInfo.availableWindowCapacity}人)！請調減人數或更換其他時段。`
+      });
+      return;
+    }
+
     if (resTableNumbers.length === 0) {
       setResFeedback({ type: 'error', msg: '請指定預約桌號或確認該時段是否有足夠空桌！' });
+      return;
+    }
+
+    if (designatedTablesCapacity > 0 && resGuests > designatedTablesCapacity) {
+      setResFeedback({
+        type: 'error',
+        msg: `⚠️ 指定桌號加總人數上限 (${designatedTablesCapacity}人) 不足：不可低於用餐人數 (${resGuests}人)！請於下方勾選更多桌位或減少人數。`
+      });
       return;
     }
 
@@ -2386,13 +2420,13 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                   {isPending && (
                     <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30">
                       <Loader2 size={12} className="animate-spin" />
-                      <span>{currentLang === 'zh' ? '廚房接收中・等待備餐' : 'Kitchen Receiving Order'}</span>
+                      <span>{TRANSLATIONS.kitchenReceiving?.[currentLang] || (currentLang === 'zh' ? '廚房接收中・等待備餐' : 'Kitchen Receiving Order')}</span>
                     </span>
                   )}
                   {isAccepted && (
                     <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
                       <Check size={12} />
-                      <span>{currentLang === 'zh' ? '廚房已接單・製餐中' : 'Kitchen Preparing'}</span>
+                      <span>{TRANSLATIONS.kitchenPreparing?.[currentLang] || (currentLang === 'zh' ? '廚房已接單・製餐中' : 'Kitchen Preparing')}</span>
                     </span>
                   )}
                   {isCancelled && (
@@ -2410,7 +2444,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
               }`}>
                 <div className="flex flex-col items-center space-y-1 text-center py-1">
                   <span className="text-[10px] tracking-wider uppercase font-bold text-zinc-400">
-                    您的專屬點餐序號
+                    {TRANSLATIONS.orderSeqLabel?.[currentLang] || '您的專屬點餐序號'}
                   </span>
                   <span className={`text-xl sm:text-2xl font-black font-mono leading-none tracking-widest ${
                     isSimplifiedMode 
@@ -2420,6 +2454,18 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                     {orderSentSuccess}
                   </span>
                 </div>
+
+                {/* 📌 指定桌號完成點餐並等待確認提示：餐點食用完畢後結帳 (對齊多語系設定) */}
+                {!isCancelled && (
+                  <div className={`text-center py-2.5 px-3.5 rounded-xl border flex items-center justify-center gap-2 shadow-sm ${
+                    isSimplifiedMode
+                      ? 'bg-amber-100/90 border-amber-300 text-amber-950 font-black text-sm sm:text-base'
+                      : 'bg-gradient-to-r from-[#E5B453]/20 via-amber-500/10 to-[#E5B453]/20 border-[#E5B453]/40 text-[#E5B453] font-black text-xs sm:text-sm'
+                  }`}>
+                    <span className="text-base sm:text-lg">🍽️</span>
+                    <span>{TRANSLATIONS.payAfterMealNotice?.[currentLang] || (currentLang === 'zh' ? '（餐點食用完畢後結帳）' : '(Please pay after finishing your meal)')}</span>
+                  </div>
+                )}
                 
                 <p className={`text-xs text-center leading-relaxed ${isSimplifiedMode ? 'text-zinc-700 font-medium' : 'text-zinc-300'}`}>
                   {isPending && (TRANSLATIONS.waitingForAcceptanceDesc[currentLang] || '系統已將您的點餐資訊送達廚房！您可以隨時關閉此視窗繼續瀏覽菜單或加點。')}
@@ -2447,7 +2493,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                 </button>
                 {isPending && (
                   <p className="text-[11px] text-zinc-400 text-center">
-                    💡 訂單已在背景排程處理中，您可隨時查看點餐進度
+                    {TRANSLATIONS.orderBackgroundProcessing?.[currentLang] || '💡 訂單已在背景排程處理中，您可隨時查看點餐進度'}
                   </p>
                 )}
               </div>
@@ -4993,24 +5039,91 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                     {/* Guest Count */}
                     <div className="space-y-1">
-                      <label className="text-zinc-300 font-bold text-xs flex items-center gap-1">
-                        <span>👥 用餐人數 Guest Count *</span>
+                      <label className="text-zinc-300 font-bold text-xs flex items-center justify-between">
+                        <span className="flex items-center gap-1">👥 用餐人數 Guest Count *</span>
+                        {reservationAvailabilityInfo.availableWindowCapacity > 0 && (
+                          <span className="text-[10px] text-amber-400 font-mono font-normal">
+                            上限 {reservationAvailabilityInfo.availableWindowCapacity} 人
+                          </span>
+                        )}
                       </label>
-                      <input
-                        type="number"
-                        min={1}
-                        max={30}
-                        required
-                        value={resGuests}
-                        onChange={(e) => setResGuests(Math.max(1, parseInt(e.target.value) || 1))}
-                        className="w-full bg-[#1c1c1c] border border-white/15 focus:border-amber-400 rounded-xl px-3 py-2 text-white outline-none font-mono transition"
-                      />
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setResGuests(prev => Math.max(1, prev - 1))}
+                          disabled={resGuests <= 1}
+                          className="w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 active:scale-95 disabled:opacity-30 disabled:pointer-events-none text-white font-bold text-lg flex items-center justify-center border border-white/10 transition"
+                          title="減少 1 人"
+                        >
+                          -
+                        </button>
+                        <input
+                          type="number"
+                          min={1}
+                          max={Math.max(1, reservationAvailabilityInfo.availableWindowCapacity || reservationAvailabilityInfo.totalStoreCapacity || 30)}
+                          required
+                          value={resGuests}
+                          onKeyDown={(e) => {
+                            const maxLimit = Math.max(1, reservationAvailabilityInfo.availableWindowCapacity || reservationAvailabilityInfo.totalStoreCapacity || 30);
+                            if (e.key === 'ArrowUp') {
+                              e.preventDefault();
+                              setResGuests(prev => Math.min(maxLimit, prev + 1));
+                            } else if (e.key === 'ArrowDown') {
+                              e.preventDefault();
+                              setResGuests(prev => Math.max(1, prev - 1));
+                            }
+                          }}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value) || 1;
+                            const maxLimit = Math.max(1, reservationAvailabilityInfo.availableWindowCapacity || reservationAvailabilityInfo.totalStoreCapacity || 30);
+                            setResGuests(Math.min(maxLimit, Math.max(1, val)));
+                          }}
+                          className="flex-1 min-w-0 bg-[#1c1c1c] border border-white/15 focus:border-amber-400 rounded-xl px-3 py-2 text-center text-white outline-none font-mono text-base font-bold transition"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const maxLimit = Math.max(1, reservationAvailabilityInfo.availableWindowCapacity || reservationAvailabilityInfo.totalStoreCapacity || 30);
+                            setResGuests(prev => Math.min(maxLimit, prev + 1));
+                          }}
+                          disabled={resGuests >= (reservationAvailabilityInfo.availableWindowCapacity || reservationAvailabilityInfo.totalStoreCapacity || 30)}
+                          className="w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 active:scale-95 disabled:opacity-30 disabled:pointer-events-none text-white font-bold text-lg flex items-center justify-center border border-white/10 transition"
+                          title="增加 1 人"
+                        >
+                          +
+                        </button>
+                      </div>
+                      {/* Capacity Status Hint */}
+                      <div className="text-[11px] pt-0.5 space-y-0.5">
+                        {resDate && resTime ? (
+                          reservationAvailabilityInfo.isFullyBooked ? (
+                            <p className="text-rose-400 font-medium">🔴 此時段已額滿 (0人可用)</p>
+                          ) : (
+                            <p className="text-zinc-400">
+                              🪑 本時段剩餘可預約容量：<span className="text-emerald-400 font-mono font-bold">{reservationAvailabilityInfo.availableWindowCapacity} 人</span>
+                              <span className="text-zinc-500 ml-1 text-[10px]">(總席位 {reservationAvailabilityInfo.totalStoreCapacity} 人，已訂 {reservationAvailabilityInfo.bookedGuestsInWindow} 人)</span>
+                            </p>
+                          )
+                        ) : (
+                          <p className="text-zinc-500">請先選取預約日期與時間以計算席位上限</p>
+                        )}
+                        {designatedTablesCapacity > 0 && designatedTablesCapacity < resGuests && (
+                          <p className="text-amber-400 font-semibold flex items-center gap-1">
+                            <span>⚠️ 所選桌位上限 ({designatedTablesCapacity}人) 小於用餐人數 ({resGuests}人)，請加選桌位</span>
+                          </p>
+                        )}
+                      </div>
                     </div>
 
                     {/* Table Selection */}
                     <div className="space-y-1">
-                      <label className="text-zinc-300 font-bold text-xs flex items-center gap-1">
+                      <label className="text-zinc-300 font-bold text-xs flex items-center justify-between">
                         <span>🪑 指定預約桌號 Designated Table *</span>
+                        {designatedTablesCapacity > 0 && (
+                          <span className={`text-[10px] font-mono ${designatedTablesCapacity < resGuests ? 'text-amber-400 font-bold' : 'text-emerald-400'}`}>
+                            已選容量: {designatedTablesCapacity} 人
+                          </span>
+                        )}
                       </label>
                       <div className="w-full bg-[#1c1c1c] border border-white/15 rounded-xl p-2 text-white max-h-32 overflow-y-auto space-y-1">
                         {(() => {

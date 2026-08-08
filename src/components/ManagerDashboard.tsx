@@ -2976,32 +2976,63 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     setIsResFormOpen(true);
   };
 
-  // Auto-assign tables based on guest count and availability
-  useEffect(() => {
-    if (!isResFormOpen || !resDateInput || !resTimeInput || tables.length === 0 || editingResObj) return;
-
+  // 3-Hour Overlapping Window Capacity Calculation for Manager Reservation Form
+  const managerResAvailability = useMemo(() => {
+    const totalStoreCapacity = (tables || []).reduce((sum, t) => sum + (t.maxCapacity || 4), 0);
+    if (!resDateInput || !resTimeInput || tables.length === 0) {
+      return {
+        totalStoreCapacity,
+        bookedGuestsInWindow: 0,
+        availableWindowCapacity: totalStoreCapacity,
+        availableTables: tables || [],
+        isFullyBooked: false
+      };
+    }
     const parseMins = (t: string) => {
       if (!t) return 0;
       const [h, m] = t.split(':').map(Number);
       return (h || 0) * 60 + (m || 0);
     };
     const targetMins = parseMins(resTimeInput);
-    
-    // Find overlapping reservations
     const overlapping = reservations.filter(r => {
-      if (r.status === 'cancelled') return false;
-      if (r.date !== resDateInput.trim()) return false;
+      if (editingResObj && (r.id === editingResObj.id || (r as any).reservationNo === editingResObj.id)) return false;
+      if (r.status === 'cancelled' || (r as any).status === 'rejected') return false;
+      if (r.date.trim() !== resDateInput.trim()) return false;
       const rMins = parseMins(r.time);
       return Math.abs(rMins - targetMins) < 180;
     });
 
+    let bookedGuestsInWindow = 0;
     const unavailableTableIds = new Set<string>();
     overlapping.forEach(r => {
+      bookedGuestsInWindow += (Number(r.guestCount) || 0);
       const rTables = String(r.tableNumber || '').split(',').map(t => t.trim()).filter(Boolean);
       rTables.forEach(tId => unavailableTableIds.add(tId));
     });
 
     const availableTables = tables.filter(t => !unavailableTableIds.has(t.id));
+    const availableWindowCapacity = availableTables.reduce((sum, t) => sum + (t.maxCapacity || 4), 0);
+    return {
+      totalStoreCapacity,
+      bookedGuestsInWindow,
+      availableWindowCapacity,
+      availableTables,
+      isFullyBooked: availableTables.length === 0 || availableWindowCapacity <= 0
+    };
+  }, [resDateInput, resTimeInput, tables, reservations, editingResObj]);
+
+  const managerDesignatedCapacity = useMemo(() => {
+    if (!tables || tables.length === 0 || resTableInputs.length === 0) return 0;
+    return tables
+      .filter(t => resTableInputs.includes(t.id))
+      .reduce((sum, t) => sum + (t.maxCapacity || 4), 0);
+  }, [tables, resTableInputs]);
+
+  // Auto-assign tables based on guest count and availability
+  useEffect(() => {
+    if (!isResFormOpen || !resDateInput || !resTimeInput || tables.length === 0 || editingResObj) return;
+
+    const availableTables = [...managerResAvailability.availableTables];
     availableTables.sort((a, b) => (b.maxCapacity || 4) - (a.maxCapacity || 4));
 
     let currentCapacity = 0;
@@ -3014,7 +3045,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     }
     
     setResTableInputs(selectedIds);
-  }, [resGuestsInput, resDateInput, resTimeInput, tables, reservations, isResFormOpen, editingResObj]);
+  }, [resGuestsInput, resDateInput, resTimeInput, tables, isResFormOpen, editingResObj, managerResAvailability.availableTables]);
 
   const handleReservationSaveSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -3054,6 +3085,16 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
 
     if (resTableInputs.length === 0) {
       setResError('請指定預約桌號或確認該時段是否有足夠空桌！');
+      return;
+    }
+
+    if (managerResAvailability.availableWindowCapacity > 0 && resGuestsInput > managerResAvailability.availableWindowCapacity) {
+      setResError(`⚠️ 用餐人數 (${resGuestsInput}人) 超過該時段（含3小時用餐時段）可容納之剩餘客席上限 (${managerResAvailability.availableWindowCapacity}人)！`);
+      return;
+    }
+
+    if (managerDesignatedCapacity > 0 && resGuestsInput > managerDesignatedCapacity) {
+      setResError(`⚠️ 指定桌號加總人數上限 (${managerDesignatedCapacity}人) 不足：不可低於用餐人數 (${resGuestsInput}人)！請於下方加選桌位或調減人數。`);
       return;
     }
 
@@ -12328,11 +12369,89 @@ ${customerDetails}
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                   <div className="space-y-1">
-                    <span className="text-zinc-500 font-sans block text-[10px]">用餐人數 Guest Count *</span>
-                    <input type="number" min={1} max={50} required value={resGuestsInput} onChange={(e) => setResGuestsInput(Number(e.target.value))} className="w-full bg-[#1e1e1e] border border-white/10 rounded px-2.5 py-1.5 text-white font-mono" />
+                    <div className="flex items-center justify-between">
+                      <span className="text-zinc-500 font-sans block text-[10px]">用餐人數 Guest Count *</span>
+                      {managerResAvailability.availableWindowCapacity > 0 && (
+                        <span className="text-[10px] text-amber-400 font-mono">
+                          時段上限 {managerResAvailability.availableWindowCapacity} 人
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setResGuestsInput(prev => Math.max(1, prev - 1))}
+                        disabled={resGuestsInput <= 1}
+                        className="w-9 h-9 rounded bg-[#2a2a2a] hover:bg-[#383838] active:scale-95 disabled:opacity-30 disabled:pointer-events-none text-white font-bold text-base flex items-center justify-center border border-white/10 transition"
+                        title="減少 1 人"
+                      >
+                        -
+                      </button>
+                      <input 
+                        type="number" 
+                        min={1} 
+                        max={Math.max(1, managerResAvailability.availableWindowCapacity || managerResAvailability.totalStoreCapacity || 50)} 
+                        required 
+                        value={resGuestsInput} 
+                        onKeyDown={(e) => {
+                          const maxLimit = Math.max(1, managerResAvailability.availableWindowCapacity || managerResAvailability.totalStoreCapacity || 50);
+                          if (e.key === 'ArrowUp') {
+                            e.preventDefault();
+                            setResGuestsInput(prev => Math.min(maxLimit, prev + 1));
+                          } else if (e.key === 'ArrowDown') {
+                            e.preventDefault();
+                            setResGuestsInput(prev => Math.max(1, prev - 1));
+                          }
+                        }}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value) || 1;
+                          const maxLimit = Math.max(1, managerResAvailability.availableWindowCapacity || managerResAvailability.totalStoreCapacity || 50);
+                          setResGuestsInput(Math.min(maxLimit, Math.max(1, val)));
+                        }} 
+                        className="flex-1 min-w-0 bg-[#1e1e1e] border border-white/10 focus:border-[#E5B453] rounded px-2.5 py-1.5 text-center text-white font-mono font-bold text-base outline-none transition" 
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const maxLimit = Math.max(1, managerResAvailability.availableWindowCapacity || managerResAvailability.totalStoreCapacity || 50);
+                          setResGuestsInput(prev => Math.min(maxLimit, prev + 1));
+                        }}
+                        disabled={resGuestsInput >= (managerResAvailability.availableWindowCapacity || managerResAvailability.totalStoreCapacity || 50)}
+                        className="w-9 h-9 rounded bg-[#2a2a2a] hover:bg-[#383838] active:scale-95 disabled:opacity-30 disabled:pointer-events-none text-white font-bold text-base flex items-center justify-center border border-white/10 transition"
+                        title="增加 1 人"
+                      >
+                        +
+                      </button>
+                    </div>
+                    {/* Capacity Helper Text */}
+                    <div className="text-[10px] pt-0.5 space-y-0.5">
+                      {resDateInput && resTimeInput ? (
+                        managerResAvailability.isFullyBooked ? (
+                          <p className="text-rose-400 font-medium">🔴 此時段已無可用空桌</p>
+                        ) : (
+                          <p className="text-zinc-400">
+                            🪑 本時段剩餘客席上限：<span className="text-emerald-400 font-mono font-bold">{managerResAvailability.availableWindowCapacity} 人</span>
+                            <span className="text-zinc-500 ml-1">(總席位 {managerResAvailability.totalStoreCapacity} 人，已訂 {managerResAvailability.bookedGuestsInWindow} 人)</span>
+                          </p>
+                        )
+                      ) : null}
+                      {managerDesignatedCapacity > 0 && managerDesignatedCapacity < resGuestsInput && (
+                        <p className="text-amber-400 font-medium">
+                          ⚠️ 所選桌位上限 ({managerDesignatedCapacity}人) 低於用餐人數 ({resGuestsInput}人)
+                        </p>
+                      )}
+                    </div>
                   </div>
+
                   <div className="space-y-1">
-                    <span className="text-zinc-500 font-sans block text-[10px]">指定桌號 Designated Table *</span>
+                    <div className="flex items-center justify-between">
+                      <span className="text-zinc-500 font-sans block text-[10px]">指定桌號 Designated Table *</span>
+                      {managerDesignatedCapacity > 0 && (
+                        <span className={`text-[10px] font-mono ${managerDesignatedCapacity < resGuestsInput ? 'text-amber-400 font-bold' : 'text-emerald-400'}`}>
+                          已選容量: {managerDesignatedCapacity} 人
+                        </span>
+                      )}
+                    </div>
                     <div className="w-full bg-[#1e1e1e] border border-white/10 rounded p-1.5 text-white max-h-32 overflow-y-auto space-y-1">
                       {(() => {
                         const currentSelectedCapacity = tables

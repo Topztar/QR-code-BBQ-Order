@@ -1425,7 +1425,7 @@ export default function App() {
       };
     }
 
-    // 預約時段衝突檢測 (3小時用餐時間，同桌次同日期)
+    // 預約時段衝突與桌席容量檢測 (3小時用餐時間，同桌次同日期)
     const parseMins = (t: string) => {
       if (!t) return 0;
       const [h, m] = t.split(':').map(Number);
@@ -1433,21 +1433,33 @@ export default function App() {
     };
 
     const targetMins = parseMins(reservation.time);
-    const targetTableStr = String(reservation.tableNumber).trim();
     const targetDateStr = String(reservation.date).trim();
+    const requestedTables = String(reservation.tableNumber).split(',').map(t => t.trim()).filter(Boolean);
+    const selectedTablesCapacity = (tables || [])
+      .filter(t => requestedTables.includes(t.id))
+      .reduce((sum, t) => sum + (t.maxCapacity || 4), 0);
+    const newGuestCount = Number(reservation.guestCount) || 1;
+
+    if (selectedTablesCapacity > 0 && selectedTablesCapacity < newGuestCount) {
+      return {
+        success: false,
+        error: `指定桌號加總人數上限 (${selectedTablesCapacity}人) 不足：不可低於用餐人數 (${newGuestCount}人)！`
+      };
+    }
 
     const conflict = (reservations || []).find(r => {
-      if (r.status === 'cancelled') return false;
+      if (r.status === 'cancelled' || (r as any).status === 'rejected') return false;
       if (String(r.date).trim() !== targetDateStr) return false;
-      if (String(r.tableNumber).trim() !== targetTableStr) return false;
       const rMins = parseMins(r.time);
-      return Math.abs(rMins - targetMins) < 180;
+      if (Math.abs(rMins - targetMins) >= 180) return false;
+      const rTables = String(r.tableNumber || '').split(',').map(t => t.trim()).filter(Boolean);
+      return requestedTables.some(t => rTables.includes(t));
     });
 
     if (conflict) {
       return {
         success: false,
-        error: `預約時段衝突：【${reservation.tableNumber} 桌】在 ${reservation.date} ${reservation.time} 前後 3 小時內已有預約 (${conflict.time} ${conflict.customerName})，該時段無法重複預約。`
+        error: `預約時段衝突：所選桌號【${reservation.tableNumber}】在 ${reservation.date} ${reservation.time} 前後 3 小時內已有預約 (${conflict.time} ${conflict.customerName})，該時段無法重複預約。`
       };
     }
 
@@ -1471,33 +1483,47 @@ export default function App() {
   };
 
   const handleUpdateReservation = async (id: string, updates: Partial<Reservation>) => {
-    if (updates.date || updates.time || updates.tableNumber) {
+    if (updates.date || updates.time || updates.tableNumber || updates.guestCount !== undefined) {
       const current = (reservations || []).find(r => r.id === id);
       const targetDate = (updates.date || current?.date || '').trim();
       const targetTime = (updates.time || current?.time || '').trim();
       const targetTable = String(updates.tableNumber || current?.tableNumber || '').trim();
       const targetStatus = updates.status || current?.status;
+      const targetGuestCount = updates.guestCount !== undefined ? Number(updates.guestCount) || 1 : (current?.guestCount || 1);
 
-      if (targetDate && targetTime && targetTable && targetStatus !== 'cancelled') {
+      if (targetDate && targetTime && targetTable && targetStatus !== 'cancelled' && targetStatus !== 'rejected') {
         const parseMins = (t: string) => {
           if (!t) return 0;
           const [h, m] = t.split(':').map(Number);
           return (h || 0) * 60 + (m || 0);
         };
         const targetMins = parseMins(targetTime);
+        const requestedTables = targetTable.split(',').map(t => t.trim()).filter(Boolean);
+        const selectedTablesCapacity = (tables || [])
+          .filter(t => requestedTables.includes(t.id))
+          .reduce((sum, t) => sum + (t.maxCapacity || 4), 0);
+
+        if (selectedTablesCapacity > 0 && selectedTablesCapacity < targetGuestCount) {
+          return {
+            success: false,
+            error: `指定桌號加總人數上限 (${selectedTablesCapacity}人) 不足：不可低於用餐人數 (${targetGuestCount}人)！`
+          };
+        }
+
         const conflict = (reservations || []).find(r => {
           if (r.id === id) return false;
-          if (r.status === 'cancelled') return false;
+          if (r.status === 'cancelled' || (r as any).status === 'rejected') return false;
           if (String(r.date).trim() !== targetDate) return false;
-          if (String(r.tableNumber).trim() !== targetTable) return false;
           const rMins = parseMins(r.time);
-          return Math.abs(rMins - targetMins) < 180;
+          if (Math.abs(rMins - targetMins) >= 180) return false;
+          const rTables = String(r.tableNumber || '').split(',').map(t => t.trim()).filter(Boolean);
+          return requestedTables.some(t => rTables.includes(t));
         });
 
         if (conflict) {
           return {
             success: false,
-            error: `預約時段衝突：【${targetTable} 桌】在 ${targetDate} ${targetTime} 前後 3 小時內已有預約 (${conflict.time} ${conflict.customerName})，該時段無法重複預約。`
+            error: `預約時段衝突：所選桌號【${targetTable}】在 ${targetDate} ${targetTime} 前後 3 小時內已有預約 (${conflict.time} ${conflict.customerName})，該時段無法重複預約。`
           };
         }
       }

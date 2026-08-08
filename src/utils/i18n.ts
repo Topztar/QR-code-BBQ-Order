@@ -208,7 +208,25 @@ const TRANSLATION_DICTIONARY: Record<string, Partial<Record<Language, string>>> 
   '冬陰功泡麵 / 米線': { zh: '冬陰功泡麵 / 米線', en: 'Extra MAMA Noodles', th: 'เพิ่มเส้นมาม่า', ja: 'MAMA麺追加', ko: '라면 사리 추가', vi: 'Thêm mì MAMA' },
   '頂級牛肉串': { zh: '頂級牛肉串', en: 'Extra Beef Skewer', th: 'เพิ่มเนื้อย่าง', ja: '牛肉串追加', ko: '소고기 꼬치 추가', vi: 'Thêm xiên bò' },
   '爆香豬五花 / 金針': { zh: '爆香豬五花 / 金針', en: 'Pork Belly & Mushroom', th: 'หมูสามชั้นย่าง', ja: '豚バラ・えのき追加', ko: '삼겹살/팽이버섯 추가', vi: 'Thêm thịt ba chỉ' },
-  '頂級椰奶罐': { zh: '頂級椰奶罐', en: 'Extra Coconut Cream', th: 'เพิ่มน้ำกะทิ', ja: 'ココナッツミルク追加', ko: '코코넛 밀크 추가', vi: 'Thêm cốt dừa' }
+  '頂級椰奶罐': { zh: '頂級椰奶罐', en: 'Extra Coconut Cream', th: 'เพิ่มน้ำกะทิ', ja: 'ココナッツミルク追加', ko: '코코넛 밀크 추가', vi: 'Thêm cốt dừa' },
+
+  // --- Notice & System Messages ---
+  '餐點食用完畢後結帳': {
+    zh: '餐點食用完畢後結帳',
+    en: 'Please pay after finishing your meal',
+    th: 'ชำระเงินหลังจากรับประทานอาหารเสร็จสิ้น',
+    ja: 'お食事後にお会計をお願いいたします',
+    ko: '식사를 마치신 후 결제해 주세요',
+    vi: 'Vui lòng thanh toán sau khi dùng bữa xong'
+  },
+  '（餐點食用完畢後結帳）': {
+    zh: '（餐點食用完畢後結帳）',
+    en: '(Please pay after finishing your meal)',
+    th: '(ชำระเงินหลังจากรับประทานอาหารเสร็จสิ้น)',
+    ja: '(お食事後にお会計をお願いいたします)',
+    ko: '(식사를 마치신 후 결제해 주세요)',
+    vi: '(Vui lòng thanh toán sau khi dùng bữa xong)'
+  }
 };
 
 /**

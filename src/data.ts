@@ -214,6 +214,46 @@ export const TRANSLATIONS: { [key: string]: { [lang in Language]: string } } = {
     th: 'โปรดติดต่อเคาน์เตอร์ที่เบอร์ 0966626408',
     vi: 'Vui lòng liên hệ quầy qua số 0966626408'
   },
+  payAfterMealNotice: {
+    zh: '（餐點食用完畢後結帳）',
+    en: '(Please pay after finishing your meal)',
+    ko: '(식사를 마치신 후 결제해 주세요)',
+    ja: '(お食事後にお会計をお願いいたします)',
+    th: '(ชำระเงินหลังจากรับประทานอาหารเสร็จสิ้น)',
+    vi: '(Vui lòng thanh toán sau khi dùng bữa xong)'
+  },
+  orderSeqLabel: {
+    zh: '您的專屬點餐序號',
+    en: 'Your Order ID',
+    ko: '전용 주문 번호',
+    ja: '専用ご注文番号',
+    th: 'หมายเลขออเดอร์ของคุณ',
+    vi: 'Mã đơn hàng của bạn'
+  },
+  kitchenReceiving: {
+    zh: '廚房接收中・等待備餐',
+    en: 'Kitchen Receiving Order',
+    ko: '주방 접수 중・조리 대기',
+    ja: '厨房受付中・準備待ち',
+    th: 'ห้องครัวกำลังรับออเดอร์・รอจัดเตรียม',
+    vi: 'Nhà bếp đang tiếp nhận・Chờ chuẩn bị'
+  },
+  kitchenPreparing: {
+    zh: '廚房已接單・製餐中',
+    en: 'Kitchen Preparing',
+    ko: '주방 접수 완료・조리 중',
+    ja: '調理中',
+    th: 'ห้องครัวรับออเดอร์แล้ว・กำลังปรุง',
+    vi: 'Nhà bếp đã nhận・Đang chế biến'
+  },
+  orderBackgroundProcessing: {
+    zh: '💡 訂單已在背景排程處理中，您可隨時查看點餐進度',
+    en: '💡 Order is being processed in background, you can check progress anytime',
+    ko: '💡 주문이 백그라운드에서 처리 중이며 언제든지 진행 상황을 확인할 수 있습니다',
+    ja: '💡 注文はバックグラウンドで処理中です。いつでも進捗を確認できます',
+    th: '💡 กำลังดำเนินการออเดอร์ในระบบ คุณสามารถตรวจสอบสถานะได้ตลอดเวลา',
+    vi: '💡 Đơn hàng đang được xử lý, bạn có thể kiểm tra tiến độ bất kỳ lúc nào'
+  },
   confirmBtnText: {
     zh: '確認 (關閉對話框)',
     en: 'Confirm (Close Dialog)',
