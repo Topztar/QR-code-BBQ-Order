@@ -7,7 +7,76 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
-    <title>沙貝燒烤 | 泰式QR線上點餐系統 Sabay BBQ Online Ordering</title>
+    <title>沙貝燒烤 SABAY BBQ | 線上預約訂位與點餐系統 Online Reservation & Order</title>
+    <meta name="description" content="沙貝泰式燒烤 SABAY BBQ 官方線上預約訂位與點餐系統。直通櫃檯客席保留，提供泰式串燒、泰式海鮮與特色熱炒線上預訂。" />
+    <!-- Open Graph / Google Business Share Meta Tags -->
+    <meta property="og:type" content="restaurant" />
+    <meta property="og:title" content="沙貝燒烤 SABAY BBQ | 官方線上預約訂位與點餐系統" />
+    <meta property="og:description" content="沙貝泰式燒烤 SABAY BBQ 官方線上預約訂位與點餐專區。即時預約熱門席位、線上點餐外帶，享專屬用餐優惠。" />
+    <meta property="og:url" content="https://sabay-bbq-order.web.app/reserve" />
+    <meta property="og:site_name" content="沙貝燒烤 SABAY BBQ" />
+    <meta property="og:image" content="https://sabay-bbq-order.web.app/favicon.ico" />
+    
+    <!-- Schema.org Structured Data (JSON-LD) for Google Place Actions & Google Maps Search -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Restaurant",
+      "name": "沙貝燒烤 SABAY BBQ",
+      "alternateName": "SABAY BBQ",
+      "url": "https://sabay-bbq-order.web.app",
+      "telephone": "+886-966-626-408",
+      "priceRange": "$$",
+      "servesCuisine": ["Thai", "Barbecue", "Seafood"],
+      "acceptsReservations": "True",
+      "address": {
+        "@type": "PostalAddress",
+        "streetAddress": "高鐵北路二段198號1樓",
+        "addressLocality": "大園區",
+        "addressRegion": "桃園市",
+        "postalCode": "337",
+        "addressCountry": "TW"
+      },
+      "openingHoursSpecification": [
+        {
+          "@type": "OpeningHoursSpecification",
+          "dayOfWeek": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+          "opens": "17:00",
+          "closes": "23:00"
+        }
+      ],
+      "potentialAction": [
+        {
+          "@type": "ReserveAction",
+          "target": {
+            "@type": "EntryPoint",
+            "urlTemplate": "https://sabay-bbq-order.web.app/reserve",
+            "inLanguage": "zh-TW",
+            "actionPlatform": [
+              "http://schema.org/DesktopWebPlatform",
+              "http://schema.org/MobileWebPlatform"
+            ]
+          },
+          "result": {
+            "@type": "FoodEstablishmentReservation"
+          }
+        },
+        {
+          "@type": "OrderAction",
+          "target": {
+            "@type": "EntryPoint",
+            "urlTemplate": "https://sabay-bbq-order.web.app/order",
+            "inLanguage": "zh-TW",
+            "actionPlatform": [
+              "http://schema.org/DesktopWebPlatform",
+              "http://schema.org/MobileWebPlatform"
+            ]
+          },
+          "deliveryMethod": "http://purl.org/goodrelations/v1#PickUp"
+        }
+      ]
+    }
+    </script>
     <script>
       // Global error listener to automatically reload with cache-busting if a script/chunk fails to load
       window.addEventListener('error', function(e) {

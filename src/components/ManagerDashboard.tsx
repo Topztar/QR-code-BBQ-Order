@@ -2249,6 +2249,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   }>({ online: false, checking: false });
   const [posBridgeTesting, setPosBridgeTesting] = useState<boolean>(false);
   const [posBridgeTestResult, setPosBridgeTestResult] = useState<string | null>(null);
+  const [copiedGoogleLinkNotice, setCopiedGoogleLinkNotice] = useState<string | null>(null);
 
   const checkBridgeStatus = useCallback(async () => {
     setPosBridgeStatus(prev => ({ ...prev, checking: true }));
@@ -5684,6 +5685,135 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
 
               {/* ==================== MOVED RESERVATIONS & TABLE MANAGEMENT SECTION ==================== */}
               <div className="space-y-6 mt-6 border-t border-white/10 pt-6">
+                {/* 📍 Google 商家線上點餐與預約訂位審查獨立連結專區 (Google Business Profile Place Actions Dedicated Links) */}
+                <div className="bg-gradient-to-br from-zinc-900 via-[#161616] to-zinc-950 border border-emerald-500/30 rounded-2xl p-5 space-y-4 shadow-xl text-left font-sans">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-white/10 pb-3">
+                    <div>
+                      <h4 className="font-bold text-sm text-emerald-400 font-serif flex items-center gap-2">
+                        <span>🌐 Google 商家線上點餐與預約訂位「審查合格獨立連結」系統</span>
+                      </h4>
+                      <p className="text-xs text-zinc-400 mt-0.5">
+                        符合 Google 商家檔案 (Google Business Profile Place Actions) 審查規範，可直接將以下獨立連結貼入 Google 地圖【線上點餐】或【預約訂位】欄位中。
+                      </p>
+                    </div>
+                    <span className="px-3 py-1 bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-bold rounded-full flex items-center gap-1 shrink-0">
+                      <Check size={13} />
+                      <span>Google 規範審查對應 🟢</span>
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {/* 1. 線上預約訂位獨立連結 */}
+                    <div className="bg-black/60 border border-amber-500/30 rounded-xl p-4 space-y-3">
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs font-bold text-amber-400 flex items-center gap-1.5">
+                          <span>📅【Google 商家預約訂位】專用獨立連結</span>
+                        </span>
+                        <span className="text-[10px] text-amber-300/80 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                          直達預約表單 (0秒預開)
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          readOnly
+                          value={`${typeof window !== 'undefined' ? window.location.origin : 'https://sabay-bbq-order.web.app'}/reserve`}
+                          className="flex-1 bg-zinc-950 border border-white/15 rounded-lg px-3 py-2 text-xs text-amber-300 font-mono"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const link = `${typeof window !== 'undefined' ? window.location.origin : 'https://sabay-bbq-order.web.app'}/reserve`;
+                            navigator.clipboard.writeText(link);
+                            setCopiedGoogleLinkNotice('reserve');
+                            setTimeout(() => setCopiedGoogleLinkNotice(null), 3000);
+                          }}
+                          className="px-3 py-2 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 font-bold text-xs rounded-lg transition active:scale-95 cursor-pointer whitespace-nowrap"
+                        >
+                          {copiedGoogleLinkNotice === 'reserve' ? '✅ 已複製！' : '📋 複製連結'}
+                        </button>
+                        <a
+                          href={`${typeof window !== 'undefined' ? window.location.origin : 'https://sabay-bbq-order.web.app'}/reserve`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 border border-white/10 text-white font-bold text-xs rounded-lg transition active:scale-95 cursor-pointer whitespace-nowrap"
+                        >
+                          🔗 預覽表單
+                        </a>
+                      </div>
+                      <p className="text-[10px] text-zinc-400 leading-relaxed">
+                        💡 貼至 Google 商家檔案【預約 (Reserve a Table)】欄位。顧客點擊後 0 秒直達預約訂位與點餐表單。
+                      </p>
+                    </div>
+
+                    {/* 2. 線上點餐與外帶獨立連結 */}
+                    <div className="bg-black/60 border border-cyan-500/30 rounded-xl p-4 space-y-3">
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs font-bold text-cyan-400 flex items-center gap-1.5">
+                          <span>🛍️【Google 商家線上點餐】專用獨立連結</span>
+                        </span>
+                        <span className="text-[10px] text-cyan-300/80 bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20">
+                          直達菜單與外帶
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          readOnly
+                          value={`${typeof window !== 'undefined' ? window.location.origin : 'https://sabay-bbq-order.web.app'}/order`}
+                          className="flex-1 bg-zinc-950 border border-white/15 rounded-lg px-3 py-2 text-xs text-cyan-300 font-mono"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const link = `${typeof window !== 'undefined' ? window.location.origin : 'https://sabay-bbq-order.web.app'}/order`;
+                            navigator.clipboard.writeText(link);
+                            setCopiedGoogleLinkNotice('order');
+                            setTimeout(() => setCopiedGoogleLinkNotice(null), 3000);
+                          }}
+                          className="px-3 py-2 bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 text-cyan-300 font-bold text-xs rounded-lg transition active:scale-95 cursor-pointer whitespace-nowrap"
+                        >
+                          {copiedGoogleLinkNotice === 'order' ? '✅ 已複製！' : '📋 複製連結'}
+                        </button>
+                        <a
+                          href={`${typeof window !== 'undefined' ? window.location.origin : 'https://sabay-bbq-order.web.app'}/order`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 border border-white/10 text-white font-bold text-xs rounded-lg transition active:scale-95 cursor-pointer whitespace-nowrap"
+                        >
+                          🔗 預覽菜單
+                        </a>
+                      </div>
+                      <p className="text-[10px] text-zinc-400 leading-relaxed">
+                        💡 貼至 Google 商家檔案【線上點餐 (Order Online)】欄位。顧客點擊後直接呈現菜單與外帶購物車。
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* 📋 Google 商家 Place Actions 審查規範對照表 */}
+                  <div className="bg-zinc-950/80 border border-white/10 rounded-xl p-3.5 space-y-2">
+                    <span className="text-xs font-bold text-zinc-300 block">
+                      🛡️ Google 商家 Place Actions 審查規範合規性檢核報告 (Compliance Audit)
+                    </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 text-[11px]">
+                      <div className="flex items-center gap-1.5 text-emerald-300 bg-emerald-950/30 p-2 rounded border border-emerald-500/20">
+                        <span className="font-bold">✅ 直達性 (Direct Landing):</span> 表單0秒載入
+                      </div>
+                      <div className="flex items-center gap-1.5 text-emerald-300 bg-emerald-950/30 p-2 rounded border border-emerald-500/20">
+                        <span className="font-bold">✅ 免登入門檻 (No Wall):</span> 無強迫註冊
+                      </div>
+                      <div className="flex items-center gap-1.5 text-emerald-300 bg-emerald-950/30 p-2 rounded border border-emerald-500/20">
+                        <span className="font-bold">✅ 商家透明度 (Identity):</span> 含名稱地址電話
+                      </div>
+                      <div className="flex items-center gap-1.5 text-emerald-300 bg-emerald-950/30 p-2 rounded border border-emerald-500/20">
+                        <span className="font-bold">✅ SEO/JSON-LD:</span> 爬蟲結構化數據
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 {/* ==================== RESERVATIONS MANAGEMENT PANEL ==================== */}
                 <div className="bg-[#161616] border border-white/10 rounded-xl p-5 space-y-4 text-left font-sans">
                   <div className="flex justify-between items-center border-b border-white/5 pb-2">

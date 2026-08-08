@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense, useMemo } from 'react';
 import { Language, MenuItem, Ingredient, Order, OrderStatus, OrderItem, Category, TableConfig, OperatingHourSlot, Reservation } from './types';
 import { getOfflineQueue, addRequestToQueue, clearOfflineQueue, removeOrderRequestsFromQueue, processOfflineQueue, QueuedRequest } from './lib/offlineQueue';
 import { safeStorage } from './lib/safeStorage';
@@ -55,11 +55,36 @@ export default function App() {
   // Secure staff role gating
   const [isStaff, setIsStaff] = useState<boolean>(false);
 
-  // Path routing states
+  // Path & Query routing states for Google Business Profile Direct Links (/reserve, /order)
   const [staffPin, setStaffPin] = useState<string>('');
   const [currentPath, setCurrentPath] = useState<string>(window.location.pathname);
   const isSuperEntry = currentPath === '/FSY20260606';
   const isAtStaffPath = currentPath === '/888888' || isSuperEntry;
+
+  const isReserveRoute = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    const path = window.location.pathname.toLowerCase();
+    const search = new URLSearchParams(window.location.search);
+    return (
+      path === '/reserve' ||
+      path === '/booking' ||
+      path === '/reservation' ||
+      search.get('mode') === 'reserve' ||
+      search.get('action') === 'reserve' ||
+      search.get('reserve') === 'true'
+    );
+  }, [currentPath]);
+
+  const isOrderRoute = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    const path = window.location.pathname.toLowerCase();
+    const search = new URLSearchParams(window.location.search);
+    return (
+      path === '/order' ||
+      search.get('mode') === 'order' ||
+      search.get('action') === 'order'
+    );
+  }, [currentPath]);
 
   useEffect(() => {
     if (currentPath === '/FSY20260606') {
@@ -2263,6 +2288,7 @@ export default function App() {
                 servicePaused={servicePaused}
                 memberPointsRatio={memberPointsRatio}
                 memberRewards={memberRewards}
+                autoOpenReservationModal={isReserveRoute}
               />
             </Suspense>
           </div>

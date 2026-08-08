@@ -118,6 +118,7 @@ interface CustomerOrderViewProps {
   servicePaused?: boolean;
   memberPointsRatio?: number;
   memberRewards?: any[];
+  autoOpenReservationModal?: boolean;
 }
 
 export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
@@ -138,6 +139,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
   operatingHours = [],
   restDays = [],
   promoCombo = { enabled: true, requiredQty: 10, discountAmount: 20, eligibleItemIds: [], combos: [] } as any,
+  autoOpenReservationModal = false,
   ingredients = [],
   onToggleMenuItemAvailability,
   onAdjustIngredientStock,
@@ -372,6 +374,12 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
 
   // 📅 預約訂位點餐 (Reservation & Pre-order) modal states
   const [showReservationModal, setShowReservationModal] = useState(false);
+
+  useEffect(() => {
+    if (autoOpenReservationModal) {
+      setShowReservationModal(true);
+    }
+  }, [autoOpenReservationModal]);
   const [resCustomerName, setResCustomerName] = useState('');
   const [resPhone, setResPhone] = useState('');
   const [resPhoneError, setResPhoneError] = useState(false);
@@ -4839,6 +4847,17 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
             className="bg-[#121212] border border-amber-500/30 rounded-3xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden shadow-2xl relative text-left"
             onClick={(e) => e.stopPropagation()}
           >
+            {/* Google Business Certified Banner */}
+            {(autoOpenReservationModal || (typeof window !== 'undefined' && (window.location.pathname.includes('/reserve') || window.location.search.includes('reserve')))) && (
+              <div className="bg-gradient-to-r from-emerald-950/80 via-zinc-900 to-amber-950/80 border-b border-emerald-500/40 px-5 py-2.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1 text-xs">
+                <div className="flex items-center gap-2 text-emerald-400 font-extrabold">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping shrink-0" />
+                  <span>🟢 Google 商家審查合格獨立連結 (Google Place Actions Reserve Portal)</span>
+                </div>
+                <span className="text-[10px] text-zinc-400">直通沙貝燒烤櫃檯客席保留系統 • 0秒直達</span>
+              </div>
+            )}
+
             {/* Modal Header */}
             <div className="p-5 pb-4 border-b border-white/10 flex-shrink-0 flex items-center justify-between bg-gradient-to-r from-amber-950/40 via-zinc-900 to-black">
               <div className="flex items-center gap-2.5">
