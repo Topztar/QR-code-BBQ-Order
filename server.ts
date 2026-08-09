@@ -1,14 +1,15 @@
 import 'dotenv/config';
 import express from 'express';
 import path from 'path';
-import fs from 'fs';
 import net from 'net';
 import { Storage } from '@google-cloud/storage';
 import { initializeApp as initializeClientApp, getApps as getClientApps } from 'firebase/app';
 import { getFirestore as getClientFirestore, collection, doc, deleteDoc, getDoc, getDocs, setDoc, writeBatch } from 'firebase/firestore';
 import { createServer as createViteServer } from 'vite';
 import { Order, Ingredient, MenuItem, OrderItem, Category, TableConfig, OperatingHourSlot, Reservation, Language } from './src/types';
-import { INITIAL_MENU, INITIAL_INGREDIENTS, INITIAL_CATEGORIES, INGREDIENT_RECIPE_MAP } from './src/data';
+import fs from 'fs';
+const dataJson = JSON.parse(fs.readFileSync('./public/data.json', 'utf-8'));
+const { INITIAL_MENU, INITIAL_INGREDIENTS, INITIAL_CATEGORIES, INGREDIENT_RECIPE_MAP } = dataJson;
 import { GoogleGenAI, Type } from '@google/genai';
 import {
   triggerRealCashDrawer,
@@ -16,19 +17,9 @@ import {
   printCustomerReceipt
 } from './hardware/printerDriver';
 
-const STORAGE_BUCKET_NAME = 'sabay-bbq-order.firebasestorage.app';
-let gcsStorage: Storage | null = null;
-let gcsBucket: any = null;
-
-try {
-  gcsStorage = new Storage({
-    projectId: 'sabay-bbq-order'
-  });
-  gcsBucket = gcsStorage.bucket(STORAGE_BUCKET_NAME);
-  console.log(`[Sabay Storage] Initialized @google-cloud/storage bucket: ${STORAGE_BUCKET_NAME}`);
-} catch (err: any) {
-  console.warn('[Sabay Storage] @google-cloud/storage initialization note:', err?.message);
-}
+import { initFirebaseStorage, gcsBucket, getGeminiClient, app, PORT } from './src/server/init';
+import { setupMiddleware } from './src/server/middleware';
+initFirebaseStorage();
 
 function getMimeTypeFromExt(filePath: string): string {
   const ext = path.extname(filePath).toLowerCase();
@@ -51,20 +42,6 @@ function getMimeTypeFromExt(filePath: string): string {
     default:
       return 'image/jpeg';
   }
-}
-
-function getGeminiClient(): GoogleGenAI | null {
-  if (!process.env.GEMINI_API_KEY) {
-    return null;
-  }
-  return new GoogleGenAI({
-    apiKey: process.env.GEMINI_API_KEY,
-    httpOptions: {
-      headers: {
-        'User-Agent': 'aistudio-build',
-      }
-    }
-  });
 }
 
 function getSabayAuthenticImage(nameZh: string, defaultImg: string): string {
@@ -132,23 +109,7 @@ function getSabayAuthenticImage(nameZh: string, defaultImg: string): string {
   return defaultImg;
 }
 
-const app = express();
-const PORT = 3000;
-
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ limit: '10mb', extended: true }));
-
-// Enable CORS for cross-origin local PC bridge requests from Firebase Hosting
-app.use((req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  if (req.method === 'OPTIONS') {
-    return res.sendStatus(200);
-  }
-  next();
-});
-
+setupMiddleware(app);
 // In-Memory Database State
 let liveMenu: MenuItem[] = INITIAL_MENU.map((item, index) => {
   const id = item.id;

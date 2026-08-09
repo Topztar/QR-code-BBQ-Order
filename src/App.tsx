@@ -4,7 +4,7 @@ import { getOfflineQueue, addRequestToQueue, clearOfflineQueue, removeOrderReque
 import { safeStorage } from './lib/safeStorage';
 import { apiFetch } from './lib/api';
 import { db, isFirebaseSyncEnabled } from './lib/firebase';
-import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, limit } from 'firebase/firestore';
 import { TRANSLATIONS, INITIAL_MENU, INITIAL_CATEGORIES } from './data';
 import { LanguageSelector } from './components/LanguageSelector';
 import { ChefHat, Smartphone, BarChart3, UtensilsCrossed, LogOut, Lock, Phone, MapPin, Eye, EyeOff, Coins, Monitor } from 'lucide-react';
@@ -34,6 +34,7 @@ interface AnalyticsData {
 }
 
 export default function App() {
+  const [dataLoaded, setDataLoaded] = useState(false);
   const [lang, setLang] = useState<Language>(() => {
     try {
       const stored = safeStorage.getItem('sabay-language');
@@ -518,7 +519,7 @@ export default function App() {
     if (isFirebaseSyncEnabled()) {
       try {
         // 實時監聽訂單
-        const ordersQuery = query(collection(db, "orders"), orderBy("createdAt", "desc"));
+        const ordersQuery = query(collection(db, "orders"), orderBy("createdAt", "desc"), limit(500));
         unsubscribeOrders = onSnapshot(ordersQuery, (snapshot) => {
           const updatedOrders = snapshot.docs.map(doc => ({ ...doc.data() } as Order));
           setOrders(reconcileOrdersWithRecentTransitions(updatedOrders));

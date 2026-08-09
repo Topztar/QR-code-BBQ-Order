@@ -1,7 +1,11 @@
-import * as functions from 'firebase-functions';
+import { onRequest } from 'firebase-functions/v2/https';
+import { setGlobalOptions } from 'firebase-functions/v2';
 import * as admin from 'firebase-admin';
-import * as express from 'express';
-import * as cors from 'cors';
+import { getStorage } from 'firebase-admin/storage';
+import express from 'express';
+
+setGlobalOptions({ maxInstances: 10, minInstances: 1, memory: "1GiB", region: "asia-east1" });
+import cors from 'cors';
 import * as net from 'net';
 import * as path from 'path';
 import { getFirestore } from 'firebase-admin/firestore';
@@ -11,7 +15,7 @@ admin.initializeApp();
 
 // Connect to the specific named Firestore database
 const db = getFirestore('ai-studio-sabaythaibbqtabl-84418196-9d0c-459c-bced-ddc424dfba07');
-const storageBucket = admin.storage().bucket('sabay-bbq-order.firebasestorage.app');
+const storageBucket = getStorage().bucket('sabay-bbq-order.firebasestorage.app');
 const app = express();
 
 app.use(cors({ origin: true }));
@@ -2013,9 +2017,9 @@ post('/printer/settings', async (req, res) => {
 });
 
 // Catch-all 404 JSON Handler to prevent returning HTML on missing API endpoints
-app.use((req, res) => {
+app.use((req: any, res: any) => {
   res.status(404).json({ error: `無效的 API 請求: ${req.method} ${req.path}` });
 });
 
-export const api = functions.https.onRequest(app);
+export const api = onRequest(app);
 

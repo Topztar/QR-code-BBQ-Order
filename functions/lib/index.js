@@ -1,20 +1,59 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.api = void 0;
-const functions = require("firebase-functions");
-const admin = require("firebase-admin");
-const express = require("express");
-const cors = require("cors");
-const net = require("net");
-const path = require("path");
+const https_1 = require("firebase-functions/v2/https");
+const v2_1 = require("firebase-functions/v2");
+const admin = __importStar(require("firebase-admin"));
+const storage_1 = require("firebase-admin/storage");
+const express_1 = __importDefault(require("express"));
+(0, v2_1.setGlobalOptions)({ maxInstances: 10, minInstances: 1, memory: "1GiB", region: "asia-east1" });
+const cors_1 = __importDefault(require("cors"));
+const net = __importStar(require("net"));
+const path = __importStar(require("path"));
 const firestore_1 = require("firebase-admin/firestore");
 admin.initializeApp();
 const db = (0, firestore_1.getFirestore)('ai-studio-sabaythaibbqtabl-84418196-9d0c-459c-bced-ddc424dfba07');
-const storageBucket = admin.storage().bucket('sabay-bbq-order.firebasestorage.app');
-const app = express();
-app.use(cors({ origin: true }));
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ limit: '10mb', extended: true }));
+const storageBucket = (0, storage_1.getStorage)().bucket('sabay-bbq-order.firebasestorage.app');
+const app = (0, express_1.default)();
+app.use((0, cors_1.default)({ origin: true }));
+app.use(express_1.default.json({ limit: '10mb' }));
+app.use(express_1.default.urlencoded({ limit: '10mb', extended: true }));
 function getMimeTypeFromExt(filePath) {
     const ext = path.extname(filePath).toLowerCase();
     switch (ext) {
@@ -1829,5 +1868,5 @@ post('/printer/settings', async (req, res) => {
 app.use((req, res) => {
     res.status(404).json({ error: `無效的 API 請求: ${req.method} ${req.path}` });
 });
-exports.api = functions.https.onRequest(app);
+exports.api = (0, https_1.onRequest)(app);
 //# sourceMappingURL=index.js.map
