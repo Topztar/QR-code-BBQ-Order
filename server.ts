@@ -1888,7 +1888,7 @@ app.get('/api/bootstrap', (_req, res) => {
   syncTableStatusesWithTodayReservations();
   res.setHeader('Cache-Control', 'public, max-age=15, s-maxage=60, stale-while-revalidate=300');
   res.json({
-    menu: liveMenu,
+    menu: liveMenu.map(m => ({ id: m.id, category: m.category, name: m.name, price: m.price, image: m.image, description: m.description, available: m.available, isSetMeal: m.isSetMeal, requiredSaucesOption: m.requiredSaucesOption, hasNoodlesOption: m.hasNoodlesOption, hasCoconutsMilkOption: m.hasCoconutsMilkOption, containsBeef: m.containsBeef, containsPork: m.containsPork, containsSeafood: m.containsSeafood, isNotSpicy: m.isNotSpicy, customAddOns: m.customAddOns, orderIndex: m.orderIndex, isTakeoutAvailable: m.isTakeoutAvailable, soldOutAt: m.soldOutAt })),
     categories: liveCategories,
     tables: liveTables,
     operatingHours: {
@@ -1916,7 +1916,7 @@ app.get('/api/bootstrap', (_req, res) => {
 app.get('/api/menu', (_req, res) => {
   checkAndRestoreSoldOutMenuItems();
   res.setHeader('Cache-Control', 'public, max-age=15, s-maxage=60, stale-while-revalidate=300');
-  res.json(liveMenu);
+  res.json(liveMenu.map(m => ({ id: m.id, category: m.category, name: m.name, price: m.price, image: m.image, description: m.description, available: m.available, isSetMeal: m.isSetMeal, requiredSaucesOption: m.requiredSaucesOption, hasNoodlesOption: m.hasNoodlesOption, hasCoconutsMilkOption: m.hasCoconutsMilkOption, containsBeef: m.containsBeef, containsPork: m.containsPork, containsSeafood: m.containsSeafood, isNotSpicy: m.isNotSpicy, customAddOns: m.customAddOns, orderIndex: m.orderIndex, isTakeoutAvailable: m.isTakeoutAvailable, soldOutAt: m.soldOutAt })));
 });
 
 // Create live menu item
@@ -1982,7 +1982,7 @@ app.put('/api/menu/reorder', (req, res) => {
   });
   liveMenu = reordered;
   saveStateToDisk();
-  res.json({ success: true, menu: liveMenu });
+  res.json({ success: true, menu: liveMenu.map(m => ({ id: m.id, category: m.category, name: m.name, price: m.price, image: m.image, description: m.description, available: m.available, isSetMeal: m.isSetMeal, requiredSaucesOption: m.requiredSaucesOption, hasNoodlesOption: m.hasNoodlesOption, hasCoconutsMilkOption: m.hasCoconutsMilkOption, containsBeef: m.containsBeef, containsPork: m.containsPork, containsSeafood: m.containsSeafood, isNotSpicy: m.isNotSpicy, customAddOns: m.customAddOns, orderIndex: m.orderIndex, isTakeoutAvailable: m.isTakeoutAvailable, soldOutAt: m.soldOutAt })) });
 });
 
 // Update live menu item
@@ -2933,7 +2933,7 @@ app.get('/api/orders/history-check', (req, res) => {
 });
 
 app.get('/api/orders', (_req, res) => {
-  res.json(liveOrders);
+  res.json(liveOrders.map(o => ({ id: o.id, tableNumber: o.tableNumber, items: o.items.map(i => ({ id: i.id, menuItemId: i.menuItemId, name: i.name, price: i.price, qty: i.qty, customization: i.customization, isPrepared: i.isPrepared, isCompleted: i.isCompleted })), subtotal: o.subtotal, serviceCharge: o.serviceCharge, total: o.total, status: o.status, createdAt: o.createdAt, customerName: o.customerName, paymentMethod: o.paymentMethod, isPaid: o.isPaid, guestCount: o.guestCount, quickNotes: o.quickNotes, isFlagged: o.isFlagged, flagReason: o.flagReason, type: o.type, drawerLog: o.drawerLog })));
 });
 
 function getMappedTableId(inputTableId: string, availableTables: Array<{id: string}>): string {
