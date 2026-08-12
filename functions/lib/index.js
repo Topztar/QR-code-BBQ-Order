@@ -42,7 +42,7 @@ const v2_1 = require("firebase-functions/v2");
 const admin = __importStar(require("firebase-admin"));
 const storage_1 = require("firebase-admin/storage");
 const express_1 = __importDefault(require("express"));
-(0, v2_1.setGlobalOptions)({ maxInstances: 10, minInstances: 1, memory: "1GiB", region: "asia-east1" });
+(0, v2_1.setGlobalOptions)({ maxInstances: 10, minInstances: 1, memory: "1GiB", region: "asia-east1", concurrency: 80 });
 const cors_1 = __importDefault(require("cors"));
 const net = __importStar(require("net"));
 const path = __importStar(require("path"));

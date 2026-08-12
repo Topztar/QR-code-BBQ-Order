@@ -4,7 +4,7 @@ import * as admin from 'firebase-admin';
 import { getStorage } from 'firebase-admin/storage';
 import express from 'express';
 
-setGlobalOptions({ maxInstances: 10, minInstances: 1, memory: "1GiB", region: "asia-east1" });
+setGlobalOptions({ maxInstances: 10, minInstances: 1, memory: "1GiB", region: "asia-east1", concurrency: 80 });
 import cors from 'cors';
 import * as net from 'net';
 import * as path from 'path';
