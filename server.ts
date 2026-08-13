@@ -1361,23 +1361,6 @@ app.post('/api/print-logs/clear', (_req, res) => {
   res.json({ success: true, message: '虛擬出單記錄已全部清除' });
 });
 
-// Clear all testing historical orders and transient data
-app.post('/api/admin/clear-test-data', (req, res) => {
-  const { pin } = req.body;
-  if (!pin || pin !== liveStaffPin) {
-    return res.status(403).json({ error: '安全校對碼 (員工解鎖 PIN 碼) 不正確，無法授權清空！' });
-  }
-  
-  // Clear data
-  liveOrders = [];
-  inventoryLogs = [];
-  printLogs = [];
-  promoNotifications = [];
-  liveTakeoutSeq = 0;
-  
-  saveStateToDisk();
-  res.json({ success: true, message: '已成功清除系統內所有測試用歷史單據、庫存記錄及虛擬出單日誌！' });
-});
 
 // Get promotional push notification list
 app.get('/api/push-notifications', (_req, res) => {
@@ -1598,106 +1581,6 @@ app.post('/api/printer/print-receipt', async (req, res) => {
   });
 });
 
-// Generate and trigger real physical test print receipt
-app.post('/api/printer/test', async (req, res) => {
-  const target = (req.body?.target as 'kitchen' | 'bill' | 'all') || 'all';
-
-  let drawerNote = '';
-  let drawerResLog = '';
-  if ((target === 'bill' || target === 'all') && livePrinterSettings.bill.cashDrawerEnabled) {
-    const drawerRes = await triggerCashDrawerOpen(livePrinterSettings.bill);
-    drawerResLog = drawerRes.log;
-    drawerNote = `
-----------------------------------------
-現金收銀抽屜連動: 啟用 🟢
-觸發驅動: ${livePrinterSettings.bill.cashDrawerDriver}
-實體埠口: ${livePrinterSettings.bill.usbPort || 'LPT1:'}
-執行日誌:
-${drawerRes.log}
-`;
-    
-    printLogs.push({
-      id: `pr-${Date.now()}-drawer-test`,
-      timestamp: new Date().toLocaleTimeString(),
-      content: `========================================\n         SABAY BBQ 收銀箱測試開啟\n========================================\n觸發方式: 測試列印連動觸發\n實體埠口: ${livePrinterSettings.bill.usbPort || 'LPT1:'}\n執行日誌:\n${drawerRes.log}\n========================================`,
-      orderId: 'TEST-PAGE',
-      type: 'customer'
-    });
-  } else if (livePrinterSettings.bill.cashDrawerEnabled) {
-    drawerNote = `
-----------------------------------------
-現金收銀抽屜連動: 啟用 🟢
-`;
-  } else {
-    drawerNote = `
-----------------------------------------
-現金收銀抽屜連動: 未啟用 ❌
-`;
-  }
-
-  const targetLabel = target === 'kitchen' ? '廚房 KDS 工作票印表機' : target === 'bill' ? '前台帳單與收銀明細印表機' : '全機型 (雙機測試)';
-  const testTicket = `
-========================================
-       沙貝燒烤 (${targetLabel} 測試頁)
-========================================
-測試狀態: 連線成功 🟢
-主機來源: ${req.ip || '127.0.0.1'}
-廚房印表機 IP: ${livePrinterSettings.kitchen?.ip || livePrinterIp} (${livePrinterSettings.kitchen?.connectionType || 'IP'})
-前台印表機 Port: ${livePrinterSettings.bill?.usbPort || 'LPT1:'} (${livePrinterSettings.bill?.connectionType || 'LPT'})
-列印時間: ${new Date().toLocaleString()}
-----------------------------------------
-字型測試 / Font Test:
-1. 繁體中文 🇹🇼 - 測試正常 (沙貝沙貝)
-2. English 🇺🇸 - OK (Sawatdee!)
-3. 泰文 🇹🇭 - ลาบหมูย่างส้มตำ${drawerNote}
-========================================
-  `.trim();
-
-  let kitchenHardwareRes = { success: false, log: '未測試廚房印表機' };
-  let billHardwareRes = { success: false, log: '未測試前台印表機' };
-
-  if (target === 'kitchen' || target === 'all') {
-    kitchenHardwareRes = await printKitchenTicket(testTicket, {
-      ip: livePrinterSettings.kitchen?.ip || livePrinterIp,
-      port: (livePrinterSettings.kitchen as any)?.port || 9100,
-      connectionType: (livePrinterSettings.kitchen?.connectionType as 'IP' | 'USB' | 'LPT') || 'IP',
-      usbPort: livePrinterSettings.kitchen?.usbPort || 'USB001'
-    });
-  }
-
-  if (target === 'bill' || target === 'all') {
-    billHardwareRes = await printCustomerReceipt(testTicket, {
-      ip: livePrinterSettings.bill?.ip || livePrinterIp,
-      port: (livePrinterSettings.bill as any)?.port || 9100,
-      connectionType: (livePrinterSettings.bill?.connectionType as 'IP' | 'USB' | 'LPT') || 'LPT',
-      usbPort: livePrinterSettings.bill?.usbPort || 'LPT1:',
-      cashDrawerEnabled: false
-    });
-  }
-
-  const isSuccess = target === 'kitchen' ? kitchenHardwareRes.success : target === 'bill' ? billHardwareRes.success : (kitchenHardwareRes.success || billHardwareRes.success);
-
-  printLogs.push({
-    id: `pr-${Date.now()}-test`,
-    timestamp: new Date().toLocaleTimeString(),
-    content: `${testTicket}\n\n[實體廚房印表機 (${livePrinterSettings.kitchen?.width || '80mm'})]:\n${kitchenHardwareRes.log}\n\n[實體前台印表機 (${livePrinterSettings.bill?.width || '58mm'})]:\n${billHardwareRes.log}`,
-    orderId: 'TEST-PAGE',
-    type: target === 'bill' ? 'customer' : 'kitchen'
-  });
-
-  saveStateToDisk();
-  res.json({
-    success: isSuccess,
-    message: `測試頁已傳送至實體印表機 [${targetLabel}]`,
-    hardwareLogs: {
-      kitchen: kitchenHardwareRes.log,
-      bill: billHardwareRes.log,
-      drawer: drawerResLog
-    },
-    ticketContent: testTicket,
-    target
-  });
-});
 
 
 // Update printer/staff authentication PIN (used from Manager dashboard)
@@ -2933,7 +2816,7 @@ app.get('/api/orders/history-check', (req, res) => {
 });
 
 app.get('/api/orders', (_req, res) => {
-  res.json(liveOrders.map(o => ({ id: o.id, tableNumber: o.tableNumber, items: o.items.map(i => ({ id: i.id, menuItemId: i.menuItemId, name: i.name, price: i.price, qty: i.qty, customization: i.customization, isPrepared: i.isPrepared, isCompleted: i.isCompleted })), subtotal: o.subtotal, serviceCharge: o.serviceCharge, total: o.total, status: o.status, createdAt: o.createdAt, customerName: o.customerName, paymentMethod: o.paymentMethod, isPaid: o.isPaid, guestCount: o.guestCount, quickNotes: o.quickNotes, isFlagged: o.isFlagged, flagReason: o.flagReason, type: o.type, drawerLog: o.drawerLog })));
+  res.json(liveOrders.map(o => ({ id: o.id, tableNumber: o.tableNumber, items: o.items.map(i => ({ id: i.id, menuItemId: i.menuItemId, name: i.name, price: i.price, qty: i.qty, customization: i.customization, isPrepared: i.isPrepared, isCompleted: i.isCompleted })), subtotal: o.subtotal, serviceCharge: o.serviceCharge, total: o.total, status: o.status, createdAt: o.createdAt, customerName: o.customerName, paymentMethod: o.paymentMethod, isPaid: o.isPaid, guestCount: o.guestCount, quickNotes: o.quickNotes, isFlagged: o.isFlagged, flagReason: o.flagReason })));
 });
 
 function getMappedTableId(inputTableId: string, availableTables: Array<{id: string}>): string {
