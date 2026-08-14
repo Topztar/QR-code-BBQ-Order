@@ -401,12 +401,7 @@ let liveOptionRules: any[] = [
             "category": "加配料"
           }
         ];
-let livePromoCombo = {
-  "discountAmount": 0,
-  "requiredQty": 0,
-  "enabled": false,
-  "eligibleItemIds": []
-};
+let livePromoCombo = { enabled: false, requiredQty: 10, discountAmount: 20, eligibleItemIds: [] };
 let livePromoCombos: any[] = [];
 let livePrinterSettings = {
   "bill": {
@@ -693,12 +688,7 @@ let printLogs: { id: string; timestamp: string; content: string; orderId: string
 // In-Memory Push Promo Dispatch Queue
 let promoNotifications: { id: string; timestamp: string; title: string; message: string; badge: string; isRead: boolean }[] = [];
 
-let livePopularItemIds = [
-          "dish-2605122152569",
-          "dish-2696007842576",
-          "dish-1909192003211",
-          "dish-2207122058577"
-        ];
+let livePopularItemIds: string[] = [];
 
 let liveMemberPointsRatio = 20; // default points ratio: 每20元新增1點
 let liveMemberRewards = [
