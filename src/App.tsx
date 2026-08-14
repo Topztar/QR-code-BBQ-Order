@@ -420,20 +420,35 @@ export default function App() {
         }
       };
 
-      if (isFullCycle) {
-        const [bootstrapRes, ordersRes, notifRes, printLogsRes, analyticsRes] = await Promise.all([
-          safeFetch('/api/bootstrap', null),
-          safeFetch('/api/orders', []),
-          safeFetch('/api/push-notifications', []),
-          safeFetch('/api/print-logs', []),
-          safeFetch('/api/analytics', fallbackAnalytics)
-        ]);
+      const isCustomerView = activeTab === 'customer';
 
-        const bootstrapData = await safeJson(bootstrapRes, null);
-        const ordData = await safeJson(ordersRes, []);
-        const notifData = await safeJson(notifRes, []);
-        const printData = await safeJson(printLogsRes, []);
-        const alyData = await safeJson(analyticsRes, fallbackAnalytics);
+      if (isFullCycle) {
+        const fetchPromises: Promise<Response>[] = [
+          safeFetch('/api/bootstrap', null),
+          safeFetch('/api/orders', [])
+        ];
+
+        if (!isCustomerView) {
+          fetchPromises.push(
+            safeFetch('/api/push-notifications', []),
+            safeFetch('/api/print-logs', []),
+            safeFetch('/api/analytics', fallbackAnalytics)
+          );
+        }
+
+        const results = await Promise.all(fetchPromises);
+        const bootstrapData = await safeJson(results[0], null);
+        const ordData = await safeJson(results[1], []);
+
+        let notifData = [];
+        let printData = [];
+        let alyData = fallbackAnalytics;
+
+        if (!isCustomerView) {
+          notifData = await safeJson(results[2], []);
+          printData = await safeJson(results[3], []);
+          alyData = await safeJson(results[4], fallbackAnalytics);
+        }
 
         setOrders(reconcileOrdersWithRecentTransitions(ordData));
         setPrintLogs(printData);
@@ -468,19 +483,27 @@ export default function App() {
         }
       } else {
         // Lightweight polling cycle for active dynamic state
-        const [ordersRes, tablesRes, servicePauseRes, notifRes, ingRes] = await Promise.all([
+        const fetchPromises: Promise<Response>[] = [
           safeFetch('/api/orders', []),
           safeFetch('/api/tables', []),
           safeFetch('/api/settings/service-pause', { servicePaused: false }),
-          safeFetch('/api/push-notifications', []),
           safeFetch('/api/ingredients', [])
-        ]);
+        ];
 
-        const ordData = await safeJson(ordersRes, []);
-        const tablesData = await safeJson(tablesRes, []);
-        const servicePauseData = await safeJson(servicePauseRes, { servicePaused: false });
-        const notifData = await safeJson(notifRes, []);
-        const ingData = await safeJson(ingRes, []);
+        if (!isCustomerView) {
+          fetchPromises.push(safeFetch('/api/push-notifications', []));
+        }
+
+        const results = await Promise.all(fetchPromises);
+        const ordData = await safeJson(results[0], []);
+        const tablesData = await safeJson(results[1], []);
+        const servicePauseData = await safeJson(results[2], { servicePaused: false });
+        const ingData = await safeJson(results[3], []);
+
+        let notifData = [];
+        if (!isCustomerView) {
+          notifData = await safeJson(results[4], []);
+        }
 
         setOrders(reconcileOrdersWithRecentTransitions(ordData));
         if (Array.isArray(tablesData)) setTables(tablesData);
