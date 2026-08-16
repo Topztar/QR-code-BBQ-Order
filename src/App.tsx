@@ -4,7 +4,7 @@ import { getOfflineQueue, addRequestToQueue, clearOfflineQueue, removeOrderReque
 import { safeStorage } from './lib/safeStorage';
 import { apiFetch } from './lib/api';
 import { db, isFirebaseSyncEnabled } from './lib/firebase';
-import { collection, onSnapshot, query, orderBy, limit } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, limit, where } from 'firebase/firestore';
 import { TRANSLATIONS, INITIAL_MENU, INITIAL_CATEGORIES } from './data';
 import { LanguageSelector } from './components/LanguageSelector';
 import { ChefHat, Smartphone, BarChart3, UtensilsCrossed, LogOut, Lock, Phone, MapPin, Eye, EyeOff, Coins, Monitor } from 'lucide-react';
@@ -431,8 +431,7 @@ export default function App() {
         if (!isCustomerView) {
           fetchPromises.push(
             safeFetch('/api/push-notifications', []),
-            safeFetch('/api/print-logs', []),
-            safeFetch('/api/analytics', fallbackAnalytics)
+            safeFetch('/api/print-logs', [])
           );
         }
 
@@ -447,7 +446,6 @@ export default function App() {
         if (!isCustomerView) {
           notifData = await safeJson(results[2], []);
           printData = await safeJson(results[3], []);
-          alyData = await safeJson(results[4], fallbackAnalytics);
         }
 
         setOrders(reconcileOrdersWithRecentTransitions(ordData));
@@ -541,8 +539,11 @@ export default function App() {
 
     if (isFirebaseSyncEnabled()) {
       try {
-        // 實時監聽訂單
-        const ordersQuery = query(collection(db, "orders"), orderBy("createdAt", "desc"), limit(500));
+        // 實時監聽訂單 (只載入今日訂單以降低 Firestore 讀取費用)
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const startOfDay = today.toISOString();
+        const ordersQuery = query(collection(db, "orders"), where("createdAt", ">=", startOfDay), orderBy("createdAt", "desc"));
         unsubscribeOrders = onSnapshot(ordersQuery, (snapshot) => {
           const updatedOrders = snapshot.docs.map(doc => ({ ...doc.data() } as Order));
           setOrders(reconcileOrdersWithRecentTransitions(updatedOrders));
@@ -560,19 +561,23 @@ export default function App() {
       } catch (e) {
         console.warn('[Firebase Sync] Realtime listener initialization skipped:', e);
       }
+      console.log('✅ [Firebase Sync] Firebase 實時同步已啟用，停止高頻 5 秒 HTTP 輪詢。');
     } else {
       console.log('⛔ [Firebase Sync] Firebase 同步已停止，轉用本地 API 定時自動輪詢。');
     }
 
-    // 當 Firebase 同步停止時，使用 5 秒自動輪詢維護本地資料同步
-    const localPollingTimer = setInterval(() => {
-      fetchData(false);
-    }, 5000);
+    let localPollingTimer: ReturnType<typeof setInterval>;
+    if (!isFirebaseSyncEnabled()) {
+      // 當 Firebase 同步停止時，才使用 5 秒自動輪詢維護本地資料同步
+      localPollingTimer = setInterval(() => {
+        fetchData(false);
+      }, 5000);
+    }
 
     return () => {
       unsubscribeOrders();
       unsubscribeIngredients();
-      clearInterval(localPollingTimer);
+      if (localPollingTimer) clearInterval(localPollingTimer);
     };
   }, []);
 
