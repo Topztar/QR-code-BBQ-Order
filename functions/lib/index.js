@@ -42,7 +42,7 @@ const v2_1 = require("firebase-functions/v2");
 const admin = __importStar(require("firebase-admin"));
 const storage_1 = require("firebase-admin/storage");
 const express_1 = __importDefault(require("express"));
-(0, v2_1.setGlobalOptions)({ maxInstances: 10, minInstances: 1, memory: "1GiB", region: "asia-east1", concurrency: 80 });
+(0, v2_1.setGlobalOptions)({ maxInstances: 10, minInstances: 0, memory: "512MiB", region: "asia-east1", concurrency: 80 });
 const cors_1 = __importDefault(require("cors"));
 const compression_1 = __importDefault(require("compression"));
 const net = __importStar(require("net"));
@@ -90,84 +90,6 @@ const put = (routePath, handler) => {
 const del = (routePath, handler) => {
     app.delete([`/api${routePath}`, routePath], handler);
 };
-app.get(['/api/images/:path(*)', '/images/:path(*)', '/api/images', '/images'], async (req, res) => {
-    const DEFAULT_FALLBACK_IMAGE = 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=600';
-    try {
-        let rawPath = req.params?.path || req.query.path || req.query.file || req.query.name || '';
-        if (!rawPath && req.query.url) {
-            const urlStr = String(req.query.url);
-            if (urlStr.startsWith('gs://')) {
-                const parts = urlStr.replace('gs://', '').split('/');
-                parts.shift();
-                rawPath = parts.join('/');
-            }
-            else if (urlStr.includes('firebasestorage.googleapis.com') || urlStr.includes('storage.googleapis.com')) {
-                const match = urlStr.match(/\/o\/([^?]+)/) || urlStr.match(/storage\.googleapis\.com\/[^/]+\/(.+)/);
-                if (match && match[1]) {
-                    rawPath = decodeURIComponent(match[1]);
-                }
-            }
-            else if (urlStr.startsWith('http://') || urlStr.startsWith('https://')) {
-                return res.redirect(302, urlStr);
-            }
-        }
-        if (!rawPath) {
-            return res.redirect(302, DEFAULT_FALLBACK_IMAGE);
-        }
-        if (rawPath.startsWith('http://') || rawPath.startsWith('https://')) {
-            return res.redirect(302, rawPath);
-        }
-        let cleanPath = decodeURIComponent(String(rawPath)).replace(/^\/+/, '').replace(/\.\.\//g, '');
-        let file = storageBucket.file(cleanPath);
-        let [exists] = await file.exists().catch(() => [false]);
-        if (!exists && !cleanPath.startsWith('dishes/')) {
-            const dishFile = storageBucket.file(`dishes/${cleanPath}`);
-            const [dishExists] = await dishFile.exists().catch(() => [false]);
-            if (dishExists) {
-                file = dishFile;
-                exists = true;
-                cleanPath = `dishes/${cleanPath}`;
-            }
-        }
-        if (!exists && !cleanPath.startsWith('images/')) {
-            const imgFile = storageBucket.file(`images/${cleanPath}`);
-            const [imgExists] = await imgFile.exists().catch(() => [false]);
-            if (imgExists) {
-                file = imgFile;
-                exists = true;
-                cleanPath = `images/${cleanPath}`;
-            }
-        }
-        if (!exists) {
-            console.warn(`[Cloud Functions Storage] Image not found: ${cleanPath}. Redirecting to fallback image.`);
-            return res.redirect(302, DEFAULT_FALLBACK_IMAGE);
-        }
-        const [metadata] = await file.getMetadata().catch(() => [{}]);
-        const contentType = metadata?.contentType || getMimeTypeFromExt(cleanPath) || 'image/jpeg';
-        res.setHeader('Content-Type', contentType);
-        res.setHeader('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
-        if (metadata?.size) {
-            res.setHeader('Content-Length', metadata.size);
-        }
-        if (metadata?.etag) {
-            res.setHeader('ETag', metadata.etag);
-        }
-        const readStream = file.createReadStream();
-        readStream.on('error', (err) => {
-            console.error('[Cloud Functions Storage Stream Error]:', err);
-            if (!res.headersSent) {
-                res.redirect(302, DEFAULT_FALLBACK_IMAGE);
-            }
-        });
-        readStream.pipe(res);
-    }
-    catch (error) {
-        console.error('[Cloud Functions Storage Error]:', error);
-        if (!res.headersSent) {
-            res.redirect(302, DEFAULT_FALLBACK_IMAGE);
-        }
-    }
-});
 post('/images/upload', async (req, res) => {
     try {
         const { base64, data, filename, contentType, folder = 'dishes' } = req.body;
@@ -203,7 +125,7 @@ post('/images/upload', async (req, res) => {
             },
             resumable: false
         });
-        const publicUrl = `/api/images/${targetPath}`;
+        const publicUrl = `https://firebasestorage.googleapis.com/v0/b/${storageBucket.name}/o/${encodeURIComponent(targetPath)}?alt=media`;
         return res.json({
             success: true,
             url: publicUrl,
@@ -223,7 +145,7 @@ let cachedCategories = null;
 const CACHE_TTL_MS = 60 * 1000;
 get('/bootstrap', async (_req, res) => {
     try {
-        res.setHeader('Cache-Control', 'public, max-age=15, s-maxage=60, stale-while-revalidate=300');
+        res.setHeader('Cache-Control', 'public, max-age=15, s-maxage=300, stale-while-revalidate=600');
         const [categoriesSnap, menuSnap, tablesSnap, systemDoc, ingredientsSnap, reservationsSnap] = await Promise.all([
             db.collection('categories').orderBy('orderIndex').get(),
             db.collection('menu').orderBy('orderIndex').get(),
@@ -258,6 +180,15 @@ get('/bootstrap', async (_req, res) => {
             else if (item.soldOutAt) {
                 item.soldOutAt = null;
             }
+            if (item.image && (item.image.startsWith('/api/images/') || item.image.startsWith('/images/'))) {
+                const path = item.image.replace(/^\/api\/images\//, '').replace(/^\/images\//, '');
+                item.image = `https://firebasestorage.googleapis.com/v0/b/${storageBucket.name}/o/${encodeURIComponent(path)}?alt=media`;
+                db.collection('menu').doc(item._docId).update({ image: item.image }).catch(err => console.error('Menu image migration error:', err));
+            }
+            else if (item.image && !item.image.startsWith('http') && !item.image.startsWith('/')) {
+                item.image = `https://firebasestorage.googleapis.com/v0/b/${storageBucket.name}/o/${encodeURIComponent(item.image)}?alt=media`;
+                db.collection('menu').doc(item._docId).update({ image: item.image }).catch(err => console.error('Menu image migration error:', err));
+            }
             delete item._docId;
             return item;
         });
@@ -283,9 +214,22 @@ get('/bootstrap', async (_req, res) => {
         }
         const sysData = systemDoc.data() || {};
         const isOpen = isStoreOpenFromData(sysData);
+        const processedCategories = categoriesSnap.docs.map(doc => {
+            const cat = doc.data();
+            if (cat.image && (cat.image.startsWith('/api/images/') || cat.image.startsWith('/images/'))) {
+                const path = cat.image.replace(/^\/api\/images\//, '').replace(/^\/images\//, '');
+                cat.image = `https://firebasestorage.googleapis.com/v0/b/${storageBucket.name}/o/${encodeURIComponent(path)}?alt=media`;
+                db.collection('categories').doc(doc.id).update({ image: cat.image }).catch(err => console.error('Category image migration error:', err));
+            }
+            else if (cat.image && !cat.image.startsWith('http') && !cat.image.startsWith('/')) {
+                cat.image = `https://firebasestorage.googleapis.com/v0/b/${storageBucket.name}/o/${encodeURIComponent(cat.image)}?alt=media`;
+                db.collection('categories').doc(doc.id).update({ image: cat.image }).catch(err => console.error('Category image migration error:', err));
+            }
+            return cat;
+        });
         res.json({
             menu: processedItems,
-            categories: categoriesSnap.docs.map(doc => doc.data()),
+            categories: processedCategories,
             tables,
             operatingHours: {
                 slots: sysData.liveOperatingHours || [],

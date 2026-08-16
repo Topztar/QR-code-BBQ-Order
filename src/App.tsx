@@ -543,7 +543,7 @@ export default function App() {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const startOfDay = today.toISOString();
-        const ordersQuery = query(collection(db, "orders"), where("createdAt", ">=", startOfDay), orderBy("createdAt", "desc"));
+        const ordersQuery = query(collection(db, "orders"), where("createdAt", ">=", startOfDay), orderBy("createdAt", "desc"), limit(300));
         unsubscribeOrders = onSnapshot(ordersQuery, (snapshot) => {
           const updatedOrders = snapshot.docs.map(doc => ({ ...doc.data() } as Order));
           setOrders(reconcileOrdersWithRecentTransitions(updatedOrders));
