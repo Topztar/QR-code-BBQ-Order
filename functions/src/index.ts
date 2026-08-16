@@ -8,7 +8,6 @@ setGlobalOptions({ maxInstances: 10, minInstances: 0, memory: "512MiB", region: 
 import cors from 'cors';
 import compression from 'compression';
 import * as net from 'net';
-import * as path from 'path';
 import { getFirestore } from 'firebase-admin/firestore';
 
 admin.initializeApp();
@@ -24,28 +23,6 @@ app.use(cors({ origin: true }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
-function getMimeTypeFromExt(filePath: string): string {
-  const ext = path.extname(filePath).toLowerCase();
-  switch (ext) {
-    case '.jpg':
-    case '.jpeg':
-      return 'image/jpeg';
-    case '.png':
-      return 'image/png';
-    case '.webp':
-      return 'image/webp';
-    case '.gif':
-      return 'image/gif';
-    case '.svg':
-      return 'image/svg+xml';
-    case '.bmp':
-      return 'image/bmp';
-    case '.ico':
-      return 'image/x-icon';
-    default:
-      return 'image/jpeg';
-  }
-}
 
 // Helper functions to register routes under both '/api/path' and '/path'
 const get = (routePath: string, handler: express.RequestHandler) => {

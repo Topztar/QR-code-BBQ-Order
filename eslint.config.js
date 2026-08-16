@@ -5,6 +5,9 @@ import unusedImports from 'eslint-plugin-unused-imports';
 import globals from 'globals';
 
 export default [
+  {
+    ignores: ['dist/**', 'functions/lib/**', 'node_modules/**', '.firebase/**']
+  },
   eslint.configs.recommended,
   {
     files: ['**/*.ts', '**/*.tsx'],
@@ -24,6 +27,7 @@ export default [
       'unused-imports': unusedImports
     },
     rules: {
+      'no-undef': 'off',
       'no-unused-vars': 'off',
       '@typescript-eslint/no-unused-vars': 'off',
       'no-useless-assignment': 'off',

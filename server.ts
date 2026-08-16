@@ -2,15 +2,14 @@ import 'dotenv/config';
 import express from 'express';
 import path from 'path';
 import net from 'net';
-import { Storage } from '@google-cloud/storage';
 import { initializeApp as initializeClientApp, getApps as getClientApps } from 'firebase/app';
 import { getFirestore as getClientFirestore, collection, doc, deleteDoc, getDoc, getDocs, setDoc, writeBatch } from 'firebase/firestore';
 import { createServer as createViteServer } from 'vite';
-import { Order, Ingredient, MenuItem, OrderItem, Category, TableConfig, OperatingHourSlot, Reservation, Language } from './src/types';
+import { Order, Ingredient, MenuItem, OrderItem, Category, TableConfig, OperatingHourSlot, Reservation } from './src/types';
 import fs from 'fs';
 const dataJson = JSON.parse(fs.readFileSync('./public/data.json', 'utf-8'));
 const { INITIAL_MENU, INITIAL_INGREDIENTS, INITIAL_CATEGORIES, INGREDIENT_RECIPE_MAP } = dataJson;
-import { GoogleGenAI, Type } from '@google/genai';
+import { Type } from '@google/genai';
 import {
   triggerRealCashDrawer,
   printKitchenTicket,

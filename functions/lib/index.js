@@ -46,7 +46,6 @@ const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const compression_1 = __importDefault(require("compression"));
 const net = __importStar(require("net"));
-const path = __importStar(require("path"));
 const firestore_1 = require("firebase-admin/firestore");
 admin.initializeApp();
 const db = (0, firestore_1.getFirestore)('ai-studio-sabaythaibbqtabl-84418196-9d0c-459c-bced-ddc424dfba07');
@@ -56,28 +55,6 @@ app.use((0, compression_1.default)());
 app.use((0, cors_1.default)({ origin: true }));
 app.use(express_1.default.json({ limit: '10mb' }));
 app.use(express_1.default.urlencoded({ limit: '10mb', extended: true }));
-function getMimeTypeFromExt(filePath) {
-    const ext = path.extname(filePath).toLowerCase();
-    switch (ext) {
-        case '.jpg':
-        case '.jpeg':
-            return 'image/jpeg';
-        case '.png':
-            return 'image/png';
-        case '.webp':
-            return 'image/webp';
-        case '.gif':
-            return 'image/gif';
-        case '.svg':
-            return 'image/svg+xml';
-        case '.bmp':
-            return 'image/bmp';
-        case '.ico':
-            return 'image/x-icon';
-        default:
-            return 'image/jpeg';
-    }
-}
 const get = (routePath, handler) => {
     app.get([`/api${routePath}`, routePath], handler);
 };
