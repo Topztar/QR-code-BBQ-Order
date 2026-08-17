@@ -5879,26 +5879,6 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                     </div>
                   </div>
 
-                  {/* 📋 Google 商家 Place Actions 審查規範對照表 */}
-                  <div className="bg-zinc-950/80 border border-white/10 rounded-xl p-3.5 space-y-2">
-                    <span className="text-xs font-bold text-zinc-300 block">
-                      🛡️ Google 商家 Place Actions 審查規範合規性檢核報告 (Compliance Audit)
-                    </span>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 text-[11px]">
-                      <div className="flex items-center gap-1.5 text-emerald-300 bg-emerald-950/30 p-2 rounded border border-emerald-500/20">
-                        <span className="font-bold">✅ 直達性 (Direct Landing):</span> 表單0秒載入
-                      </div>
-                      <div className="flex items-center gap-1.5 text-emerald-300 bg-emerald-950/30 p-2 rounded border border-emerald-500/20">
-                        <span className="font-bold">✅ 免登入門檻 (No Wall):</span> 無強迫註冊
-                      </div>
-                      <div className="flex items-center gap-1.5 text-emerald-300 bg-emerald-950/30 p-2 rounded border border-emerald-500/20">
-                        <span className="font-bold">✅ 商家透明度 (Identity):</span> 含名稱地址電話
-                      </div>
-                      <div className="flex items-center gap-1.5 text-emerald-300 bg-emerald-950/30 p-2 rounded border border-emerald-500/20">
-                        <span className="font-bold">✅ SEO/JSON-LD:</span> 爬蟲結構化數據
-                      </div>
-                    </div>
-                  </div>
                 </div>
 
                 {/* ==================== RESERVATIONS MANAGEMENT PANEL ==================== */}
