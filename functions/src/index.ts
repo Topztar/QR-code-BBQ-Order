@@ -6,7 +6,6 @@ import express from 'express';
 
 setGlobalOptions({ maxInstances: 10, minInstances: 0, memory: "512MiB", region: "asia-east1", concurrency: 80 });
 import cors from 'cors';
-import compression from 'compression';
 import * as net from 'net';
 import { getFirestore } from 'firebase-admin/firestore';
 
