@@ -2,28 +2,26 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Allow public read/write access for real-time app operation
-    match /{document=**} {
-      allow read, write: if true;
-    }
-
     // Since the application runs in an anonymous/unauthenticated environment
     // (no Firebase Auth on frontend tablets or client, and backend runs client-side SDK in unauthenticated mode),
-    // we must allow public read/write access so that the system syncs in real time without permission errors.
+    // we must allow public read/write access for most collections so that the system syncs in real time.
+    // However, we restrict settings to read-only and prevent order deletions to prevent abuse.
 
     // 1. menu (菜單)
     match /menu/{id} {
       allow read, write: if true;
     }
 
-    // 2. orders (訂單)
+    // 2. orders (訂單) - prevent deletion
     match /orders/{id} {
-      allow read, write: if true;
+      allow read, create, update: if true;
+      allow delete: if false;
     }
 
-    // 3. settings (設定)
+    // 3. settings (設定) - read-only from client (writes happen via Cloud Functions)
     match /settings/{id} {
-      allow read, write: if true;
+      allow read: if true;
+      allow write: if false;
     }
 
     // 4. categories (分類)

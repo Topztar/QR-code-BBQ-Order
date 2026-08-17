@@ -18,7 +18,7 @@ const db = getFirestore('ai-studio-sabaythaibbqtabl-84418196-9d0c-459c-bced-ddc4
 const storageBucket = getStorage().bucket('sabay-bbq-order.firebasestorage.app');
 const app = express();
 
-app.use(compression() as unknown as express.RequestHandler);
+// app.use(compression() as unknown as express.RequestHandler); // Removed to save CPU, CDN handles compression
 app.use(cors({ origin: true }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
@@ -96,7 +96,18 @@ post('/images/upload', async (req, res) => {
 // In-Memory Caching for High-Read Endpoints
 let cachedMenu: { data: any; timestamp: number } | null = null;
 let cachedCategories: { data: any; timestamp: number } | null = null;
+let cachedSettings: { data: any; timestamp: number } | null = null;
 const CACHE_TTL_MS = 60 * 1000; // 60 seconds
+
+async function getCachedSettings() {
+  const nowMs = Date.now();
+  if (cachedSettings && (nowMs - cachedSettings.timestamp < CACHE_TTL_MS)) {
+    return cachedSettings.data;
+  }
+  const doc = await db.collection('settings').doc('system').get();
+  cachedSettings = { data: doc.data() || {}, timestamp: nowMs };
+  return cachedSettings.data;
+}
 
 // --- GET APIs ---
 
@@ -117,7 +128,7 @@ get('/bootstrap', async (_req, res) => {
       db.collection('tables').get(),
       db.collection('settings').doc('system').get(),
       db.collection('ingredients').get(),
-      db.collection('reservations').get()
+      db.collection('reservations').where('date', '>=', new Date().toISOString().split('T')[0]).limit(100).get()
     ]);
 
     const now = new Date();
@@ -490,6 +501,7 @@ del('/ingredients/:id', async (req, res) => {
 // 4. Get Tables
 get('/tables', async (_req, res) => {
   try {
+    res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=10, stale-while-revalidate=30');
     const snapshot = await db.collection('tables').get();
     const nowMs = Date.now();
     const updatePromises: Promise<any>[] = [];
@@ -523,7 +535,8 @@ get('/tables', async (_req, res) => {
 // 5. Get Reservations
 get('/reservations', async (_req, res) => {
   try {
-    const snapshot = await db.collection('reservations').get();
+    const todayStr = new Date().toISOString().split('T')[0];
+    const snapshot = await db.collection('reservations').where('date', '>=', todayStr).limit(100).get();
     const reservations = snapshot.docs.map(doc => doc.data());
     res.json(reservations);
   } catch (error) {
@@ -535,6 +548,7 @@ get('/reservations', async (_req, res) => {
 // 6. Get Orders
 get('/orders', async (_req, res) => {
   try {
+    res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=5, stale-while-revalidate=10');
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const startOfDay = today.toISOString();
@@ -561,8 +575,8 @@ get('/settings/service-pause', async (_req, res) => {
       return res.json(cachedServicePause.data);
     }
     
-    const systemDoc = await db.collection('settings').doc('system').get();
-    const data = { servicePaused: systemDoc.data()?.liveServicePaused || false };
+    const sysData = await getCachedSettings();
+    const data = { servicePaused: sysData?.liveServicePaused || false };
     cachedServicePause = { data, timestamp: nowMs };
     res.json(data);
   } catch (error) {
@@ -573,8 +587,8 @@ get('/settings/service-pause', async (_req, res) => {
 // 8. Minimum Spend Settings
 get('/settings/min-spend', async (_req, res) => {
   try {
-    const systemDoc = await db.collection('settings').doc('system').get();
-    res.json({ minSpend: systemDoc.data()?.liveMinSpendPerPerson ?? 200 });
+    const sysData = await getCachedSettings();
+    res.json({ minSpend: sysData?.liveMinSpendPerPerson ?? 200 });
   } catch (error) {
     res.status(500).send(error);
   }
@@ -637,8 +651,8 @@ function isStoreOpenFromData(sysData: any, timestamp?: number, isReservation: bo
 // 9. Operating Hours Settings
 get('/settings/operating-hours', async (_req, res) => {
   try {
-    const systemDoc = await db.collection('settings').doc('system').get();
-    const data = systemDoc.data() || {};
+    const sysData = await getCachedSettings();
+    const data = sysData || {};
     const isOpen = isStoreOpenFromData(data);
     res.json({
       slots: data.liveOperatingHours || [],
@@ -653,8 +667,8 @@ get('/settings/operating-hours', async (_req, res) => {
 // 10. Customer Notice
 get('/settings/customer-notice', async (_req, res) => {
   try {
-    const systemDoc = await db.collection('settings').doc('system').get();
-    res.json({ notice: systemDoc.data()?.liveCustomerNotice || '' });
+    const sysData = await getCachedSettings();
+    res.json({ notice: sysData?.liveCustomerNotice || '' });
   } catch (error) {
     res.status(500).send(error);
   }
@@ -663,8 +677,8 @@ get('/settings/customer-notice', async (_req, res) => {
 // 11. Popular Item IDs
 get('/settings/popular-item-ids', async (_req, res) => {
   try {
-    const systemDoc = await db.collection('settings').doc('system').get();
-    res.json(systemDoc.data()?.livePopularItemIds || []);
+    const sysData = await getCachedSettings();
+    res.json(sysData?.livePopularItemIds || []);
   } catch (error) {
     res.status(500).send(error);
   }
@@ -673,8 +687,8 @@ get('/settings/popular-item-ids', async (_req, res) => {
 // 12. Members Configuration
 get('/settings/members-config', async (_req, res) => {
   try {
-    const systemDoc = await db.collection('settings').doc('system').get();
-    const data = systemDoc.data();
+    const sysData = await getCachedSettings();
+    const data = sysData;
     res.json({
       pointsRatio: data?.liveMemberPointsRatio ?? 20,
       rewards: data?.liveMemberRewards || []
@@ -687,8 +701,8 @@ get('/settings/members-config', async (_req, res) => {
 // 13. Promo Combo Config
 get('/promo-combo', async (_req, res) => {
   try {
-    const systemDoc = await db.collection('settings').doc('system').get();
-    res.json(systemDoc.data()?.livePromoCombo || { enabled: false, requiredQty: 0, discountAmount: 0, eligibleItemIds: [] });
+    const sysData = await getCachedSettings();
+    res.json(sysData?.livePromoCombo || { enabled: false, requiredQty: 0, discountAmount: 0, eligibleItemIds: [] });
   } catch (error) {
     res.status(500).send(error);
   }
@@ -697,7 +711,7 @@ get('/promo-combo', async (_req, res) => {
 // 13.5. Option Rules Config
 get('/option-rules', async (_req, res) => {
   try {
-    const systemDoc = await db.collection('settings').doc('system').get();
+    const sysData = await getCachedSettings();
     const defaultRules = [
       {
         id: 'rule-1784360566576',
@@ -718,7 +732,7 @@ get('/option-rules', async (_req, res) => {
         price: 140
       }
     ];
-    res.json(systemDoc.data()?.liveOptionRules || defaultRules);
+    res.json(sysData?.liveOptionRules || defaultRules);
   } catch (error) {
     res.status(500).send(error);
   }
@@ -727,8 +741,8 @@ get('/option-rules', async (_req, res) => {
 // 14. Printer Configuration
 get('/printer/config', async (_req, res) => {
   try {
-    const systemDoc = await db.collection('settings').doc('system').get();
-    res.json({ ip: systemDoc.data()?.livePrinterIp || '192.168.123.100' });
+    const sysData = await getCachedSettings();
+    res.json({ ip: sysData?.livePrinterIp || '192.168.123.100' });
   } catch (error) {
     res.status(500).send(error);
   }
@@ -1309,15 +1323,6 @@ post('/admin/clear-test-data', async (req, res) => {
 });
 
 // --- Missing Category APIs ---
-post('/categories', async (req, res) => {
-  const data = req.body;
-  try {
-    await db.collection('categories').doc(data.id).set(data);
-    res.status(201).json(data);
-  } catch (error) {
-    res.status(500).send(error);
-  }
-});
 
 put('/categories/reorder', async (req, res) => {
   const { order } = req.body;

@@ -423,9 +423,10 @@ export default function App() {
       const isCustomerView = activeTab === 'customer';
 
       if (isFullCycle) {
+        const syncEnabled = isFirebaseSyncEnabled();
         const fetchPromises: Promise<Response>[] = [
           safeFetch('/api/bootstrap', null),
-          safeFetch('/api/orders', [])
+          syncEnabled ? Promise.resolve({ ok: true, json: async () => null } as unknown as Response) : safeFetch('/api/orders', [])
         ];
 
         if (!isCustomerView) {
@@ -448,7 +449,9 @@ export default function App() {
           printData = await safeJson(results[3], []);
         }
 
-        setOrders(reconcileOrdersWithRecentTransitions(ordData));
+        if (!syncEnabled && ordData !== null) {
+          setOrders(reconcileOrdersWithRecentTransitions(ordData));
+        }
         setPrintLogs(printData);
         setAnalytics(alyData);
         if (Array.isArray(notifData)) setPushNotifications(notifData.filter((n: any) => !n.isRead));
@@ -481,11 +484,12 @@ export default function App() {
         }
       } else {
         // Lightweight polling cycle for active dynamic state
+        const syncEnabled = isFirebaseSyncEnabled();
         const fetchPromises: Promise<Response>[] = [
-          safeFetch('/api/orders', []),
+          syncEnabled ? Promise.resolve({ ok: true, json: async () => null } as unknown as Response) : safeFetch('/api/orders', []),
           safeFetch('/api/tables', []),
           safeFetch('/api/settings/service-pause', { servicePaused: false }),
-          safeFetch('/api/ingredients', [])
+          syncEnabled ? Promise.resolve({ ok: true, json: async () => null } as unknown as Response) : safeFetch('/api/ingredients', [])
         ];
 
         if (!isCustomerView) {
@@ -503,9 +507,11 @@ export default function App() {
           notifData = await safeJson(results[4], []);
         }
 
-        setOrders(reconcileOrdersWithRecentTransitions(ordData));
+        if (!syncEnabled && ordData !== null) {
+          setOrders(reconcileOrdersWithRecentTransitions(ordData));
+        }
         if (Array.isArray(tablesData)) setTables(tablesData);
-        if (Array.isArray(ingData)) setIngredients(ingData);
+        if (!syncEnabled && Array.isArray(ingData)) setIngredients(ingData);
         if (servicePauseData) setServicePaused(!!servicePauseData.servicePaused);
         if (Array.isArray(notifData)) setPushNotifications(notifData.filter((n: any) => !n.isRead));
       }
