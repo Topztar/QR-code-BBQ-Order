@@ -165,20 +165,10 @@ get('/bootstrap', async (_req, res) => {
             else if (item.soldOutAt) {
                 item.soldOutAt = null;
             }
-            if (item.image && (item.image.startsWith('/api/images/') || item.image.startsWith('/images/'))) {
-                const path = item.image.replace(/^\/api\/images\//, '').replace(/^\/images\//, '');
-                item.image = `https://firebasestorage.googleapis.com/v0/b/${storageBucket.name}/o/${encodeURIComponent(path)}?alt=media`;
-                db.collection('menu').doc(item._docId).update({ image: item.image }).catch(err => console.error('Menu image migration error:', err));
-            }
-            else if (item.image && !item.image.startsWith('http') && !item.image.startsWith('/')) {
-                item.image = `https://firebasestorage.googleapis.com/v0/b/${storageBucket.name}/o/${encodeURIComponent(item.image)}?alt=media`;
-                db.collection('menu').doc(item._docId).update({ image: item.image }).catch(err => console.error('Menu image migration error:', err));
-            }
             delete item._docId;
             return item;
         });
         const nowMs = Date.now();
-        const tableUpdatePromises = [];
         const tables = tablesSnap.docs.map(doc => {
             const tb = doc.data();
             if (tb.status === 'cleaning') {
@@ -189,28 +179,14 @@ get('/bootstrap', async (_req, res) => {
                 if (nowMs - cleaningStartMs >= 15 * 60 * 1000) {
                     tb.status = 'available';
                     tb.cleaningStartedAt = null;
-                    tableUpdatePromises.push(doc.ref.update({ status: 'available', cleaningStartedAt: null }));
                 }
             }
             return tb;
         });
-        if (tableUpdatePromises.length > 0) {
-            Promise.all(tableUpdatePromises).catch(err => console.error('[Cloud Functions] Bootstrap tables auto-clean write error:', err));
-        }
         const sysData = systemDoc.data() || {};
         const isOpen = isStoreOpenFromData(sysData);
         const processedCategories = categoriesSnap.docs.map(doc => {
-            const cat = doc.data();
-            if (cat.image && (cat.image.startsWith('/api/images/') || cat.image.startsWith('/images/'))) {
-                const path = cat.image.replace(/^\/api\/images\//, '').replace(/^\/images\//, '');
-                cat.image = `https://firebasestorage.googleapis.com/v0/b/${storageBucket.name}/o/${encodeURIComponent(path)}?alt=media`;
-                db.collection('categories').doc(doc.id).update({ image: cat.image }).catch(err => console.error('Category image migration error:', err));
-            }
-            else if (cat.image && !cat.image.startsWith('http') && !cat.image.startsWith('/')) {
-                cat.image = `https://firebasestorage.googleapis.com/v0/b/${storageBucket.name}/o/${encodeURIComponent(cat.image)}?alt=media`;
-                db.collection('categories').doc(doc.id).update({ image: cat.image }).catch(err => console.error('Category image migration error:', err));
-            }
-            return cat;
+            return doc.data();
         });
         res.json({
             menu: processedItems,
@@ -483,7 +459,6 @@ get('/tables', async (_req, res) => {
         res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=10, stale-while-revalidate=30');
         const snapshot = await db.collection('tables').get();
         const nowMs = Date.now();
-        const updatePromises = [];
         const tables = snapshot.docs.map(doc => {
             const tb = doc.data();
             if (tb.status === 'cleaning') {
@@ -494,14 +469,10 @@ get('/tables', async (_req, res) => {
                 if (nowMs - cleaningStartMs >= 15 * 60 * 1000) {
                     tb.status = 'available';
                     tb.cleaningStartedAt = null;
-                    updatePromises.push(doc.ref.update({ status: 'available', cleaningStartedAt: null }));
                 }
             }
             return tb;
         });
-        if (updatePromises.length > 0) {
-            Promise.all(updatePromises).catch(err => console.error('[Cloud Functions] Tables auto-clean write error:', err));
-        }
         res.json(tables);
     }
     catch (error) {
@@ -1048,20 +1019,20 @@ post('/staff/pin/check-path', async (req, res) => {
     }
     try {
         const systemDoc = await db.collection('settings').doc('system').get();
-        const liveStaffPin = systemDoc.data()?.liveStaffPin || '888888';
-        const validPins = [String(liveStaffPin), '888888', '952788', 'FSY20260606', '070718'];
+        const liveStaffPin = systemDoc.data()?.liveStaffPin || '952788';
+        const validPins = [String(liveStaffPin), '952788', 'FSY20260606'];
         return res.json({ valid: validPins.includes(String(pathPin)) });
     }
     catch (error) {
-        return res.json({ valid: ['888888', '952788', 'FSY20260606', '070718'].includes(String(pathPin)) });
+        return res.json({ valid: ['952788', 'FSY20260606'].includes(String(pathPin)) });
     }
 });
 post('/staff/pin/verify', async (req, res) => {
     const { pin } = req.body;
     try {
         const systemDoc = await db.collection('settings').doc('system').get();
-        const liveStaffPin = systemDoc.data()?.liveStaffPin || '888888';
-        const validPins = [String(liveStaffPin), '888888', '952788', 'FSY20260606', '070718'];
+        const liveStaffPin = systemDoc.data()?.liveStaffPin || '952788';
+        const validPins = [String(liveStaffPin), '952788', 'FSY20260606'];
         if (validPins.includes(String(pin))) {
             return res.json({ success: true, access_token: 'mock-jwt-token-for-staff' });
         }
@@ -1080,7 +1051,7 @@ put('/staff/pin', async (req, res) => {
     try {
         const systemRef = db.collection('settings').doc('system');
         const systemDoc = await systemRef.get();
-        const liveStaffPin = systemDoc.data()?.liveStaffPin || '888888';
+        const liveStaffPin = systemDoc.data()?.liveStaffPin || '952788';
         if (String(currentPin) !== String(liveStaffPin)) {
             return res.status(400).json({ error: '目前金鑰輸入錯誤！' });
         }
@@ -1103,7 +1074,7 @@ post('/printer/pin', async (req, res) => {
     try {
         const systemRef = db.collection('settings').doc('system');
         const systemDoc = await systemRef.get();
-        const liveStaffPin = systemDoc.data()?.liveStaffPin || '888888';
+        const liveStaffPin = systemDoc.data()?.liveStaffPin || '952788';
         if (String(currentPin) !== String(liveStaffPin)) {
             return res.status(400).json({ error: '目前解鎖金鑰輸入錯誤！' });
         }
@@ -1196,7 +1167,7 @@ post('/admin/clear-test-data', async (req, res) => {
     try {
         const systemRef = db.collection('settings').doc('system');
         const systemDoc = await systemRef.get();
-        const liveStaffPin = systemDoc.data()?.liveStaffPin || '888888';
+        const liveStaffPin = systemDoc.data()?.liveStaffPin || '952788';
         if (!pin || String(pin) !== String(liveStaffPin)) {
             return res.status(403).json({ error: '安全校對碼 (員工解鎖 PIN 碼) 不正確，無法授權清空！' });
         }
@@ -1221,9 +1192,9 @@ post('/admin/clear-test-data', async (req, res) => {
         await batchTables.commit();
         await systemRef.set({
             liveTakeoutSeq: 0,
-            liveStaffPin: '888888'
+            liveStaffPin: '952788'
         }, { merge: true });
-        res.json({ success: true, message: '已成功清除系統內所有測試單據、顧客預約、桌位佔用，並將登入密碼重設為預設值 888888！' });
+        res.json({ success: true, message: '已成功清除系統內所有測試單據、顧客預約、桌位佔用，並將登入密碼重設為預設值 952788！' });
     }
     catch (error) {
         console.error('Error clearing test data:', error);
@@ -1476,6 +1447,8 @@ post('/send-promo-push', async (req, res) => {
         const logsDoc = await db.collection('settings').doc('logs').get();
         let notifs = logsDoc.data()?.promoNotifications || [];
         notifs.push(newNotif);
+        if (notifs.length > 100)
+            notifs = notifs.slice(-100);
         await db.collection('settings').doc('logs').set({ promoNotifications: notifs }, { merge: true });
         res.status(201).json(newNotif);
     }
@@ -1608,6 +1581,8 @@ post('/printer/test', async (req, res) => {
             orderId: 'TEST-PAGE',
             type: target === 'bill' ? 'customer' : 'kitchen'
         });
+        if (printLogs.length > 100)
+            printLogs = printLogs.slice(-100);
         await db.collection('settings').doc('logs').set({ printLogs }, { merge: true });
         res.json({
             success: true,
@@ -1648,6 +1623,8 @@ post('/printer/open-drawer', async (_req, res) => {
             orderId: 'MANUAL-TRIGGER',
             type: 'customer'
         });
+        if (printLogs.length > 100)
+            printLogs = printLogs.slice(-100);
         await db.collection('settings').doc('logs').set({ printLogs }, { merge: true });
         res.json({
             success: tcpResult.success,

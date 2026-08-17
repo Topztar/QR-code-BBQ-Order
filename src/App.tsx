@@ -60,7 +60,7 @@ export default function App() {
   const [staffPin, setStaffPin] = useState<string>('');
   const [currentPath, setCurrentPath] = useState<string>(window.location.pathname);
   const isSuperEntry = currentPath === '/FSY20260606';
-  const isAtStaffPath = currentPath === '/888888' || isSuperEntry;
+  const isAtStaffPath = currentPath === '/952788' || isSuperEntry;
 
   const isReserveRoute = useMemo(() => {
     if (typeof window === 'undefined') return false;
@@ -91,8 +91,8 @@ export default function App() {
     if (currentPath === '/FSY20260606') {
       setIsStaff(true);
       setStaffPin('FSY20260606');
-    } else if (currentPath === '/888888') {
-      setStaffPin('888888');
+    } else if (currentPath === '/952788') {
+      setStaffPin('952788');
     }
   }, [currentPath]);
 
@@ -519,8 +519,8 @@ export default function App() {
       if (window.location.pathname === '/FSY20260606') {
         setStaffPin('FSY20260606');
         setIsStaff(true);
-      } else if (window.location.pathname === '/888888') {
-        setStaffPin('888888');
+      } else if (window.location.pathname === '/952788') {
+        setStaffPin('952788');
       } else {
         const legacyMatch = window.location.pathname.match(/^\/(\d{4,6})$/);
         if (legacyMatch) {
@@ -540,16 +540,40 @@ export default function App() {
   useEffect(() => {
     fetchData();
 
+    let localPollingTimer: ReturnType<typeof setInterval>;
+    if (!isFirebaseSyncEnabled()) {
+      localPollingTimer = setInterval(() => {
+        fetchData(false);
+      }, 5000);
+    }
+
+    return () => {
+      if (localPollingTimer) clearInterval(localPollingTimer);
+    };
+  }, []);
+
+  useEffect(() => {
     let unsubscribeOrders = () => {};
     let unsubscribeIngredients = () => {};
 
     if (isFirebaseSyncEnabled()) {
       try {
-        // 實時監聽訂單 (只載入今日訂單以降低 Firestore 讀取費用)
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const startOfDay = today.toISOString();
-        const ordersQuery = query(collection(db, "orders"), where("createdAt", ">=", startOfDay), orderBy("createdAt", "desc"), limit(300));
+        const isCustomerView = activeTab === 'customer';
+        const currentTable = currentPath.replace('/', '');
+
+        let ordersQuery;
+        if (isCustomerView && currentTable && currentTable !== '') {
+          ordersQuery = query(collection(db, "orders"), where("tableNumber", "==", currentTable), where("createdAt", ">=", startOfDay), orderBy("createdAt", "desc"));
+        } else if (isCustomerView) {
+          // If customer hasn't selected a table, no need to listen to all orders
+          ordersQuery = query(collection(db, "orders"), where("tableNumber", "==", "NONE"), limit(1));
+        } else {
+          ordersQuery = query(collection(db, "orders"), where("createdAt", ">=", startOfDay), orderBy("createdAt", "desc"), limit(300));
+        }
+
         unsubscribeOrders = onSnapshot(ordersQuery, (snapshot) => {
           const updatedOrders = snapshot.docs.map(doc => ({ ...doc.data() } as Order));
           setOrders(reconcileOrdersWithRecentTransitions(updatedOrders));
@@ -557,35 +581,24 @@ export default function App() {
           console.warn('[Firebase Sync] Orders listener paused/disabled:', error);
         });
 
-        // 實時監聽庫存
-        unsubscribeIngredients = onSnapshot(collection(db, "ingredients"), (snapshot) => {
-          const updatedIngredients = snapshot.docs.map(doc => doc.data() as Ingredient);
-          setIngredients(updatedIngredients);
-        }, (error) => {
-          console.warn('[Firebase Sync] Ingredients listener paused/disabled:', error);
-        });
+        if (!isCustomerView) {
+          unsubscribeIngredients = onSnapshot(collection(db, "ingredients"), (snapshot) => {
+            const updatedIngredients = snapshot.docs.map(doc => doc.data() as Ingredient);
+            setIngredients(updatedIngredients);
+          }, (error) => {
+            console.warn('[Firebase Sync] Ingredients listener paused/disabled:', error);
+          });
+        }
       } catch (e) {
         console.warn('[Firebase Sync] Realtime listener initialization skipped:', e);
       }
-      console.log('✅ [Firebase Sync] Firebase 實時同步已啟用，停止高頻 5 秒 HTTP 輪詢。');
-    } else {
-      console.log('⛔ [Firebase Sync] Firebase 同步已停止，轉用本地 API 定時自動輪詢。');
-    }
-
-    let localPollingTimer: ReturnType<typeof setInterval>;
-    if (!isFirebaseSyncEnabled()) {
-      // 當 Firebase 同步停止時，才使用 5 秒自動輪詢維護本地資料同步
-      localPollingTimer = setInterval(() => {
-        fetchData(false);
-      }, 5000);
     }
 
     return () => {
       unsubscribeOrders();
       unsubscribeIngredients();
-      if (localPollingTimer) clearInterval(localPollingTimer);
     };
-  }, []);
+  }, [activeTab, currentPath]);
 
   // 🔄 自動連動桌席狀態與訂單/KDS/預約 (Real-time Table Status Auto-Sync)
   useEffect(() => {
@@ -2524,7 +2537,7 @@ export default function App() {
         <div className="text-[9px] text-[#E5B453]/20 italic font-mono uppercase tracking-widest pt-1 flex items-center justify-center">
           <span>A.S.R. Cloud Engine v4.2 // Secured Connection Terminal</span>
           <button
-            onClick={() => navigateTo('/888888')}
+            onClick={() => navigateTo('/952788')}
             className="text-[#0A0A0A] hover:text-[#0A0A0A] focus:outline-none cursor-default select-none ml-1 inline-flex items-center"
             title="Secure Portal"
             id="hidden-backend-portal-trigger"
