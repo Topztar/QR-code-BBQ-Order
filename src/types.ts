@@ -1,6 +1,6 @@
 // Types for Sabay BBQ Web Ordering App
 
-export type Language = 'zh' | 'en' | 'ko' | 'ja' | 'th' | 'vi';
+export type Language = 'zh' | 'en' | 'ko' | 'ja' | 'th' | 'vi' | 'ru' | 'es';
 
 export interface CustomAddOn {
   id: string;
@@ -9,7 +9,7 @@ export interface CustomAddOn {
 }
 
 export interface FoodCustomization {
-  spiciness: number; // 0=None, 1=Mild (小辣), 2=Medium (中辣), 3=Thai Spicy (大辣, +10)
+  spiciness: number; // 0=None, 1=Spicy
   noodleType?: 'rice-noodle' | 'vermicelli' | 'none'; // for Tom Yum noodles
   soupBase?: 'plain' | 'coconut-milk'; // +50
   notes: string;

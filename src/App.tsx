@@ -60,7 +60,7 @@ export default function App() {
   const [staffPin, setStaffPin] = useState<string>('');
   const [currentPath, setCurrentPath] = useState<string>(window.location.pathname);
   const isSuperEntry = currentPath === '/FSY20260606';
-  const isAtStaffPath = currentPath === '/952788' || isSuperEntry;
+  const isAtStaffPath = isSuperEntry;
 
   const isReserveRoute = useMemo(() => {
     if (typeof window === 'undefined') return false;
@@ -91,8 +91,6 @@ export default function App() {
     if (currentPath === '/FSY20260606') {
       setIsStaff(true);
       setStaffPin('FSY20260606');
-    } else if (currentPath === '/952788') {
-      setStaffPin('952788');
     }
   }, [currentPath]);
 
@@ -148,7 +146,7 @@ export default function App() {
       if (defaultItem) {
         const cleanName = { ...item.name };
         const cleanDesc = { ...item.description };
-        ['ko', 'ja', 'th', 'vi'].forEach(lang => {
+        ['ko', 'ja', 'th', 'vi', 'ru', 'es'].forEach(lang => {
           if (cleanName[lang as Language] === cleanName['zh']) delete cleanName[lang as Language];
           if (cleanDesc[lang as Language] === cleanDesc['zh']) delete cleanDesc[lang as Language];
         });
@@ -198,12 +196,7 @@ export default function App() {
   const [tables, setTables] = useState<TableConfig[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [minSpend, setMinSpend] = useState<number>(200);
-  const [promoCombo, setPromoCombo] = useState<any>({
-    enabled: false,
-    requiredQty: 0,
-    discountAmount: 0,
-    eligibleItemIds: []
-  });
+  const [promoCombo, setPromoCombo] = useState<any>({ enabled: false, combos: [] });
   const [operatingHours, setOperatingHours] = useState<OperatingHourSlot[]>([]);
   const [isOpen, setIsOpen] = useState<boolean>(true);
   const [restDays, setRestDays] = useState<string[]>([]);
@@ -519,8 +512,6 @@ export default function App() {
       if (window.location.pathname === '/FSY20260606') {
         setStaffPin('FSY20260606');
         setIsStaff(true);
-      } else if (window.location.pathname === '/952788') {
-        setStaffPin('952788');
       } else {
         const legacyMatch = window.location.pathname.match(/^\/(\d{4,6})$/);
         if (legacyMatch) {
@@ -749,7 +740,7 @@ export default function App() {
     };
     const totalAmount = orderData.items.reduce((sum, item) => {
       let unitP = item.price;
-      if (item.customization?.spiciness === 3) unitP += 10;
+      if (false) unitP += 10;
       if (item.customization?.soupBase === 'coconut-milk') unitP += 50;
       if (item.customization?.selectedAddOns && Array.isArray(item.customization.selectedAddOns)) {
         unitP += item.customization.selectedAddOns.reduce((s, a) => s + (Number(a.price) || 0), 0);
@@ -2537,7 +2528,7 @@ export default function App() {
         <div className="text-[9px] text-[#E5B453]/20 italic font-mono uppercase tracking-widest pt-1 flex items-center justify-center">
           <span>A.S.R. Cloud Engine v4.2 // Secured Connection Terminal</span>
           <button
-            onClick={() => navigateTo('/952788')}
+            onClick={() => {}}
             className="text-[#0A0A0A] hover:text-[#0A0A0A] focus:outline-none cursor-default select-none ml-1 inline-flex items-center"
             title="Secure Portal"
             id="hidden-backend-portal-trigger"

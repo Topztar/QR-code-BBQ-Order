@@ -1723,7 +1723,7 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
                               {/* customization specifications */}
                               <div className="flex flex-wrap gap-1">
                                 <span className="bg-[#FF4D4D]/5 text-[#FF4D4D] border border-[#FF4D4D]/10 text-[9px] font-medium px-1 rounded">
-                                  {t('spicyPrefix')}: {oi.customization.spiciness === 0 ? t('notSpicy') : (oi.customization.spiciness === 1 ? t('mildSpicy') : (oi.customization.spiciness === 2 ? t('mediumSpicy') : t('thaiSpicy')))}
+                                  {t('spicyPrefix')}: {oi.customization.spiciness === 1 ? t('spicy') : t('notSpicy')}
                                 </span>
                                 {oi.customization.noodleType && (
                                   <span className="bg-[#E5B453]/5 text-[#E5B453] border border-[#E5B453]/10 text-[9px] font-medium px-1 rounded">
@@ -1737,7 +1737,7 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
                                 )}
                                 {oi.customization.selectedAddOns?.map((addOn: any) => (
                                   <span key={addOn.id} className="bg-amber-500/5 text-amber-400 border border-amber-500/10 text-[9px] font-medium px-1 rounded">
-                                    +{getLocalizedText(addOn.name, currentLang)}
+                                    +{getLocalizedText(addOn.name, 'zh')}{currentLang !== 'zh' ? ` / ${getLocalizedText(addOn.name, currentLang)}` : ''}
                                   </span>
                                 ))}
                               </div>
@@ -2042,7 +2042,7 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
                           onClick={() => {
                             const specLines = order.items.map(it => {
                               const spec = [
-                                it.customization.spiciness === 0 ? t('notSpicy') : (it.customization.spiciness === 1 ? t('mildSpicy') : (it.customization.spiciness === 2 ? t('mediumSpicy') : t('thaiSpicy'))),
+                                it.customization.spiciness === 1 ? t('spicy') : t('notSpicy'),
                                 it.customization.noodleType === 'rice-noodle' ? t('riceNoodle') : (it.customization.noodleType === 'vermicelli' ? t('vermicelli') : ''),
                                 it.customization.soupBase === 'coconut-milk' ? t('coconutMilkAdd') : '',
                                 it.customization.notes ? `${t('notesLabel')}: ${it.customization.notes}` : ''
@@ -2167,7 +2167,7 @@ ${specLines}
                               {/* customize modifiers indicator */}
                               <div className="flex flex-wrap gap-1 mt-1.5">
                                 <span className="bg-[#FF4D4D]/10 text-[#FF4D4D] border border-[#FF4D4D]/20 text-[10px] font-semibold px-1 rounded font-mono">
-                                  {t('spicyPrefix')}: {it.customization.spiciness === 0 ? t('notSpicy') : (it.customization.spiciness === 1 ? t('mildSpicy') : (it.customization.spiciness === 2 ? t('mediumSpicy') : t('thaiSpicy')))}
+                                  {t('spicyPrefix')}: {it.customization.spiciness === 1 ? t('spicy') : t('notSpicy')}
                                 </span>
                                 {it.customization.noodleType && (
                                   <span className="bg-[#E5B453]/10 text-[#E5B453] border border-[#E5B453]/20 text-[10px] font-semibold px-1 rounded font-sans">
@@ -2181,7 +2181,7 @@ ${specLines}
                                 )}
                                 {it.customization.selectedAddOns?.map((addOn) => (
                                   <span key={addOn.id} className="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-semibold px-1.5 py-0.5 rounded font-sans">
-                                    +{getLocalizedText(addOn.name, currentLang)}
+                                    +{getLocalizedText(addOn.name, 'zh')}{currentLang !== 'zh' ? ` / ${getLocalizedText(addOn.name, currentLang)}` : ''}
                                   </span>
                                 ))}
                               </div>
@@ -3247,7 +3247,7 @@ ${specLines}
                 
                 <div className="space-y-3">
                   {quickViewOrder.items.map((it, idx) => {
-                    const spicinessText = it.customization.spiciness === 0 ? t('notSpicy') : (it.customization.spiciness === 1 ? t('mildSpicy') : (it.customization.spiciness === 2 ? t('mediumSpicy') : t('thaiSpicy')));
+                    const spicinessText = it.customization.spiciness === 1 ? t('spicy') : t('notSpicy');
                     
                     return (
                       <div key={idx} className={`border rounded-xl p-4 space-y-3 transition ${
@@ -3376,7 +3376,7 @@ ${specLines}
                               <div className="flex flex-wrap gap-1.5">
                                 {it.customization.selectedAddOns.map((addOn) => (
                                   <span key={addOn.id} className="bg-amber-500/15 text-amber-250 border border-amber-500/30 font-bold px-2 py-0.5 rounded text-xs">
-                                    ＋ {getLocalizedText(addOn.name, currentLang)} x{addOn.qty || 1}
+                                    ＋ {getLocalizedText(addOn.name, 'zh')}{currentLang !== 'zh' ? ` / ${getLocalizedText(addOn.name, currentLang)}` : ''} x{addOn.qty || 1}
                                   </span>
                                 ))}
                               </div>
@@ -3411,7 +3411,7 @@ ${specLines}
                   onClick={() => {
                     const specLines = quickViewOrder.items.map(it => {
                       const spec = [
-                        it.customization.spiciness === 0 ? t('notSpicy') : (it.customization.spiciness === 1 ? t('mildSpicy') : (it.customization.spiciness === 2 ? t('mediumSpicy') : t('thaiSpicy'))),
+                        it.customization.spiciness === 1 ? t('spicy') : t('notSpicy'),
                         it.customization.noodleType === 'rice-noodle' ? t('riceNoodle') : (it.customization.noodleType === 'vermicelli' ? t('vermicelli') : ''),
                         it.customization.soupBase === 'coconut-milk' ? t('coconutMilkAdd') : '',
                         it.customization.notes ? `${t('notesLabel')}: ${it.customization.notes}` : ''

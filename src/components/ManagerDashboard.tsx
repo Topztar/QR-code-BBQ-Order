@@ -6,7 +6,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 import { TrendingUp, Package, AlertTriangle, Layers, Sparkles, Coins, Lock, Unlock, QrCode, Trash2, Plus, Edit, Download, Calendar, FileText, ShoppingBag, ShoppingCart, Copy, Check, ExternalLink, Minus, Flame, Printer, Maximize2, Minimize2, ChevronLeft, ChevronRight, RefreshCw, Cpu } from 'lucide-react';
 import { db, isFirebaseSyncEnabled } from '../lib/firebase';
 import { safeStorage } from '../lib/safeStorage';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc, writeBatch, collection, getDocs, query, where } from 'firebase/firestore';
 import PrintLogsD3Chart from './PrintLogsD3Chart';
 import {
   checkPOSBridgeHealth,
@@ -100,7 +100,7 @@ export const computeOrderItemUnitPrice = (it: any, menuItemsList: any[] = []): n
   if (it.customization?.selectedAddOns && Array.isArray(it.customization.selectedAddOns)) {
     addOnsTotal = it.customization.selectedAddOns.reduce((s: number, a: any) => s + (Number(a.price) || 0), 0);
   }
-  let spicinessAdd = it.customization?.spiciness === 3 ? 10 : 0;
+  let spicinessAdd = 0;
   let soupBaseAdd = it.customization?.soupBase === 'coconut-milk' ? 50 : 0;
 
   const dish = menuItemsList.find((m: any) => m.id === it.menuItemId);
@@ -287,7 +287,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   customerNotice = '',
   onUpdateCustomerNotice,
   staffPin,
-  promoCombo = { enabled: false, requiredQty: 0, discountAmount: 0, eligibleItemIds: [], combos: [] } as any,
+  promoCombo = { enabled: false, combos: [] } as any,
   onSavePromoCombo,
   popularItemIds = [],
   onUpdatePopularItemIds,
@@ -363,6 +363,10 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   const [selectedQrPreviewId, setSelectedQrPreviewId] = useState<string>('1');
   const [copiedTableId, setCopiedTableId] = useState<string | null>(null);
   const [tableToDeleteId, setTableToDeleteId] = useState<string | null>(null);
+  const [showBulkDeleteOrdersModal, setShowBulkDeleteOrdersModal] = useState(false);
+  const [bulkDeleteThresholdDate, setBulkDeleteThresholdDate] = useState<string>('');
+  const [bulkDeleteConfirmText, setBulkDeleteConfirmText] = useState('');
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const [reservationToDeleteId, setReservationToDeleteId] = useState<string | null>(null);
   const [showCheckoutConfirm, setShowCheckoutConfirm] = useState(false);
 
@@ -883,7 +887,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
 
           // Spiciness
           if (it.customization?.spiciness !== undefined) {
-            const spice = it.customization.spiciness === 0 ? '不辣' : (it.customization.spiciness === 1 ? '小辣' : (it.customization.spiciness === 2 ? '中辣' : '泰大辣'));
+            const spice = it.customization.spiciness === 1 ? '辣味' : '不辣';
             customizationDetails.push(`辣：${spice}`);
           }
           // Noodle Type
@@ -1016,9 +1020,6 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     if (onSavePromoCombo) {
       const payload = {
         enabled: tempPromoCombos.some(c => c.enabled),
-        requiredQty: tempPromoCombos[0]?.requiredQty || 10,
-        discountAmount: tempPromoCombos[0]?.discountAmount || 20,
-        eligibleItemIds: tempPromoCombos[0]?.eligibleItemIds || [],
         combos: tempPromoCombos
       };
       const res = await onSavePromoCombo(payload);
@@ -2759,6 +2760,68 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
 
     return { revenue: totalRev, count, aov, memberShare };
   }, [filteredOrders]);
+
+  // Bulk delete old orders from Firestore
+  const handleBulkDeleteOrders = async () => {
+    if (bulkDeleteConfirmText !== 'DELETE') {
+      alert('請輸入 DELETE 以確認刪除');
+      return;
+    }
+    if (!bulkDeleteThresholdDate) {
+      alert('請選擇截止日期');
+      return;
+    }
+    const targetDate = new Date(bulkDeleteThresholdDate);
+    targetDate.setHours(0, 0, 0, 0);
+
+    setIsBulkDeleting(true);
+    try {
+      const q = query(
+        collection(db, 'orders'),
+        where('createdAt', '<', targetDate.toISOString())
+      );
+      const snapshot = await getDocs(q);
+      if (snapshot.empty) {
+        alert('沒有符合條件的訂單可刪除！');
+        setIsBulkDeleting(false);
+        setShowBulkDeleteOrdersModal(false);
+        return;
+      }
+      
+      let deletedCount = 0;
+      const batches = [];
+      let currentBatch = writeBatch(db);
+      let opCount = 0;
+
+      snapshot.docs.forEach((d) => {
+        currentBatch.delete(d.ref);
+        opCount++;
+        deletedCount++;
+        if (opCount === 490) {
+          batches.push(currentBatch);
+          currentBatch = writeBatch(db);
+          opCount = 0;
+        }
+      });
+      if (opCount > 0) {
+        batches.push(currentBatch);
+      }
+      
+      for (const batch of batches) {
+        await batch.commit();
+      }
+
+      alert(`已成功刪除 ${deletedCount} 筆歷史訂單！`);
+      setShowBulkDeleteOrdersModal(false);
+      setBulkDeleteConfirmText('');
+      setBulkDeleteThresholdDate('');
+    } catch (error: any) {
+      console.error('Error deleting orders:', error);
+      alert('刪除失敗: ' + error.message);
+    } finally {
+      setIsBulkDeleting(false);
+    }
+  };
 
   // Export Orders CSV Report
   const handleExportOrdersReport = () => {
@@ -4623,7 +4686,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                                   const effectiveUnitPrice = computeOrderItemUnitPrice(it, menuItems);
                                   const itemRowTotal = effectiveUnitPrice * (it.qty || 0);
 
-                                  const spicinessName = ['不辣', '微辣', '中辣', '泰式大辣 (+NT$ 10)'][it.customization?.spiciness || 0];
+                                  const spicinessName = ['不辣', '辣味'][it.customization?.spiciness || 0];
                                   const noodleName = it.customization?.noodleType === 'rice-noodle' ? '河粉' : (it.customization?.noodleType === 'vermicelli' ? '米線' : null);
                                   const soupBaseName = it.customization?.soupBase === 'coconut-milk' ? '升級奶香冬蔭 (+NT$ 50)' : null;
                                   const addOns = it.customization?.selectedAddOns || [];
@@ -10939,7 +11002,7 @@ ${ingredientLines || '  (尚無庫存異動記錄)'}
                       onClick={() => {
                         const specLines = selectedOrder.items.map(it => {
                           const spec = [
-                            it.customization.spiciness === 0 ? '不辣 (Non-Spicy)' : (it.customization.spiciness === 1 ? '小辣 (Mild)' : (it.customization.spiciness === 2 ? '中辣 (Med)' : '泰辣 (Hot)')),
+                            it.customization.spiciness === 1 ? '辣味 (Spicy)' : '不辣 (Non-Spicy)',
                             it.customization.noodleType === 'rice-noodle' ? '河粉' : (it.customization.noodleType === 'vermicelli' ? '米線' : ''),
                             it.customization.soupBase === 'coconut-milk' ? '加椰奶(+50)' : '',
                             it.customization.notes ? `備註: ${it.customization.notes}` : ''
@@ -11038,7 +11101,7 @@ ${customerDetails}
                           addOnsStr = it.customization.selectedAddOns.map((a: any) => `+${getLocalizedText(a.name, 'zh') || a.name}(+$${a.price})`).join(' ');
                         }
                         const spec = [
-                          it.customization?.spiciness === 0 ? '不辣' : (it.customization?.spiciness === 1 ? '小辣' : (it.customization?.spiciness === 2 ? '中辣' : '泰辣(+10)')),
+                          it.customization?.spiciness === 1 ? '辣味' : '不辣',
                           it.customization?.noodleType === 'rice-noodle' ? '河粉' : (it.customization?.noodleType === 'vermicelli' ? '米線' : ''),
                           it.customization?.soupBase === 'coconut-milk' ? '升級奶香冬蔭(+50)' : '',
                           addOnsStr,
@@ -11340,7 +11403,7 @@ ${customerDetails}
                         onClick={() => {
                           const specLines = selectedOrder.items.map(it => {
                             const spec = [
-                              it.customization.spiciness === 0 ? '不辣 (Non-Spicy)' : (it.customization.spiciness === 1 ? '小辣 (Mild)' : (it.customization.spiciness === 2 ? '中辣 (Med)' : '泰辣 (Hot)')),
+                              it.customization.spiciness === 1 ? '辣味 (Spicy)' : '不辣 (Non-Spicy)',
                               it.customization.noodleType === 'rice-noodle' ? '河粉' : (it.customization.noodleType === 'vermicelli' ? '米線' : ''),
                               it.customization.soupBase === 'coconut-milk' ? '加椰奶(+50)' : '',
                               it.customization.notes ? `備註: ${it.customization.notes}` : ''
@@ -11433,7 +11496,7 @@ ${customerDetails}
                     <div className="divide-y divide-white/5 space-y-3">
                       {selectedOrder.items.map((it: any) => {
                         const spec = [
-                          it.customization?.spiciness === 0 ? '不辣' : (it.customization?.spiciness === 1 ? '小辣' : (it.customization?.spiciness === 2 ? '中辣' : '泰辣')),
+                          it.customization?.spiciness === 1 ? '辣味' : '不辣',
                           it.customization?.noodleType === 'rice-noodle' ? '河粉' : (it.customization?.noodleType === 'vermicelli' ? '米線' : ''),
                           it.customization?.soupBase === 'coconut-milk' ? '升級奶香冬蔭' : '',
                           it.customization?.notes ? `客備：${it.customization?.notes}` : ''
@@ -11573,7 +11636,7 @@ ${customerDetails}
                         onClick={() => {
                           const specLines = selectedOrder.items.map(it => {
                             const spec = [
-                              it.customization.spiciness === 0 ? '不辣 (Non-Spicy)' : (it.customization.spiciness === 1 ? '小辣 (Mild)' : (it.customization.spiciness === 2 ? '中辣 (Med)' : '泰辣 (Hot)')),
+                              it.customization.spiciness === 1 ? '辣味 (Spicy)' : '不辣 (Non-Spicy)',
                               it.customization.noodleType === 'rice-noodle' ? '河粉' : (it.customization.noodleType === 'vermicelli' ? '米線' : ''),
                               it.customization.soupBase === 'coconut-milk' ? '加椰奶(+50)' : '',
                               it.customization.notes ? `備註: ${it.customization.notes}` : ''

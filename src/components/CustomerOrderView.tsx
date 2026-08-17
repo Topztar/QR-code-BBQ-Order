@@ -139,7 +139,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
   customerNotice = '',
   operatingHours = [],
   restDays = [],
-  promoCombo = { enabled: true, requiredQty: 10, discountAmount: 20, eligibleItemIds: [], combos: [] } as any,
+  promoCombo = { enabled: false, combos: [] } as any,
   autoOpenReservationModal = false,
   isOrderRoute = false,
   ingredients = [],
@@ -1496,7 +1496,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
 
     // Calculate item markup if any
     let markup = selectedDetailItem.price;
-    if (spiciness === 3) {
+    if (false) {
       markup += 10; // Extra spicy + 10
     }
     if (soupBase === 'coconut-milk') {
@@ -1596,27 +1596,8 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
   }, [cart, promoCombo]);
 
   const promoComboEligibleCount = useMemo(() => {
-    // legacy compatibility or sum of all eligible
-    if (!promoCombo) return 0;
-    if (Array.isArray(promoCombo.combos)) {
-      return activeCombosAndDiscounts.reduce((sum, item) => sum + item.eligibleCount, 0);
-    }
-    if (!promoCombo.enabled) return 0;
-    return cart.reduce((count, item) => {
-      const isBeverageOrTopup =
-        (item.menuItemId && item.menuItemId.startsWith('item-topup-')) ||
-        item.id.startsWith('topup-') ||
-        item.category === 'beverages' ||
-        item.category === 'drinks';
-      const isEligible = promoCombo.eligibleItemIds && promoCombo.eligibleItemIds.length > 0
-        ? promoCombo.eligibleItemIds.includes(item.menuItemId || '')
-        : !isBeverageOrTopup;
-      if (isEligible) {
-        return count + item.qty;
-      }
-      return count;
-    }, 0);
-  }, [cart, promoCombo, activeCombosAndDiscounts]);
+    return activeCombosAndDiscounts.reduce((sum, item) => sum + item.eligibleCount, 0);
+  }, [activeCombosAndDiscounts]);
 
   const promoComboDiscount = useMemo(() => {
     return activeCombosAndDiscounts.reduce((sum, item) => sum + item.discount, 0);
@@ -3174,9 +3155,9 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                     🥥 {currentLang === 'zh' ? '加椰奶' : currentLang === 'en' ? 'Add Coconut' : currentLang === 'th' ? 'ใส่กะทิ' : currentLang === 'ja' ? 'ココナッツ加' : currentLang === 'ko' ? '코코넛 추가' : 'Thêm cốt dừa'}
                   </span>
                 )}
-                {hoverCartItem.customization.spiciness > 1 && (
+                {hoverCartItem.customization.spiciness > 0 && (
                   <span className={`text-[10px] px-1.5 py-0.5 rounded ${isSimplifiedMode ? 'bg-zinc-200 text-black border border-zinc-300 font-bold' : 'bg-white/5 border border-white/10 text-zinc-400'}`}>
-                    🌶️ {hoverCartItem.customization.spiciness === 2 ? (TRANSLATIONS.spicyMild[currentLang] || '小辣') : (TRANSLATIONS.spicyHot[currentLang] || '大辣')}
+                    🌶️ {(TRANSLATIONS.spicy[currentLang] || '辣味')}
                   </span>
                 )}
                 {hoverCartItem.customization.notes && (
@@ -3558,7 +3539,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
               <div className="text-left leading-none">
                 <span className={`text-[10px] uppercase font-bold ${isSimplifiedMode ? 'text-black font-black' : 'text-white/40'}`}>{TRANSLATIONS.totalAmountLabel[currentLang] || '總計算額金額'}</span>
                 <p className={`text-lg font-bold mt-1 font-serif ${isSimplifiedMode ? 'text-amber-800 text-xl font-black' : 'text-[#E5B453]'}`}>
-                  NT$ {(selectedDetailItem.price + (spiciness === 3 ? 10 : 0) + (soupBase === 'coconut-milk' ? 50 : 0) + selectedAddOns.reduce((sum, a) => sum + a.price, 0)) * qty}
+                  NT$ {(selectedDetailItem.price + 0 + (soupBase === 'coconut-milk' ? 50 : 0) + selectedAddOns.reduce((sum, a) => sum + a.price, 0)) * qty}
                 </p>
               </div>
 
@@ -3648,11 +3629,11 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                               {currentLang === 'zh' ? '加椰奶(+50)' : currentLang === 'en' ? 'Add Coconut (+50)' : currentLang === 'th' ? 'ใส่กะทิ (+50)' : currentLang === 'ja' ? 'ココナッツ加 (+50)' : currentLang === 'ko' ? '코코넛 추가 (+50)' : 'Thêm cốt dừa (+50)'}
                             </span>
                           )}
-                          {item.customization.spiciness > 1 && (
+                          {item.customization.spiciness > 0 && (
                             <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono border ${
                               isSimplifiedMode ? 'bg-red-200 text-red-950 border-red-300 font-extrabold' : 'bg-red-500/10 text-red-400 border-red-500/15'
                             }`}>
-                              {item.customization.spiciness === 2 ? (TRANSLATIONS.spicyMild[currentLang] || '小辣') : `${TRANSLATIONS.spicyHot[currentLang] || '大辣'}(+10)`}
+                              {(TRANSLATIONS.spicy[currentLang] || '辣味')}
                             </span>
                           )}
                           {item.customization.selectedAddOns?.map((addOn) => (
@@ -3701,7 +3682,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
 
                       <div className="text-right space-y-2 shrink-0 ml-4 font-sans">
                         <span className={`font-mono text-sm font-bold block ${isSimplifiedMode ? 'text-black text-base font-black' : 'text-white/95'}`}>
-                          NT$ {(item.price + (item.customization.spiciness === 3 ? 10 : 0) + (item.customization.soupBase === 'coconut-milk' ? 50 : 0) + (item.customization.selectedAddOns?.reduce((sum, a) => sum + a.price, 0) || 0)) * item.qty}
+                          NT$ {(item.price + 0 + (item.customization.soupBase === 'coconut-milk' ? 50 : 0) + (item.customization.selectedAddOns?.reduce((sum, a) => sum + a.price, 0) || 0)) * item.qty}
                         </span>
                         <button
                           id={`delete-cart-item-${item.id}`}
@@ -3804,10 +3785,9 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                     </div>
 
                     {/* Promo Combo Info / Progress Banner */}
-                    {promoCombo && (
+                    {promoCombo && Array.isArray(promoCombo.combos) && promoCombo.combos.length > 0 && (
                       <>
-                        {Array.isArray(promoCombo.combos) ? (
-                          promoCombo.combos.map((combo: any, idx: number) => {
+                        {promoCombo.combos.map((combo: any, idx: number) => {
                             if (!combo.enabled) return null;
                             const itemDiscountDetail = activeCombosAndDiscounts.find(d => d.combo.id === combo.id);
                             const count = itemDiscountDetail ? itemDiscountDetail.eligibleCount : 0;
@@ -3849,44 +3829,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                                 )}
                               </div>
                             );
-                          })
-                        ) : promoCombo.enabled && (
-                          <>
-                            {promoComboEligibleCount > 0 && promoComboEligibleCount < promoCombo.requiredQty ? (
-                              <div className={`text-[10px] border rounded-lg p-2.5 mt-2 flex flex-col space-y-1 ${
-                                isSimplifiedMode ? 'bg-amber-50 border-amber-300 text-amber-900 font-bold' : 'bg-[#E5B453]/5 border-[#E5B453]/15 text-[#E5B453]/90'
-                              }`}>
-                                <div className="font-bold flex items-center justify-between text-[11px] text-[#E5B453]">
-                                  <span>🌟 {currentLang === 'zh' ? '超值優惠套餐折抵中' : currentLang === 'en' ? 'Promo Combo in Progress' : currentLang === 'th' ? 'กำลังคำนวณเซตโปรโมชั่น' : currentLang === 'ja' ? 'お得セット割引計算中' : currentLang === 'ko' ? '혜택 세트 적용 중' : 'Đang tính combo khuyến mãi'}</span>
-                                  <span className="text-[10px] opacity-75 font-mono">{promoComboEligibleCount}/{promoCombo.requiredQty}{currentLang === 'zh' ? '件' : ' item(s)'}</span>
-                                </div>
-                                <p className="leading-tight opacity-80 font-sans">
-                                  {currentLang === 'zh' ? (
-                                    <>目前已選擇限定品項 {promoComboEligibleCount} 件，再點 <span className="underline font-bold font-mono text-white text-xs">{promoCombo.requiredQty - promoComboEligibleCount}</span> 件即可自動折扣 <span className="font-extrabold text-white font-mono text-xs">{promoCombo.discountAmount}元</span> ── 快去選購限定炭烤吧！</>
-                                  ) : (
-                                    <>Selected {promoComboEligibleCount} promo item(s). Add <span className="underline font-bold font-mono text-white text-xs">{promoCombo.requiredQty - promoComboEligibleCount}</span> more to get a <span className="font-extrabold text-white font-mono text-xs">NT$ {promoCombo.discountAmount}</span> discount!</>
-                                  )}
-                                </p>
-                              </div>
-                            ) : promoComboEligibleCount >= promoCombo.requiredQty ? (
-                              <div className={`text-[10px] border rounded-lg p-2.5 mt-2 flex flex-col space-y-1 ${
-                                isSimplifiedMode ? 'bg-emerald-50 border-emerald-300 text-emerald-950 font-bold' : 'bg-emerald-500/5 border-emerald-500/15 text-emerald-400 font-bold'
-                              }`}>
-                                <div className="font-bold flex items-center justify-between text-[11px] text-emerald-400">
-                                  <span>🎉 {currentLang === 'zh' ? '已享超值優惠套餐折扣！' : currentLang === 'en' ? 'Promo Combo Discount Applied!' : currentLang === 'th' ? 'ได้รับส่วนลดเซตโปรโมชั่นแล้ว!' : currentLang === 'ja' ? 'お得セット割引適用済み！' : currentLang === 'ko' ? '혜택 세트 적용 완료!' : 'Đã nhận chiết khấu combo!'}</span>
-                                  <span className="font-mono text-xs">{currentLang === 'zh' ? `符合 ${Math.floor(promoComboEligibleCount / promoCombo.requiredQty)} 組` : `${Math.floor(promoComboEligibleCount / promoCombo.requiredQty)} Set(s) Matched`}</span>
-                                </div>
-                                <p className="leading-tight opacity-85 font-sans">
-                                  {currentLang === 'zh' ? (
-                                    <>已累計限定餐飲商品 {promoComboEligibleCount} 件，為您全自動節省 NT$ {promoComboDiscount} 元！</>
-                                  ) : (
-                                    <>Accumulated {promoComboEligibleCount} specified promo item(s), automatically saved NT$ {promoComboDiscount}!</>
-                                  )}
-                                </p>
-                              </div>
-                            ) : null}
-                          </>
-                        )}
+                          })}
                       </>
                     )}
 
@@ -4051,7 +3994,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                                       <div className="text-[11px] text-white/40 mt-0.5 space-y-0.5 pl-2">
                                         {it.customization.spiciness !== undefined && (
                                           <div>
-                                            • {t('spiciness') || '辣度'}: {['不辣', '微辣', '中辣', '大辣(+10)'][it.customization.spiciness]}
+                                            • {t('spiciness') || '辣度'}: {['不辣', '辣味'][it.customization.spiciness]}
                                           </div>
                                         )}
                                         {it.customization.soupBase && (
@@ -4379,7 +4322,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                                     <div className="text-[11px] text-white/40 mt-0.5 space-y-0.5 pl-3">
                                       {it.customization.spiciness !== undefined && (
                                         <div>
-                                          • {t('spiciness') || '辣度'}: {['不辣', '微辣', '中辣', '大辣(+10)'][it.customization.spiciness]}
+                                          • {t('spiciness') || '辣度'}: {['不辣', '辣味'][it.customization.spiciness]}
                                         </div>
                                       )}
                                       {it.customization.soupBase && (
