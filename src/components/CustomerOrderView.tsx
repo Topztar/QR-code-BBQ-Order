@@ -2831,6 +2831,8 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                           {item.image ? (
                             <img
                               src={item.image}
+                              loading="lazy"
+                              decoding="async"
                               alt={getLocalizedText(item.name, currentLang) || 'dish'}
                               className="w-full h-full object-cover hover:scale-105 transition duration-300"
                               referrerPolicy="no-referrer"
@@ -2947,6 +2949,8 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                         {item.image ? (
                           <img
                             src={item.image}
+                            loading="lazy"
+                            decoding="async"
                             alt={getLocalizedText(item.name, currentLang) || 'dish'}
                             className="w-full h-full object-cover hover:scale-105 transition duration-500"
                             referrerPolicy="no-referrer"
@@ -3236,6 +3240,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                 <>
                   <img
                     src={selectedDetailItem.image}
+                    decoding="async"
                     alt={getLocalizedText(selectedDetailItem?.name, currentLang) || 'dish'}
                     className="w-full h-full object-cover opacity-90 group-hover:scale-102 transition duration-500"
                     referrerPolicy="no-referrer"
@@ -4620,6 +4625,8 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                             {item.image ? (
                               <img
                                 src={item.image}
+                                loading="lazy"
+                                decoding="async"
                                 alt={getLocalizedText(item.name, currentLang) || 'dish'}
                                 className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
                                 referrerPolicy="no-referrer"
@@ -4746,6 +4753,8 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                         {item.image ? (
                           <img
                             src={item.image}
+                            loading="lazy"
+                            decoding="async"
                             alt={getLocalizedText(item.name, currentLang) || 'dish'}
                             className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
                             referrerPolicy="no-referrer"

@@ -1,0 +1,10 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      // 允許全域公開讀取餐點圖片；禁止前端直接寫入（圖片上傳一律經由 Cloud Functions 後端驗證處理）
+      allow read: if true;
+      allow write: if false;
+    }
+  }
+}
