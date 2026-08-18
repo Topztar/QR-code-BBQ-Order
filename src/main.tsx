@@ -4,19 +4,12 @@ import App from './App.tsx';
 import './index.css';
 import { loadData } from './data.ts';
 
-loadData().then(() => {
-  createRoot(document.getElementById('root')!).render(
-    <StrictMode>
-      <App />
-    </StrictMode>,
-  );
-}).catch(err => {
-  console.error("Failed to load initial data", err);
-  // Fallback to render anyway
-  createRoot(document.getElementById('root')!).render(
-    <StrictMode>
-      <App />
-    </StrictMode>,
-  );
-});
+// Trigger non-blocking background prefetch for legacy data fallbacks
+loadData().catch(err => console.warn("[Init] Background data prefetch notice:", err));
+
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <App />
+  </StrictMode>,
+);
 

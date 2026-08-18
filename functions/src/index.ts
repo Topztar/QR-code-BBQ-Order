@@ -1313,7 +1313,6 @@ post('/admin/clear-test-data', async (req, res) => {
 });
 
 // --- Missing Category APIs ---
-
 put('/categories/reorder', async (req, res) => {
   const { order } = req.body;
   if (!Array.isArray(order)) return res.status(400).json({ error: 'Invalid order parameter' });
@@ -1324,27 +1323,6 @@ put('/categories/reorder', async (req, res) => {
       batch.update(ref, { orderIndex: index });
     });
     await batch.commit();
-    res.json({ success: true });
-  } catch (error) {
-    res.status(500).send(error);
-  }
-});
-
-put('/categories/:id', async (req, res) => {
-  const id = req.params.id as string;
-  const updates = req.body;
-  try {
-    await db.collection('categories').doc(id).update(updates);
-    res.json({ success: true });
-  } catch (error) {
-    res.status(500).send(error);
-  }
-});
-
-del('/categories/:id', async (req, res) => {
-  const id = req.params.id as string;
-  try {
-    await db.collection('categories').doc(id).delete();
     res.json({ success: true });
   } catch (error) {
     res.status(500).send(error);
@@ -1468,31 +1446,6 @@ del('/reservations/:id', async (req, res) => {
   }
 });
 
-// --- Missing Ingredients APIs ---
-post('/ingredients', async (req, res) => {
-  const data = req.body;
-  const finalName = {
-    zh: data.name.zh,
-    en: data.name.en || data.name.zh,
-    ko: data.name.ko || data.name.zh,
-    ja: data.name.ja || data.name.zh,
-    th: data.name.th || data.name.zh,
-  };
-  const newIngredient = {
-    id: data.id,
-    name: finalName,
-    stock: Math.round(Number(data.stock || 0) * 100) / 100,
-    minThreshold: Number(data.minThreshold) || 0,
-    unit: data.unit || 'kg',
-  };
-  try {
-    await db.collection('ingredients').doc(newIngredient.id).set(newIngredient);
-    res.status(201).json(newIngredient);
-  } catch (error) {
-    res.status(500).send(error);
-  }
-});
-
 // --- Additional Order & Other APIs ---
 put('/orders/:id/pay', async (req, res) => {
   const id = req.params.id as string;
@@ -1527,31 +1480,6 @@ put('/orders/:id/rate', async (req, res) => {
   const { rating, feedback } = req.body;
   try {
     await db.collection('orders').doc(id).update({ rating, feedback });
-    res.json({ success: true });
-  } catch (error) {
-    res.status(500).send(error);
-  }
-});
-
-put('/orders/:id/items/:itemId/complete', async (req, res) => {
-  const { id, itemId } = req.params;
-  const { isCompleted } = req.body;
-  try {
-    // Requires reading the whole order to update the specific item
-    const orderDoc = await db.collection('orders').doc(id as string).get();
-    const order = orderDoc.data();
-    if (order && order.items) {
-      const items = order.items.map((it: any) => it.id === itemId ? { ...it, isCompleted } : it);
-      const allCompleted = items.every((it: any) => it.isCompleted);
-      let status = order.status;
-      // Don't auto-complete paid orders — kitchen must explicitly press 出餐完成
-      if (allCompleted && status !== 'paid') {
-         status = 'completed';
-      } else if (status === 'completed') {
-         status = 'preparing';
-      }
-      await db.collection('orders').doc(id as string).update({ items, status });
-    }
     res.json({ success: true });
   } catch (error) {
     res.status(500).send(error);

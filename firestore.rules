@@ -2,54 +2,53 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Since the application runs in an anonymous/unauthenticated environment
-    // (no Firebase Auth on frontend tablets or client, and backend runs client-side SDK in unauthenticated mode),
-    // we allow public read/write access for operational collections so that the system syncs in real time.
-    // We restrict settings to read-only from client (writes happen via Cloud Functions),
-    // and disable test collection access.
-
-    // 1. menu (菜單)
+    // 1. menu (菜單) - Allow client real-time snapshot reads and controlled updates
     match /menu/{id} {
       allow read, write: if true;
     }
 
-    // 2. orders (訂單) - allow read, create, update, delete (for bulk delete historical orders)
+    // 2. orders (訂單) - Real-time order sync and kitchen processing
     match /orders/{id} {
       allow read, write: if true;
     }
 
-    // 3. settings (設定) - read-only from client (writes happen via Cloud Functions)
+    // 3. settings (公開營運設定) - 前端唯讀，防止客戶端直接篡改全店營運與系統設定
     match /settings/{id} {
       allow read: if true;
       allow write: if false;
     }
 
-    // 4. categories (分類)
+    // 4. secrets & security (私密敏感設定與金鑰) - 嚴格封鎖前端讀寫，僅限 Cloud Functions Admin SDK 存取
+    match /secrets/{id} {
+      allow read, write: if false;
+    }
+
+    // 5. categories (分類)
     match /categories/{id} {
       allow read, write: if true;
     }
 
-    // 5. ingredients (原料/庫存)
+    // 6. ingredients (原料/庫存)
     match /ingredients/{id} {
       allow read, write: if true;
     }
 
-    // 6. tables (桌位)
+    // 7. tables (桌位)
     match /tables/{id} {
       allow read, write: if true;
     }
 
-    // 7. reservations (預約)
+    // 8. reservations (預約)
     match /reservations/{id} {
       allow read, write: if true;
     }
 
-    // 8. checkouts (收銀結帳紀錄)
+    // 9. checkouts (收銀結帳紀錄)
     match /checkouts/{id} {
       allow read, write: if true;
     }
 
-    // 9. test (測試連線用 - 生產環境停用)
+    // 10. test (測試連線用 - 生產環境停用)
     match /test/{id} {
       allow read, write: if false;
     }

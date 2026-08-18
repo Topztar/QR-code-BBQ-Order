@@ -1218,27 +1218,6 @@ put('/categories/reorder', async (req, res) => {
         res.status(500).send(error);
     }
 });
-put('/categories/:id', async (req, res) => {
-    const id = req.params.id;
-    const updates = req.body;
-    try {
-        await db.collection('categories').doc(id).update(updates);
-        res.json({ success: true });
-    }
-    catch (error) {
-        res.status(500).send(error);
-    }
-});
-del('/categories/:id', async (req, res) => {
-    const id = req.params.id;
-    try {
-        await db.collection('categories').doc(id).delete();
-        res.json({ success: true });
-    }
-    catch (error) {
-        res.status(500).send(error);
-    }
-});
 post('/tables', async (req, res) => {
     const data = req.body;
     try {
@@ -1349,30 +1328,6 @@ del('/reservations/:id', async (req, res) => {
         res.status(500).send(error);
     }
 });
-post('/ingredients', async (req, res) => {
-    const data = req.body;
-    const finalName = {
-        zh: data.name.zh,
-        en: data.name.en || data.name.zh,
-        ko: data.name.ko || data.name.zh,
-        ja: data.name.ja || data.name.zh,
-        th: data.name.th || data.name.zh,
-    };
-    const newIngredient = {
-        id: data.id,
-        name: finalName,
-        stock: Math.round(Number(data.stock || 0) * 100) / 100,
-        minThreshold: Number(data.minThreshold) || 0,
-        unit: data.unit || 'kg',
-    };
-    try {
-        await db.collection('ingredients').doc(newIngredient.id).set(newIngredient);
-        res.status(201).json(newIngredient);
-    }
-    catch (error) {
-        res.status(500).send(error);
-    }
-});
 put('/orders/:id/pay', async (req, res) => {
     const id = req.params.id;
     const { isPaid } = req.body;
@@ -1403,30 +1358,6 @@ put('/orders/:id/rate', async (req, res) => {
     const { rating, feedback } = req.body;
     try {
         await db.collection('orders').doc(id).update({ rating, feedback });
-        res.json({ success: true });
-    }
-    catch (error) {
-        res.status(500).send(error);
-    }
-});
-put('/orders/:id/items/:itemId/complete', async (req, res) => {
-    const { id, itemId } = req.params;
-    const { isCompleted } = req.body;
-    try {
-        const orderDoc = await db.collection('orders').doc(id).get();
-        const order = orderDoc.data();
-        if (order && order.items) {
-            const items = order.items.map((it) => it.id === itemId ? { ...it, isCompleted } : it);
-            const allCompleted = items.every((it) => it.isCompleted);
-            let status = order.status;
-            if (allCompleted && status !== 'paid') {
-                status = 'completed';
-            }
-            else if (status === 'completed') {
-                status = 'preparing';
-            }
-            await db.collection('orders').doc(id).update({ items, status });
-        }
         res.json({ success: true });
     }
     catch (error) {
