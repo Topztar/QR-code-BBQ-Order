@@ -867,19 +867,17 @@ export default function App() {
 
     // 4. Synchronize immediately with backend API
     try {
-      apiFetch(`/api/orders/${orderId}/status`, {
+      const res = await apiFetch(`/api/orders/${orderId}/status`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status }),
-      }).then(async (res) => {
-        if (res.ok) {
-          console.log(`[KDS Sync] Order #${orderId} status synced to "${status}" successfully`);
-        } else {
-          console.warn(`[KDS Sync] Server returned status ${res.status}, keeping optimistic update`);
-        }
-      }).catch(err => {
-        console.warn('[KDS Sync] Failed to sync order status to server in background:', err);
       });
+      if (res.ok) {
+        console.log(`[KDS Sync] Order #${orderId} status synced to "${status}" successfully`);
+        setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status, isOfflinePending: false } : o));
+      } else {
+        console.warn(`[KDS Sync] Server returned status ${res.status}, keeping optimistic update`);
+      }
     } catch (err) {
       console.warn('[KDS Sync Error]', err);
     }
@@ -1114,12 +1112,18 @@ export default function App() {
     },
     skipRefresh?: boolean
   ) => {
-    const description = `結帳 🥢 訂單 #${orderId.replace('offline_temp_', '離線')} 完成付款`;
-    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, isPaid: true, status: 'paid' as OrderStatus, isOfflinePending: !isOnline } : o));
+    const isOnline = navigator.onLine;
+    const description = `結帳 🥢 訂單 #${orderId.replace('offline_temp_', '離線')}`;
+    
+    // 🛡️ 保持已經「製餐完成 (completed)」或「取消 (cancelled)」的訂單狀態，防止結帳時回滾為 'paid' 導致已完成訂單重複浮現於廚房 KDS
+    const targetOrder = orders.find(o => o.id === orderId);
+    const resolvedStatus: OrderStatus = (targetOrder?.status === 'completed' || targetOrder?.status === 'cancelled')
+      ? targetOrder.status
+      : 'paid';
+
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, isPaid: true, status: (o.status === 'completed' || o.status === 'cancelled') ? o.status : 'paid', isOfflinePending: !isOnline } : o));
 
     // 🔒 結帳完成後一併刪除相對應的「預約訂位點餐專屬通道」
-    const targetOrder = orders.find(o => o.id === orderId);
     if (targetOrder) {
       if (targetOrder.tableNumber && targetOrder.tableNumber !== '外帶' && targetOrder.tableNumber !== 'takeout') {
         const remainingUnpaid = orders.filter(o => o.tableNumber === targetOrder.tableNumber && o.id !== orderId && !o.isPaid && o.status !== 'cancelled');
@@ -1151,7 +1155,7 @@ export default function App() {
     recentStatusTransitionsRef.current.set(orderId, {
       ...recentStatusTransitionsRef.current.get(orderId),
       isPaid: true,
-      status: 'paid' as OrderStatus,
+      status: resolvedStatus,
       timestamp: Date.now()
     });
 

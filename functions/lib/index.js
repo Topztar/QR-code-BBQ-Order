@@ -782,10 +782,12 @@ put('/orders/:id/checkout', async (req, res) => {
     try {
         const orderDoc = await db.collection('orders').doc(id).get();
         const orderData = orderDoc.data();
+        const currentStatus = orderData?.status;
+        const resolvedStatus = (currentStatus === 'completed' || currentStatus === 'cancelled') ? currentStatus : 'paid';
         await db.collection('orders').doc(id).update({
             ...checkoutData,
             isPaid: true,
-            status: 'paid'
+            status: resolvedStatus
         });
         if (orderData && orderData.tableNumber && !String(orderData.tableNumber).includes('外帶') && String(orderData.tableNumber).toLowerCase() !== 'takeout') {
             const tblId = String(orderData.tableNumber).trim();
@@ -813,7 +815,7 @@ put('/orders/:id/checkout', async (req, res) => {
                 }
             }
         }
-        res.json({ id, ...checkoutData, isPaid: true, status: 'paid' });
+        res.json({ id, ...checkoutData, isPaid: true, status: resolvedStatus });
     }
     catch (error) {
         res.status(500).send(error);

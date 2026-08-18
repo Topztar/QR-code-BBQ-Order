@@ -4,6 +4,7 @@ import { Order, OrderStatus, Language, TableConfig, MenuItem, Category, Ingredie
 import { getLocalizedText } from '../utils/i18n';
 import { TRANSLATIONS } from '../data';
 import { safeStorage } from '../lib/safeStorage';
+import { removeOrderRequestsFromQueue } from '../lib/offlineQueue';
 import { ChefHat, Printer, Trash2, Check, Ban, RefreshCw, Volume2, Wifi, Edit, Settings, X, Clock, AlertTriangle, Mic, Flag, Eye, Search, Timer, Download, ChevronUp, ChevronDown } from 'lucide-react';
 
 import { KdsHourlyChart } from './KdsHourlyChart';
@@ -841,7 +842,10 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
 
     // 檢查網際網路連線狀態
     const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
-    if (!isOnline) {
+    if (isOnline) {
+      // 🛡️ 在連線狀態下，立即清除此訂單的本機離線排隊暫存，確保不會被舊隊列覆寫
+      removeOrderRequestsFromQueue(id);
+    } else {
       console.warn('[KDS Sync] 目前系統處於離線狀態，狀態變更已自動加入本機離線隊列。');
     }
 
@@ -871,6 +875,10 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
     if (kdsRole !== 'kitchen') {
       alert('【權限不足】僅有「廚房」角色可以更改餐點狀態，店員僅能瀏覽。');
       return;
+    }
+    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+    if (isOnline) {
+      removeOrderRequestsFromQueue(orderId);
     }
     if (onToggleOrderItemComplete) {
       onToggleOrderItemComplete(orderId, itemId, isCompleted, isPrepared);
@@ -1722,7 +1730,11 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
 
                               {/* customization specifications */}
                               <div className="flex flex-wrap gap-1">
-                                <span className="bg-[#FF4D4D]/5 text-[#FF4D4D] border border-[#FF4D4D]/10 text-[9px] font-medium px-1 rounded">
+                                <span className={`text-[9px] font-medium px-1 rounded border ${
+                                  oi.customization.spiciness === 1
+                                    ? 'bg-[#FF4D4D]/5 text-[#FF4D4D] border-[#FF4D4D]/10'
+                                    : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                }`}>
                                   {t('spicyPrefix')}: {oi.customization.spiciness === 1 ? t('spicy') : t('notSpicy')}
                                 </span>
                                 {oi.customization.noodleType && (
@@ -2166,7 +2178,11 @@ ${specLines}
 
                               {/* customize modifiers indicator */}
                               <div className="flex flex-wrap gap-1 mt-1.5">
-                                <span className="bg-[#FF4D4D]/10 text-[#FF4D4D] border border-[#FF4D4D]/20 text-[10px] font-semibold px-1 rounded font-mono">
+                                <span className={`text-[10px] font-semibold px-1 rounded font-mono border ${
+                                  it.customization.spiciness === 1
+                                    ? 'bg-[#FF4D4D]/10 text-[#FF4D4D] border-[#FF4D4D]/20'
+                                    : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                }`}>
                                   {t('spicyPrefix')}: {it.customization.spiciness === 1 ? t('spicy') : t('notSpicy')}
                                 </span>
                                 {it.customization.noodleType && (
