@@ -34,7 +34,6 @@ interface AnalyticsData {
 }
 
 export default function App() {
-  const [dataLoaded, setDataLoaded] = useState(false);
   const [lang, setLang] = useState<Language>(() => {
     try {
       const stored = safeStorage.getItem('sabay-language');
@@ -408,7 +407,7 @@ export default function App() {
           const contentType = res.headers?.get ? res.headers.get('content-type') : null;
           if (contentType && !contentType.includes('application/json')) return fallback;
           return await res.json();
-        } catch (e) {
+        } catch (_e) {
           return fallback;
         }
       };
@@ -1300,7 +1299,7 @@ export default function App() {
         body: JSON.stringify({ ingredientId, quantityChanged, note }),
       });
       await fetchData();
-    } catch (err) {
+    } catch (_err) {
       addRequestToQueue('/api/inventory/adjust', 'POST', { ingredientId, quantityChanged, note }, description);
     }
   };

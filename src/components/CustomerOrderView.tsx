@@ -1259,7 +1259,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                emailLower !== 'vegan_sabay@gmail.com' && 
                emailLower !== 'bbq_lover@gmail.com';
       });
-    } catch (e) {
+    } catch (_e) {
       return [];
     }
   };
@@ -1495,12 +1495,9 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
     if (!selectedDetailItem) return;
 
     // Calculate item markup if any
-    let markup = selectedDetailItem.price;
-    if (false) {
-      markup += 10; // Extra spicy + 10
-    }
+    // Customization applied directly
     if (soupBase === 'coconut-milk') {
-      markup += 50; // Coconut milk soup base + 50
+      // applied
     }
 
     const cartId = `cart-${Date.now()}-${Math.floor(Math.random() * 100)}`;
@@ -1595,7 +1592,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
     });
   }, [cart, promoCombo]);
 
-  const promoComboEligibleCount = useMemo(() => {
+  const _promoComboEligibleCount = useMemo(() => {
     return activeCombosAndDiscounts.reduce((sum, item) => sum + item.eligibleCount, 0);
   }, [activeCombosAndDiscounts]);
 
@@ -1889,7 +1886,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                     } else {
                       setPincodeError(true);
                     }
-                  } catch (error) {
+                  } catch (_error) {
                     setPincodeError(true);
                   }
                 }}

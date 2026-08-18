@@ -4,18 +4,18 @@ service cloud.firestore {
     
     // Since the application runs in an anonymous/unauthenticated environment
     // (no Firebase Auth on frontend tablets or client, and backend runs client-side SDK in unauthenticated mode),
-    // we must allow public read/write access for most collections so that the system syncs in real time.
-    // However, we restrict settings to read-only and prevent order deletions to prevent abuse.
+    // we allow public read/write access for operational collections so that the system syncs in real time.
+    // We restrict settings to read-only from client (writes happen via Cloud Functions),
+    // and disable test collection access.
 
     // 1. menu (菜單)
     match /menu/{id} {
       allow read, write: if true;
     }
 
-    // 2. orders (訂單) - prevent deletion
+    // 2. orders (訂單) - allow read, create, update, delete (for bulk delete historical orders)
     match /orders/{id} {
-      allow read, create, update: if true;
-      allow delete: if false;
+      allow read, write: if true;
     }
 
     // 3. settings (設定) - read-only from client (writes happen via Cloud Functions)
@@ -49,9 +49,9 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
-    // 9. test (測試連線用)
+    // 9. test (測試連線用 - 生產環境停用)
     match /test/{id} {
-      allow read, write: if true;
+      allow read, write: if false;
     }
   }
 }

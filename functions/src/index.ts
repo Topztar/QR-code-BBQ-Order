@@ -1105,11 +1105,10 @@ post('/staff/pin/check-path', async (req, res) => {
   }
   try {
     const systemDoc = await db.collection('settings').doc('system').get();
-    const liveStaffPin = systemDoc.data()?.liveStaffPin || '952788';
-    const validPins = [String(liveStaffPin), '952788', 'FSY20260606'];
-    return res.json({ valid: validPins.includes(String(pathPin)) });
+    const liveStaffPin = systemDoc.data()?.liveStaffPin || '000000';
+    return res.json({ valid: String(pathPin) === String(liveStaffPin) });
   } catch (error) {
-    return res.json({ valid: ['952788', 'FSY20260606'].includes(String(pathPin)) });
+    return res.json({ valid: false });
   }
 });
 
@@ -1117,10 +1116,9 @@ post('/staff/pin/verify', async (req, res) => {
   const { pin } = req.body;
   try {
     const systemDoc = await db.collection('settings').doc('system').get();
-    const liveStaffPin = systemDoc.data()?.liveStaffPin || '952788';
-    const validPins = [String(liveStaffPin), '952788', 'FSY20260606'];
-    if (validPins.includes(String(pin))) {
-      return res.json({ success: true, access_token: 'mock-jwt-token-for-staff' });
+    const liveStaffPin = systemDoc.data()?.liveStaffPin || '000000';
+    if (String(pin) === String(liveStaffPin)) {
+      return res.json({ success: true, access_token: 'valid-staff-session' });
     }
     return res.status(400).json({ success: false, error: '解鎖金鑰錯誤！' });
   } catch (error) {
@@ -1138,7 +1136,7 @@ put('/staff/pin', async (req, res) => {
   try {
     const systemRef = db.collection('settings').doc('system');
     const systemDoc = await systemRef.get();
-    const liveStaffPin = systemDoc.data()?.liveStaffPin || '952788';
+    const liveStaffPin = systemDoc.data()?.liveStaffPin || '000000';
     if (String(currentPin) !== String(liveStaffPin)) {
       return res.status(400).json({ error: '目前金鑰輸入錯誤！' });
     }
