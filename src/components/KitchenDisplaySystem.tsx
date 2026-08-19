@@ -6,6 +6,15 @@ import { TRANSLATIONS } from '../data';
 import { safeStorage } from '../lib/safeStorage';
 import { removeOrderRequestsFromQueue } from '../lib/offlineQueue';
 import { ChefHat, Printer, Trash2, Check, Ban, RefreshCw, Volume2, Wifi, Edit, Settings, X, Clock, AlertTriangle, Mic, Flag, Eye, Search, Timer, Download, ChevronUp, ChevronDown } from 'lucide-react';
+import {
+  unlockAudio,
+  playOrderChimeSound,
+  playStatusBeepSound,
+  speakUtterance,
+  announceOrderNotification,
+  formatOrderAnnouncementText,
+  stopSpeech
+} from '../utils/kdsAudio';
 
 import { KdsHourlyChart } from './KdsHourlyChart';
 import { useRetry } from '../hooks/useRetry';
@@ -188,123 +197,19 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
   });
 
   const [audioNeedsUnlock, setAudioNeedsUnlock] = useState<boolean>(true);
-  const audioCtxRef = useRef<AudioContext | null>(null);
-  const activeUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
-  const cachedVoicesRef = useRef<SpeechSynthesisVoice[]>([]);
-
-  // Get or initialize AudioContext
-  const getAudioContext = (): AudioContext | null => {
-    if (!audioCtxRef.current) {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      if (AudioCtx) {
-        audioCtxRef.current = new AudioCtx();
-      }
-    }
-    return audioCtxRef.current;
-  };
-
-  // Play Web Audio Chime Sound (Kitchen Order Bell / Alert)
-  const playOrderChimeSound = () => {
-    try {
-      const ctx = getAudioContext();
-      if (!ctx) return;
-      if (ctx.state === 'suspended') {
-        ctx.resume().catch(() => {});
-      }
-      const now = ctx.currentTime;
-      // Tone 1: A5 (880 Hz)
-      const osc1 = ctx.createOscillator();
-      const gain1 = ctx.createGain();
-      osc1.type = 'sine';
-      osc1.frequency.setValueAtTime(880, now);
-      gain1.gain.setValueAtTime(0.25, now);
-      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
-      osc1.connect(gain1);
-      gain1.connect(ctx.destination);
-      osc1.start(now);
-      osc1.stop(now + 0.35);
-
-      // Tone 2: D6 (1174.66 Hz)
-      const osc2 = ctx.createOscillator();
-      const gain2 = ctx.createGain();
-      osc2.type = 'sine';
-      osc2.frequency.setValueAtTime(1174.66, now + 0.15);
-      gain2.gain.setValueAtTime(0.25, now + 0.15);
-      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.65);
-      osc2.connect(gain2);
-      gain2.connect(ctx.destination);
-      osc2.start(now + 0.15);
-      osc2.stop(now + 0.65);
-    } catch (e) {
-      console.warn('[Web Audio Chime Error]', e);
-    }
-  };
-
-  // Play single tone status change beep
-  const playStatusBeepSound = () => {
-    try {
-      const ctx = getAudioContext();
-      if (!ctx) return;
-      if (ctx.state === 'suspended') {
-        ctx.resume().catch(() => {});
-      }
-      const now = ctx.currentTime;
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(587.33, now); // D5
-      gain.gain.setValueAtTime(0.15, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start(now);
-      osc.stop(now + 0.25);
-    } catch (e) {
-      console.warn('[Web Audio Status Beep Error]', e);
-    }
-  };
-
-  // Unlock AudioContext and pre-warm SpeechSynthesis on user gesture
-  const unlockAudio = () => {
-    try {
-      const ctx = getAudioContext();
-      if (ctx && ctx.state === 'suspended') {
-        ctx.resume().then(() => {
-          setAudioNeedsUnlock(false);
-        }).catch(() => {});
-      } else if (ctx && ctx.state === 'running') {
-        setAudioNeedsUnlock(false);
-      }
-
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.resume();
-      }
-    } catch (e) {
-      console.warn('[Audio Unlock Error]', e);
-    }
-  };
 
   // Auto-listen for user gesture to unlock audio & pre-load voices
   useEffect(() => {
-    const handleUserGesture = () => {
-      unlockAudio();
+    const handleUserGesture = async () => {
+      const unlocked = await unlockAudio();
+      if (unlocked) {
+        setAudioNeedsUnlock(false);
+      }
     };
 
     window.addEventListener('pointerdown', handleUserGesture, { once: false });
     window.addEventListener('click', handleUserGesture, { once: false });
     window.addEventListener('keydown', handleUserGesture, { once: false });
-
-    if ('speechSynthesis' in window) {
-      const loadVoices = () => {
-        try {
-          cachedVoicesRef.current = window.speechSynthesis.getVoices();
-        } catch {}
-      };
-      loadVoices();
-      if (typeof window.speechSynthesis.onvoiceschanged !== 'undefined') {
-        window.speechSynthesis.onvoiceschanged = loadVoices;
-      }
-    }
 
     return () => {
       window.removeEventListener('pointerdown', handleUserGesture);
@@ -346,56 +251,7 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
   const seenOrderIdsRef = useRef<Set<string>>(new Set());
   const isInitialMountRef = useRef<boolean>(true);
 
-  const speak = (text: string) => {
-    // 1. Play Web Audio synthesizer chime sound
-    playOrderChimeSound();
-
-    // 2. Speech synthesis readout
-    if (!('speechSynthesis' in window)) return;
-    try {
-      if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
-        window.speechSynthesis.cancel();
-      }
-      window.speechSynthesis.resume();
-
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'zh-TW';
-
-      const voices = cachedVoicesRef.current.length > 0
-        ? cachedVoicesRef.current
-        : window.speechSynthesis.getVoices();
-
-      const zhVoice = voices.find(v => {
-        const lang = v.lang.toLowerCase();
-        return lang.includes('zh-tw') || lang.includes('zh_tw') || lang.includes('cmn-hant') ||
-               lang.includes('zh-hk') || lang.includes('zh-cn') || lang.includes('zh_cn') ||
-               lang.includes('zh') || lang.includes('zho') || lang.includes('cmn') || lang.includes('chn');
-      });
-
-      if (zhVoice) {
-        utterance.voice = zhVoice;
-      }
-
-      utterance.rate = 1.0;
-      utterance.pitch = 1.0;
-
-      activeUtteranceRef.current = utterance;
-      utterance.onend = () => {
-        activeUtteranceRef.current = null;
-      };
-      utterance.onerror = (err) => {
-        console.warn('[SpeechSynthesis Utterance Error]', err);
-        activeUtteranceRef.current = null;
-      };
-
-      window.speechSynthesis.speak(utterance);
-      window.speechSynthesis.resume();
-    } catch (e) {
-      console.error('[TTS Speech Synthesis Error]', e);
-    }
-  };
-
-  const handleToggleTts = () => {
+  const handleToggleTts = async () => {
     const nextVal = !ttsEnabled;
     setTtsEnabled(nextVal);
     try {
@@ -403,11 +259,12 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
     } catch (e) {
       console.error(e);
     }
-    unlockAudio();
+    await unlockAudio();
+    setAudioNeedsUnlock(false);
     if (nextVal) {
-      speak('語音合成廣播已開啟，收到新訂單時將自動朗讀');
+      announceOrderNotification('語音合成廣播已開啟，收到新訂單時將自動朗讀', false);
     } else {
-      speak('語音合成廣播已關閉');
+      stopSpeech();
     }
   };
 
@@ -433,35 +290,21 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
 
     const pendingOrders = orders.filter(o => o.status === 'pending' && !processingOrderIds.has(o.id));
     if (pendingOrders.length === 0) {
-      if ('speechSynthesis' in window && (window.speechSynthesis.speaking || window.speechSynthesis.pending)) {
-        window.speechSynthesis.cancel();
-      }
+      stopSpeech();
       return;
     }
 
     const announcePendingOrders = () => {
       const currentPending = orders.filter(o => o.status === 'pending' && !processingOrderIds.has(o.id));
       if (currentPending.length === 0) {
-        if ('speechSynthesis' in window && (window.speechSynthesis.speaking || window.speechSynthesis.pending)) {
-          window.speechSynthesis.cancel();
-        }
+        stopSpeech();
         return;
       }
 
-      const tableListStr = currentPending.map(o => {
-        let tStr = o.tableNumber;
-        if (!tStr || tStr.trim() === '' || tStr.toLowerCase() === 'takeout' || tStr.toLowerCase() === '外帶') {
-          return '外帶';
-        }
-        return `${tStr}桌`;
-      }).join('、');
-
-      const messageText = currentPending.length === 1
-        ? `新訂單待確認，${tableListStr}，請確認接單！`
-        : `您有 ${currentPending.length} 筆新訂單待確認，包含 ${tableListStr}，請確認接單！`;
+      const messageText = formatOrderAnnouncementText(currentPending);
 
       if (ttsEnabled) {
-        speak(messageText);
+        announceOrderNotification(messageText, true);
       } else {
         playOrderChimeSound();
       }
@@ -470,16 +313,14 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
     // Broadcast immediately when pending orders exist
     announcePendingOrders();
 
-    // Continuously loop broadcast every 5.5 seconds until all pending orders are accepted
+    // Continuously loop broadcast every 6.5 seconds until all pending orders are accepted
     const broadcastTimer = setInterval(() => {
       announcePendingOrders();
-    }, 5500);
+    }, 6500);
 
     return () => {
       clearInterval(broadcastTimer);
-      if ('speechSynthesis' in window && (window.speechSynthesis.speaking || window.speechSynthesis.pending)) {
-        window.speechSynthesis.cancel();
-      }
+      stopSpeech();
     };
   }, [orders.filter(o => o.status === 'pending').map(o => `${o.id}:${o.status}`).join(','), processingOrderIds.size, ttsEnabled, autoScrollEnabled]);
 
@@ -836,9 +677,7 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
     }
 
     // 當接單或進入備餐/出餐完成時，立即中斷當前正在播報的新訂單廣播語音
-    if ('speechSynthesis' in window && (window.speechSynthesis.speaking || window.speechSynthesis.pending)) {
-      window.speechSynthesis.cancel();
-    }
+    stopSpeech();
 
     // 檢查網際網路連線狀態
     const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
@@ -1516,9 +1355,10 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
                 <button
                   id="kds-audio-unlock-btn"
                   type="button"
-                  onClick={() => {
-                    unlockAudio();
-                    speak('廚房音效與語音已啟用');
+                  onClick={async () => {
+                    await unlockAudio();
+                    setAudioNeedsUnlock(false);
+                    announceOrderNotification('廚房音效與語音已啟用', true);
                   }}
                   className="flex items-center space-x-1.5 px-3 py-1 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/40 text-amber-300 rounded-lg text-[11px] font-bold animate-pulse transition cursor-pointer"
                   title="點擊以開啟瀏覽器語音與音效播放權限"
@@ -1545,9 +1385,10 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
                 <button
                   id="kds-tts-test-btn"
                   type="button"
-                  onClick={() => {
-                    unlockAudio();
-                    speak('語音測試，沙貝烤肉祝您用餐愉快');
+                  onClick={async () => {
+                    await unlockAudio();
+                    setAudioNeedsUnlock(false);
+                    announceOrderNotification('語音測試，沙貝燒烤祝您用餐愉快', true);
                   }}
                   className="px-2 py-1 hover:bg-white/5 border border-[#E5B453]/20 hover:border-[#E5B453]/40 rounded-lg text-[10px] font-bold text-[#E5B453] hover:text-white transition cursor-pointer"
                   title="測試播放音量與語音廣播"
