@@ -3,7 +3,7 @@ import React, { Component, useState, useEffect, useMemo, useCallback } from 'rea
 import { Ingredient, Language, Category, TableConfig, Order, OrderStatus, Reservation } from '../types';
 import { getLocalizedText } from '../utils/i18n';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
-import { TrendingUp, Package, AlertTriangle, Layers, Sparkles, Coins, Lock, Unlock, QrCode, Trash2, Plus, Edit, Download, Calendar, FileText, ShoppingBag, ShoppingCart, Copy, Check, ExternalLink, Minus, Flame, Printer, Maximize2, Minimize2, ChevronLeft, ChevronRight, RefreshCw, Cpu } from 'lucide-react';
+import { TrendingUp, Package, AlertTriangle, Layers, Sparkles, Coins, Lock, Unlock, QrCode, Trash2, Plus, Edit, Download, Calendar, FileText, ShoppingBag, ShoppingCart, Copy, Check, ExternalLink, Minus, Flame, Printer, Maximize2, Minimize2, ChevronLeft, ChevronRight, RefreshCw, Cpu, Phone, Clock, User, CheckCircle2 } from 'lucide-react';
 import { db, isFirebaseSyncEnabled } from '../lib/firebase';
 import { safeStorage } from '../lib/safeStorage';
 import { doc, setDoc, writeBatch, collection, getDocs, query, where } from 'firebase/firestore';
@@ -1371,6 +1371,9 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   // Checkout merge scope: 'single' (獨立結帳) | 'same_table' (同桌合併) | 'all_merged' (跨桌全併) | 'custom' (自訂勾選)
   const [cashierCheckoutScope, setCashierCheckoutScope] = useState<'single' | 'same_table' | 'all_merged' | 'custom'>('single');
   const [cashierSelectedMergeOrderIds, setCashierSelectedMergeOrderIds] = useState<string[]>([]);
+  // Dedicated Take-out Detail Modal State in Cashier Dashboard
+  const [takeoutDetailModalOrder, setTakeoutDetailModalOrder] = useState<Order | null>(null);
+  const [copiedTakeoutPhone, setCopiedTakeoutPhone] = useState<boolean>(false);
 
   // Auto-scaling width and fit screen boundary state & logic
   const [cashierPanelWidth, setCashierPanelWidth] = useState<number>(48);
@@ -1426,6 +1429,10 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
         return orders.filter(o => !o.isPaid);
     }
   }, [orders, cashierListFilter]);
+
+  const activeTakeoutOrders = useMemo(() => {
+    return orders.filter(o => !o.isPaid && ((o.tableNumber && o.tableNumber.includes('外帶')) || o.takeoutInfo));
+  }, [orders]);
 
   const cashierSelectedOrder = useMemo(() => {
     if (!selectedCashierOrderId) return null;
@@ -3843,6 +3850,145 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                   </h5>
                 </div>
 
+                {/* 🥡 DEDICATED TAKE-OUT ORDERS LIVE MANAGEMENT SECTION */}
+                {activeTakeoutOrders.length > 0 && (
+                  <div className="bg-gradient-to-br from-purple-950/40 via-purple-900/20 to-[#121212] border-2 border-purple-500/40 rounded-2xl p-4 my-3 shadow-xl relative overflow-hidden text-left font-sans" id="cashier-takeout-live-section">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-purple-500/20 pb-3 mb-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xl">🥡</span>
+                        <div>
+                          <h5 className="font-extrabold text-sm text-purple-300 flex items-center gap-2">
+                            <span>外帶自取即時專區 (Take-out Live Hub)</span>
+                            <span className="bg-purple-500 text-white font-black text-[10px] px-2 py-0.5 rounded-full font-mono shadow">
+                              {activeTakeoutOrders.length} 筆進行中
+                            </span>
+                          </h5>
+                          <p className="text-[11px] text-purple-200/70 mt-0.5">
+                            外帶顧客訂單獨立即時管理，支援快速檢視顧客姓名、預約取餐時間、一鍵撥打/複製電話及明細核對。
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        id="filter-takeout-only-btn"
+                        onClick={() => setCashierListFilter('takeout')}
+                        className="self-start sm:self-auto text-xs text-purple-200 hover:text-white font-bold bg-purple-600/30 hover:bg-purple-600/50 border border-purple-500/40 px-3 py-1.5 rounded-lg transition active:scale-95 cursor-pointer flex items-center gap-1 shadow-sm"
+                      >
+                        <span>僅看外帶佇列 ➔</span>
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                      {activeTakeoutOrders.map((tOrder) => {
+                        const tCalculated = calculateOrderTotalWithPayment(tOrder, menuItems);
+                        const tTotal = tCalculated.total;
+                        const isReady = tOrder.status === 'completed';
+                        const isPreparing = tOrder.status === 'preparing';
+
+                        return (
+                          <div
+                            key={tOrder.id}
+                            id={`takeout-highlight-card-${tOrder.id}`}
+                            onClick={() => setSelectedCashierOrderId(tOrder.id)}
+                            className={`bg-zinc-950/90 border rounded-xl p-3.5 flex flex-col justify-between transition hover:border-purple-400 hover:bg-purple-950/30 cursor-pointer relative shadow group ${
+                              selectedCashierOrderId === tOrder.id ? 'border-[#E5B453] ring-1 ring-[#E5B453]' : 'border-purple-500/35'
+                            }`}
+                          >
+                            <div>
+                              <div className="flex items-center justify-between gap-2 border-b border-white/5 pb-2">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="font-mono text-xs font-black text-purple-300 bg-purple-500/20 border border-purple-500/30 px-2 py-0.5 rounded">
+                                    🛍️ {tOrder.tableNumber}
+                                  </span>
+                                  <span className="font-mono text-[10px] text-zinc-400">
+                                    #{tOrder.id}
+                                  </span>
+                                </div>
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border font-mono ${
+                                  isReady 
+                                    ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30 animate-pulse' 
+                                    : isPreparing 
+                                      ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' 
+                                      : 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+                                }`}>
+                                  {isReady ? '✨ 廚房已備妥' : isPreparing ? '👨‍🍳 備餐製作中' : '⏳ 待廚房接單'}
+                                </span>
+                              </div>
+
+                              <div className="mt-2.5 space-y-1.5 text-xs text-zinc-300">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-zinc-400 flex items-center gap-1">
+                                    <User size={12} className="text-purple-400" />
+                                    <span>顧客姓名:</span>
+                                  </span>
+                                  <span className="font-extrabold text-white">
+                                    {tOrder.takeoutInfo?.customerName || tOrder.customerName || '外帶顧客'}
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-zinc-400 flex items-center gap-1">
+                                    <Phone size={12} className="text-purple-400" />
+                                    <span>聯絡電話:</span>
+                                  </span>
+                                  <span className="font-mono font-bold text-amber-300">
+                                    {tOrder.takeoutInfo?.phone || '未填寫'}
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-zinc-400 flex items-center gap-1">
+                                    <Clock size={12} className="text-purple-400" />
+                                    <span>預訂取餐:</span>
+                                  </span>
+                                  <span className="font-mono font-black text-[#E5B453] bg-[#E5B453]/10 px-1.5 py-0.2 rounded border border-[#E5B453]/20">
+                                    {tOrder.takeoutInfo?.pickupTime || '即刻取餐'}
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between pt-1 border-t border-white/5 text-[11px]">
+                                  <span className="text-zinc-400">餐點總計:</span>
+                                  <span className="text-zinc-300 font-medium truncate max-w-[150px]">
+                                    {(tOrder.items || []).reduce((acc, it) => acc + (it.qty || 1), 0)} 件商品
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="mt-3 pt-2.5 border-t border-dashed border-white/10 flex items-center justify-between gap-2">
+                              <div className="font-mono font-extrabold text-sm text-[#E5B453]">
+                                NT$ {tTotal.toLocaleString()}
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  id={`takeout-quick-detail-${tOrder.id}`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setTakeoutDetailModalOrder(tOrder);
+                                  }}
+                                  className="px-2.5 py-1 bg-purple-500/20 hover:bg-purple-500/40 text-purple-200 border border-purple-500/40 rounded-lg text-[11px] font-bold transition flex items-center gap-1 cursor-pointer active:scale-95"
+                                >
+                                  <FileText size={12} />
+                                  <span>明細/聯絡</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  id={`takeout-quick-pay-${tOrder.id}`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedCashierOrderId(tOrder.id);
+                                  }}
+                                  className="px-2.5 py-1 bg-[#E5B453] hover:bg-amber-400 text-zinc-950 font-black rounded-lg text-[11px] transition shadow flex items-center gap-0.5 cursor-pointer active:scale-95"
+                                >
+                                  <span>收銀結帳</span>
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 {/* Sub-Queue Filter Tabs */}
                 <div className="flex flex-wrap gap-1 mt-3 mb-3">
                   {[
@@ -4009,6 +4155,38 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                                 </div>
                               )}
 
+                              {!isDineIn && (
+                                <div className="mt-2 text-[10px] text-purple-200 space-y-1 bg-purple-950/40 p-2.5 rounded-lg border border-purple-500/30">
+                                  <div className="flex justify-between items-center">
+                                    <span className="text-zinc-400 flex items-center gap-1">
+                                      <User size={11} className="text-purple-400" />
+                                      <span>顧客姓名:</span>
+                                    </span>
+                                    <span className="font-extrabold text-white">
+                                      {order.takeoutInfo?.customerName || order.customerName || '外帶顧客'}
+                                    </span>
+                                  </div>
+                                  <div className="flex justify-between items-center">
+                                    <span className="text-zinc-400 flex items-center gap-1">
+                                      <Phone size={11} className="text-purple-400" />
+                                      <span>聯絡電話:</span>
+                                    </span>
+                                    <span className="font-mono font-bold text-amber-300">
+                                      {order.takeoutInfo?.phone || '未留電話'}
+                                    </span>
+                                  </div>
+                                  <div className="flex justify-between items-center">
+                                    <span className="text-zinc-400 flex items-center gap-1">
+                                      <Clock size={11} className="text-purple-400" />
+                                      <span>預訂取餐:</span>
+                                    </span>
+                                    <span className="font-mono font-black text-[#E5B453] bg-[#E5B453]/10 px-1 py-0.2 rounded border border-[#E5B453]/20">
+                                      {order.takeoutInfo?.pickupTime || '即刻自取'}
+                                    </span>
+                                  </div>
+                                </div>
+                              )}
+
                               {showDineInAlert && (
                                 <div className="mt-2.5 p-2 bg-rose-500/10 border border-rose-500/30 text-rose-400 text-[11px] font-extrabold rounded-lg animate-pulse text-center leading-normal">
                                   🚨 未達到低消，用餐時間結束
@@ -4023,6 +4201,21 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                                   }).join(', ')}
                                 </p>
                               </div>
+
+                              {!isDineIn && (
+                                <button
+                                  type="button"
+                                  id={`btn-inspect-takeout-${order.id}`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setTakeoutDetailModalOrder(order);
+                                  }}
+                                  className="w-full mt-2.5 py-1.5 bg-purple-600/20 hover:bg-purple-600/35 text-purple-200 border border-purple-500/30 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 active:scale-95 cursor-pointer shadow-sm"
+                                >
+                                  <Phone size={12} className="text-purple-300" />
+                                  <span>📱 查看外帶詳情 / 聯絡資料</span>
+                                </button>
+                              )}
                             </div>
 
                             <div className="mt-3.5 pt-2 border-t border-dashed border-white/5 flex items-center justify-between text-[11px] text-zinc-400">
@@ -6901,8 +7094,224 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                 </div>
               </div>
             </div>
-          </div>
-        )}
+
+          {/* 🥡 TAKE-OUT CUSTOMER DETAIL MODAL DIALOG */}
+          {takeoutDetailModalOrder && (
+            <div
+              id="cashier-takeout-detail-modal"
+              className="fixed inset-0 bg-black/85 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 overflow-y-auto animate-fadeIn"
+              onClick={() => setTakeoutDetailModalOrder(null)}
+            >
+              <div
+                className="bg-[#121212] border border-purple-500/40 rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-5 text-left relative overflow-hidden font-sans my-8"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Modal Header */}
+                <div className="flex items-start justify-between border-b border-purple-500/20 pb-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-2xl">🥡</span>
+                      <h3 className="text-lg font-black text-white flex items-center gap-2">
+                        <span>外帶顧客資料與餐點明細</span>
+                      </h3>
+                    </div>
+                    <div className="flex items-center gap-2 font-mono text-xs text-purple-300">
+                      <span className="bg-purple-500/20 border border-purple-500/40 px-2 py-0.5 rounded font-bold">
+                        🛍️ 桌號/外帶號: {takeoutDetailModalOrder.tableNumber}
+                      </span>
+                      <span className="text-zinc-400">訂單編號: #{takeoutDetailModalOrder.id}</span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    id="btn-close-takeout-modal"
+                    onClick={() => setTakeoutDetailModalOrder(null)}
+                    className="text-zinc-400 hover:text-white bg-white/5 hover:bg-white/10 rounded-full p-2 transition cursor-pointer"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                {/* Customer Contact & Pickup Info Card */}
+                <div className="bg-gradient-to-br from-purple-950/40 to-zinc-900/60 border border-purple-500/30 rounded-xl p-4 space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-purple-300 shrink-0">
+                        <User size={16} />
+                      </div>
+                      <div>
+                        <div className="text-[11px] text-zinc-400 font-medium">顧客姓名 / 稱謂</div>
+                        <div className="font-extrabold text-white text-base">
+                          {takeoutDetailModalOrder.takeoutInfo?.customerName || takeoutDetailModalOrder.customerName || '外帶顧客 (未填)'}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-purple-300 shrink-0">
+                        <Clock size={16} />
+                      </div>
+                      <div>
+                        <div className="text-[11px] text-zinc-400 font-medium">預約取餐時間 (Pickup Time)</div>
+                        <div className="font-black text-[#E5B453] font-mono text-base">
+                          {takeoutDetailModalOrder.takeoutInfo?.pickupTime || '即刻取餐 (隨到隨取)'}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Phone action bar */}
+                  <div className="pt-2.5 border-t border-purple-500/20 flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Phone size={14} className="text-purple-400" />
+                      <span className="text-xs text-zinc-400 font-medium">聯絡電話:</span>
+                      <span className="font-mono text-sm font-black text-amber-300 tracking-wider">
+                        {takeoutDetailModalOrder.takeoutInfo?.phone || '未填寫電話'}
+                      </span>
+                    </div>
+
+                    {takeoutDetailModalOrder.takeoutInfo?.phone && (
+                      <div className="flex items-center gap-2">
+                        <a
+                          href={`tel:${takeoutDetailModalOrder.takeoutInfo.phone}`}
+                          className="px-2.5 py-1 bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-300 border border-emerald-500/30 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                        >
+                          <Phone size={12} />
+                          <span>撥打電話</span>
+                        </a>
+                        <button
+                          type="button"
+                          id="btn-copy-takeout-phone"
+                          onClick={() => {
+                            if (takeoutDetailModalOrder.takeoutInfo?.phone) {
+                              navigator.clipboard.writeText(takeoutDetailModalOrder.takeoutInfo.phone);
+                              setCopiedTakeoutPhone(true);
+                              setTimeout(() => setCopiedTakeoutPhone(false), 2000);
+                            }
+                          }}
+                          className="px-2.5 py-1 bg-purple-600/20 hover:bg-purple-600/40 text-purple-200 border border-purple-500/30 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                        >
+                          {copiedTakeoutPhone ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
+                          <span>{copiedTakeoutPhone ? '已複製電話！' : '一鍵複製'}</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Fulfillment Status Banner */}
+                  <div className="pt-2 border-t border-purple-500/20 flex items-center justify-between text-xs">
+                    <span className="text-zinc-400">目前廚房製作進度:</span>
+                    <span className={`px-2.5 py-0.5 rounded-full font-bold border font-mono ${
+                      takeoutDetailModalOrder.status === 'completed'
+                        ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
+                        : takeoutDetailModalOrder.status === 'preparing'
+                          ? 'bg-blue-500/20 text-blue-400 border-blue-500/40'
+                          : 'bg-amber-500/20 text-amber-400 border-amber-500/40'
+                    }`}>
+                      {takeoutDetailModalOrder.status === 'completed'
+                        ? '✨ 廚房已備妥 (可通知顧客取餐)'
+                        : takeoutDetailModalOrder.status === 'preparing'
+                          ? '👨‍🍳 備餐製作中'
+                          : '⏳ 待廚房接單製作'}
+                    </span>
+                  </div>
+
+                  {/* Customer Quick Notes / Remarks */}
+                  {(takeoutDetailModalOrder.quickNotes || (takeoutDetailModalOrder as any).feedback) && (
+                    <div className="p-2.5 bg-black/40 rounded-lg border border-white/5 text-xs text-zinc-300">
+                      <span className="text-amber-400 font-bold">📝 備註事項: </span>
+                      <span>{takeoutDetailModalOrder.quickNotes || (takeoutDetailModalOrder as any).feedback}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Itemized Order List */}
+                <div className="space-y-2">
+                  <h4 className="text-xs font-black text-zinc-300 uppercase tracking-wider flex items-center justify-between">
+                    <span>餐點商品清單 ({takeoutDetailModalOrder.items?.length || 0} 品項)</span>
+                    <span className="font-mono text-zinc-400">
+                      共 {(takeoutDetailModalOrder.items || []).reduce((acc, it) => acc + (it.qty || 1), 0)} 份
+                    </span>
+                  </h4>
+
+                  <div className="bg-zinc-950 rounded-xl border border-white/10 divide-y divide-white/5 max-h-56 overflow-y-auto pr-1">
+                    {(takeoutDetailModalOrder.items || []).map((item, idx) => {
+                      const itemName = typeof item.name === 'object'
+                        ? (getLocalizedText(item.name, currentLang) || '餐點')
+                        : (item.name || '餐點');
+                      const itemSubtotal = (item.price || 0) * (item.qty || 1);
+
+                      return (
+                        <div key={idx} className="p-3 flex items-start justify-between gap-3 text-xs">
+                          <div className="space-y-1">
+                            <div className="font-bold text-white text-sm flex items-center gap-2">
+                              <span>{itemName}</span>
+                              <span className="font-mono text-xs font-black text-purple-300 bg-purple-500/20 px-1.5 py-0.2 rounded">
+                                x{item.qty || 1}
+                              </span>
+                            </div>
+                            {item.customizations && (
+                              <div className="text-[11px] text-zinc-400 space-x-2">
+                                {item.customizations.spiciness && <span>🌶️ {item.customizations.spiciness}</span>}
+                                {item.customizations.soupBase && <span>🥣 {item.customizations.soupBase}</span>}
+                                {item.customizations.noodleType && <span>🍜 {item.customizations.noodleType}</span>}
+                                {item.customizations.notes && <span className="text-amber-300">({item.customizations.notes})</span>}
+                              </div>
+                            )}
+                          </div>
+                          <div className="text-right shrink-0 font-mono">
+                            <div className="font-bold text-white">NT$ {itemSubtotal.toLocaleString()}</div>
+                            <div className="text-[10px] text-zinc-500">NT$ {item.price || 0} /份</div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Financial Summary & Actions */}
+                {(() => {
+                  const calculated = calculateOrderTotalWithPayment(takeoutDetailModalOrder, menuItems);
+                  const total = calculated.total;
+
+                  return (
+                    <div className="space-y-4 pt-2 border-t border-white/10">
+                      <div className="flex items-center justify-between bg-white/5 p-3.5 rounded-xl border border-white/5">
+                        <span className="font-black text-zinc-300 text-sm">訂單結帳應收總金額:</span>
+                        <span className="font-mono font-black text-2xl text-[#E5B453]">
+                          NT$ {total.toLocaleString()}
+                        </span>
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row items-center justify-end gap-2.5">
+                        <button
+                          type="button"
+                          id="btn-close-takeout-modal-secondary"
+                          onClick={() => setTakeoutDetailModalOrder(null)}
+                          className="w-full sm:w-auto px-5 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold rounded-xl text-xs transition cursor-pointer"
+                        >
+                          關閉 (Close)
+                        </button>
+                        <button
+                          type="button"
+                          id="btn-proceed-cashier-from-modal"
+                          onClick={() => {
+                            setSelectedCashierOrderId(takeoutDetailModalOrder.id);
+                            setTakeoutDetailModalOrder(null);
+                          }}
+                          className="w-full sm:w-auto px-6 py-2.5 bg-gradient-to-r from-amber-500 to-[#E5B453] hover:from-amber-400 hover:to-amber-300 text-zinc-950 font-black rounded-xl text-xs transition shadow-lg flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+                        >
+                          <span>⚡ 前往收銀台結帳 (Proceed to Checkout)</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
 
       {/* ==================== TAB 2: ACCOUNTING LOG CHART & SINGLE DRILLDOWN ==================== */}
