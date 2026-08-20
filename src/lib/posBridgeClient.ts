@@ -142,7 +142,8 @@ export async function printViaBridge(
   options: POSPrintOptions,
   baseUrl: string = DEFAULT_POS_BRIDGE_URL
 ): Promise<POSBridgeResponse> {
-  const targetPort = normalizePort(options.port);
+  const isIp = options.connectionType === 'IP' || (!options.connectionType && !!options.ip);
+  const targetPort = isIp ? undefined : normalizePort(options.port);
   const cleanText = options.text ? cleanPrintTextForWindows(options.text) : options.text;
   try {
     const cleanUrl = baseUrl.replace(/\/+$/, '');
@@ -171,7 +172,7 @@ export async function printViaBridge(
       success: !!data.success,
       message: data.message || '列印指令已成功寫入本機印表機埠口',
       bytesSent: data.bytesSent,
-      port: data.port || targetPort,
+      port: data.port || (isIp ? options.ip : targetPort),
       drawerOpened: data.drawerOpened
     };
   } catch (err: any) {
@@ -179,7 +180,7 @@ export async function printViaBridge(
     return {
       success: false,
       message: `本機 POS 橋接器列印失敗 (${baseUrl}): ${err?.message || err}`,
-      port: targetPort
+      port: isIp ? options.ip : targetPort
     };
   }
 }
