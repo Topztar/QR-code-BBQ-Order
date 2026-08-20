@@ -1905,6 +1905,8 @@ export default function App() {
 
       // Step 1: Direct Local Check-in POS Bridge Print (http://127.0.0.1:8060)
       if (typeof window !== 'undefined') {
+        const activeBridgeUrl = localStorage.getItem('pos-bridge-url') || DEFAULT_POS_BRIDGE_URL;
+
         if (isKitchen) {
           try {
             const kSampleText = [
@@ -1927,7 +1929,7 @@ export default function App() {
               connectionType: kitchenConn,
               target: 'kitchen',
               autoOpenDrawer: false
-            });
+            }, activeBridgeUrl);
 
             if (kRes.success) {
               bridgeSuccesses.push(`🍳 廚房測試頁已成功送出 (${kitchenConn === 'IP' ? kitchenIp : kitchenPort})`);
@@ -1961,7 +1963,7 @@ export default function App() {
               connectionType: billConn,
               target: 'bill',
               autoOpenDrawer: true
-            });
+            }, activeBridgeUrl);
 
             if (bRes.success) {
               bridgeSuccesses.push(`🧾 前台測試頁已成功送出 (${billConn === 'IP' ? billIp : billPort})`);
