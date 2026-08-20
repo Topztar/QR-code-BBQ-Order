@@ -220,7 +220,7 @@ interface ManagerDashboardProps {
   popularItemIds?: string[];
   onUpdatePopularItemIds?: (ids: string[]) => Promise<{ success: boolean; error?: string }>;
   printerIp?: string;
-  onPrintTestPage?: (target?: 'kitchen' | 'bill' | 'all') => Promise<{ success: boolean; error?: string }>;
+  onPrintTestPage?: (target?: 'kitchen' | 'bill' | 'all', settings?: { kitchen?: any; bill?: any }) => Promise<{ success: boolean; error?: string; message?: string }>;
   onAddIngredient?: (
     id: string,
     name: { zh: string; en?: string },
@@ -9602,11 +9602,11 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                           onConfirm: async () => {
                             if (onPrintTestPage) {
                               try {
-                                const res = await onPrintTestPage('kitchen');
+                                const res = await onPrintTestPage('kitchen', { kitchen: kitchenPrinter, bill: billPrinter });
                                 if (res.success) {
-                                  alert('✓ 🍳 廚房測試列印請求已成功發送至 IP 印表機！');
+                                  alert(`✓ 🍳 廚房測試列印請求已成功送出！\n${res.message || ''}`);
                                 } else {
-                                  alert(`⚠️ 列印失敗: ${res.error || '無法存取設備'}`);
+                                  alert(`⚠️ 列印失敗:\n${res.error || '無法存取設備，請確認本機 POS 橋接器 (127.0.0.1:8060) 或印表機 IP 連線'}`);
                                 }
                               } catch (_err) {
                                 alert('⚠️ 列印失敗，連線異常');
@@ -9896,11 +9896,11 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                           onConfirm: async () => {
                             if (onPrintTestPage) {
                               try {
-                                const res = await onPrintTestPage('bill');
+                                const res = await onPrintTestPage('bill', { kitchen: kitchenPrinter, bill: billPrinter });
                                 if (res.success) {
-                                  alert('✓ 🧾 前台收銀測試列印請求已成功發送至 LPT 埠 (LPT1:)！');
+                                  alert(`✓ 🧾 前台收銀測試列印請求已成功送出！\n${res.message || ''}`);
                                 } else {
-                                  alert(`⚠️ 列印失敗: ${res.error || '無法存取設備'}`);
+                                  alert(`⚠️ 列印失敗:\n${res.error || '無法存取設備，請確認本機 POS 橋接器 (127.0.0.1:8060) 或 LPT 埠口連線'}`);
                                 }
                               } catch (_err) {
                                 alert('⚠️ 列印失敗，連線異常');

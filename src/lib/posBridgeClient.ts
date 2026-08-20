@@ -20,10 +20,24 @@ export interface POSPrintOptions {
   base64?: string;
   action?: 'print' | 'open_drawer';
   port?: string;
+  ip?: string;
+  connectionType?: 'IP' | 'USB' | 'LPT';
+  target?: 'kitchen' | 'bill' | 'all';
   autoOpenDrawer?: boolean;
 }
 
 export const DEFAULT_POS_BRIDGE_URL = 'http://127.0.0.1:8060';
+
+/**
+ * 清理並標準化熱感應印表機列印文字，過濾特殊 Emoji 以免在 Windows 8 GBK (CP936) / Big5 環境下造成 Python 轉碼崩潰
+ */
+export function cleanPrintTextForWindows(text: string): string {
+  if (!text) return '';
+  return text
+    .replace(/[\u{1F300}-\u{1F9FF}]|[\u{1F600}-\u{1F64F}]|[\u{1F680}-\u{1F6FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/gu, '')
+    .replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, '')
+    .replace(/[\uFE00-\uFE0F]/g, '');
+}
 
 /**
  * 標準化本機硬體埠口名稱 (例如將 LPT1 轉為 LPT1:)
@@ -129,6 +143,7 @@ export async function printViaBridge(
   baseUrl: string = DEFAULT_POS_BRIDGE_URL
 ): Promise<POSBridgeResponse> {
   const targetPort = normalizePort(options.port);
+  const cleanText = options.text ? cleanPrintTextForWindows(options.text) : options.text;
   try {
     const cleanUrl = baseUrl.replace(/\/+$/, '');
     const controller = new AbortController();
@@ -138,10 +153,13 @@ export async function printViaBridge(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        text: options.text,
+        text: cleanText,
         hex: options.hex,
         base64: options.base64,
         port: targetPort,
+        ip: options.ip,
+        connectionType: options.connectionType || (options.ip ? 'IP' : 'LPT'),
+        target: options.target || 'bill',
         autoOpenDrawer: options.autoOpenDrawer ?? false
       }),
       signal: controller.signal

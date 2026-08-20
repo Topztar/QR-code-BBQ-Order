@@ -8,7 +8,7 @@ import { collection, onSnapshot, query, orderBy, limit, where } from 'firebase/f
 import { TRANSLATIONS, INITIAL_MENU, INITIAL_CATEGORIES } from './data';
 import { LanguageSelector } from './components/LanguageSelector';
 import { ChefHat, Smartphone, BarChart3, UtensilsCrossed, LogOut, Lock, Phone, MapPin, Eye, EyeOff, Coins, Monitor } from 'lucide-react';
-import { printViaBridge } from './lib/posBridgeClient';
+import { printViaBridge, normalizePort } from './lib/posBridgeClient';
 
 const CustomerOrderView = lazy(() => import('./components/CustomerOrderView').then(m => ({ default: m.CustomerOrderView })));
 const KitchenDisplaySystem = lazy(() => import('./components/KitchenDisplaySystem').then(m => ({ default: m.KitchenDisplaySystem })));
@@ -1880,61 +1880,158 @@ export default function App() {
     }
   };
 
-  const handlePrintTestPage = async (target?: 'kitchen' | 'bill' | 'all') => {
+  const handlePrintTestPage = async (
+    target?: 'kitchen' | 'bill' | 'all',
+    customSettings?: { kitchen?: any; bill?: any }
+  ) => {
     try {
-      let data: any = null;
       const targetVal = typeof target === 'string' ? target : 'all';
-      
-      // Step 1: Direct Local POS Bridge print attempt (http://127.0.0.1:8060) - ONLY for bill/all
-      let bridgePrinted = false;
-      if (typeof window !== 'undefined' && (targetVal === 'bill' || targetVal === 'all')) {
-        try {
-          const sampleText = `================================\n  沙貝燒烤 SABAY BBQ 測試列印\n================================\n類別: 前台收銀結帳單 (LPT1:)\n時間: ${new Date().toLocaleString()}\n狀態: 系統連線與驅動測試正常\n================================\n`;
-          const bRes = await printViaBridge({
-            text: sampleText,
-            port: 'LPT1:',
-            autoOpenDrawer: targetVal === 'bill'
-          });
-          if (bRes.success) {
-            bridgePrinted = true;
-            console.log('[Print test page bridge success]', bRes.message);
+      const isKitchen = targetVal === 'kitchen' || targetVal === 'all';
+      const isBill = targetVal === 'bill' || targetVal === 'all';
+
+      const kitchenConfig = customSettings?.kitchen || {};
+      const billConfig = customSettings?.bill || {};
+
+      const kitchenIp = kitchenConfig.ip || printerIp || '192.168.123.100';
+      const kitchenPort = kitchenConfig.usbPort || 'USB001';
+      const kitchenConn = kitchenConfig.connectionType || 'IP';
+
+      const billPort = normalizePort(billConfig.usbPort || 'LPT1:');
+      const billIp = billConfig.ip || '192.168.1.102';
+      const billConn = billConfig.connectionType || 'LPT';
+
+      const bridgeSuccesses: string[] = [];
+      const bridgeWarnings: string[] = [];
+
+      // Step 1: Direct Local Check-in POS Bridge Print (http://127.0.0.1:8060)
+      if (typeof window !== 'undefined') {
+        if (isKitchen) {
+          try {
+            const kSampleText = [
+              '================================',
+              '    SABAY BBQ KDS 測試頁',
+              '================================',
+              `類別: 廚房工作票 (${kitchenConn === 'IP' ? `IP ${kitchenIp}` : `Port ${kitchenPort}`})`,
+              `時間: ${new Date().toLocaleString()}`,
+              '品項: 1. 泰式烤豬肉串 x 2 (小辣)',
+              '      2. 泰式冬蔭功海鮮湯 x 1',
+              '================================',
+              '狀態: POS 橋接器通訊正常',
+              '================================\n\n'
+            ].join('\n');
+
+            const kRes = await printViaBridge({
+              text: kSampleText,
+              ip: kitchenConn === 'IP' ? kitchenIp : undefined,
+              port: kitchenConn === 'IP' ? undefined : kitchenPort,
+              connectionType: kitchenConn,
+              target: 'kitchen',
+              autoOpenDrawer: false
+            });
+
+            if (kRes.success) {
+              bridgeSuccesses.push(`🍳 廚房測試頁已成功送出 (${kitchenConn === 'IP' ? kitchenIp : kitchenPort})`);
+            } else {
+              bridgeWarnings.push(`🍳 廚房橋接: ${kRes.message}`);
+            }
+          } catch (e: any) {
+            bridgeWarnings.push(`🍳 廚房連線: ${e?.message || e}`);
           }
-        } catch {
-          // Local bridge unreachable
+        }
+
+        if (isBill) {
+          try {
+            const bSampleText = [
+              '================================',
+              '    SABAY BBQ 前台收銀測試頁',
+              '================================',
+              `類別: 前台帳單與收銀明細`,
+              `埠口: ${billConn === 'IP' ? `IP ${billIp}` : billPort}`,
+              `時間: ${new Date().toLocaleString()}`,
+              `型態: ${billConn} (硬體連動)`,
+              '================================',
+              '狀態: POS 橋接器與錢箱驅動就緒',
+              '================================\n\n'
+            ].join('\n');
+
+            const bRes = await printViaBridge({
+              text: bSampleText,
+              ip: billConn === 'IP' ? billIp : undefined,
+              port: billConn === 'IP' ? undefined : billPort,
+              connectionType: billConn,
+              target: 'bill',
+              autoOpenDrawer: true
+            });
+
+            if (bRes.success) {
+              bridgeSuccesses.push(`🧾 前台測試頁已成功送出 (${billConn === 'IP' ? billIp : billPort})`);
+            } else {
+              bridgeWarnings.push(`🧾 前台橋接: ${bRes.message}`);
+            }
+          } catch (e: any) {
+            bridgeWarnings.push(`🧾 前台連線: ${e?.message || e}`);
+          }
         }
       }
 
-      // Step 2: Server API dispatch & log recording
-      const res = await apiFetch('/api/printer/test', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ target: targetVal }),
-      });
-      if (res.ok) {
-        data = await res.json();
-      }
+      // If at least one bridge call succeeded, return success and asynchronously record logs
+      if (bridgeSuccesses.length > 0) {
+        apiFetch('/api/printer/test', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            target: targetVal,
+            settings: { kitchen: kitchenConfig, bill: billConfig },
+            bridgeSuccess: true
+          }),
+        }).catch(() => {});
 
-      if ((data && data.success) || bridgePrinted) {
-        await fetchData();
-        return { 
-          success: true, 
-          message: data?.message || (targetVal === 'kitchen' ? '廚房印表機 (IP) 測試指令已送出' : '測試頁已透過本機 POS 橋接器 (LPT1:) 成功送印！'), 
-          tcpLog: targetVal === 'kitchen' ? (data?.hardwareLogs?.kitchen || 'IP 印表機通訊成功') : (data?.hardwareLogs?.bill || 'LOCAL-PRINTER-POS-BRIDGE (127.0.0.1:8060) LPT1: 成功寫入')
+        return {
+          success: true,
+          message: bridgeSuccesses.join('\n')
         };
-      } else {
-        const text = res ? await res.text() : '';
-        let errorMsg = '列印測試頁失敗';
-        try {
-          const d = JSON.parse(text);
-          errorMsg = d.error || d.message || errorMsg;
-        } catch {
-          if (text) errorMsg = text;
-        }
-        return { success: false, error: errorMsg };
       }
+
+      // Step 2: Fallback to Server API dispatch
+      let data: any = null;
+      let res: Response | null = null;
+      try {
+        res = await apiFetch('/api/printer/test', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            target: targetVal,
+            settings: { kitchen: kitchenConfig, bill: billConfig }
+          }),
+        });
+        if (res.ok) {
+          data = await res.json();
+        }
+      } catch (err: any) {
+        console.warn('[Server API test page warning]:', err);
+      }
+
+      if (data && data.success) {
+        await fetchData();
+        return {
+          success: true,
+          message: data.message || '測試頁指令已成功送出！'
+        };
+      }
+
+      const serverErr = data?.error || (res ? `HTTP ${res.status}` : null);
+      const combinedErrMsg = [
+        ...bridgeWarnings,
+        serverErr ? `伺服器回應: ${serverErr}` : '本機 Check-in 橋接器未啟動 (請確認 http://127.0.0.1:8060)'
+      ].filter(Boolean).join('\n');
+
+      return {
+        success: false,
+        error: combinedErrMsg || '列印測試頁失敗，請確認印表機與本機 POS 橋接器狀態'
+      };
     } catch (err: any) {
       console.error('[Print test page error]', err);
-      return { success: false, error: err.message || '連線錯誤' };
+      return { success: false, error: err?.message || '連線錯誤' };
     }
   };
 

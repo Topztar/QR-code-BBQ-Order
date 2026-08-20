@@ -177,7 +177,7 @@ export async function sendToPosBridgeService(
       }
     }
     return null;
-  } catch (err: any) {
+  } catch (_err: any) {
     // POS Bridge offline or not listening on 8060
     return null;
   }
@@ -380,6 +380,21 @@ export async function triggerRealCashDrawer(settings: CashDrawerSettings): Promi
 }
 
 /**
+ * 安全編碼函式：優先 Big5，若含簡體或特殊字元則自動 fallback 至 GBK 或 UTF-8
+ */
+export function safeEncodeForPrinter(text: string): Buffer {
+  try {
+    return iconv.encode(text, 'big5');
+  } catch {
+    try {
+      return iconv.encode(text, 'gbk');
+    } catch {
+      return Buffer.from(text, 'utf-8');
+    }
+  }
+}
+
+/**
  * Print 80mm Kitchen Ticket over Network TCP Socket or Serial Port
  */
 export async function printKitchenTicket(
@@ -394,7 +409,7 @@ export async function printKitchenTicket(
   const cleanTicketText = sanitizeTextForThermalPrinter(ticketText);
   const ticketBuffer = Buffer.concat([
     ESC_POS_INIT,
-    iconv.encode(cleanTicketText, 'big5'),
+    safeEncodeForPrinter(cleanTicketText),
     Buffer.from('\n\n\n\n', 'utf-8'),
     ESC_POS_CUT
   ]);
@@ -422,7 +437,7 @@ export async function printCustomerReceipt(
   const cleanReceiptText = sanitizeTextForThermalPrinter(receiptText);
   const receiptBuffer = Buffer.concat([
     ESC_POS_INIT,
-    iconv.encode(cleanReceiptText, 'big5'),
+    safeEncodeForPrinter(cleanReceiptText),
     Buffer.from('\n\n\n', 'utf-8'),
     ESC_POS_CUT
   ]);

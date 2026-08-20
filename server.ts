@@ -1570,6 +1570,97 @@ app.post('/api/printer/print-receipt', async (req, res) => {
   });
 });
 
+// Printer Test Ticket Generator for local server
+app.post('/api/printer/test', async (req, res) => {
+  try {
+    const { target = 'all', settings: customSettings, bridgeSuccess } = req.body || {};
+    const effectiveKitchen = {
+      ...livePrinterSettings.kitchen,
+      ...(customSettings?.kitchen || {})
+    };
+    const effectiveBill = {
+      ...livePrinterSettings.bill,
+      ...(customSettings?.bill || {})
+    };
+
+    const isKitchen = target === 'kitchen' || target === 'all';
+    const isBill = target === 'bill' || target === 'all';
+
+    let kitchenResult = { success: true, log: '未選取廚房出單' };
+    let billResult = { success: true, log: '未選取前台出單' };
+
+    const testTime = new Date().toLocaleString();
+
+    if (!bridgeSuccess) {
+      if (isKitchen) {
+        const kitchenText = [
+          '================================',
+          '    SABAY BBQ KDS 測試頁',
+          '================================',
+          `出單類別: 廚房工作票 (${effectiveKitchen.connectionType || 'IP'})`,
+          `目標位址: ${effectiveKitchen.connectionType === 'IP' ? (effectiveKitchen.ip || livePrinterIp) : (effectiveKitchen.usbPort || 'USB001')}`,
+          `列印時間: ${testTime}`,
+          '測試品項: 泰式烤豬肉串 x 2 (小辣)',
+          '================================\n\n'
+        ].join('\n');
+
+        kitchenResult = await printKitchenTicket(kitchenText, {
+          ip: effectiveKitchen.ip || livePrinterIp,
+          port: effectiveKitchen.port || 9100,
+          connectionType: effectiveKitchen.connectionType || 'IP',
+          usbPort: effectiveKitchen.usbPort || 'USB001'
+        });
+      }
+
+      if (isBill) {
+        const billText = [
+          '================================',
+          '    SABAY BBQ 前台收銀測試頁',
+          '================================',
+          `出單類別: 前台帳單與收銀明細 (${effectiveBill.connectionType || 'LPT'})`,
+          `實體埠口: ${effectiveBill.usbPort || 'LPT1:'}`,
+          `列印時間: ${testTime}`,
+          '錢箱連動: 支援 ESC/POS Pulse',
+          '================================\n\n'
+        ].join('\n');
+
+        billResult = await printCustomerReceipt(billText, {
+          ip: effectiveBill.ip || livePrinterIp,
+          port: effectiveBill.port || 9100,
+          connectionType: effectiveBill.connectionType || 'LPT',
+          usbPort: effectiveBill.usbPort || 'LPT1:',
+          cashDrawerEnabled: isBill
+        });
+      }
+    } else {
+      kitchenResult = { success: true, log: '已透過本機 POS 橋接器成功送印' };
+      billResult = { success: true, log: '已透過本機 POS 橋接器成功送印' };
+    }
+
+    printLogs.push({
+      id: `pr-${Date.now()}-test-${target}`,
+      timestamp: new Date().toLocaleTimeString(),
+      content: `[測試頁列印]: target=${target}\n廚房日誌: ${kitchenResult.log}\n前台日誌: ${billResult.log}`,
+      orderId: 'TEST-PAGE',
+      type: target === 'bill' ? 'customer' : 'kitchen'
+    });
+    if (printLogs.length > 100) printLogs = printLogs.slice(-100);
+    saveStateToDisk();
+
+    res.json({
+      success: (isKitchen ? kitchenResult.success : true) && (isBill ? billResult.success : true),
+      message: `測試頁 (${target}) 已成功處理！`,
+      hardwareLogs: {
+        kitchen: kitchenResult.log,
+        bill: billResult.log
+      }
+    });
+  } catch (error: any) {
+    console.error('Error in /api/printer/test:', error);
+    res.status(500).json({ error: error?.message || '伺服器端列印處理失敗' });
+  }
+});
+
 
 
 // Update printer/staff authentication PIN (used from Manager dashboard)

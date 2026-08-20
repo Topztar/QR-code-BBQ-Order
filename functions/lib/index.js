@@ -1558,8 +1558,9 @@ post('/printer/test', exports.requireStaffAuth, async (req, res) => {
 3. 泰文 🇹🇭 - ลาบหมูย่างส้มตำ${drawerNote}
 ========================================
     `.trim();
-        let tcpResult = { success: true, log: 'Cloud Function 處理完成' };
-        if (target === 'kitchen' || target === 'all') {
+        const bridgeSuccess = req.body?.bridgeSuccess === true;
+        let tcpResult = { success: true, log: bridgeSuccess ? '已由前端透過本機 Check-in POS 橋接器 (127.0.0.1:8060) 成功寫入' : 'Cloud Function 處理完成' };
+        if (!bridgeSuccess && (target === 'kitchen' || target === 'all')) {
             const kitchenIp = livePrinterSettings.kitchen?.ip || livePrinterIp;
             tcpResult = await sendToNetworkPrinter(kitchenIp, 9100, testTicket);
         }
@@ -1568,7 +1569,7 @@ post('/printer/test', exports.requireStaffAuth, async (req, res) => {
         printLogs.push({
             id: `pr-${Date.now()}-test`,
             timestamp: new Date().toLocaleTimeString(),
-            content: `${testTicket}\n\n[TCP 印表機傳送日誌]: ${tcpResult.log}`,
+            content: `${testTicket}\n\n[印表機傳送日誌]: ${tcpResult.log}`,
             orderId: 'TEST-PAGE',
             type: target === 'bill' ? 'customer' : 'kitchen'
         });
