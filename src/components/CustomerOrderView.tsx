@@ -285,9 +285,16 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
     return false;
   }, [isOpen, servicePaused, operatingHours, nowTimestamp]);
 
+  const isTakeoutMode = useMemo(() => {
+    const params = new URLSearchParams(window.location.search);
+    const hasTakeoutParam = params.has('takeout');
+    const tableClean = (selectedTable || '').toLowerCase();
+    return isOrderRoute || hasTakeoutParam || tableClean.includes('takeout') || tableClean.includes('外帶') || tableClean.includes('take-out');
+  }, [selectedTable, isOrderRoute]);
+
   const isStoreCurrentlyOpen = useMemo(() => {
-    // 預約專屬連結特權：不受營業時間或暫停服務限制，可自由點餐與瀏覽（需專屬通道有效）
-    if (validUrlReservationParams?.reservationNo) return true;
+    // 預約專屬連結特權 或 外帶模式：不受營業時間或暫停服務限制，可自由點餐與瀏覽
+    if (validUrlReservationParams?.reservationNo || isTakeoutMode) return true;
 
     if (servicePaused || !isOpen) return false;
 
@@ -340,13 +347,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
     }
 
     return false;
-  }, [isOpen, servicePaused, restDays, operatingHours, nowTimestamp, urlReservationParams, isHasReservation]);
-  const isTakeoutMode = useMemo(() => {
-    const params = new URLSearchParams(window.location.search);
-    const hasTakeoutParam = params.has('takeout');
-    const tableClean = (selectedTable || '').toLowerCase();
-    return isOrderRoute || hasTakeoutParam || tableClean.includes('takeout') || tableClean.includes('外帶') || tableClean.includes('take-out');
-  }, [selectedTable, isOrderRoute]);
+  }, [isOpen, servicePaused, restDays, operatingHours, nowTimestamp, urlReservationParams, isHasReservation, isTakeoutMode]);
 
   useEffect(() => {
     if (isOrderRoute) {
@@ -414,6 +415,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
   const [takeoutCustomerName, setTakeoutCustomerName] = useState('');
   const [takeoutPhone, setTakeoutPhone] = useState('');
   const [takeoutPickupTime, setTakeoutPickupTime] = useState('18:00');
+  const [takeoutTimeError, setTakeoutTimeError] = useState<string | null>(null);
 
   const isResDateValid = useMemo(() => {
     if (!resDate) return true;
@@ -1863,14 +1865,6 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
               <button
                 type="button"
                 onClick={async () => {
-                  if (pincodeInput === 'FSY20260606') {
-                    setIsMerchantMode(true);
-                    setShowPasscodeModal(false);
-                    setPincodeInput('');
-                    setPincodeError(false);
-                    return;
-                  }
-
                   try {
                     const res = await fetch('/api/staff/pin/verify', {
                       method: 'POST',
@@ -1879,6 +1873,10 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                     });
                     
                     if (res.ok) {
+                      const data = await res.json();
+                      if (data?.access_token) {
+                        localStorage.setItem('sabay_jwt_token', data.access_token);
+                      }
                       setIsMerchantMode(true);
                       setShowPasscodeModal(false);
                       setPincodeInput('');
@@ -3124,7 +3122,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
               </div>
               <div className="text-left">
                 <h4 className={`font-black text-sm sm:text-base ${isSimplifiedMode ? 'text-black' : 'text-zinc-100'}`}>
-                  {currentLang === 'zh' ? '🎉 餐點已加入購物車' : currentLang === 'en' ? '🎉 Added to Cart' : currentLang === 'th' ? '🎉 เพิ่มลงตะกร้าแล้ว' : currentLang === 'ja' ? '🎉 カートに追加しました' : currentLang === 'ko' ? '🎉 장바구니에 추가됨' : '🎉 Đã thêm vào giỏ hàng'}
+                  {currentLang === 'zh' ? '🎉 餐點已加入購物車' : currentLang === 'en' ? '🎉 Added to Cart' : currentLang === 'th' ? '🎉 เพิ่มลงตะกร้าแล้ว' : currentLang === 'ja' ? '🎉 カートに追加しました' : currentLang === 'ko' ? '🎉 장바구니에 추가됨' : currentLang === 'ru' ? '🎉 Добавлено в корзину' : currentLang === 'es' ? '🎉 Añadido al carrito' : '🎉 Đã thêm vào giỏ hàng'}
                 </h4>
                 <p className="text-[10px] text-zinc-500 font-mono">Successfully Added to Cart</p>
               </div>
@@ -3140,7 +3138,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                 <span className={`font-mono text-xs font-bold leading-none px-2.5 py-1 rounded shrink-0 ${
                   isSimplifiedMode ? 'bg-[#FFA500] text-black font-extrabold border border-black' : 'bg-[#E5B453]/20 text-[#E5B453]'
                 }`}>
-                  {hoverCartItem.qty} {currentLang === 'zh' ? '份' : currentLang === 'en' ? 'portion(s)' : currentLang === 'th' ? 'ที่' : currentLang === 'ja' ? '点' : currentLang === 'ko' ? '개' : 'phần'}
+                  {hoverCartItem.qty} {currentLang === 'zh' ? '份' : currentLang === 'en' ? 'portion(s)' : currentLang === 'th' ? 'ที่' : currentLang === 'ja' ? '点' : currentLang === 'ko' ? '개' : currentLang === 'ru' ? 'порц.' : currentLang === 'es' ? 'porción(es)' : 'phần'}
                 </span>
               </div>
               
@@ -3153,7 +3151,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                 )}
                 {hoverCartItem.customization.soupBase === 'coconut-milk' && (
                   <span className={`text-[10px] px-1.5 py-0.5 rounded ${isSimplifiedMode ? 'bg-zinc-200 text-black border border-zinc-300 font-bold' : 'bg-white/5 border border-white/10 text-zinc-400'}`}>
-                    🥥 {currentLang === 'zh' ? '加椰奶' : currentLang === 'en' ? 'Add Coconut' : currentLang === 'th' ? 'ใส่กะทิ' : currentLang === 'ja' ? 'ココナッツ加' : currentLang === 'ko' ? '코코넛 추가' : 'Thêm cốt dừa'}
+                    🥥 {currentLang === 'zh' ? '加椰奶' : currentLang === 'en' ? 'Add Coconut' : currentLang === 'th' ? 'ใส่กะทิ' : currentLang === 'ja' ? 'ココナッツ加' : currentLang === 'ko' ? '코코넛 추가' : currentLang === 'ru' ? 'Кокосовое молоко' : currentLang === 'es' ? 'Con leche de coco' : 'Thêm cốt dừa'}
                   </span>
                 )}
                 {hoverCartItem.customization.spiciness > 0 && (
@@ -3185,6 +3183,10 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                 <>現在カートに計 <strong className={`font-mono ${isSimplifiedMode ? 'text-black text-sm font-black' : 'text-white'}`}>{cart.reduce((s, o) => s + o.qty, 0)}</strong> 点、合計 <strong className={`font-mono ${isSimplifiedMode ? 'text-amber-800 text-sm font-black' : 'text-[#E5B453]'}`}>NT$ {cartTotal}</strong></>
               ) : currentLang === 'ko' ? (
                 <>장바구니에 총 <strong className={`font-mono ${isSimplifiedMode ? 'text-black text-sm font-black' : 'text-white'}`}>{cart.reduce((s, o) => s + o.qty, 0)}</strong>개의 상품, 합계 <strong className={`font-mono ${isSimplifiedMode ? 'text-amber-800 text-sm font-black' : 'text-[#E5B453]'}`}>NT$ {cartTotal}</strong></>
+              ) : currentLang === 'ru' ? (
+                <>В корзине <strong className={`font-mono ${isSimplifiedMode ? 'text-black text-sm font-black' : 'text-white'}`}>{cart.reduce((s, o) => s + o.qty, 0)}</strong> блюд(а), итого <strong className={`font-mono ${isSimplifiedMode ? 'text-amber-800 text-sm font-black' : 'text-[#E5B453]'}`}>NT$ {cartTotal}</strong></>
+              ) : currentLang === 'es' ? (
+                <>Actualmente hay <strong className={`font-mono ${isSimplifiedMode ? 'text-black text-sm font-black' : 'text-white'}`}>{cart.reduce((s, o) => s + o.qty, 0)}</strong> plato(s) en el carrito, total <strong className={`font-mono ${isSimplifiedMode ? 'text-amber-800 text-sm font-black' : 'text-[#E5B453]'}`}>NT$ {cartTotal}</strong></>
               ) : (
                 <>Tổng cộng <strong className={`font-mono ${isSimplifiedMode ? 'text-black text-sm font-black' : 'text-white'}`}>{cart.reduce((s, o) => s + o.qty, 0)}</strong> món trong giỏ hàng, tổng tiền <strong className={`font-mono ${isSimplifiedMode ? 'text-amber-800 text-sm font-black' : 'text-[#E5B453]'}`}>NT$ {cartTotal}</strong></>
               )}
@@ -3201,7 +3203,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                     : 'bg-white/5 hover:bg-white/10 text-white/90 border border-white/10'
                 }`}
               >
-                {currentLang === 'zh' ? '繼續點餐' : currentLang === 'en' ? 'Continue' : currentLang === 'th' ? 'เลือกเมนูต่อ' : currentLang === 'ja' ? '注文を続ける' : currentLang === 'ko' ? '계속 주문' : 'Tiếp tục'}
+                {currentLang === 'zh' ? '繼續點餐' : currentLang === 'en' ? 'Continue' : currentLang === 'th' ? 'เลือกเมนูต่อ' : currentLang === 'ja' ? '注文を続ける' : currentLang === 'ko' ? '계속 주문' : currentLang === 'ru' ? 'Продолжить заказ' : currentLang === 'es' ? 'Seguir pidiendo' : 'Tiếp tục'}
               </button>
               <button
                 type="button"
@@ -3628,7 +3630,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                             <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono border ${
                               isSimplifiedMode ? 'bg-amber-200 text-amber-950 border-amber-400 font-extrabold' : 'bg-amber-500/10 text-amber-500 border-amber-500/15'
                             }`}>
-                              {currentLang === 'zh' ? '加椰奶(+50)' : currentLang === 'en' ? 'Add Coconut (+50)' : currentLang === 'th' ? 'ใส่กะทิ (+50)' : currentLang === 'ja' ? 'ココナッツ加 (+50)' : currentLang === 'ko' ? '코코넛 추가 (+50)' : 'Thêm cốt dừa (+50)'}
+                              {currentLang === 'zh' ? '加椰奶(+50)' : currentLang === 'en' ? 'Add Coconut (+50)' : currentLang === 'th' ? 'ใส่กะทิ (+50)' : currentLang === 'ja' ? 'ココナッツ加 (+50)' : currentLang === 'ko' ? '코코넛 추가 (+50)' : currentLang === 'ru' ? 'Кокосовое молоко (+50)' : currentLang === 'es' ? 'Leche de coco (+50)' : 'Thêm cốt dừa (+50)'}
                             </span>
                           )}
                           {item.customization.spiciness > 0 && (
@@ -3747,21 +3749,21 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
 
                     {promoCombo && promoComboDiscount > 0 && (
                       <div className="flex justify-between text-[#E5B453] font-bold py-0.5">
-                        <span className="flex items-center gap-1">🎁 {currentLang === 'zh' ? '優惠套餐自動折抵' : currentLang === 'en' ? 'Promo Combo Auto-Discount' : currentLang === 'th' ? 'ส่วนลดชุดโปรโมชั่นอัตโนมัติ' : currentLang === 'ja' ? 'お得セット自動割引' : currentLang === 'ko' ? '우대 콤보 자동 할인' : 'Ưu đãi combo tự động giảm'}</span>
+                        <span className="flex items-center gap-1">🎁 {currentLang === 'zh' ? '優惠套餐自動折抵' : currentLang === 'en' ? 'Promo Combo Auto-Discount' : currentLang === 'th' ? 'ส่วนลดชุดโปรโมชั่นอัตโนมัติ' : currentLang === 'ja' ? 'お得セット自動割引' : currentLang === 'ko' ? '우대 콤보 자동 할인' : currentLang === 'ru' ? 'Авто-скидка на комбо' : currentLang === 'es' ? 'Descuento automático de combo' : 'Ưu đãi combo tự động giảm'}</span>
                         <span className="font-mono">- NT$ {promoComboDiscount}</span>
                       </div>
                     )}
 
                     {lineProfile && (
                       <div className="flex justify-between text-[#4285F4] font-bold">
-                        <span>{currentLang === 'zh' ? 'Google 會員可累積點數' : currentLang === 'en' ? 'Google Member point accruable' : currentLang === 'th' ? 'สมาชิก Google สะสมคะแนนได้' : currentLang === 'ja' ? 'Google会員ポイント貯まります' : currentLang === 'ko' ? '구글 회원 포인트 적립 가능' : 'Thành viên Google tích điểm'}</span>
+                        <span>{currentLang === 'zh' ? 'Google 會員可累積點數' : currentLang === 'en' ? 'Google Member point accruable' : currentLang === 'th' ? 'สมาชิก Google สะสมคะแนนได้' : currentLang === 'ja' ? 'Google会員ポイント貯まります' : currentLang === 'ko' ? '구글 회원 포인트 적립 가능' : currentLang === 'ru' ? 'Начисление баллов Google' : currentLang === 'es' ? 'Acumula puntos de Google' : 'Thành viên Google tích điểm'}</span>
                         <span className="font-mono">+{Math.round(cartSubtotal * 0.1)} 點</span>
                       </div>
                     )}
 
                     {(paymentMethod === 'credit' || paymentMethod === 'twqr') && (
                       <div className={`flex justify-between ${isSimplifiedMode ? 'text-black font-extrabold' : 'text-white/60'}`}>
-                        <span>{paymentMethod === 'twqr' ? (currentLang === 'zh' ? 'TWQR支付預設服務費 (10%)' : 'TWQR Payment Fee (10%)') : (currentLang === 'zh' ? '信用卡服務加成 (10%)' : 'Credit Card Surcharge (10%)')}</span>
+                        <span>{paymentMethod === 'twqr' ? (currentLang === 'zh' ? 'TWQR支付預設服務費 (10%)' : currentLang === 'ru' ? 'Комиссия TWQR (10%)' : currentLang === 'es' ? 'Tarifa de servicio TWQR (10%)' : 'TWQR Payment Fee (10%)') : (currentLang === 'zh' ? '信用卡服務加成 (10%)' : currentLang === 'ru' ? 'Сбор по карте (10%)' : currentLang === 'es' ? 'Recargo por tarjeta (10%)' : 'Credit Card Surcharge (10%)')}</span>
                         <span className="font-mono">+ NT$ {expressFee}</span>
                       </div>
                     )}
@@ -3815,9 +3817,9 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                                     isSimplifiedMode ? 'bg-emerald-50 border-emerald-300 text-emerald-950 font-bold' : 'bg-emerald-500/5 border-emerald-500/15 text-emerald-400 font-bold'
                                   }`}>
                                     <div className="font-bold flex items-center justify-between text-[11px] text-emerald-400">
-                                      <span>🎉 【{combo.name}】{currentLang === 'zh' ? '已享有優惠折扣！' : currentLang === 'en' ? 'Discount Applied!' : currentLang === 'th' ? 'ได้รับส่วนลดแล้ว!' : currentLang === 'ja' ? '割引が適用されました！' : currentLang === 'ko' ? '할인이 적용되었습니다!' : 'Đã áp dụng giảm giá!'}</span>
+                                      <span>🎉 【{combo.name}】{currentLang === 'zh' ? '已享有優惠折扣！' : currentLang === 'en' ? 'Discount Applied!' : currentLang === 'th' ? 'ได้รับส่วนลดแล้ว!' : currentLang === 'ja' ? '割引が適用されました！' : currentLang === 'ko' ? '할인이 적용되었습니다!' : currentLang === 'ru' ? 'Скидка применена!' : currentLang === 'es' ? '¡Descuento aplicado!' : 'Đã áp dụng giảm giá!'}</span>
                                       <span className="font-mono text-xs">
-                                        {currentLang === 'zh' ? `符合 ${Math.floor(count / combo.requiredQty)} 組` : `${Math.floor(count / combo.requiredQty)} Set(s) Matched`}
+                                        {currentLang === 'zh' ? `符合 ${Math.floor(count / combo.requiredQty)} 組` : currentLang === 'ru' ? `Наборов: ${Math.floor(count / combo.requiredQty)}` : currentLang === 'es' ? `${Math.floor(count / combo.requiredQty)} conjunto(s)` : `${Math.floor(count / combo.requiredQty)} Set(s) Matched`}
                                       </span>
                                     </div>
                                     <p className="leading-tight opacity-85 font-sans">
@@ -3884,7 +3886,11 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                                 ? `${selectedTable} で注文を確定する (レジで決済)`
                                 : currentLang === 'ko'
                                   ? `${selectedTable} 주문 확인 (카운터에서 결제)`
-                                  : `Xác nhận ${selectedTable} và đặt món (Thanh toán tại quầy)`
+                                  : currentLang === 'ru'
+                                    ? `Подтвердить заказ (${selectedTable}) и оформить (Оплата на кассе)`
+                                    : currentLang === 'es'
+                                      ? `Confirmar ${selectedTable} y pedir (Pagar en caja)`
+                                      : `Xác nhận ${selectedTable} và đặt món (Thanh toán tại quầy)`
                         )
                       )
                     }
@@ -3971,7 +3977,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                                     {order.id}
                                   </span>
                                   <span className="text-xs text-white/40 pl-2">
-                                    {new Date(order.createdAt).toLocaleTimeString()} · {currentLang === 'vi' ? 'Bàn' : '桌次'}: {order.tableNumber} {currentLang === 'vi' ? '' : '桌'}
+                                    {new Date(order.createdAt).toLocaleTimeString()} · {order.takeoutInfo || order.tableNumber?.includes('外帶') || order.tableNumber === 'takeout' ? `單號: #${order.id}` : `${currentLang === 'vi' ? 'Bàn' : currentLang === 'ru' ? 'Стол' : currentLang === 'es' ? 'Mesa' : currentLang === 'en' ? 'Table' : '桌次'}: ${order.tableNumber} ${currentLang === 'zh' ? '桌' : ''}`}
                                   </span>
                                 </div>
 
@@ -4298,7 +4304,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                                 <span className="text-[11px] text-white/40 font-mono">
                                   {pastOrder.createdAt.includes('T') 
                                     ? pastOrder.createdAt.split('T')[0] 
-                                    : pastOrder.createdAt} • {currentLang === 'vi' ? 'Bàn' : '桌號'}: {pastOrder.tableNumber} {currentLang === 'vi' ? '' : '桌'}
+                                    : pastOrder.createdAt} • {pastOrder.takeoutInfo || pastOrder.tableNumber?.includes('外帶') || pastOrder.tableNumber === 'takeout' ? `單號: #${pastOrder.id}` : `${currentLang === 'vi' ? 'Bàn' : '桌號'}: ${pastOrder.tableNumber} ${currentLang === 'vi' ? '' : '桌'}`}
                                 </span>
                               </div>
                               <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#E5B453]/10 border border-[#E5B453]/25 text-[#E5B453]">
@@ -4652,7 +4658,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                               </h6>
                               <div className="flex items-center gap-1.5 py-0.5">
                                 <span className="bg-amber-500/10 text-[#E5B453] text-[9px] px-1.5 py-0.5 rounded border border-[#E5B453]/20 font-sans font-black select-none">
-                                  📈 {idx === 0 ? '98%' : idx === 1 ? '94%' : idx === 2 ? '91%' : '88%'} {currentLang === 'vi' ? 'Tỷ lệ đặt' : '點購率 (Order Rate)'}
+                                  📈 {idx === 0 ? '98%' : idx === 1 ? '94%' : idx === 2 ? '91%' : '88%'} {currentLang === 'zh' ? '點購率' : currentLang === 'en' ? 'Order Rate' : currentLang === 'th' ? 'อัตราสั่งซื้อ' : currentLang === 'ja' ? '注文率' : currentLang === 'ko' ? '주문율' : currentLang === 'ru' ? 'Частота заказа' : currentLang === 'es' ? 'Tasa de pedido' : 'Tỷ lệ đặt'}
                                 </span>
                               </div>
                               <p className="text-white/45 text-[9px] sm:text-xs leading-snug line-clamp-1">
@@ -5257,6 +5263,50 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                 if (!takeoutCustomerName || !takeoutPhone || !takeoutPickupTime) {
                   return;
                 }
+                // Validate takeout pickup time to align with active general operating hours
+                const [h, m] = takeoutPickupTime.split(':').map(Number);
+                const pickupMinutes = h * 60 + m;
+
+                const now = new Date();
+                const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
+                const localDate = new Date(utcTime + (3600000 * 8)); // Taiwan Time
+                const dayOfWeek = localDate.getDay();
+
+                const generalSlots = (operatingHours || []).filter((s: any) => s && s.isActive && !s.isReservableOnly);
+                if (generalSlots.length > 0) {
+                  let isValid = false;
+                  for (const slot of generalSlots) {
+                    if (slot.days && Array.isArray(slot.days) && !slot.days.includes(dayOfWeek)) {
+                      continue;
+                    }
+                    const [startH, startM] = (slot.start || '00:00').split(':').map(Number);
+                    const [endH, endM] = (slot.end || '23:59').split(':').map(Number);
+                    const startTotal = startH * 60 + startM;
+                    const endTotal = endH * 60 + endM;
+
+                    if (startTotal <= endTotal) {
+                      if (pickupMinutes >= startTotal && pickupMinutes <= endTotal) {
+                        isValid = true;
+                        break;
+                      }
+                    } else {
+                      if (pickupMinutes >= startTotal || pickupMinutes <= endTotal) {
+                        isValid = true;
+                        break;
+                      }
+                    }
+                  }
+
+                  if (!isValid) {
+                    const timeRangesStr = generalSlots
+                      .filter((s: any) => !s.days || s.days.includes(dayOfWeek))
+                      .map((s: any) => `${s.start}-${s.end}`)
+                      .join(', ');
+                    setTakeoutTimeError(`取餐時間必須在一般營業時間內 (${timeRangesStr || '本日無一般營業'})`);
+                    return;
+                  }
+                }
+                setTakeoutTimeError(null);
                 setShowTakeoutFormModal(false);
                 handleCheckout(true);
               }}
@@ -5297,9 +5347,12 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                     type="time"
                     required
                     value={takeoutPickupTime}
-                    onChange={e => setTakeoutPickupTime(e.target.value)}
+                    onChange={e => { setTakeoutPickupTime(e.target.value); setTakeoutTimeError(null); }}
                     className="w-full bg-black/40 border border-blue-500/20 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/50 transition-colors font-mono"
                   />
+                  {takeoutTimeError && (
+                    <p className="text-[11px] text-rose-400 font-bold mt-1 animate-pulse">{takeoutTimeError}</p>
+                  )}
                   <p className="text-[10px] text-amber-300/80 italic mt-1">※ 餐點製作約需 20~30 分鐘，敬請稍候。</p>
                 </div>
               </div>

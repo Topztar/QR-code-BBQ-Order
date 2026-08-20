@@ -2400,9 +2400,7 @@ app.post('/api/reservations', (req, res) => {
 
   // 1. Total Store Window Capacity Check
   const unavailableTableIds = new Set<string>();
-  let bookedGuestsInWindow = 0;
   for (const r of overlapping) {
-    bookedGuestsInWindow += (Number(r.guestCount) || 0);
     const rTables = String(r.tableNumber || '').split(',').map(t => t.trim()).filter(Boolean);
     rTables.forEach(tId => unavailableTableIds.add(tId));
   }
@@ -2650,7 +2648,7 @@ app.post('/api/staff/pin/check-path', (req, res) => {
 app.post('/api/staff/pin/verify', (req, res) => {
   const { pin } = req.body;
   if (pin === liveStaffPin) {
-    return res.json({ success: true });
+    return res.json({ success: true, access_token: 'valid-staff-session' });
   }
   return res.status(400).json({ success: false, error: '解鎖金鑰錯誤！' });
 });
@@ -2805,7 +2803,7 @@ app.get('/api/orders/history-check', (req, res) => {
 });
 
 app.get('/api/orders', (_req, res) => {
-  res.json(liveOrders.map(o => ({ id: o.id, tableNumber: o.tableNumber, items: o.items.map(i => ({ id: i.id, menuItemId: i.menuItemId, name: i.name, price: i.price, qty: i.qty, customization: i.customization, isPrepared: i.isPrepared, isCompleted: i.isCompleted })), subtotal: o.subtotal, serviceCharge: o.serviceCharge, total: o.total, status: o.status, createdAt: o.createdAt, customerName: o.customerName, paymentMethod: o.paymentMethod, isPaid: o.isPaid, guestCount: o.guestCount, quickNotes: o.quickNotes, isFlagged: o.isFlagged, flagReason: o.flagReason })));
+  res.json(liveOrders);
 });
 
 function getMappedTableId(inputTableId: string, availableTables: Array<{id: string}>): string {
@@ -2853,7 +2851,7 @@ function getMappedTableId(inputTableId: string, availableTables: Array<{id: stri
 
 // 4. Place New Order
 app.post('/api/orders', (req, res) => {
-  const { tableNumber, items, customerName, customerAvatar, paymentMethod, isMember, guestCount, clientOrderId, reservationNo, reservationDate, reservationTime } = req.body;
+  const { tableNumber, items, customerName, customerAvatar, paymentMethod, isMember, guestCount, clientOrderId, reservationNo, reservationDate, reservationTime, takeoutInfo } = req.body;
 
   if (clientOrderId) {
     const existing = liveOrders.find(o => o.clientOrderId === clientOrderId);
@@ -2869,9 +2867,10 @@ app.post('/api/orders', (req, res) => {
   }
 
   // Validate that the store is open (operating hours check)
-  // 預約專屬點餐 (reservationNo) 或 預約日期 (reservationDate) 豁免營業時間限制
+  // 預約專屬點餐 (reservationNo) 或 預約日期 (reservationDate) 或 外帶點餐 豁免營業時間限制
+  const isTakeoutOrder = !!(takeoutInfo || mappedTableNumber === '外帶' || mappedTableNumber === 'takeout');
   const isReservationOrder = !!(reservationNo || reservationDate);
-  if (!isReservationOrder && !isStoreOpen()) {
+  if (!isReservationOrder && !isTakeoutOrder && !isStoreOpen()) {
     return res.status(403).json({ error: '目前不在營業時間內（店鋪休息中），系統不開放下單點餐！' });
   }
 
@@ -3004,6 +3003,7 @@ app.post('/api/orders', (req, res) => {
     reservationNo: reservationNo || undefined,
     reservationDate: reservationDate || undefined,
     reservationTime: reservationTime || undefined,
+    takeoutInfo: takeoutInfo || undefined,
   };
 
   liveOrders.push(newOrder);
@@ -3551,7 +3551,7 @@ app.get('/api/analytics', (_req, res) => {
       const hour = new Date(order.createdAt).getHours();
       const slot = `${String(hour).padStart(2, '0')}:00`;
       hourlyMap[slot] = (hourlyMap[slot] || 0) + 1;
-    } catch (e) {}
+    } catch (_e) {}
   });
   const hourlyDistribution = Object.keys(hourlyMap).map(slot => ({
     timeSlot: slot,
@@ -3806,7 +3806,7 @@ app.get('/api/auth/google/url', (req, res) => {
       console.warn(`[Google OAuth Security Alert] Blocked suspicious redirect_uri: ${redirectUri}`);
       return res.status(400).json({ error: '安全性錯誤：未經核准的重新導向網址 / Unauthorized redirect host blocked for enterprise safety.' });
     }
-  } catch (err) {
+  } catch (_err) {
     return res.status(400).json({ error: '無效的重新導向網址 / Invalid redirect URI structure.' });
   }
 

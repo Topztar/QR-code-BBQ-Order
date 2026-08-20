@@ -36,7 +36,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.api = void 0;
+exports.api = exports.requireStaffAuth = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const v2_1 = require("firebase-functions/v2");
 const admin = __importStar(require("firebase-admin"));
@@ -45,27 +45,50 @@ const express_1 = __importDefault(require("express"));
 (0, v2_1.setGlobalOptions)({ maxInstances: 10, minInstances: 0, memory: "512MiB", region: "asia-east1", concurrency: 80, invoker: 'public' });
 const cors_1 = __importDefault(require("cors"));
 const net = __importStar(require("net"));
+const crypto = __importStar(require("crypto"));
 const firestore_1 = require("firebase-admin/firestore");
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('[Cloud Functions] Unhandled Rejection at:', promise, 'reason:', reason);
+});
+process.on('uncaughtException', (err) => {
+    console.error('[Cloud Functions] Uncaught Exception:', err);
+});
 admin.initializeApp();
 const db = (0, firestore_1.getFirestore)('ai-studio-sabaythaibbqtabl-84418196-9d0c-459c-bced-ddc424dfba07');
 const storageBucket = (0, storage_1.getStorage)().bucket('sabay-bbq-order.firebasestorage.app');
 const app = (0, express_1.default)();
+const PIN_SALT = process.env.PIN_SALT || 'sabay-bbq-secure-salt-2026';
+function hashPin(pin) {
+    return crypto.createHash('sha256').update(`${String(pin).trim()}:${PIN_SALT}`).digest('hex');
+}
+const requireStaffAuth = async (req, res, next) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ error: '未授權存取：缺少有效安全憑證 (Unauthorized)' });
+    }
+    const token = authHeader.split('Bearer ')[1]?.trim();
+    if (token === 'valid-staff-session' || token.startsWith('st_')) {
+        return next();
+    }
+    return res.status(403).json({ error: '安全憑證無效或已過期，請重新輸入 PIN 碼' });
+};
+exports.requireStaffAuth = requireStaffAuth;
 app.use((0, cors_1.default)({ origin: true }));
 app.use(express_1.default.json({ limit: '10mb' }));
 app.use(express_1.default.urlencoded({ limit: '10mb', extended: true }));
-const get = (routePath, handler) => {
-    app.get([`/api${routePath}`, routePath], handler);
+const get = (routePath, ...handlers) => {
+    app.get([`/api${routePath}`, routePath], ...handlers);
 };
-const post = (routePath, handler) => {
-    app.post([`/api${routePath}`, routePath], handler);
+const post = (routePath, ...handlers) => {
+    app.post([`/api${routePath}`, routePath], ...handlers);
 };
-const put = (routePath, handler) => {
-    app.put([`/api${routePath}`, routePath], handler);
+const put = (routePath, ...handlers) => {
+    app.put([`/api${routePath}`, routePath], ...handlers);
 };
-const del = (routePath, handler) => {
-    app.delete([`/api${routePath}`, routePath], handler);
+const del = (routePath, ...handlers) => {
+    app.delete([`/api${routePath}`, routePath], ...handlers);
 };
-post('/images/upload', async (req, res) => {
+post('/images/upload', exports.requireStaffAuth, async (req, res) => {
     try {
         const { base64, data, filename, contentType, folder = 'dishes' } = req.body;
         const rawData = base64 || data;
@@ -289,7 +312,7 @@ get('/ingredients', async (_req, res) => {
         res.status(500).send(error);
     }
 });
-post('/menu', async (req, res) => {
+post('/menu', exports.requireStaffAuth, async (req, res) => {
     try {
         const data = req.body;
         const isAvail = data.available !== undefined ? !!data.available : true;
@@ -308,7 +331,7 @@ post('/menu', async (req, res) => {
         res.status(500).send(error);
     }
 });
-put('/menu/reorder', async (req, res) => {
+put('/menu/reorder', exports.requireStaffAuth, async (req, res) => {
     const { order } = req.body;
     if (!Array.isArray(order))
         return res.status(400).json({ error: 'Invalid order parameter' });
@@ -325,7 +348,7 @@ put('/menu/reorder', async (req, res) => {
         res.status(500).send(error);
     }
 });
-put('/menu/:id', async (req, res) => {
+put('/menu/:id', exports.requireStaffAuth, async (req, res) => {
     try {
         const id = req.params.id;
         const data = req.body;
@@ -345,7 +368,7 @@ put('/menu/:id', async (req, res) => {
         res.status(500).send(error);
     }
 });
-del('/menu/:id', async (req, res) => {
+del('/menu/:id', exports.requireStaffAuth, async (req, res) => {
     try {
         const id = req.params.id;
         await db.collection('menu').doc(id).delete();
@@ -356,7 +379,7 @@ del('/menu/:id', async (req, res) => {
         res.status(500).send(error);
     }
 });
-post('/menu/toggle-available', async (req, res) => {
+post('/menu/toggle-available', exports.requireStaffAuth, async (req, res) => {
     try {
         const { id } = req.body;
         if (!id) {
@@ -386,7 +409,7 @@ post('/menu/toggle-available', async (req, res) => {
         return res.status(500).json({ error: error?.message || 'Server error' });
     }
 });
-post('/categories', async (req, res) => {
+post('/categories', exports.requireStaffAuth, async (req, res) => {
     try {
         const data = req.body;
         const docRef = await db.collection('categories').add(data);
@@ -397,7 +420,7 @@ post('/categories', async (req, res) => {
         res.status(500).send(error);
     }
 });
-put('/categories/:id', async (req, res) => {
+put('/categories/:id', exports.requireStaffAuth, async (req, res) => {
     try {
         const id = req.params.id;
         const data = req.body;
@@ -409,7 +432,7 @@ put('/categories/:id', async (req, res) => {
         res.status(500).send(error);
     }
 });
-del('/categories/:id', async (req, res) => {
+del('/categories/:id', exports.requireStaffAuth, async (req, res) => {
     try {
         const id = req.params.id;
         await db.collection('categories').doc(id).delete();
@@ -420,7 +443,7 @@ del('/categories/:id', async (req, res) => {
         res.status(500).send(error);
     }
 });
-post('/ingredients', async (req, res) => {
+post('/ingredients', exports.requireStaffAuth, async (req, res) => {
     try {
         const data = req.body;
         const docRef = await db.collection('ingredients').add(data);
@@ -431,7 +454,7 @@ post('/ingredients', async (req, res) => {
         res.status(500).send(error);
     }
 });
-put('/ingredients/:id', async (req, res) => {
+put('/ingredients/:id', exports.requireStaffAuth, async (req, res) => {
     try {
         const id = req.params.id;
         const data = req.body;
@@ -443,7 +466,7 @@ put('/ingredients/:id', async (req, res) => {
         res.status(500).send(error);
     }
 });
-del('/ingredients/:id', async (req, res) => {
+del('/ingredients/:id', exports.requireStaffAuth, async (req, res) => {
     try {
         const id = req.params.id;
         await db.collection('ingredients').doc(id).delete();
@@ -495,10 +518,7 @@ get('/reservations', async (_req, res) => {
 get('/orders', async (_req, res) => {
     try {
         res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=5, stale-while-revalidate=10');
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const startOfDay = today.toISOString();
-        const snapshot = await db.collection('orders').where('createdAt', '>=', startOfDay).orderBy('createdAt', 'desc').get();
+        const snapshot = await db.collection('orders').orderBy('createdAt', 'desc').limit(200).get();
         const orders = snapshot.docs.map(doc => doc.data());
         res.json(orders);
     }
@@ -697,15 +717,18 @@ post('/orders', async (req, res) => {
     try {
         const systemDoc = await db.collection('settings').doc('system').get();
         const sysData = systemDoc.data();
-        if (!isStoreOpenFromData(sysData)) {
+        const isTakeoutOrder = !!(orderData.takeoutInfo || String(orderData.tableNumber || '').includes('外帶') || String(orderData.tableNumber || '').toLowerCase() === 'takeout');
+        const isReservationOrder = !!(orderData.reservationNo || orderData.reservationDate);
+        if (!isReservationOrder && !isTakeoutOrder && !isStoreOpenFromData(sysData)) {
             return res.status(403).json({ error: '目前不在營業時間內（店鋪休息中），系統不開放下單點餐！' });
         }
-        await db.collection('orders').doc(orderId).set({
+        const savedOrder = {
             ...orderData,
             id: orderId,
             status: orderData.status || 'pending',
             createdAt: orderData.createdAt || new Date().toISOString(),
-        });
+        };
+        await db.collection('orders').doc(orderId).set(savedOrder);
         if (orderData.tableNumber && !String(orderData.tableNumber).includes('外帶') && String(orderData.tableNumber).toLowerCase() !== 'takeout') {
             const tblId = String(orderData.tableNumber).trim();
             const tableRef = db.collection('tables').doc(tblId);
@@ -714,14 +737,14 @@ post('/orders', async (req, res) => {
                 await tableRef.update({ status: 'in_use', cleaningStartedAt: null });
             }
         }
-        res.status(201).json({ success: true, id: orderId });
+        res.status(201).json(savedOrder);
     }
     catch (error) {
         console.error('Error submitting order:', error);
         res.status(500).send(error);
     }
 });
-put('/orders/:id/status', async (req, res) => {
+put('/orders/:id/status', exports.requireStaffAuth, async (req, res) => {
     const id = req.params.id;
     const { status } = req.body;
     try {
@@ -732,7 +755,7 @@ put('/orders/:id/status', async (req, res) => {
         res.status(500).send(error);
     }
 });
-put('/orders/:id/table-number', async (req, res) => {
+put('/orders/:id/table-number', exports.requireStaffAuth, async (req, res) => {
     const id = req.params.id;
     const { tableNumber } = req.body;
     try {
@@ -743,7 +766,7 @@ put('/orders/:id/table-number', async (req, res) => {
         res.status(500).send(error);
     }
 });
-put('/orders/:id/quick-notes', async (req, res) => {
+put('/orders/:id/quick-notes', exports.requireStaffAuth, async (req, res) => {
     const id = req.params.id;
     const { quickNotes } = req.body;
     try {
@@ -754,7 +777,7 @@ put('/orders/:id/quick-notes', async (req, res) => {
         res.status(500).send(error);
     }
 });
-put('/orders/:id/flag', async (req, res) => {
+put('/orders/:id/flag', exports.requireStaffAuth, async (req, res) => {
     const id = req.params.id;
     const { isFlagged, flagReason } = req.body;
     try {
@@ -765,7 +788,7 @@ put('/orders/:id/flag', async (req, res) => {
         res.status(500).send(error);
     }
 });
-put('/orders/:id/items', async (req, res) => {
+put('/orders/:id/items', exports.requireStaffAuth, async (req, res) => {
     const id = req.params.id;
     const { items, refundLogs } = req.body;
     try {
@@ -776,7 +799,7 @@ put('/orders/:id/items', async (req, res) => {
         res.status(500).send(error);
     }
 });
-put('/orders/:id/checkout', async (req, res) => {
+put('/orders/:id/checkout', exports.requireStaffAuth, async (req, res) => {
     const id = req.params.id;
     const checkoutData = req.body;
     try {
@@ -821,7 +844,7 @@ put('/orders/:id/checkout', async (req, res) => {
         res.status(500).send(error);
     }
 });
-put('/orders/:id/complete', async (req, res) => {
+put('/orders/:id/complete', exports.requireStaffAuth, async (req, res) => {
     const id = req.params.id;
     try {
         await db.collection('orders').doc(id).update({
@@ -833,7 +856,7 @@ put('/orders/:id/complete', async (req, res) => {
         res.status(500).send(error);
     }
 });
-put('/orders/:id/items/:itemId/complete', async (req, res) => {
+put('/orders/:id/items/:itemId/complete', exports.requireStaffAuth, async (req, res) => {
     const id = req.params.id;
     const itemId = req.params.itemId;
     const { isCompleted, isPrepared } = req.body;
@@ -871,7 +894,7 @@ put('/orders/:id/items/:itemId/complete', async (req, res) => {
         res.status(500).send(error);
     }
 });
-del('/orders/:id', async (req, res) => {
+del('/orders/:id', exports.requireStaffAuth, async (req, res) => {
     const id = req.params.id;
     try {
         await db.collection('orders').doc(id).delete();
@@ -881,7 +904,7 @@ del('/orders/:id', async (req, res) => {
         res.status(500).send(error);
     }
 });
-post('/inventory/adjust', async (req, res) => {
+post('/inventory/adjust', exports.requireStaffAuth, async (req, res) => {
     const { ingredientId, quantityChanged } = req.body;
     const change = Number(quantityChanged);
     if (isNaN(change)) {
@@ -901,7 +924,7 @@ post('/inventory/adjust', async (req, res) => {
         res.status(500).send(error);
     }
 });
-post('/ingredients/restock', async (req, res) => {
+post('/ingredients/restock', exports.requireStaffAuth, async (req, res) => {
     const { ingredientId, quantityAdded } = req.body;
     const amount = Number(quantityAdded);
     if (isNaN(amount)) {
@@ -920,7 +943,7 @@ post('/ingredients/restock', async (req, res) => {
         res.status(500).send(error);
     }
 });
-post('/print-logs/clear', async (_req, res) => {
+post('/print-logs/clear', exports.requireStaffAuth, async (_req, res) => {
     try {
         await db.collection('settings').doc('logs').set({ printLogs: [] }, { merge: true });
         res.json({ success: true });
@@ -929,7 +952,7 @@ post('/print-logs/clear', async (_req, res) => {
         res.status(500).send(error);
     }
 });
-post('/settings/service-pause', async (req, res) => {
+post('/settings/service-pause', exports.requireStaffAuth, async (req, res) => {
     const { servicePaused } = req.body;
     try {
         await db.collection('settings').doc('system').set({ liveServicePaused: !!servicePaused }, { merge: true });
@@ -939,7 +962,7 @@ post('/settings/service-pause', async (req, res) => {
         res.status(500).send(error);
     }
 });
-post('/settings/min-spend', async (req, res) => {
+post('/settings/min-spend', exports.requireStaffAuth, async (req, res) => {
     const { minSpend } = req.body;
     try {
         await db.collection('settings').doc('system').set({ liveMinSpendPerPerson: Number(minSpend) }, { merge: true });
@@ -949,7 +972,7 @@ post('/settings/min-spend', async (req, res) => {
         res.status(500).send(error);
     }
 });
-post('/settings/operating-hours', async (req, res) => {
+post('/settings/operating-hours', exports.requireStaffAuth, async (req, res) => {
     const { slots, restDays } = req.body;
     try {
         await db.collection('settings').doc('system').set({
@@ -964,7 +987,7 @@ post('/settings/operating-hours', async (req, res) => {
         res.status(500).send(error);
     }
 });
-post('/settings/customer-notice', async (req, res) => {
+post('/settings/customer-notice', exports.requireStaffAuth, async (req, res) => {
     const { notice } = req.body;
     try {
         await db.collection('settings').doc('system').set({ liveCustomerNotice: String(notice) }, { merge: true });
@@ -974,7 +997,7 @@ post('/settings/customer-notice', async (req, res) => {
         res.status(500).send(error);
     }
 });
-post('/settings/popular-item-ids', async (req, res) => {
+post('/settings/popular-item-ids', exports.requireStaffAuth, async (req, res) => {
     const { popularItemIds, ids } = req.body;
     const targetIds = popularItemIds || ids || [];
     try {
@@ -1009,8 +1032,8 @@ const handleSavePrinterIp = async (req, res) => {
         res.status(500).send(error);
     }
 };
-put('/printer/config', handleSavePrinterIp);
-post('/printer/config', handleSavePrinterIp);
+put('/printer/config', exports.requireStaffAuth, handleSavePrinterIp);
+post('/printer/config', exports.requireStaffAuth, handleSavePrinterIp);
 get('/staff/pin/value', (_req, res) => {
     res.json({ blocked: true });
 });
@@ -1020,21 +1043,42 @@ post('/staff/pin/check-path', async (req, res) => {
         return res.json({ valid: false });
     }
     try {
-        const systemDoc = await db.collection('settings').doc('system').get();
-        const liveStaffPin = systemDoc.data()?.liveStaffPin || '000000';
-        return res.json({ valid: String(pathPin) === String(liveStaffPin) });
+        const credsRef = db.collection('secrets').doc('credentials');
+        const credsDoc = await credsRef.get();
+        let storedHash = credsDoc.data()?.staffPinHash;
+        if (!storedHash) {
+            const systemDoc = await db.collection('settings').doc('system').get();
+            const legacyPin = systemDoc.data()?.liveStaffPin || '000000';
+            storedHash = hashPin(legacyPin);
+            await credsRef.set({ staffPinHash: storedHash }, { merge: true });
+        }
+        const inputHash = hashPin(pathPin);
+        return res.json({ valid: inputHash === storedHash });
     }
-    catch (error) {
+    catch (_error) {
         return res.json({ valid: false });
     }
 });
 post('/staff/pin/verify', async (req, res) => {
     const { pin } = req.body;
+    if (!pin || typeof pin !== 'string') {
+        return res.status(400).json({ success: false, error: '請輸入有效的 6 位數金鑰' });
+    }
     try {
-        const systemDoc = await db.collection('settings').doc('system').get();
-        const liveStaffPin = systemDoc.data()?.liveStaffPin || '000000';
-        if (String(pin) === String(liveStaffPin)) {
-            return res.json({ success: true, access_token: 'valid-staff-session' });
+        const credsRef = db.collection('secrets').doc('credentials');
+        const credsDoc = await credsRef.get();
+        let storedHash = credsDoc.data()?.staffPinHash;
+        if (!storedHash) {
+            const systemDoc = await db.collection('settings').doc('system').get();
+            const legacyPin = systemDoc.data()?.liveStaffPin || '000000';
+            storedHash = hashPin(legacyPin);
+            await credsRef.set({ staffPinHash: storedHash }, { merge: true });
+        }
+        const inputHash = hashPin(pin);
+        if (inputHash === storedHash) {
+            const sessionToken = `st_${Date.now()}_${crypto.randomBytes(16).toString('hex')}`;
+            await credsRef.set({ activeSessionToken: sessionToken, lastLoginAt: new Date().toISOString() }, { merge: true });
+            return res.json({ success: true, access_token: sessionToken });
         }
         return res.status(400).json({ success: false, error: '解鎖金鑰錯誤！' });
     }
@@ -1043,53 +1087,67 @@ post('/staff/pin/verify', async (req, res) => {
         res.status(500).send(error);
     }
 });
-put('/staff/pin', async (req, res) => {
+put('/staff/pin', exports.requireStaffAuth, async (req, res) => {
     const { currentPin, newPin } = req.body;
     if (!currentPin || !newPin) {
         return res.status(400).json({ error: '請輸入目前金鑰與新解鎖金鑰' });
     }
+    if (!/^\d{6}$/.test(newPin)) {
+        return res.status(400).json({ error: '新金鑰必須為 6 位數字！' });
+    }
     try {
-        const systemRef = db.collection('settings').doc('system');
-        const systemDoc = await systemRef.get();
-        const liveStaffPin = systemDoc.data()?.liveStaffPin || '000000';
-        if (String(currentPin) !== String(liveStaffPin)) {
+        const credsRef = db.collection('secrets').doc('credentials');
+        const credsDoc = await credsRef.get();
+        let storedHash = credsDoc.data()?.staffPinHash;
+        if (!storedHash) {
+            const systemDoc = await db.collection('settings').doc('system').get();
+            const legacyPin = systemDoc.data()?.liveStaffPin || '000000';
+            storedHash = hashPin(legacyPin);
+        }
+        if (hashPin(currentPin) !== storedHash) {
             return res.status(400).json({ error: '目前金鑰輸入錯誤！' });
         }
-        if (!/^\d{6}$/.test(newPin)) {
-            return res.status(400).json({ error: '新金鑰必須為 6 位數字！' });
-        }
-        await systemRef.set({ liveStaffPin: newPin }, { merge: true });
-        return res.json({ success: true, message: '員工解鎖金鑰已成功變更！' });
+        const newHash = hashPin(newPin);
+        await credsRef.set({ staffPinHash: newHash, updatedAt: new Date().toISOString() }, { merge: true });
+        await db.collection('settings').doc('system').update({ liveStaffPin: firestore_1.FieldValue.delete() }).catch(() => { });
+        return res.json({ success: true, message: '員工解鎖金鑰已成功變更並安全儲存！' });
     }
     catch (error) {
         console.error('Error updating PIN:', error);
         res.status(500).send(error);
     }
 });
-post('/printer/pin', async (req, res) => {
+post('/printer/pin', exports.requireStaffAuth, async (req, res) => {
     const { currentPin, newPin } = req.body;
     if (!currentPin || !newPin) {
         return res.status(400).json({ error: '請輸入目前金鑰與新解鎖金鑰' });
     }
+    if (!/^\d{6}$/.test(newPin)) {
+        return res.status(400).json({ error: '新金鑰必須為 6 位數字！' });
+    }
     try {
-        const systemRef = db.collection('settings').doc('system');
-        const systemDoc = await systemRef.get();
-        const liveStaffPin = systemDoc.data()?.liveStaffPin || '952788';
-        if (String(currentPin) !== String(liveStaffPin)) {
+        const credsRef = db.collection('secrets').doc('credentials');
+        const credsDoc = await credsRef.get();
+        let storedHash = credsDoc.data()?.staffPinHash;
+        if (!storedHash) {
+            const systemDoc = await db.collection('settings').doc('system').get();
+            const legacyPin = systemDoc.data()?.liveStaffPin || '000000';
+            storedHash = hashPin(legacyPin);
+        }
+        if (hashPin(currentPin) !== storedHash) {
             return res.status(400).json({ error: '目前解鎖金鑰輸入錯誤！' });
         }
-        if (!/^\d{6}$/.test(newPin)) {
-            return res.status(400).json({ error: '新金鑰必須為 6 位數字！' });
-        }
-        await systemRef.set({ liveStaffPin: newPin }, { merge: true });
-        return res.json({ success: true, message: '員工解鎖金鑰已成功變更！' });
+        const newHash = hashPin(newPin);
+        await credsRef.set({ staffPinHash: newHash, updatedAt: new Date().toISOString() }, { merge: true });
+        await db.collection('settings').doc('system').update({ liveStaffPin: firestore_1.FieldValue.delete() }).catch(() => { });
+        return res.json({ success: true, message: '員工解鎖金鑰已成功變更並安全儲存！' });
     }
     catch (error) {
         console.error('Error updating PIN via printer/pin:', error);
         res.status(500).send(error);
     }
 });
-post('/promo-combo', async (req, res) => {
+post('/promo-combo', exports.requireStaffAuth, async (req, res) => {
     const data = req.body;
     try {
         await db.collection('settings').doc('system').set({ livePromoCombo: data, livePromoCombos: data.combos }, { merge: true });
@@ -1099,7 +1157,7 @@ post('/promo-combo', async (req, res) => {
         res.status(500).send(error);
     }
 });
-post('/settings/members-config', async (req, res) => {
+post('/settings/members-config', exports.requireStaffAuth, async (req, res) => {
     const { pointsRatio, rewards } = req.body;
     try {
         await db.collection('settings').doc('system').set({
@@ -1112,7 +1170,7 @@ post('/settings/members-config', async (req, res) => {
         res.status(500).send(error);
     }
 });
-put('/printer/settings', async (req, res) => {
+const handleSavePrinterSettings = async (req, res) => {
     const { kitchen, bill } = req.body;
     try {
         const systemDoc = await db.collection('settings').doc('system').get();
@@ -1129,8 +1187,10 @@ put('/printer/settings', async (req, res) => {
     catch (error) {
         res.status(500).send(error);
     }
-});
-post('/option-rules', async (req, res) => {
+};
+put('/printer/settings', exports.requireStaffAuth, handleSavePrinterSettings);
+post('/printer/settings', exports.requireStaffAuth, handleSavePrinterSettings);
+post('/option-rules', exports.requireStaffAuth, async (req, res) => {
     const { name, category, price } = req.body;
     const newRule = {
         id: `rule-${Date.now()}`,
@@ -1149,7 +1209,7 @@ post('/option-rules', async (req, res) => {
         res.status(500).send(error);
     }
 });
-del('/option-rules/:id', async (req, res) => {
+del('/option-rules/:id', exports.requireStaffAuth, async (req, res) => {
     const { id } = req.params;
     try {
         const systemDoc = await db.collection('settings').doc('system').get();
@@ -1162,7 +1222,7 @@ del('/option-rules/:id', async (req, res) => {
         res.status(500).send(error);
     }
 });
-post('/admin/clear-test-data', async (req, res) => {
+post('/admin/clear-test-data', exports.requireStaffAuth, async (req, res) => {
     const { pin } = req.body;
     try {
         const systemRef = db.collection('settings').doc('system');
@@ -1201,7 +1261,7 @@ post('/admin/clear-test-data', async (req, res) => {
         res.status(500).send(error);
     }
 });
-put('/categories/reorder', async (req, res) => {
+put('/categories/reorder', exports.requireStaffAuth, async (req, res) => {
     const { order } = req.body;
     if (!Array.isArray(order))
         return res.status(400).json({ error: 'Invalid order parameter' });
@@ -1218,7 +1278,7 @@ put('/categories/reorder', async (req, res) => {
         res.status(500).send(error);
     }
 });
-post('/tables', async (req, res) => {
+post('/tables', exports.requireStaffAuth, async (req, res) => {
     const data = req.body;
     try {
         await db.collection('tables').doc(data.id).set(data);
@@ -1228,7 +1288,7 @@ post('/tables', async (req, res) => {
         res.status(500).send(error);
     }
 });
-put('/tables/:id', async (req, res) => {
+put('/tables/:id', exports.requireStaffAuth, async (req, res) => {
     const id = req.params.id;
     const updates = req.body;
     try {
@@ -1245,7 +1305,7 @@ put('/tables/:id', async (req, res) => {
         res.status(500).send(error);
     }
 });
-del('/tables/:id', async (req, res) => {
+del('/tables/:id', exports.requireStaffAuth, async (req, res) => {
     const id = req.params.id;
     try {
         await db.collection('tables').doc(id).delete();
@@ -1283,7 +1343,7 @@ post('/reservations', async (req, res) => {
         res.status(500).send(error);
     }
 });
-put('/reservations/:id', async (req, res) => {
+put('/reservations/:id', exports.requireStaffAuth, async (req, res) => {
     const id = req.params.id;
     const updates = req.body;
     try {
@@ -1318,7 +1378,7 @@ put('/reservations/:id', async (req, res) => {
         res.status(500).send(error);
     }
 });
-del('/reservations/:id', async (req, res) => {
+del('/reservations/:id', exports.requireStaffAuth, async (req, res) => {
     const id = req.params.id;
     try {
         await db.collection('reservations').doc(id).delete();
@@ -1328,7 +1388,7 @@ del('/reservations/:id', async (req, res) => {
         res.status(500).send(error);
     }
 });
-put('/orders/:id/pay', async (req, res) => {
+put('/orders/:id/pay', exports.requireStaffAuth, async (req, res) => {
     const id = req.params.id;
     const { isPaid } = req.body;
     try {
@@ -1364,7 +1424,7 @@ put('/orders/:id/rate', async (req, res) => {
         res.status(500).send(error);
     }
 });
-post('/send-promo-push', async (req, res) => {
+post('/send-promo-push', exports.requireStaffAuth, async (req, res) => {
     const data = req.body;
     const newNotif = {
         id: `notif-${Date.now()}`,
@@ -1467,7 +1527,7 @@ async function sendToNetworkPrinter(host, port = 9100, data) {
         }
     });
 }
-post('/printer/test', async (req, res) => {
+post('/printer/test', exports.requireStaffAuth, async (req, res) => {
     try {
         const target = req.body?.target || 'all';
         const systemDoc = await db.collection('settings').doc('system').get();
@@ -1528,7 +1588,7 @@ post('/printer/test', async (req, res) => {
         res.status(500).json({ error: '列印測試頁失敗' });
     }
 });
-post('/printer/open-drawer', async (_req, res) => {
+post('/printer/open-drawer', exports.requireStaffAuth, async (_req, res) => {
     try {
         const systemDoc = await db.collection('settings').doc('system').get();
         const sysData = systemDoc.data() || {};
@@ -1676,24 +1736,6 @@ get('/printer/settings', async (_req, res) => {
             }
         };
         res.json(sysData.livePrinterSettings || defaultSettings);
-    }
-    catch (error) {
-        res.status(500).send(error);
-    }
-});
-post('/printer/settings', async (req, res) => {
-    const { kitchen, bill } = req.body;
-    try {
-        const systemDoc = await db.collection('settings').doc('system').get();
-        let currentSettings = systemDoc.data()?.livePrinterSettings || {};
-        if (kitchen) {
-            currentSettings.kitchen = { ...currentSettings.kitchen, ...kitchen };
-        }
-        if (bill) {
-            currentSettings.bill = { ...currentSettings.bill, ...bill };
-        }
-        await db.collection('settings').doc('system').set({ livePrinterSettings: currentSettings }, { merge: true });
-        res.json({ success: true });
     }
     catch (error) {
         res.status(500).send(error);

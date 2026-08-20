@@ -3,7 +3,7 @@ import React, { Component, useState, useEffect, useMemo, useCallback } from 'rea
 import { Ingredient, Language, Category, TableConfig, Order, OrderStatus, Reservation } from '../types';
 import { getLocalizedText } from '../utils/i18n';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
-import { TrendingUp, Package, AlertTriangle, Layers, Sparkles, Coins, Lock, Unlock, QrCode, Trash2, Plus, Edit, Download, Calendar, FileText, ShoppingBag, ShoppingCart, Copy, Check, ExternalLink, Minus, Flame, Printer, Maximize2, Minimize2, ChevronLeft, ChevronRight, RefreshCw, Cpu, Phone, Clock, User, CheckCircle2 } from 'lucide-react';
+import { TrendingUp, Package, AlertTriangle, Layers, Sparkles, Coins, Lock, Unlock, QrCode, Trash2, Plus, Edit, Download, Calendar, FileText, ShoppingBag, ShoppingCart, Copy, Check, ExternalLink, Minus, Flame, Printer, Maximize2, Minimize2, ChevronLeft, ChevronRight, RefreshCw, Cpu, Phone, Clock, User } from 'lucide-react';
 import { db, isFirebaseSyncEnabled } from '../lib/firebase';
 import { safeStorage } from '../lib/safeStorage';
 import { doc, setDoc, writeBatch, collection, getDocs, query, where } from 'firebase/firestore';
@@ -1203,7 +1203,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
         alert(`❌ 簽核失敗：${errData.error || '員工授權 PIN 碼不正確！請重新輸入。'}`);
         return;
       }
-    } catch (e) {
+    } catch (_e) {
       alert('❌ 網路連線或伺服器驗證失敗，請稍後再試。');
       return;
     }
@@ -2468,7 +2468,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
           localStorage.setItem('google-members-database', JSON.stringify(filtered));
         }
         setMembersList(filtered);
-      } catch (e) {
+      } catch (_e) {
         setMembersList([]);
       }
     } else {
@@ -2589,7 +2589,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
       } else {
         setPinChangeError(data.error || '金鑰更新失敗');
       }
-    } catch (err) {
+    } catch (_err) {
       setPinChangeError('與伺服器連線或程序異常！');
     } finally {
       setPinChangeLoading(false);
@@ -3898,7 +3898,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                               <div className="flex items-center justify-between gap-2 border-b border-white/5 pb-2">
                                 <div className="flex items-center gap-1.5">
                                   <span className="font-mono text-xs font-black text-purple-300 bg-purple-500/20 border border-purple-500/30 px-2 py-0.5 rounded">
-                                    🛍️ {tOrder.tableNumber}
+                                    🛍️ 單號: #{tOrder.id}
                                   </span>
                                   <span className="font-mono text-[10px] text-zinc-400">
                                     #{tOrder.id}
@@ -7117,7 +7117,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                     </div>
                     <div className="flex items-center gap-2 font-mono text-xs text-purple-300">
                       <span className="bg-purple-500/20 border border-purple-500/40 px-2 py-0.5 rounded font-bold">
-                        🛍️ 桌號/外帶號: {takeoutDetailModalOrder.tableNumber}
+                        🛍️ 單號: #{takeoutDetailModalOrder.id}
                       </span>
                       <span className="text-zinc-400">訂單編號: #{takeoutDetailModalOrder.id}</span>
                     </div>
@@ -7479,7 +7479,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                       <tr key={o.id} className="hover:bg-white/[2%] transition duration-150">
                         <td className="py-3 px-4 font-mono font-bold text-white text-sm">{o.id || ''}</td>
                         <td className="py-3 px-4 text-zinc-500">{o.createdAt ? new Date(o.createdAt).toLocaleString() : 'N/A'}</td>
-                        <td className="py-3 px-4 text-center font-bold text-white">{o.tableNumber || 'N/A'} 桌</td>
+                        <td className="py-3 px-4 text-center font-bold text-white">{o.takeoutInfo || o.tableNumber?.includes('外帶') || o.tableNumber === 'takeout' ? `單號: #${o.id}` : `${o.tableNumber || 'N/A'} 桌`}</td>
                         <td className="py-3 px-4 flex items-center space-x-2.5">
                           <img src={o.customerAvatar || 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=150'} defaultValue="" alt="avatar" className="w-6 h-6 rounded-full object-cover border border-white/10" referrerPolicy="no-referrer" />
                           <span className="font-bold text-white truncate max-w-[120px] block">{o.customerName || 'N/A'}</span>
@@ -9608,7 +9608,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                                 } else {
                                   alert(`⚠️ 列印失敗: ${res.error || '無法存取設備'}`);
                                 }
-                              } catch (err) {
+                              } catch (_err) {
                                 alert('⚠️ 列印失敗，連線異常');
                               }
                             } else {
@@ -9902,7 +9902,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                                 } else {
                                   alert(`⚠️ 列印失敗: ${res.error || '無法存取設備'}`);
                                 }
-                              } catch (err) {
+                              } catch (_err) {
                                 alert('⚠️ 列印失敗，連線異常');
                               }
                             } else {
@@ -11432,7 +11432,7 @@ ${ingredientLines || '  (尚無庫存異動記錄)'}
                         const kitchenStr = `
 ========================================
        沙貝燒烤 (廚房工作即時交代單-重印)
-       桌號/標記: ${selectedOrder.tableNumber}
+       ${selectedOrder.takeoutInfo || selectedOrder.tableNumber?.includes('外帶') || selectedOrder.tableNumber === 'takeout' ? `單號/標記: #${selectedOrder.id}` : `桌號/標記: ${selectedOrder.tableNumber}`}
 ========================================
 單號 ID: ${selectedOrder.id || 'N/A'}
 出單 IP : ${printerIp} (VIRTUAL LAN_9100)
@@ -11468,7 +11468,7 @@ ${specLines}
                         const customerStr = `
 ========================================
        沙貝燒烤 (顧客結賬與消點收據-重印)
-       桌號/標記: ${selectedOrder.tableNumber || 'N/A'} 桌
+       ${selectedOrder.takeoutInfo || selectedOrder.tableNumber?.includes('外帶') || selectedOrder.tableNumber === 'takeout' ? `單號/標記: #${selectedOrder.id}` : `桌號/標記: ${selectedOrder.tableNumber || 'N/A'}`} 桌
 ========================================
 單號 ID: ${selectedOrder.id || 'N/A'}
 出單 IP : ${printerIp} (VIRTUAL LAN_9100)
@@ -11833,7 +11833,7 @@ ${customerDetails}
                           const kitchenStr = `
 ========================================
        沙貝燒烤 (廚房工作即時交代單-重印)
-       桌號/標記: ${selectedOrder.tableNumber || 'N/A'}
+       ${selectedOrder.takeoutInfo || selectedOrder.tableNumber?.includes('外帶') || selectedOrder.tableNumber === 'takeout' ? `單號/標記: #${selectedOrder.id}` : `桌號/標記: ${selectedOrder.tableNumber || 'N/A'}`}
 ========================================
 單號 ID: ${selectedOrder.id || 'N/A'}
 出單 IP : ${printerIp} (VIRTUAL LAN_9100)
@@ -11869,7 +11869,7 @@ ${specLines}
                           const customerStr = `
 ========================================
        沙貝燒烤 (顧客結賬與消點收據-重印)
-       桌號/標記: ${selectedOrder.tableNumber || 'N/A'} 桌
+       ${selectedOrder.takeoutInfo || selectedOrder.tableNumber?.includes('外帶') || selectedOrder.tableNumber === 'takeout' ? `單號/標記: #${selectedOrder.id}` : `桌號/標記: ${selectedOrder.tableNumber || 'N/A'}`} 桌
 ========================================
 單號 ID: ${selectedOrder.id || 'N/A'}
 出單 IP : ${printerIp} (VIRTUAL LAN_9100)
@@ -12066,7 +12066,7 @@ ${customerDetails}
                           const kitchenStr = `
 ========================================
        沙貝燒烤 (廚房工作即時交代單-重印)
-       桌號/標記: ${selectedOrder.tableNumber}
+       ${selectedOrder.takeoutInfo || selectedOrder.tableNumber?.includes('外帶') || selectedOrder.tableNumber === 'takeout' ? `單號/標記: #${selectedOrder.id}` : `桌號/標記: ${selectedOrder.tableNumber}`}
 ========================================
 單號 ID: ${selectedOrder.id || 'N/A'}
 出單 IP : ${printerIp} (VIRTUAL LAN_9100)
@@ -12102,7 +12102,7 @@ ${specLines}
                           const customerStr = `
 ========================================
        沙貝燒烤 (顧客結賬與消點收據-重印)
-       桌號/標記: ${selectedOrder.tableNumber} 桌
+       ${selectedOrder.takeoutInfo || selectedOrder.tableNumber?.includes('外帶') || selectedOrder.tableNumber === 'takeout' ? `單號/標記: #${selectedOrder.id}` : `桌號/標記: ${selectedOrder.tableNumber}`} 桌
 ========================================
 單號 ID: ${selectedOrder.id}
 出單 IP : ${printerIp} (VIRTUAL LAN_9100)
@@ -13830,7 +13830,7 @@ ${customerDetails}
                     if (dbStr) {
                       try {
                         db = JSON.parse(dbStr);
-                      } catch (e) {
+                      } catch (_e) {
                         db = [];
                       }
                     }

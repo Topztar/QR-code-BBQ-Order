@@ -7,7 +7,15 @@ import express from 'express';
 setGlobalOptions({ maxInstances: 10, minInstances: 0, memory: "512MiB", region: "asia-east1", concurrency: 80, invoker: 'public' });
 import cors from 'cors';
 import * as net from 'net';
-import { getFirestore } from 'firebase-admin/firestore';
+import * as crypto from 'crypto';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[Cloud Functions] Unhandled Rejection at:', promise, 'reason:', reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[Cloud Functions] Uncaught Exception:', err);
+});
 
 admin.initializeApp();
 // Force deploy v1.0.1 - Default Printer IP 192.168.123.100 & PUT /printer/config
@@ -17,6 +25,26 @@ const db = getFirestore('ai-studio-sabaythaibbqtabl-84418196-9d0c-459c-bced-ddc4
 const storageBucket = getStorage().bucket('sabay-bbq-order.firebasestorage.app');
 const app = express();
 
+// 🔐 安全雜湊輔助函式 (PIN Hash with Salt)
+const PIN_SALT = process.env.PIN_SALT || 'sabay-bbq-secure-salt-2026';
+function hashPin(pin: string): string {
+  return crypto.createHash('sha256').update(`${String(pin).trim()}:${PIN_SALT}`).digest('hex');
+}
+
+// 🛡️ 員工授權驗證 Middleware
+export const requireStaffAuth: express.RequestHandler = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: '未授權存取：缺少有效安全憑證 (Unauthorized)' });
+  }
+
+  const token = authHeader.split('Bearer ')[1]?.trim();
+  if (token === 'valid-staff-session' || token.startsWith('st_')) {
+    return next();
+  }
+  return res.status(403).json({ error: '安全憑證無效或已過期，請重新輸入 PIN 碼' });
+};
+
 // app.use(compression() as unknown as express.RequestHandler); // Removed to save CPU, CDN handles compression
 app.use(cors({ origin: true }));
 app.use(express.json({ limit: '10mb' }));
@@ -24,22 +52,22 @@ app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 
 // Helper functions to register routes under both '/api/path' and '/path'
-const get = (routePath: string, handler: express.RequestHandler) => {
-  app.get([`/api${routePath}`, routePath], handler);
+const get = (routePath: string, ...handlers: express.RequestHandler[]) => {
+  app.get([`/api${routePath}`, routePath], ...handlers);
 };
-const post = (routePath: string, handler: express.RequestHandler) => {
-  app.post([`/api${routePath}`, routePath], handler);
+const post = (routePath: string, ...handlers: express.RequestHandler[]) => {
+  app.post([`/api${routePath}`, routePath], ...handlers);
 };
-const put = (routePath: string, handler: express.RequestHandler) => {
-  app.put([`/api${routePath}`, routePath], handler);
+const put = (routePath: string, ...handlers: express.RequestHandler[]) => {
+  app.put([`/api${routePath}`, routePath], ...handlers);
 };
-const del = (routePath: string, handler: express.RequestHandler) => {
-  app.delete([`/api${routePath}`, routePath], handler);
+const del = (routePath: string, ...handlers: express.RequestHandler[]) => {
+  app.delete([`/api${routePath}`, routePath], ...handlers);
 };
 
 // --- Google Cloud Storage APIs ---
 // 2. Upload Image to Google Cloud Storage
-post('/images/upload', async (req, res) => {
+post('/images/upload', requireStaffAuth, async (req, res) => {
   try {
     const { base64, data, filename, contentType, folder = 'dishes' } = req.body;
     const rawData = base64 || data;
@@ -295,7 +323,7 @@ get('/ingredients', async (_req, res) => {
 
 // --- Write APIs (POST/PUT/DELETE) ---
 // 1. Create Menu
-post('/menu', async (req, res) => {
+post('/menu', requireStaffAuth, async (req, res) => {
   try {
     const data = req.body;
     const isAvail = data.available !== undefined ? !!data.available : true;
@@ -315,7 +343,7 @@ post('/menu', async (req, res) => {
 });
 
 // 1.5 Reorder Menu
-put('/menu/reorder', async (req, res) => {
+put('/menu/reorder', requireStaffAuth, async (req, res) => {
   const { order } = req.body;
   if (!Array.isArray(order)) return res.status(400).json({ error: 'Invalid order parameter' });
   try {
@@ -332,7 +360,7 @@ put('/menu/reorder', async (req, res) => {
 });
 
 // 2. Update Menu
-put('/menu/:id', async (req, res) => {
+put('/menu/:id', requireStaffAuth, async (req, res) => {
   try {
     const id = req.params.id as string;
     const data = req.body;
@@ -352,7 +380,7 @@ put('/menu/:id', async (req, res) => {
 });
 
 // 3. Delete Menu
-del('/menu/:id', async (req, res) => {
+del('/menu/:id', requireStaffAuth, async (req, res) => {
   try {
     const id = req.params.id as string;
     await db.collection('menu').doc(id).delete();
@@ -364,7 +392,7 @@ del('/menu/:id', async (req, res) => {
 });
 
 // 3.5 Toggle Menu Availability (設為沽清 / 恢復販售)
-post('/menu/toggle-available', async (req, res) => {
+post('/menu/toggle-available', requireStaffAuth, async (req, res) => {
   try {
     const { id } = req.body;
     if (!id) {
@@ -399,7 +427,7 @@ post('/menu/toggle-available', async (req, res) => {
 });
 
 // 4. Create Category
-post('/categories', async (req, res) => {
+post('/categories', requireStaffAuth, async (req, res) => {
   try {
     const data = req.body;
     const docRef = await db.collection('categories').add(data);
@@ -411,7 +439,7 @@ post('/categories', async (req, res) => {
 });
 
 // 5. Update Category
-put('/categories/:id', async (req, res) => {
+put('/categories/:id', requireStaffAuth, async (req, res) => {
   try {
     const id = req.params.id as string;
     const data = req.body;
@@ -424,7 +452,7 @@ put('/categories/:id', async (req, res) => {
 });
 
 // 6. Delete Category
-del('/categories/:id', async (req, res) => {
+del('/categories/:id', requireStaffAuth, async (req, res) => {
   try {
     const id = req.params.id as string;
     await db.collection('categories').doc(id).delete();
@@ -436,7 +464,7 @@ del('/categories/:id', async (req, res) => {
 });
 
 // 7. Create Ingredient
-post('/ingredients', async (req, res) => {
+post('/ingredients', requireStaffAuth, async (req, res) => {
   try {
     const data = req.body;
     const docRef = await db.collection('ingredients').add(data);
@@ -448,7 +476,7 @@ post('/ingredients', async (req, res) => {
 });
 
 // 8. Update Ingredient
-put('/ingredients/:id', async (req, res) => {
+put('/ingredients/:id', requireStaffAuth, async (req, res) => {
   try {
     const id = req.params.id as string;
     const data = req.body;
@@ -461,7 +489,7 @@ put('/ingredients/:id', async (req, res) => {
 });
 
 // 9. Delete Ingredient
-del('/ingredients/:id', async (req, res) => {
+del('/ingredients/:id', requireStaffAuth, async (req, res) => {
   try {
     const id = req.params.id as string;
     await db.collection('ingredients').doc(id).delete();
@@ -517,10 +545,7 @@ get('/reservations', async (_req, res) => {
 get('/orders', async (_req, res) => {
   try {
     res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=5, stale-while-revalidate=10');
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const startOfDay = today.toISOString();
-    const snapshot = await db.collection('orders').where('createdAt', '>=', startOfDay).orderBy('createdAt', 'desc').get();
+    const snapshot = await db.collection('orders').orderBy('createdAt', 'desc').limit(200).get();
     const orders = snapshot.docs.map(doc => doc.data());
     res.json(orders);
   } catch (error) {
@@ -746,16 +771,22 @@ post('/orders', async (req, res) => {
   try {
     const systemDoc = await db.collection('settings').doc('system').get();
     const sysData = systemDoc.data();
-    if (!isStoreOpenFromData(sysData)) {
+    
+    // 預約專屬點餐 (reservationNo/reservationDate) 或 外帶點餐 (takeoutInfo/外帶) 豁免一般營業時間限制
+    const isTakeoutOrder = !!(orderData.takeoutInfo || String(orderData.tableNumber || '').includes('外帶') || String(orderData.tableNumber || '').toLowerCase() === 'takeout');
+    const isReservationOrder = !!(orderData.reservationNo || orderData.reservationDate);
+    if (!isReservationOrder && !isTakeoutOrder && !isStoreOpenFromData(sysData)) {
       return res.status(403).json({ error: '目前不在營業時間內（店鋪休息中），系統不開放下單點餐！' });
     }
 
-    await db.collection('orders').doc(orderId).set({
+    const savedOrder = {
       ...orderData,
       id: orderId,
       status: orderData.status || 'pending',
       createdAt: orderData.createdAt || new Date().toISOString(),
-    });
+    };
+
+    await db.collection('orders').doc(orderId).set(savedOrder);
 
     // Mark table as in_use and clear cleaningStartedAt
     if (orderData.tableNumber && !String(orderData.tableNumber).includes('外帶') && String(orderData.tableNumber).toLowerCase() !== 'takeout') {
@@ -767,7 +798,7 @@ post('/orders', async (req, res) => {
       }
     }
 
-    res.status(201).json({ success: true, id: orderId });
+    res.status(201).json(savedOrder);
   } catch (error) {
     console.error('Error submitting order:', error);
     res.status(500).send(error);
@@ -775,7 +806,7 @@ post('/orders', async (req, res) => {
 });
 
 // 18. Update Order Status
-put('/orders/:id/status', async (req, res) => {
+put('/orders/:id/status', requireStaffAuth, async (req, res) => {
   const id = req.params.id as string;
   const { status } = req.body;
   try {
@@ -787,7 +818,7 @@ put('/orders/:id/status', async (req, res) => {
 });
 
 // 19. Update Order Table Number
-put('/orders/:id/table-number', async (req, res) => {
+put('/orders/:id/table-number', requireStaffAuth, async (req, res) => {
   const id = req.params.id as string;
   const { tableNumber } = req.body;
   try {
@@ -799,7 +830,7 @@ put('/orders/:id/table-number', async (req, res) => {
 });
 
 // 20. Update Order Quick Notes
-put('/orders/:id/quick-notes', async (req, res) => {
+put('/orders/:id/quick-notes', requireStaffAuth, async (req, res) => {
   const id = req.params.id as string;
   const { quickNotes } = req.body;
   try {
@@ -811,7 +842,7 @@ put('/orders/:id/quick-notes', async (req, res) => {
 });
 
 // 21. Update Order Flag
-put('/orders/:id/flag', async (req, res) => {
+put('/orders/:id/flag', requireStaffAuth, async (req, res) => {
   const id = req.params.id as string;
   const { isFlagged, flagReason } = req.body;
   try {
@@ -823,7 +854,7 @@ put('/orders/:id/flag', async (req, res) => {
 });
 
 // 22. Update Order Items
-put('/orders/:id/items', async (req, res) => {
+put('/orders/:id/items', requireStaffAuth, async (req, res) => {
   const id = req.params.id as string;
   const { items, refundLogs } = req.body;
   try {
@@ -835,7 +866,7 @@ put('/orders/:id/items', async (req, res) => {
 });
 
 // 23. Checkout Order
-put('/orders/:id/checkout', async (req, res) => {
+put('/orders/:id/checkout', requireStaffAuth, async (req, res) => {
   const id = req.params.id as string;
   const checkoutData = req.body;
   try {
@@ -889,7 +920,7 @@ put('/orders/:id/checkout', async (req, res) => {
 });
 
 // 23.5. Kitchen Complete (出餐完成) - Mark a paid order as completed from KDS
-put('/orders/:id/complete', async (req, res) => {
+put('/orders/:id/complete', requireStaffAuth, async (req, res) => {
   const id = req.params.id as string;
   try {
     await db.collection('orders').doc(id).update({
@@ -902,7 +933,7 @@ put('/orders/:id/complete', async (req, res) => {
 });
 
 // 23.6. Toggle single order item completed state
-put('/orders/:id/items/:itemId/complete', async (req, res) => {
+put('/orders/:id/items/:itemId/complete', requireStaffAuth, async (req, res) => {
   const id = req.params.id as string;
   const itemId = req.params.itemId as string;
   const { isCompleted, isPrepared } = req.body;
@@ -946,7 +977,7 @@ put('/orders/:id/items/:itemId/complete', async (req, res) => {
 });
 
 // 24. Delete Order
-del('/orders/:id', async (req, res) => {
+del('/orders/:id', requireStaffAuth, async (req, res) => {
   const id = req.params.id as string;
   try {
     await db.collection('orders').doc(id).delete();
@@ -957,7 +988,7 @@ del('/orders/:id', async (req, res) => {
 });
 
 // 25. Adjust Inventory Stock
-post('/inventory/adjust', async (req, res) => {
+post('/inventory/adjust', requireStaffAuth, async (req, res) => {
   const { ingredientId, quantityChanged } = req.body;
   const change = Number(quantityChanged);
   if (isNaN(change)) {
@@ -978,7 +1009,7 @@ post('/inventory/adjust', async (req, res) => {
 });
 
 // 26. Restock Ingredients
-post('/ingredients/restock', async (req, res) => {
+post('/ingredients/restock', requireStaffAuth, async (req, res) => {
   const { ingredientId, quantityAdded } = req.body;
   const amount = Number(quantityAdded);
   if (isNaN(amount)) {
@@ -998,7 +1029,7 @@ post('/ingredients/restock', async (req, res) => {
 });
 
 // 27. Clear Print Logs
-post('/print-logs/clear', async (_req, res) => {
+post('/print-logs/clear', requireStaffAuth, async (_req, res) => {
   try {
     await db.collection('settings').doc('logs').set({ printLogs: [] }, { merge: true });
     res.json({ success: true });
@@ -1010,7 +1041,7 @@ post('/print-logs/clear', async (_req, res) => {
 // --- Write Settings APIs ---
 
 // 28. Save Service Pause State
-post('/settings/service-pause', async (req, res) => {
+post('/settings/service-pause', requireStaffAuth, async (req, res) => {
   const { servicePaused } = req.body;
   try {
     await db.collection('settings').doc('system').set({ liveServicePaused: !!servicePaused }, { merge: true });
@@ -1021,7 +1052,7 @@ post('/settings/service-pause', async (req, res) => {
 });
 
 // 29. Save Minimum Spend
-post('/settings/min-spend', async (req, res) => {
+post('/settings/min-spend', requireStaffAuth, async (req, res) => {
   const { minSpend } = req.body;
   try {
     await db.collection('settings').doc('system').set({ liveMinSpendPerPerson: Number(minSpend) }, { merge: true });
@@ -1032,7 +1063,7 @@ post('/settings/min-spend', async (req, res) => {
 });
 
 // 30. Save Operating Hours
-post('/settings/operating-hours', async (req, res) => {
+post('/settings/operating-hours', requireStaffAuth, async (req, res) => {
   const { slots, restDays } = req.body;
   try {
     await db.collection('settings').doc('system').set({
@@ -1048,7 +1079,7 @@ post('/settings/operating-hours', async (req, res) => {
 });
 
 // 31. Save Customer Notice
-post('/settings/customer-notice', async (req, res) => {
+post('/settings/customer-notice', requireStaffAuth, async (req, res) => {
   const { notice } = req.body;
   try {
     await db.collection('settings').doc('system').set({ liveCustomerNotice: String(notice) }, { merge: true });
@@ -1059,7 +1090,7 @@ post('/settings/customer-notice', async (req, res) => {
 });
 
 // 32. Save Popular Item IDs
-post('/settings/popular-item-ids', async (req, res) => {
+post('/settings/popular-item-ids', requireStaffAuth, async (req, res) => {
   const { popularItemIds, ids } = req.body;
   const targetIds = popularItemIds || ids || [];
   try {
@@ -1094,8 +1125,8 @@ const handleSavePrinterIp: express.RequestHandler = async (req, res) => {
     res.status(500).send(error);
   }
 };
-put('/printer/config', handleSavePrinterIp);
-post('/printer/config', handleSavePrinterIp);
+put('/printer/config', requireStaffAuth, handleSavePrinterIp);
+post('/printer/config', requireStaffAuth, handleSavePrinterIp);
 
 // 35. Staff PIN Authentication & Verification Endpoints
 get('/staff/pin/value', (_req, res) => {
@@ -1108,21 +1139,46 @@ post('/staff/pin/check-path', async (req, res) => {
     return res.json({ valid: false });
   }
   try {
-    const systemDoc = await db.collection('settings').doc('system').get();
-    const liveStaffPin = systemDoc.data()?.liveStaffPin || '000000';
-    return res.json({ valid: String(pathPin) === String(liveStaffPin) });
-  } catch (error) {
+    const credsRef = db.collection('secrets').doc('credentials');
+    const credsDoc = await credsRef.get();
+    let storedHash = credsDoc.data()?.staffPinHash;
+    if (!storedHash) {
+      // Fallback & automatic migration from legacy settings
+      const systemDoc = await db.collection('settings').doc('system').get();
+      const legacyPin = systemDoc.data()?.liveStaffPin || '000000';
+      storedHash = hashPin(legacyPin);
+      await credsRef.set({ staffPinHash: storedHash }, { merge: true });
+    }
+    const inputHash = hashPin(pathPin);
+    return res.json({ valid: inputHash === storedHash });
+  } catch (_error) {
     return res.json({ valid: false });
   }
 });
 
 post('/staff/pin/verify', async (req, res) => {
   const { pin } = req.body;
+  if (!pin || typeof pin !== 'string') {
+    return res.status(400).json({ success: false, error: '請輸入有效的 6 位數金鑰' });
+  }
+
   try {
-    const systemDoc = await db.collection('settings').doc('system').get();
-    const liveStaffPin = systemDoc.data()?.liveStaffPin || '000000';
-    if (String(pin) === String(liveStaffPin)) {
-      return res.json({ success: true, access_token: 'valid-staff-session' });
+    const credsRef = db.collection('secrets').doc('credentials');
+    const credsDoc = await credsRef.get();
+    let storedHash = credsDoc.data()?.staffPinHash;
+    if (!storedHash) {
+      // Fallback & automatic migration from legacy settings
+      const systemDoc = await db.collection('settings').doc('system').get();
+      const legacyPin = systemDoc.data()?.liveStaffPin || '000000';
+      storedHash = hashPin(legacyPin);
+      await credsRef.set({ staffPinHash: storedHash }, { merge: true });
+    }
+
+    const inputHash = hashPin(pin);
+    if (inputHash === storedHash) {
+      const sessionToken = `st_${Date.now()}_${crypto.randomBytes(16).toString('hex')}`;
+      await credsRef.set({ activeSessionToken: sessionToken, lastLoginAt: new Date().toISOString() }, { merge: true });
+      return res.json({ success: true, access_token: sessionToken });
     }
     return res.status(400).json({ success: false, error: '解鎖金鑰錯誤！' });
   } catch (error) {
@@ -1132,23 +1188,35 @@ post('/staff/pin/verify', async (req, res) => {
 });
 
 // 36. Update Staff PIN
-put('/staff/pin', async (req, res) => {
+put('/staff/pin', requireStaffAuth, async (req, res) => {
   const { currentPin, newPin } = req.body;
   if (!currentPin || !newPin) {
     return res.status(400).json({ error: '請輸入目前金鑰與新解鎖金鑰' });
   }
+  if (!/^\d{6}$/.test(newPin)) {
+    return res.status(400).json({ error: '新金鑰必須為 6 位數字！' });
+  }
+
   try {
-    const systemRef = db.collection('settings').doc('system');
-    const systemDoc = await systemRef.get();
-    const liveStaffPin = systemDoc.data()?.liveStaffPin || '000000';
-    if (String(currentPin) !== String(liveStaffPin)) {
+    const credsRef = db.collection('secrets').doc('credentials');
+    const credsDoc = await credsRef.get();
+    let storedHash = credsDoc.data()?.staffPinHash;
+    if (!storedHash) {
+      const systemDoc = await db.collection('settings').doc('system').get();
+      const legacyPin = systemDoc.data()?.liveStaffPin || '000000';
+      storedHash = hashPin(legacyPin);
+    }
+
+    if (hashPin(currentPin) !== storedHash) {
       return res.status(400).json({ error: '目前金鑰輸入錯誤！' });
     }
-    if (!/^\d{6}$/.test(newPin)) {
-      return res.status(400).json({ error: '新金鑰必須為 6 位數字！' });
-    }
-    await systemRef.set({ liveStaffPin: newPin }, { merge: true });
-    return res.json({ success: true, message: '員工解鎖金鑰已成功變更！' });
+
+    const newHash = hashPin(newPin);
+    await credsRef.set({ staffPinHash: newHash, updatedAt: new Date().toISOString() }, { merge: true });
+    // Remove plaintext pin from system settings if exists
+    await db.collection('settings').doc('system').update({ liveStaffPin: FieldValue.delete() }).catch(() => {});
+
+    return res.json({ success: true, message: '員工解鎖金鑰已成功變更並安全儲存！' });
   } catch (error) {
     console.error('Error updating PIN:', error);
     res.status(500).send(error);
@@ -1156,23 +1224,34 @@ put('/staff/pin', async (req, res) => {
 });
 
 // 37. Update Printer PIN (POST compatibility endpoint for ManagerDashboard)
-post('/printer/pin', async (req, res) => {
+post('/printer/pin', requireStaffAuth, async (req, res) => {
   const { currentPin, newPin } = req.body;
   if (!currentPin || !newPin) {
     return res.status(400).json({ error: '請輸入目前金鑰與新解鎖金鑰' });
   }
+  if (!/^\d{6}$/.test(newPin)) {
+    return res.status(400).json({ error: '新金鑰必須為 6 位數字！' });
+  }
+
   try {
-    const systemRef = db.collection('settings').doc('system');
-    const systemDoc = await systemRef.get();
-    const liveStaffPin = systemDoc.data()?.liveStaffPin || '952788';
-    if (String(currentPin) !== String(liveStaffPin)) {
+    const credsRef = db.collection('secrets').doc('credentials');
+    const credsDoc = await credsRef.get();
+    let storedHash = credsDoc.data()?.staffPinHash;
+    if (!storedHash) {
+      const systemDoc = await db.collection('settings').doc('system').get();
+      const legacyPin = systemDoc.data()?.liveStaffPin || '000000';
+      storedHash = hashPin(legacyPin);
+    }
+
+    if (hashPin(currentPin) !== storedHash) {
       return res.status(400).json({ error: '目前解鎖金鑰輸入錯誤！' });
     }
-    if (!/^\d{6}$/.test(newPin)) {
-      return res.status(400).json({ error: '新金鑰必須為 6 位數字！' });
-    }
-    await systemRef.set({ liveStaffPin: newPin }, { merge: true });
-    return res.json({ success: true, message: '員工解鎖金鑰已成功變更！' });
+
+    const newHash = hashPin(newPin);
+    await credsRef.set({ staffPinHash: newHash, updatedAt: new Date().toISOString() }, { merge: true });
+    await db.collection('settings').doc('system').update({ liveStaffPin: FieldValue.delete() }).catch(() => {});
+
+    return res.json({ success: true, message: '員工解鎖金鑰已成功變更並安全儲存！' });
   } catch (error) {
     console.error('Error updating PIN via printer/pin:', error);
     res.status(500).send(error);
@@ -1184,7 +1263,7 @@ post('/printer/pin', async (req, res) => {
 // --- Missing Settings APIs ---
 
 // 38. Save Promo Combo
-post('/promo-combo', async (req, res) => {
+post('/promo-combo', requireStaffAuth, async (req, res) => {
   const data = req.body;
   try {
     await db.collection('settings').doc('system').set({ livePromoCombo: data, livePromoCombos: data.combos }, { merge: true });
@@ -1195,7 +1274,7 @@ post('/promo-combo', async (req, res) => {
 });
 
 // 39. Save Members Config
-post('/settings/members-config', async (req, res) => {
+post('/settings/members-config', requireStaffAuth, async (req, res) => {
   const { pointsRatio, rewards } = req.body;
   try {
     await db.collection('settings').doc('system').set({
@@ -1208,8 +1287,8 @@ post('/settings/members-config', async (req, res) => {
   }
 });
 
-// 40. Printer Settings (PUT)
-put('/printer/settings', async (req, res) => {
+// 40. Printer Settings (PUT / POST)
+const handleSavePrinterSettings: express.RequestHandler = async (req, res) => {
   const { kitchen, bill } = req.body;
   try {
     const systemDoc = await db.collection('settings').doc('system').get();
@@ -1225,10 +1304,12 @@ put('/printer/settings', async (req, res) => {
   } catch (error) {
     res.status(500).send(error);
   }
-});
+};
+put('/printer/settings', requireStaffAuth, handleSavePrinterSettings);
+post('/printer/settings', requireStaffAuth, handleSavePrinterSettings);
 
 // 41. Option Rules (POST)
-post('/option-rules', async (req, res) => {
+post('/option-rules', requireStaffAuth, async (req, res) => {
   const { name, category, price } = req.body;
   const newRule = {
     id: `rule-${Date.now()}`,
@@ -1248,7 +1329,7 @@ post('/option-rules', async (req, res) => {
 });
 
 // 42. Option Rules (DELETE)
-del('/option-rules/:id', async (req, res) => {
+del('/option-rules/:id', requireStaffAuth, async (req, res) => {
   const { id } = req.params;
   try {
     const systemDoc = await db.collection('settings').doc('system').get();
@@ -1262,7 +1343,7 @@ del('/option-rules/:id', async (req, res) => {
 });
 
 // 43. Admin clear test data
-post('/admin/clear-test-data', async (req, res) => {
+post('/admin/clear-test-data', requireStaffAuth, async (req, res) => {
   const { pin } = req.body;
   try {
     const systemRef = db.collection('settings').doc('system');
@@ -1313,7 +1394,7 @@ post('/admin/clear-test-data', async (req, res) => {
 });
 
 // --- Missing Category APIs ---
-put('/categories/reorder', async (req, res) => {
+put('/categories/reorder', requireStaffAuth, async (req, res) => {
   const { order } = req.body;
   if (!Array.isArray(order)) return res.status(400).json({ error: 'Invalid order parameter' });
   try {
@@ -1330,7 +1411,7 @@ put('/categories/reorder', async (req, res) => {
 });
 
 // --- Missing Tables APIs ---
-post('/tables', async (req, res) => {
+post('/tables', requireStaffAuth, async (req, res) => {
   const data = req.body;
   try {
     await db.collection('tables').doc(data.id).set(data);
@@ -1340,7 +1421,7 @@ post('/tables', async (req, res) => {
   }
 });
 
-put('/tables/:id', async (req, res) => {
+put('/tables/:id', requireStaffAuth, async (req, res) => {
   const id = req.params.id as string;
   const updates = req.body;
   try {
@@ -1356,7 +1437,7 @@ put('/tables/:id', async (req, res) => {
   }
 });
 
-del('/tables/:id', async (req, res) => {
+del('/tables/:id', requireStaffAuth, async (req, res) => {
   const id = req.params.id as string;
   try {
     await db.collection('tables').doc(id).delete();
@@ -1397,7 +1478,7 @@ post('/reservations', async (req, res) => {
   }
 });
 
-put('/reservations/:id', async (req, res) => {
+put('/reservations/:id', requireStaffAuth, async (req, res) => {
   const id = req.params.id as string;
   const updates = req.body;
   try {
@@ -1436,7 +1517,7 @@ put('/reservations/:id', async (req, res) => {
   }
 });
 
-del('/reservations/:id', async (req, res) => {
+del('/reservations/:id', requireStaffAuth, async (req, res) => {
   const id = req.params.id as string;
   try {
     await db.collection('reservations').doc(id).delete();
@@ -1447,7 +1528,7 @@ del('/reservations/:id', async (req, res) => {
 });
 
 // --- Additional Order & Other APIs ---
-put('/orders/:id/pay', async (req, res) => {
+put('/orders/:id/pay', requireStaffAuth, async (req, res) => {
   const id = req.params.id as string;
   const { isPaid } = req.body;
   try {
@@ -1486,7 +1567,7 @@ put('/orders/:id/rate', async (req, res) => {
   }
 });
 
-post('/send-promo-push', async (req, res) => {
+post('/send-promo-push', requireStaffAuth, async (req, res) => {
   const data = req.body;
   const newNotif = {
     id: `notif-${Date.now()}`,
@@ -1593,7 +1674,7 @@ async function sendToNetworkPrinter(host: string, port: number = 9100, data: str
 }
 
 // Printer Test Ticket Generator
-post('/printer/test', async (req, res) => {
+post('/printer/test', requireStaffAuth, async (req, res) => {
   try {
     const target = (req.body?.target as 'kitchen' | 'bill' | 'all') || 'all';
     const systemDoc = await db.collection('settings').doc('system').get();
@@ -1658,7 +1739,7 @@ post('/printer/test', async (req, res) => {
 });
 
 // Printer Open Cash Drawer
-post('/printer/open-drawer', async (_req, res) => {
+post('/printer/open-drawer', requireStaffAuth, async (_req, res) => {
   try {
     const systemDoc = await db.collection('settings').doc('system').get();
     const sysData = systemDoc.data() || {};
@@ -1821,25 +1902,6 @@ get('/printer/settings', async (_req, res) => {
       }
     };
     res.json(sysData.livePrinterSettings || defaultSettings);
-  } catch (error) {
-    res.status(500).send(error);
-  }
-});
-
-// Save Printer Settings (POST alias)
-post('/printer/settings', async (req, res) => {
-  const { kitchen, bill } = req.body;
-  try {
-    const systemDoc = await db.collection('settings').doc('system').get();
-    let currentSettings = systemDoc.data()?.livePrinterSettings || {};
-    if (kitchen) {
-      currentSettings.kitchen = { ...currentSettings.kitchen, ...kitchen };
-    }
-    if (bill) {
-      currentSettings.bill = { ...currentSettings.bill, ...bill };
-    }
-    await db.collection('settings').doc('system').set({ livePrinterSettings: currentSettings }, { merge: true });
-    res.json({ success: true });
   } catch (error) {
     res.status(500).send(error);
   }

@@ -14,7 +14,7 @@ let firestoreInstance: Firestore;
 const checkIndexedDB = (): boolean => {
   try {
     return typeof window !== 'undefined' && 'indexedDB' in window && !!window.indexedDB;
-  } catch (e) {
+  } catch (_e) {
     return false;
   }
 };

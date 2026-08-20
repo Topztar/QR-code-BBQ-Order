@@ -190,6 +190,10 @@ export function stopSpeech(): void {
   }
 }
 
+export function getActiveUtterance(): SpeechSynthesisUtterance | null {
+  return activeUtterance;
+}
+
 /**
  * Find the most natural Taiwan Mandarin (zh-TW) voice available on the device
  */

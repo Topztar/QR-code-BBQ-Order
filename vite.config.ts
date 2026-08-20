@@ -7,8 +7,10 @@ export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
-    viteCompression({ algorithm: 'gzip' }),
-    viteCompression({ algorithm: 'brotliCompress' })
+    // gzip 預壓縮（CDN 邊緣節點回退支援）
+    viteCompression({ algorithm: 'gzip', threshold: 1024 }),
+    // brotli 預壓縮（現代瀏覽器優先使用，壓縮比更佳）
+    viteCompression({ algorithm: 'brotliCompress', threshold: 1024 }),
   ],
   server: {
     port: 3000,
@@ -21,15 +23,31 @@ export default defineConfig({
     }
   },
   build: {
+    // 指定目標為現代瀏覽器，啟用最佳化 Tree-shaking
+    target: 'es2020',
+    // 減少 chunk 大小警告門檻
+    chunkSizeWarningLimit: 600,
     rollupOptions: {
       output: {
-        manualChunks: {
-          'vendor-icons': ['lucide-react'],
-          'vendor-charts': ['recharts', 'd3'],
-          'vendor-firebase': ['firebase/app', 'firebase/firestore', 'firebase/auth'],
+        manualChunks(id) {
+          // Firebase SDK 核心（最大包）單獨隔離，啟用長期快取
+          if (id.includes('node_modules/firebase')) {
+            return 'vendor-firebase';
+          }
+          // 圖表 / D3 視覺化（僅管理後台需要）
+          if (id.includes('node_modules/recharts') || id.includes('node_modules/d3')) {
+            return 'vendor-charts';
+          }
+          // Lucide 圖示庫（跨 chunk 共用）
+          if (id.includes('node_modules/lucide-react')) {
+            return 'vendor-icons';
+          }
+          // 多語系翻譯字典（186KB，獨立 chunk 避免阻塞首屏）
+          if (id.includes('src/utils/i18n')) {
+            return 'i18n';
+          }
         }
       }
-    },
-    chunkSizeWarningLimit: 1000
+    }
   }
 });

@@ -56,10 +56,9 @@ export default function App() {
   const [isStaff, setIsStaff] = useState<boolean>(false);
 
   // Path & Query routing states for Google Business Profile Direct Links (/reserve, /order)
-  const [staffPin, setStaffPin] = useState<string>('');
+  const [staffPin] = useState<string>('');
   const [currentPath, setCurrentPath] = useState<string>(window.location.pathname);
-  const isSuperEntry = currentPath === '/FSY20260606';
-  const isAtStaffPath = isSuperEntry;
+  const isAtStaffPath = activeTab !== 'customer';
 
   const isReserveRoute = useMemo(() => {
     if (typeof window === 'undefined') return false;
@@ -84,13 +83,6 @@ export default function App() {
       search.get('mode') === 'order' ||
       search.get('action') === 'order'
     );
-  }, [currentPath]);
-
-  useEffect(() => {
-    if (currentPath === '/FSY20260606') {
-      setIsStaff(true);
-      setStaffPin('FSY20260606');
-    }
   }, [currentPath]);
 
   useEffect(() => {
@@ -441,7 +433,7 @@ export default function App() {
           printData = await safeJson(results[3], []);
         }
 
-        if (!syncEnabled && ordData !== null) {
+        if (Array.isArray(ordData) && ordData.length > 0) {
           setOrders(reconcileOrdersWithRecentTransitions(ordData));
         }
         setPrintLogs(printData);
@@ -478,7 +470,7 @@ export default function App() {
         // Lightweight polling cycle for active dynamic state
         const syncEnabled = isFirebaseSyncEnabled();
         const fetchPromises: Promise<Response>[] = [
-          syncEnabled ? Promise.resolve({ ok: true, json: async () => null } as unknown as Response) : safeFetch('/api/orders', []),
+          safeFetch('/api/orders', []),
           safeFetch('/api/tables', []),
           safeFetch('/api/settings/service-pause', { servicePaused: false }),
           syncEnabled ? Promise.resolve({ ok: true, json: async () => null } as unknown as Response) : safeFetch('/api/ingredients', [])
@@ -499,7 +491,7 @@ export default function App() {
           notifData = await safeJson(results[4], []);
         }
 
-        if (!syncEnabled && ordData !== null) {
+        if (Array.isArray(ordData) && ordData.length > 0) {
           setOrders(reconcileOrdersWithRecentTransitions(ordData));
         }
         if (Array.isArray(tablesData)) setTables(tablesData);
@@ -508,18 +500,11 @@ export default function App() {
         if (Array.isArray(notifData)) setPushNotifications(notifData.filter((n: any) => !n.isRead));
       }
 
-      if (window.location.pathname === '/FSY20260606') {
-        setStaffPin('FSY20260606');
-        setIsStaff(true);
-      } else {
-        const legacyMatch = window.location.pathname.match(/^\/(\d{4,6})$/);
-        if (legacyMatch) {
-          window.history.replaceState({}, '', '/');
-          setCurrentPath('/');
-          setStaffPin('');
-        } else {
-          setStaffPin('');
-        }
+      // 清理遺留的數字路徑（如舊版掃碼 QR 直連路徑），統一導向首頁
+      const legacyNumericPath = window.location.pathname.match(/^\/\d{4,6}$/);
+      if (legacyNumericPath) {
+        window.history.replaceState({}, '', '/');
+        setCurrentPath('/');
       }
     } catch (err: any) {
       console.warn('[Sabay Sync] Fetch error:', err);
@@ -530,12 +515,10 @@ export default function App() {
   useEffect(() => {
     fetchData();
 
-    let localPollingTimer: ReturnType<typeof setInterval>;
-    if (!isFirebaseSyncEnabled()) {
-      localPollingTimer = setInterval(() => {
-        fetchData(false);
-      }, 5000);
-    }
+    // 保障本地沙盒與託管環境實時輪詢更新
+    const localPollingTimer = setInterval(() => {
+      fetchData(false);
+    }, 5000);
 
     return () => {
       if (localPollingTimer) clearInterval(localPollingTimer);
@@ -739,7 +722,6 @@ export default function App() {
     };
     const totalAmount = orderData.items.reduce((sum, item) => {
       let unitP = item.price;
-      if (false) unitP += 10;
       if (item.customization?.soupBase === 'coconut-milk') unitP += 50;
       if (item.customization?.selectedAddOns && Array.isArray(item.customization.selectedAddOns)) {
         unitP += item.customization.selectedAddOns.reduce((s, a) => s + (Number(a.price) || 0), 0);
@@ -797,6 +779,7 @@ export default function App() {
 
       const completedOrder = await res.json();
       if (completedOrder && completedOrder.id) {
+        setOrders((prev) => [completedOrder, ...prev.filter(o => o.id !== completedOrder.id)]);
         setLocalOrderIds((prev) => {
           const updated = [...prev, completedOrder.id];
           safeStorage.setItem('sabay-my-submitted-order-ids', JSON.stringify(updated));
@@ -2531,8 +2514,11 @@ export default function App() {
         <div className="text-[9px] text-[#E5B453]/20 italic font-mono uppercase tracking-widest pt-1 flex items-center justify-center">
           <span>A.S.R. Cloud Engine v4.2 // Secured Connection Terminal</span>
           <button
-            onClick={() => {}}
-            className="text-[#0A0A0A] hover:text-[#0A0A0A] focus:outline-none cursor-default select-none ml-1 inline-flex items-center"
+            onClick={() => {
+              setActiveTab('admin');
+              setAdminSubTab('stats');
+            }}
+            className="text-[#0A0A0A] hover:text-white/20 focus:outline-none cursor-pointer select-none ml-1 inline-flex items-center transition-colors"
             title="Secure Portal"
             id="hidden-backend-portal-trigger"
           >

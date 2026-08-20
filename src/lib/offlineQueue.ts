@@ -8,6 +8,7 @@ export interface QueuedRequest {
   body: string;        // Stringified request payload
   description: string; // User-facing descriptive title (e.g. "送出 3 桌 5 份餐點" or "變更 2 號訂單為製作中")
   timestamp: number;   // Creation time
+  retryCount?: number; // Attempt tracker for retry limits
 }
 
 const STORAGE_KEY = 'sabay_offline_sync_queue_v1';
@@ -143,6 +144,8 @@ export async function processOfflineQueue(onProgress?: (msg: string) => void): P
 
   for (let i = 0; i < queue.length; i++) {
     const item = queue[i];
+    item.retryCount = (item.retryCount || 0) + 1;
+
     if (onProgress) {
       onProgress(`正在同步 [${i + 1}/${queue.length}]: ${item.description}...`);
     }
@@ -178,9 +181,9 @@ export async function processOfflineQueue(onProgress?: (msg: string) => void): P
         console.error(`[OfflineQueue] Server rejected request for ${item.url}:`, response.status);
         failureCount++;
 
-        // If it is a terminal client error (400-499), remove it from the queue so it doesn't block forever
-        if (response.status >= 400 && response.status < 500) {
-          console.warn(`[OfflineQueue] Terminal 4xx response (${response.status}) received. Discarding request from queue.`);
+        // If it is a terminal client error (400-499) or retry limit exceeded (>= 3), discard request to prevent queue deadlock
+        if ((response.status >= 400 && response.status < 500) || item.retryCount >= 3) {
+          console.warn(`[OfflineQueue] Discarding request (${item.id}) status: ${response.status}, retries: ${item.retryCount}`);
           const idx = remaining.findIndex(r => r.id === item.id);
           if (idx > -1) remaining.splice(idx, 1);
           saveOfflineQueue([...remaining]);
@@ -188,12 +191,15 @@ export async function processOfflineQueue(onProgress?: (msg: string) => void): P
           continue; // Proceed with the next item in the queue
         }
 
+        // Save updated retry counts
+        saveOfflineQueue([...remaining]);
         break; // Stop processing further items for 5xx server errors to maintain sequence integrity
       }
     } catch (error) {
       // Network loss / CORS issue / offline timeout
       console.warn(`[OfflineQueue] Network request failed for ${item.description}:`, error);
       failureCount++;
+      saveOfflineQueue([...remaining]);
       break; // Stop synchronization batch immediately upon network failure
     }
   }

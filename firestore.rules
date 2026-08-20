@@ -2,50 +2,61 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // 1. menu (菜單) - Allow client real-time snapshot reads and controlled updates
+    // 1. menu (菜單) - 前端公開唯讀，修改一律經由後端 API 驗證
     match /menu/{id} {
-      allow read, write: if true;
+      allow read: if true;
+      allow write: if false;
     }
 
-    // 2. orders (訂單) - Real-time order sync and kitchen processing
+    // 2. categories (分類) - 前端唯讀
+    match /categories/{id} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // 3. ingredients (原料/庫存) - 前端唯讀，庫存扣減由後端安全計算
+    match /ingredients/{id} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // 4. tables (桌位狀態) - 前端公開唯讀
+    match /tables/{id} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // 5. orders (訂單) - 允許前台讀取與送單（建立），禁止前端直接任意刪除或竄改訂單狀態
     match /orders/{id} {
-      allow read, write: if true;
+      allow read: if true;
+      allow create: if request.resource.data.tableNumber is string &&
+                       request.resource.data.items is list &&
+                       request.resource.data.totalAmount is number;
+      allow update, delete: if false;
     }
 
-    // 3. settings (公開營運設定) - 前端唯讀，防止客戶端直接篡改全店營運與系統設定
+    // 6. reservations (預約) - 允許顧客建立預約，禁止公開遍歷或任意竄改
+    match /reservations/{id} {
+      allow create: if request.resource.data.customerName is string &&
+                       request.resource.data.phone is string &&
+                       request.resource.data.guestCount is number;
+      allow read, update, delete: if false;
+    }
+
+    // 7. checkouts (收銀結帳紀錄) - 嚴格禁止前端存取，僅限 Cloud Functions Admin SDK
+    match /checkouts/{id} {
+      allow read, write: if false;
+    }
+
+    // 8. settings (公開營運設定) - 前端唯讀，防止篡改全店營運與系統設定
     match /settings/{id} {
       allow read: if true;
       allow write: if false;
     }
 
-    // 4. secrets & security (私密敏感設定與金鑰) - 嚴格封鎖前端讀寫，僅限 Cloud Functions Admin SDK 存取
+    // 9. secrets & security (私密敏感設定、員工 PIN 雜湊、金鑰) - 嚴格封鎖前端讀寫
     match /secrets/{id} {
       allow read, write: if false;
-    }
-
-    // 5. categories (分類)
-    match /categories/{id} {
-      allow read, write: if true;
-    }
-
-    // 6. ingredients (原料/庫存)
-    match /ingredients/{id} {
-      allow read, write: if true;
-    }
-
-    // 7. tables (桌位)
-    match /tables/{id} {
-      allow read, write: if true;
-    }
-
-    // 8. reservations (預約)
-    match /reservations/{id} {
-      allow read, write: if true;
-    }
-
-    // 9. checkouts (收銀結帳紀錄)
-    match /checkouts/{id} {
-      allow read, write: if true;
     }
 
     // 10. test (測試連線用 - 生產環境停用)
@@ -54,3 +65,4 @@ service cloud.firestore {
     }
   }
 }
+

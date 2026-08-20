@@ -17,7 +17,7 @@ class SafeStorage implements Storage {
       storage.setItem(testKey, testKey);
       storage.removeItem(testKey);
       return true;
-    } catch (e) {
+    } catch (_e) {
       console.warn(`[SafeStorage] ${this.storageType} is not available (likely sandboxed iframe or disabled). Falling back to in-memory store.`);
       return false;
     }
@@ -27,7 +27,7 @@ class SafeStorage implements Storage {
     if (this.isAvailable) {
       try {
         return window[this.storageType].length;
-      } catch (e) {
+      } catch (_e) {
         return Object.keys(this.memStore).length;
       }
     }
@@ -38,7 +38,7 @@ class SafeStorage implements Storage {
     if (this.isAvailable) {
       try {
         window[this.storageType].clear();
-      } catch (e) {
+      } catch (_e) {
         // Fallback
       }
     }
@@ -49,7 +49,7 @@ class SafeStorage implements Storage {
     if (this.isAvailable) {
       try {
         return window[this.storageType].getItem(key);
-      } catch (e) {
+      } catch (_e) {
         return this.memStore[key] || null;
       }
     }
@@ -60,7 +60,7 @@ class SafeStorage implements Storage {
     if (this.isAvailable) {
       try {
         return window[this.storageType].key(index);
-      } catch (e) {
+      } catch (_e) {
         const keys = Object.keys(this.memStore);
         return keys[index] || null;
       }
@@ -73,7 +73,7 @@ class SafeStorage implements Storage {
     if (this.isAvailable) {
       try {
         window[this.storageType].removeItem(key);
-      } catch (e) {
+      } catch (_e) {
         // Fallback
       }
     }
@@ -85,7 +85,7 @@ class SafeStorage implements Storage {
       try {
         window[this.storageType].setItem(key, value);
         return;
-      } catch (e) {
+      } catch (_e) {
         // Fallback
       }
     }
