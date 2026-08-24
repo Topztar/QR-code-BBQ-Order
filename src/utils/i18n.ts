@@ -2258,3 +2258,12 @@ export const getLocalizedText = (
 
   return '';
 };
+
+/**
+ * Universal translation helper by key and language
+ */
+export const translateKey = (key: string, currentLang: Language = 'zh'): string => {
+  if (!key) return '';
+  return TRANSLATION_DICTIONARY[key]?.[currentLang] || key;
+};
+

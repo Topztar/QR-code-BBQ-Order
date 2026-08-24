@@ -128,13 +128,13 @@ export const CustomerCustomizerModal: React.FC<CustomerCustomizerModalProps> = (
                 referrerPolicy="no-referrer"
               />
               <div className="absolute bottom-2 right-2 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded backdrop-blur-sm opacity-0 group-hover:opacity-100 transition">
-                🔍 點擊放大縮放 Click to Zoom
+                {TRANSLATIONS.clickToZoom?.[currentLang] || '🔍 點擊放大縮放'}
               </div>
             </>
           ) : (
             <div className="w-full h-full bg-zinc-900 flex flex-col items-center justify-center text-zinc-500">
               <span className="text-4xl">🍲</span>
-              <span className="text-xs text-zinc-400 font-bold mt-1.5">無餐點照片 No Image Assigned</span>
+              <span className="text-xs text-zinc-400 font-bold mt-1.5">{TRANSLATIONS.noImageAssigned?.[currentLang] || '無餐點照片'}</span>
             </div>
           )}
           <button
@@ -189,7 +189,7 @@ export const CustomerCustomizerModal: React.FC<CustomerCustomizerModalProps> = (
                 isSimplifiedMode ? 'text-black text-base' : 'text-xs text-white/90 font-bold'
               }`}
             >
-              {TRANSLATIONS.quantityPortion?.[currentLang] || '點餐份數'} Quantity
+              {TRANSLATIONS.quantityPortion?.[currentLang] || '點餐份數'}
             </span>
             <div
               className={`flex items-center space-x-3 px-3 py-1.5 rounded-lg ${
@@ -236,7 +236,7 @@ export const CustomerCustomizerModal: React.FC<CustomerCustomizerModalProps> = (
                   isSimplifiedMode ? 'text-zinc-800 text-sm font-black' : 'text-white/40'
                 }`}
               >
-                {TRANSLATIONS.noodleOption?.[currentLang] || '選擇麵體'} Select noodle types
+                {TRANSLATIONS.noodleOption?.[currentLang] || '選擇麵體'}
               </label>
               <div className="grid grid-cols-3 gap-2">
                 {[
@@ -334,7 +334,7 @@ export const CustomerCustomizerModal: React.FC<CustomerCustomizerModalProps> = (
                   isSimplifiedMode ? 'text-black text-sm font-black' : 'text-[#E5B453]'
                 }`}
               >
-                {TRANSLATIONS.customAddOnsLabel?.[currentLang] || '加選附加選項'} Custom Options & Add-Ons
+                {TRANSLATIONS.customAddOnsLabel?.[currentLang] || '加選附加選項'}
               </label>
               <div className="grid grid-cols-2 gap-2.5">
                 {selectedDetailItem.customAddOns.map((addOn) => {
@@ -404,7 +404,7 @@ export const CustomerCustomizerModal: React.FC<CustomerCustomizerModalProps> = (
             <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 space-y-3 mt-4 text-xs">
               <div className="flex items-center justify-between">
                 <span className="font-extrabold text-amber-500 flex items-center gap-1">
-                  <span>🛡️ 店家管理控制 (Instant Controls)</span>
+                  <span>{TRANSLATIONS.instantControls?.[currentLang] || '🛡️ 店家管理控制'}</span>
                 </span>
                 <span className="bg-amber-500 text-black text-[9px] px-1 rounded font-black font-sans leading-none uppercase select-none">
                   LIVE ADJUST
@@ -426,18 +426,18 @@ export const CustomerCustomizerModal: React.FC<CustomerCustomizerModalProps> = (
                       : 'bg-emerald-500/25 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/35'
                   }`}
                 >
-                  {selectedDetailItem.available ? '✕ 設為沽清 (Close)' : '● 開放供應 (Open)'}
+                  {selectedDetailItem.available ? (TRANSLATIONS.setSoldOut?.[currentLang] || '✕ 設為沽清') : (TRANSLATIONS.setAvailable?.[currentLang] || '● 開放供應')}
                 </button>
 
                 <span className="text-[10px] text-white/50 flex items-center justify-center text-center font-bold">
-                  狀態：{selectedDetailItem.available ? '🟢 供應中 Supply' : '🔴 沽清中 Sold Out'}
+                  {TRANSLATIONS.orderStatusLabel?.[currentLang] || '狀態'}：{selectedDetailItem.available ? (TRANSLATIONS.statusSupply?.[currentLang] || '🟢 供應中') : (TRANSLATIONS.statusSoldOut?.[currentLang] || '🔴 沽清中')}
                 </span>
               </div>
 
               {/* Raw Ingredients stock adjustment section */}
               <div className="space-y-1.5 border-t border-white/10 pt-2 text-left">
                 <span className="font-bold text-white/95 block text-[11px] font-sans">
-                  📦 關聯原料庫存即時微調 (Ingredient Stock):
+                  {TRANSLATIONS.ingredientStockAdjust?.[currentLang] || '📦 關聯原料庫存即時微調'}:
                 </span>
                 {(() => {
                   const itemRecipe = getMenuItemIngredients(selectedDetailItem);

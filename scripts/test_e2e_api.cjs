@@ -66,8 +66,9 @@ async function runE2E() {
 
   // 3. Test Reservation Creation & Overlap Conflict Protection
   console.log('\n🗓️ [3/6] Testing Customer Reservation Flows...');
+  const randomDayOffset = Math.floor(Math.random() * 20) + 5;
   const targetDate = new Date();
-  targetDate.setDate(targetDate.getDate() + 2); // 2 days ahead to guarantee clear slot
+  targetDate.setDate(targetDate.getDate() + randomDayOffset);
   const targetDateStr = targetDate.toISOString().split('T')[0];
 
   const reservationPayload = {

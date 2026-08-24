@@ -42,7 +42,7 @@ const CustomerCategoryTabsBase: React.FC<CustomerCategoryTabsProps> = ({
             isSimplifiedMode ? 'text-black font-black text-sm' : 'text-white/45'
           }`}
         >
-          {TRANSLATIONS.categories?.[currentLang] || '精選分類'} Menu Category
+          {TRANSLATIONS.categories?.[currentLang] || '精選分類'}
         </label>
         <div className="self-start sm:self-center">
           {isMerchantMode ? (

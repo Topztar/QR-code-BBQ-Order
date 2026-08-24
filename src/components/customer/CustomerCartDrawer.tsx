@@ -267,7 +267,7 @@ export const CustomerCartDrawer: React.FC<CustomerCartDrawerProps> = ({
                     isSimplifiedMode ? 'text-black font-black' : 'text-white/40'
                   }`}
                 >
-                  {TRANSLATIONS.payMethod?.[currentLang] || '支付方式 Payment Method'}
+                  {TRANSLATIONS.payMethod?.[currentLang] || '支付方式'}
                 </label>
                 <div className="grid grid-cols-2 gap-2">
                   {[
@@ -453,22 +453,72 @@ export const CustomerCartDrawer: React.FC<CustomerCartDrawerProps> = ({
                               }`}
                             >
                               <div className="font-bold flex items-center justify-between text-[11px] text-[#E5B453]">
-                                <span>🌟 【{combo.name}】活動累計中</span>
+                                <span>🌟 【{combo.name}】{TRANSLATIONS.comboAccumulating?.[currentLang] || '活動累計中'}</span>
                                 <span className="text-[10px] opacity-75 font-mono">
-                                  {count}/{combo.requiredQty}件
+                                  {count}/{combo.requiredQty} {TRANSLATIONS.itemsUnit?.[currentLang] || '件'}
                                 </span>
                               </div>
-                              <p className="leading-tight opacity-80 font-sans">
-                                目前已點選此套餐餐品 {count} 件，再點{' '}
-                                <span className="underline font-bold font-mono text-[#E5B453] text-xs">
-                                  {combo.requiredQty - count}
-                                </span>{' '}
-                                件即可自動折扣{' '}
-                                <span className="font-extrabold text-[#E5B453] font-mono text-xs">
-                                  {combo.discountAmount}元
-                                </span>
-                                ！
-                              </p>
+                              {currentLang === 'zh' ? (
+                                <p className="leading-tight opacity-80 font-sans">
+                                  目前已點選此套餐餐品 {count} 件，再點{' '}
+                                  <span className="underline font-bold font-mono text-[#E5B453] text-xs">
+                                    {combo.requiredQty - count}
+                                  </span>{' '}
+                                  件即可自動折扣{' '}
+                                  <span className="font-extrabold text-[#E5B453] font-mono text-xs">
+                                    {combo.discountAmount}元
+                                  </span>
+                                  ！
+                                </p>
+                              ) : currentLang === 'ja' ? (
+                                <p className="leading-tight opacity-80 font-sans">
+                                  現在 {count} 品目を選択中。あと{' '}
+                                  <span className="underline font-bold font-mono text-[#E5B453] text-xs">
+                                    {combo.requiredQty - count}
+                                  </span>{' '}
+                                  品で自動的に NT${' '}
+                                  <span className="font-extrabold text-[#E5B453] font-mono text-xs">
+                                    {combo.discountAmount}
+                                  </span>{' '}
+                                  割引！
+                                </p>
+                              ) : currentLang === 'th' ? (
+                                <p className="leading-tight opacity-80 font-sans">
+                                  เลือกแล้ว {count} รายการ สั่งเพิ่มอีก{' '}
+                                  <span className="underline font-bold font-mono text-[#E5B453] text-xs">
+                                    {combo.requiredQty - count}
+                                  </span>{' '}
+                                  รายการ จะได้รับส่วนลด NT${' '}
+                                  <span className="font-extrabold text-[#E5B453] font-mono text-xs">
+                                    {combo.discountAmount}
+                                  </span>
+                                  !
+                                </p>
+                              ) : currentLang === 'ko' ? (
+                                <p className="leading-tight opacity-80 font-sans">
+                                  현재 {count}개 선택됨. 앞으로{' '}
+                                  <span className="underline font-bold font-mono text-[#E5B453] text-xs">
+                                    {combo.requiredQty - count}
+                                  </span>{' '}
+                                  개 더 주문 시 NT${' '}
+                                  <span className="font-extrabold text-[#E5B453] font-mono text-xs">
+                                    {combo.discountAmount}
+                                  </span>{' '}
+                                  자동 할인!
+                                </p>
+                              ) : (
+                                <p className="leading-tight opacity-80 font-sans">
+                                  Selected {count} item(s). Add{' '}
+                                  <span className="underline font-bold font-mono text-[#E5B453] text-xs">
+                                    {combo.requiredQty - count}
+                                  </span>{' '}
+                                  more to get NT${' '}
+                                  <span className="font-extrabold text-[#E5B453] font-mono text-xs">
+                                    {combo.discountAmount}
+                                  </span>{' '}
+                                  discount!
+                                </p>
+                              )}
                             </div>
                           ) : (
                             <div
@@ -510,6 +560,12 @@ export const CustomerCartDrawer: React.FC<CustomerCartDrawerProps> = ({
                               <p className="leading-tight opacity-85 font-sans">
                                 {currentLang === 'zh' ? (
                                   <>已累計指定商品 {count} 件，為您自動扣除 NT$ {discount} 元！</>
+                                ) : currentLang === 'ja' ? (
+                                  <>対象商品 {count} 品を集計し、NT$ {discount} 割引を適用しました！</>
+                                ) : currentLang === 'th' ? (
+                                  <>สะสมครบ {count} รายการ ลดทันที NT$ {discount}!</>
+                                ) : currentLang === 'ko' ? (
+                                  <>지정 상품 {count}개 달성, NT$ {discount} 자동 할인 적용!</>
                                 ) : (
                                   <>
                                     Accumulated {count} specified item(s), automatically saved NT${' '}
@@ -583,18 +639,18 @@ export const CustomerCartDrawer: React.FC<CustomerCartDrawerProps> = ({
                     : currentLang === 'zh'
                       ? `確認 ${selectedTable.includes('外帶') ? selectedTable : `${selectedTable} 桌`} 並下單 (請至櫃台結帳)`
                       : currentLang === 'en'
-                        ? `Confirm ${selectedTable} & Order (Pay at Counter)`
+                        ? `Confirm Table ${selectedTable} & Order (Pay at Counter)`
                         : currentLang === 'th'
-                          ? `ยืนยัน ${selectedTable} และสั่งอาหาร (ชำระเงินที่เคาน์เตอร์)`
+                          ? `ยืนยัน โต๊ะ ${selectedTable} และสั่งอาหาร (ชำระเงินที่เคาน์เตอร์)`
                           : currentLang === 'ja'
-                            ? `${selectedTable} で注文を確定する (レジで決済)`
+                            ? `${selectedTable}番テーブルで注文確定 (レジで決済)`
                             : currentLang === 'ko'
-                              ? `${selectedTable} 주문 확인 (카운터에서 결制)`
+                              ? `${selectedTable}번 테이블 주문 확인 (카운터에서 결제)`
                               : currentLang === 'ru'
-                                ? `Подтвердить заказ (${selectedTable}) и оформить (Оплата на кассе)`
+                                ? `Подтвердить стол ${selectedTable} и оформить (Оплата на кассе)`
                                 : currentLang === 'es'
-                                  ? `Confirmar ${selectedTable} y pedir (Pagar en caja)`
-                                  : `Xác nhận ${selectedTable} và đặt món (Thanh toán tại quầy)`}
+                                  ? `Confirmar mesa ${selectedTable} y pedir (Pagar en caja)`
+                                  : `Xác nhận bàn ${selectedTable} và đặt món (Thanh toán tại quầy)`}
               </span>
             </button>
           </div>

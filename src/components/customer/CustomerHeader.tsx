@@ -495,7 +495,7 @@ const CustomerHeaderBase: React.FC<CustomerHeaderProps> = ({
             </div>
             <div>
               <h5 className="font-bold text-white text-sm">
-                {TRANSLATIONS.guestCountLabel?.[currentLang] || '用餐人數'} Guest Count
+                {TRANSLATIONS.guestCountLabel?.[currentLang] || '用餐人數'}
               </h5>
               <p className="text-[11px] text-white/50">
                 {(

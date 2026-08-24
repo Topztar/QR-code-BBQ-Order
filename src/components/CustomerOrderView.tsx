@@ -957,6 +957,63 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                   </strong>{' '}
                   元
                 </>
+              ) : currentLang === 'ja' ? (
+                <>
+                  カートに{' '}
+                  <strong
+                    className={`font-mono ${
+                      isSimplifiedMode ? 'text-black text-sm font-black' : 'text-white'
+                    }`}
+                  >
+                    {cartItemsCount}
+                  </strong>{' '}
+                  品目、合計{' '}
+                  <strong
+                    className={`font-mono ${
+                      isSimplifiedMode ? 'text-amber-800 text-sm font-black' : 'text-[#E5B453]'
+                    }`}
+                  >
+                    NT$ {cartTotal}
+                  </strong>
+                </>
+              ) : currentLang === 'th' ? (
+                <>
+                  ในตะกร้ามีอาหาร{' '}
+                  <strong
+                    className={`font-mono ${
+                      isSimplifiedMode ? 'text-black text-sm font-black' : 'text-white'
+                    }`}
+                  >
+                    {cartItemsCount}
+                  </strong>{' '}
+                  รายการ รวม{' '}
+                  <strong
+                    className={`font-mono ${
+                      isSimplifiedMode ? 'text-amber-800 text-sm font-black' : 'text-[#E5B453]'
+                    }`}
+                  >
+                    NT$ {cartTotal}
+                  </strong>
+                </>
+              ) : currentLang === 'ko' ? (
+                <>
+                  장바구니에{' '}
+                  <strong
+                    className={`font-mono ${
+                      isSimplifiedMode ? 'text-black text-sm font-black' : 'text-white'
+                    }`}
+                  >
+                    {cartItemsCount}
+                  </strong>{' '}
+                  개 품목, 총{' '}
+                  <strong
+                    className={`font-mono ${
+                      isSimplifiedMode ? 'text-amber-800 text-sm font-black' : 'text-[#E5B453]'
+                    }`}
+                  >
+                    NT$ {cartTotal}
+                  </strong>
+                </>
               ) : (
                 <>
                   Total{' '}
