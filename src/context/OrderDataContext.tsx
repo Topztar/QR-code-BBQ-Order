@@ -212,9 +212,10 @@ export function OrderDataProvider({
     }
   }, [isNetworkOnline, offlineQueue.length]);
 
-  // Firestore Realtime Orders listener
+  // Firestore Realtime Orders listener & Fallback API Polling
   useEffect(() => {
     let unsubscribeOrders = () => {};
+    let pollingInterval: ReturnType<typeof setInterval>;
 
     if (isFirebaseSyncEnabled()) {
       try {
@@ -242,10 +243,41 @@ export function OrderDataProvider({
       } catch (e) {
         console.warn('[Firebase Sync] Realtime listener initialization skipped:', e);
       }
+    } else {
+      // Fallback Polling Mechanism for Express Server Backend
+      const fetchOrdersFromApi = async () => {
+        try {
+          const isCustomerView = activeTab === 'customer';
+          const currentTable = currentPath.replace('/', '');
+          let url = '/api/orders';
+          const res = await apiFetch(url);
+          if (res.ok) {
+            let data = await res.json();
+            
+            // Replicate Firebase query filtering logic
+            if (isCustomerView && currentTable && currentTable !== '') {
+              data = data.filter((o: Order) => String(o.tableNumber) === String(currentTable));
+            } else if (isCustomerView) {
+              data = data.filter((o: Order) => String(o.tableNumber) === 'NONE').slice(0, 1);
+            }
+            
+            setOrders(prev => reconcileOrdersWithRecentTransitions(data));
+          }
+        } catch (e) {
+          console.error('[API Sync] Failed to fetch orders:', e);
+        }
+      };
+
+      // Initial fetch
+      fetchOrdersFromApi();
+      
+      // Poll every 5 seconds for new orders/updates
+      pollingInterval = setInterval(fetchOrdersFromApi, 5000);
     }
 
     return () => {
       unsubscribeOrders();
+      if (pollingInterval) clearInterval(pollingInterval);
     };
   }, [activeTab, currentPath]);
 
