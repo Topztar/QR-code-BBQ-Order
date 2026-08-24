@@ -17,8 +17,11 @@ import {
 } from './hardware/printerDriver';
 
 import { initFirebaseStorage, gcsBucket, getGeminiClient, app, PORT } from './src/server/init';
-import { setupMiddleware } from './src/server/middleware';
+import { setupMiddleware, createRateLimiter } from './src/server/middleware';
 initFirebaseStorage();
+
+const orderRateLimiter = createRateLimiter(15, 60 * 1000, '訂單提交');
+const reservationRateLimiter = createRateLimiter(10, 60 * 1000, '預約提交');
 
 function getMimeTypeFromExt(filePath: string): string {
   const ext = path.extname(filePath).toLowerCase();
@@ -2459,7 +2462,7 @@ app.get('/api/reservations', (_req, res) => {
   res.json(liveReservations);
 });
 
-app.post('/api/reservations', (req, res) => {
+app.post('/api/reservations', reservationRateLimiter, (req, res) => {
   const { customerName, phone, guestCount, tableNumber, date, time, notes, status } = req.body;
   if (!customerName || !phone || !tableNumber || !date || !time) {
     return res.status(400).json({ error: 'Missing required field: customerName, phone, tableNumber, date, time / 缺少預約必填欄位' });
@@ -2941,7 +2944,7 @@ function getMappedTableId(inputTableId: string, availableTables: Array<{id: stri
 }
 
 // 4. Place New Order
-app.post('/api/orders', (req, res) => {
+app.post('/api/orders', orderRateLimiter, (req, res) => {
   const { tableNumber, items, customerName, customerAvatar, paymentMethod, isMember, guestCount, clientOrderId, reservationNo, reservationDate, reservationTime, takeoutInfo } = req.body;
 
   if (clientOrderId) {

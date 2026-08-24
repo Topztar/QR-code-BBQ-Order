@@ -70,5 +70,26 @@ export const startFirebaseSync = async () => {
 
 // Firebase network sync is enabled by default
 
+import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
+
 export const functions = getFunctions(app);
+
+// 🤖 Firebase App Check (Bot & Abuse Protection)
+let appCheckInstance: any = null;
+if (typeof window !== 'undefined') {
+  const recaptchaSiteKey = (window as any).__FIREBASE_APPCHECK_KEY__ || (import.meta as any).env?.VITE_RECAPTCHA_SITE_KEY;
+  if (recaptchaSiteKey) {
+    try {
+      appCheckInstance = initializeAppCheck(app, {
+        provider: new ReCaptchaV3Provider(recaptchaSiteKey),
+        isTokenAutoRefreshEnabled: true
+      });
+      console.log('[Firebase AppCheck] Initialized successfully with ReCaptchaV3Provider');
+    } catch (err) {
+      console.warn('[Firebase AppCheck] Initialization skipped or debug fallback active:', err);
+    }
+  }
+}
+export const appCheck = appCheckInstance;
+
 

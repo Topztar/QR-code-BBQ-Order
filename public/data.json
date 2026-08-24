@@ -1660,6 +1660,56 @@
       "ru": "Заказать",
       "es": "Pedir"
     },
+    "selectDish": {
+      "zh": "點選",
+      "en": "Select",
+      "ko": "선택",
+      "ja": "選択",
+      "th": "เลือก",
+      "vi": "Chọn",
+      "ru": "Выбрать",
+      "es": "Elegir"
+    },
+    "dineInOnly": {
+      "zh": "僅接受內用",
+      "en": "Dine-In Only",
+      "ko": "매장 식사 전용",
+      "ja": "店内飲食のみ",
+      "th": "ทานที่ร้านเท่านั้น",
+      "vi": "Chỉ ăn tại chỗ",
+      "ru": "Только в зале",
+      "es": "Solo en el Local"
+    },
+    "hotRecommended": {
+      "zh": "熱銷推薦",
+      "en": "Popular",
+      "ko": "인기 추천",
+      "ja": "おすすめ",
+      "th": "แนะนำยอดฮิต",
+      "vi": "Được yêu thích",
+      "ru": "Хит",
+      "es": "Recomendado"
+    },
+    "noImage": {
+      "zh": "無圖",
+      "en": "No Photo",
+      "ko": "사진 없음",
+      "ja": "画像なし",
+      "th": "ไม่มีรูป",
+      "vi": "Không có ảnh",
+      "ru": "Без фото",
+      "es": "Sin foto"
+    },
+    "hasImage": {
+      "zh": "配圖",
+      "en": "Photo",
+      "ko": "사진",
+      "ja": "画像あり",
+      "th": "มีรูป",
+      "vi": "Có ảnh",
+      "ru": "Фото",
+      "es": "Foto"
+    },
     "cartLobby": {
       "zh": "購物車結帳大廳",
       "en": "Shopping Cart Lobby",

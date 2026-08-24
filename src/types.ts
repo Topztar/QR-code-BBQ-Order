@@ -6,6 +6,7 @@ export interface CustomAddOn {
   id: string;
   name: { [key in Language]?: string } | string;
   price: number;
+  qty?: number;
 }
 
 export interface FoodCustomization {
@@ -38,6 +39,7 @@ export interface MenuItem {
   orderIndex?: number;
   isTakeoutAvailable?: boolean;
   soldOutAt?: string | null;
+  showOnCustomerPage?: boolean;
 }
 
 export interface OrderItem {

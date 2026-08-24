@@ -2,18 +2,25 @@ import { apiFetch } from "../lib/api";
 import React, { Component, useState, useEffect, useMemo, useCallback } from 'react';
 import { Ingredient, Language, Category, TableConfig, Order, OrderStatus, Reservation } from '../types';
 import { getLocalizedText } from '../utils/i18n';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
-import { TrendingUp, Package, AlertTriangle, Layers, Sparkles, Coins, Lock, Unlock, QrCode, Trash2, Plus, Edit, Download, Calendar, FileText, ShoppingBag, ShoppingCart, Copy, Check, ExternalLink, Minus, Flame, Printer, Maximize2, Minimize2, ChevronLeft, ChevronRight, RefreshCw, Cpu, Phone, Clock, User } from 'lucide-react';
+import { AlertTriangle, Sparkles, Coins, Lock, Unlock, QrCode, Trash2, Plus, Edit, Download, Calendar, FileText, ShoppingBag, Copy, Check, Minus, Printer, Maximize2, Phone, Clock, User } from 'lucide-react';
 import { db, isFirebaseSyncEnabled } from '../lib/firebase';
 import { safeStorage } from '../lib/safeStorage';
 import { doc, setDoc, writeBatch, collection, getDocs, query, where } from 'firebase/firestore';
-import PrintLogsD3Chart from './PrintLogsD3Chart';
 import {
   checkPOSBridgeHealth,
   openCashDrawerViaBridge,
   printViaBridge,
   DEFAULT_POS_BRIDGE_URL
 } from '../lib/posBridgeClient';
+import { ManagerStatsTab } from './manager/ManagerStatsTab';
+import { ManagerOrdersTab } from './manager/ManagerOrdersTab';
+import { ManagerInventoryTab } from './manager/ManagerInventoryTab';
+import { ManagerMenuTab } from './manager/ManagerMenuTab';
+import { ManagerMembersTab } from './manager/ManagerMembersTab';
+import { ManagerPrinterTab, PrinterConfig } from './manager/ManagerPrinterTab';
+import { ManagerOptionRulesTab } from './manager/ManagerOptionRulesTab';
+import { ManagerEodTab } from './manager/ManagerEodTab';
+import { ManagerTerminalTab } from './manager/ManagerTerminalTab';
 
 const localStorage = safeStorage;
 
@@ -187,10 +194,10 @@ interface ManagerDashboardProps {
   onReorderCategories?: (order: string[]) => Promise<void>;
   onReorderMenuItems?: (order: string[]) => Promise<void>;
   tables: TableConfig[];
-  onAddTable: (id: string, qrCodeUrl?: string) => Promise<{ success: boolean; error?: string }>;
-  onEditTable: (id: string, qrCodeUrl: string) => Promise<{ success: boolean; error?: string }>;
+  onAddTable: (id: string, qrCodeUrl?: string, maxCapacity?: number) => Promise<{ success: boolean; error?: string }>;
+  onEditTable: (id: string, qrCodeUrl: string, maxCapacity?: number) => Promise<{ success: boolean; error?: string }>;
   onDeleteTable: (id: string) => Promise<{ success: boolean; error?: string }>;
-  onUpdateOrderItems?: (orderId: string, items: any[]) => Promise<void>;
+  onUpdateOrderItems?: (orderId: string, items: any[], refundLogs?: any[]) => Promise<void>;
   onDeleteOrder?: (orderId: string) => Promise<{ success: boolean; error?: string }>;
   onPayOrder?: (
     orderId: string,
@@ -204,7 +211,7 @@ interface ManagerDashboardProps {
     },
     skipRefresh?: boolean
   ) => Promise<void>;
-  defaultSubTab?: 'stats' | 'orders' | 'inventory' | 'menu' | 'members' | 'cashier' | 'printer' | 'options' | 'eod';
+  defaultSubTab?: 'stats' | 'orders' | 'inventory' | 'menu' | 'members' | 'cashier' | 'printer' | 'options' | 'eod' | 'terminal';
   onSubTabChange?: (subTab: 'stats' | 'orders' | 'inventory' | 'menu' | 'members' | 'cashier' | 'printer' | 'options' | 'eod' | 'terminal') => void;
   minSpend?: number;
   onUpdateMinSpend?: (newVal: number) => Promise<{ success: boolean; error?: string }>;
@@ -299,7 +306,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   onUpdateMemberConfig,
 }) => {
   // Navigation Tabs
-  const [activeSubTab, setActiveSubTab] = useState<'stats' | 'orders' | 'inventory' | 'menu' | 'members' | 'cashier' | 'printer' | 'options' | 'eod'>(defaultSubTab || 'stats');
+  const [activeSubTab, setActiveSubTab] = useState<'stats' | 'orders' | 'inventory' | 'menu' | 'members' | 'cashier' | 'printer' | 'options' | 'eod' | 'terminal'>(defaultSubTab || 'stats');
   const [eodSelectedDate, setEodSelectedDate] = useState<string>(() => getLocalDateString());
 
   const prevMemberPointsRatioRef = React.useRef<number>(memberPointsRatio);
@@ -430,8 +437,13 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     return localStorage.getItem('table-layout-locked') !== 'false'; // Default to true (locked) for safety
   });
 
+  // Reservation pagination
+  const [reservationPage, setReservationPage] = useState<number>(1);
+  const RESERVATION_PAGE_SIZE = 10;
+
   // Tablet selection for map drag helper
   const [selectedFineTuneTableId, setSelectedFineTuneTableId] = useState<string | null>(null);
+  const fineTuneTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
 
   // Drag and drop mouse event handler
   const handleTableMouseDown = (e: React.MouseEvent, tableId: string) => {
@@ -577,9 +589,14 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
       [tbl.id]: { x: nextX, y: nextY }
     }));
 
-    if (onUpdateTableStatus) {
-      await onUpdateTableStatus(tbl.id, { positionX: nextX, positionY: nextY } as any);
+    if (fineTuneTimeoutRef.current) {
+      clearTimeout(fineTuneTimeoutRef.current);
     }
+    fineTuneTimeoutRef.current = setTimeout(async () => {
+      if (onUpdateTableStatus) {
+        await onUpdateTableStatus(tbl.id, { positionX: nextX, positionY: nextY } as any);
+      }
+    }, 500);
   };
 
   // Reorder sorting action handlers
@@ -1253,7 +1270,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
         alert('❌ 點單中查無此餐點！');
         return;
       }
-      itemName = targetItem.name?.zh || targetItem.name;
+      itemName = (typeof targetItem.name === 'string' ? targetItem.name : targetItem.name?.zh || '') || '';
       unitPrice = targetItem.price;
 
       updatedItems = updatedItems.map((it: any) => {
@@ -1334,7 +1351,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
 
     // Save and sync with backend
     const logs = selectedOrder.refundLogs ? [...selectedOrder.refundLogs, newLog] : [newLog];
-    await onUpdateOrderItems(selectedOrder.id, updatedItems, logs);
+    await (onUpdateOrderItems as any)(selectedOrder.id, updatedItems, logs);
 
     // Update selectedOrder modal state to sync UI
     setSelectedOrder({
@@ -2176,7 +2193,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   const [itemNameZh, setItemNameZh] = useState('');
   const [itemNameEn, setItemNameEn] = useState('');
   const [itemCategory, setItemCategory] = useState('skewers');
-  const [itemPrice, setItemPrice] = useState(100);
+  const [itemPrice, setItemPrice] = useState<number | ''>(100);
   const [itemImage, setItemImage] = useState('https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=400');
   const [itemDescZh, setItemDescZh] = useState('');
   const [itemDescEn, setItemDescEn] = useState('');
@@ -2211,7 +2228,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   const [newRulePrice, setNewRulePrice] = useState<number | ''>(20);
 
   // Printer Configuration States
-  const [kitchenPrinter, setKitchenPrinter] = useState({
+  const [kitchenPrinter, setKitchenPrinter] = useState<PrinterConfig>({
     connectionType: 'IP',
     ip: '192.168.1.101',
     usbPort: 'USB001',
@@ -2224,7 +2241,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     headerPrefix: '★★★ 廚房工作備餐單 ★★★',
     footerSuffix: '請主廚盡速配餐出餐！'
   });
-  const [billPrinter, setBillPrinter] = useState({
+  const [billPrinter, setBillPrinter] = useState<PrinterConfig>({
     connectionType: 'LPT',
     ip: '192.168.1.102',
     usbPort: 'LPT1:',
@@ -3334,479 +3351,30 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
       )}
       {/* ==================== TAB 1: OPERATIONAL ANALYTICS ==================== */}
       {activeSubTab === 'stats' && (
-        <div className="space-y-6 animate-fadeIn" id="subtab-section-stats">
-          {/* Offline Accounting & Export Header Banner */}
-          <div className="bg-[#121212] border border-white/10 rounded-2xl p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-xl" id="stats-accounting-banner">
-            <div className="space-y-1 text-left">
-              <h3 className="font-extrabold text-base text-white tracking-tight flex items-center gap-2">
-                <FileText size={18} className="text-[#E5B453]" />
-                營運數據分析與離線對帳管理 (Business Analytics & Offline Accounting)
-              </h3>
-              <p className="text-xs text-white/40">
-                將過去 30 天內已完成 (Status: Completed) 的所有顧客交易訂單明細匯出為完整的 CSV 檔格式，方便執行會計記帳或損益試算。
-              </p>
-            </div>
-            
-            <button
-              type="button"
-              onClick={handleExportLast30DaysOrdersCSV}
-              className="bg-[#E5B453] hover:bg-amber-400 active:scale-95 text-[#0F0F0F] font-black text-xs px-4 py-2.5 rounded-xl cursor-pointer transition-all flex items-center gap-2 shrink-0 border border-[#E5B453]/25 shadow-lg shadow-amber-500/5"
-            >
-              <Download size={14} className="stroke-[3]" />
-              <span>匯出 30 天已完成交易 CSV</span>
-            </button>
-          </div>
-
-          {/* Toast / Status messages inside Stats Tab */}
-          {(csvExportSuccess || csvExportError) && (
-            <div className="animate-slideIn" id="csv-export-alerts">
-              {csvExportSuccess && (
-                <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs py-3 px-4 rounded-xl flex items-center gap-2">
-                  <Check size={14} className="stroke-[3]" />
-                  <span>{csvExportSuccess}</span>
-                </div>
-              )}
-              {csvExportError && (
-                <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-xs py-3 px-4 rounded-xl flex items-center gap-2">
-                  <AlertTriangle size={14} className="stroke-[3]" />
-                  <span>{csvExportError}</span>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Key KPI Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5" id="stats-kpi-grid">
-            <div className="bg-[#161616] rounded-xl p-5 border border-white/10 shadow-sm flex items-center space-x-4">
-              <div className="bg-amber-500/10 text-[#E5B453] p-3 rounded-lg">
-                <Coins size={22} className="text-[#E5B453]" />
-              </div>
-              <div className="text-left font-sans">
-                <span className="text-xs text-white/45 font-black uppercase tracking-wider block">累計點餐營業額</span>
-                <p className="text-xl font-black text-white font-mono mt-0.5">NT$ {(analytics.totalRevenue || 0).toLocaleString()}</p>
-              </div>
-            </div>
-            <div className="bg-[#161616] rounded-xl p-5 border border-white/10 shadow-sm flex items-center space-x-4">
-              <div className="bg-blue-500/10 text-blue-400 p-3 rounded-lg">
-                <TrendingUp size={22} className="text-blue-400" />
-              </div>
-              <div className="text-left font-sans">
-                <span className="text-xs text-white/45 font-black uppercase tracking-wider block">完成出單交易量</span>
-                <p className="text-xl font-black text-white font-mono mt-0.5">{analytics.ordersCount} 筆交易</p>
-              </div>
-            </div>
-            <div className="bg-[#161616] rounded-xl p-5 border border-white/10 shadow-sm flex items-center space-x-4">
-              <div className="bg-rose-500/10 text-rose-400 p-3 rounded-lg">
-                <AlertTriangle size={22} className="text-rose-400" />
-              </div>
-              <div className="text-left font-sans">
-                <span className="text-xs text-white/45 font-black uppercase tracking-wider block">食材庫存水位警報</span>
-                <p className="text-xl font-black text-white font-mono mt-0.5">
-                  {analytics.stockWarnings.length > 0 ? (
-                    <span className="text-rose-400 animate-pulse">{analytics.stockWarnings.length} 個料件告警</span>
-                  ) : (
-                    <span className="text-emerald-400 text-sm font-semibold">健康安全 ok</span>
-                  )}
-                </p>
-              </div>
-            </div>
-            <div className="bg-[#161616] rounded-xl p-5 border border-white/10 shadow-sm flex items-center space-x-4">
-              <div className="bg-[#E5B453]/10 text-[#E5B453] p-3 rounded-lg">
-                <ShoppingBag size={22} className="text-[#E5B453]" />
-              </div>
-              <div className="text-left font-sans">
-                <span className="text-xs text-white/45 font-black uppercase tracking-wider block">外帶編號取餐序列</span>
-                <p className="text-sm font-bold text-white mt-0.5">
-                  目前外帶累計: <span className="font-mono text-base font-extrabold text-[#E5B453]">#{takeoutStatus.sequence}</span> 號
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Business Charts with Recharts */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6" id="manager-charts-workspace">
-            {/* Category breakdown sales BarChart */}
-            <div className="bg-[#161616] border border-white/10 rounded-xl p-5 shadow-sm space-y-2 text-left">
-              <h4 className="font-bold text-sm text-white font-serif tracking-wide">
-                📊 各類別銷售營業額分析 Sales Breakdown by Categories
-              </h4>
-              <p className="text-white/40 text-xs text-sans">用以分析哪些料理為沙貝之金雞母類別</p>
-              <div className="h-64 pt-3" id="revenue-barchart-container">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartCategoryData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-                    <XAxis dataKey="name" tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }} axisLine={false} />
-                    <YAxis tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }} tickFormatter={formattedValue => `NT$ ${formattedValue}`} axisLine={false} />
-                    <Tooltip contentStyle={{ backgroundColor: '#161616', borderColor: 'rgba(255,255,255,0.15)', color: '#fff' }} formatter={(value) => [`NT$ ${value}`, '營業額']} />
-                    <Bar dataKey="營業額 NT$" fill="#E5B453" radius={[5, 5, 0, 0]} barSize={35} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            {/* 今日各類別商品銷售佔比 Pie Chart */}
-            <div className="bg-[#161616] border border-white/10 rounded-xl p-5 shadow-sm space-y-2 text-left" id="category-sales-piechart-card">
-              <h4 className="font-bold text-sm text-white font-serif tracking-wide">
-                🍰 今日各類別銷售佔比 Category Sales Share (Pie Chart)
-              </h4>
-              <p className="text-white/40 text-xs text-sans">視覺化分析今日不同餐點類別之營業額佔比份額</p>
-              <div className="h-64 pt-3 flex flex-col md:flex-row items-center justify-center gap-2" id="piechart-container">
-                <div className="w-1/2 h-full min-h-[160px] relative">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={chartCategoryData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={50}
-                        outerRadius={70}
-                        paddingAngle={4}
-                        dataKey="營業額 NT$"
-                        nameKey="name"
-                      >
-                        {chartCategoryData.map((_entry, index) => {
-                          const colors = ['#E5B453', '#FFA500', '#F3CD78', '#D4AF37', '#FF8C00', '#FFD700', '#CD7F32'];
-                          return (
-                            <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
-                          );
-                        })}
-                      </Pie>
-                      <Tooltip 
-                        contentStyle={{ backgroundColor: '#161616', borderColor: 'rgba(255,255,255,0.15)', color: '#fff' }} 
-                        formatter={(value, name) => [`NT$ ${value}`, name]} 
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-                {/* Custom list of categories on the side so the user reads values and colors clearly */}
-                <div className="w-1/2 flex flex-col space-y-1.5 max-h-[220px] overflow-y-auto px-1 pr-2">
-                  {chartCategoryData.map((entry, index) => {
-                    const colors = ['#E5B453', '#FFA500', '#F3CD78', '#D4AF37', '#FF8C00', '#FFD700', '#CD7F32'];
-                    const totalRevenue = chartCategoryData.reduce((sum, item) => sum + (item['營業額 NT$'] || 0), 0);
-                    const percentage = totalRevenue > 0 ? ((entry['營業額 NT$'] / totalRevenue) * 100).toFixed(1) : '0.0';
-                    return (
-                      <div key={index} className="flex flex-col text-[10px] text-zinc-300 font-sans border-b border-white/5 pb-1">
-                        <div className="flex items-center space-x-1.5">
-                          <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: colors[index % colors.length] }} />
-                          <span className="truncate font-semibold text-white/90">{entry.name}</span>
-                        </div>
-                        <div className="pl-3.5 flex items-center justify-between text-[10px] font-mono text-zinc-400 mt-0.5">
-                          <span>{percentage}%</span>
-                          <span className="text-zinc-500 text-[9px]">NT$ {entry['營業額 NT$']}</span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
-            {/* Hourly busy dining line graph */}
-            <div className="bg-[#161616] border border-white/10 rounded-xl p-5 shadow-sm space-y-2 text-left">
-              <h4 className="font-bold text-sm text-white font-serif tracking-wide">
-                📈 宵夜尖峰點餐時段趨勢 Hourly Dining Orders Trends
-              </h4>
-              <p className="text-white/40 text-xs text-sans">營業時間 17:30 - 00:30。有助於適當調度內外場人力。</p>
-              <div className="h-64 pt-3" id="busy-hours-linechart-container">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartHourlyData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-                    <XAxis dataKey="用餐時段" tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }} axisLine={false} />
-                    <YAxis tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }} axisLine={false} />
-                    <Tooltip contentStyle={{ backgroundColor: '#161616', borderColor: 'rgba(255,255,255,0.15)', color: '#fff' }} />
-                    <Legend iconType="circle" />
-                    <Line type="monotone" dataKey="下單數量" stroke="#00C300" strokeWidth={3} activeDot={{ r: 8 }} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          </div>
-
-          {/* 📊 D3-powered hourly revenue and peak order times analytics chart */}
-          <PrintLogsD3Chart printLogs={printLogs} onRefresh={fetchPrintLogs} />
-
-          {/* Top selling food rankings */}
-          <div className="bg-[#161616] border border-white/10 rounded-xl p-5 text-left">
-            <div className="flex items-center space-x-2 border-b border-white/5 pb-3 mb-4">
-              <Sparkles size={16} className="text-[#E5B453]" />
-              <h4 className="font-bold text-sm">🔥 本店熱門人氣銷售排行 (銷量排行 Top Dishes)</h4>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3.5">
-              {analytics.topDishes.map((dish, i) => (
-                <div key={dish.name} className="bg-black/30 border border-white/5 p-3 rounded-lg text-center relative overflow-hidden">
-                  <span className="absolute top-0 left-0 bg-amber-500 text-black text-[9px] font-black px-1.5 py-0.5 rounded-br">
-                    NO.{i + 1}
-                  </span>
-                  <p className="font-bold text-xs text-white truncate mt-2">{dish.name}</p>
-                  <p className="font-mono text-xs text-blue-400 font-extrabold mt-1">{dish.qty} 份</p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* 今日熱銷設定 Today's Bestsellers Configuration */}
-          <div className="bg-[#161616] border border-white/10 rounded-xl p-5 text-left space-y-4" id="stats-popular-settings-card">
-            <div className="flex items-center space-x-2 border-b border-white/5 pb-3">
-              <Flame size={18} className="text-[#E5B453] fill-amber-500 animate-pulse" />
-              <div>
-                <h4 className="font-bold text-sm text-white">🔥 今日熱銷設定 Today's Bestsellers Configuration</h4>
-                <p className="text-[11px] text-white/40 font-sans">
-                  手動編輯與自訂消費者點餐首頁頂端顯示的「今日今日熱銷」人氣商品清單，引導導購成效。
-                </p>
-              </div>
-            </div>
-
-            {popularSaveStatus.type && (
-              <div className={`p-3.5 rounded-xl text-xs font-bold flex items-center justify-between border animate-fadeIn transition-all duration-300 ${
-                popularSaveStatus.type === 'success' 
-                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' 
-                  : 'bg-rose-500/10 border-rose-500/30 text-rose-455 text-rose-400'
-              }`}>
-                <span className="flex items-center gap-1.5">
-                  {popularSaveStatus.type === 'success' ? '✨' : '⚠️'}
-                  {popularSaveStatus.message}
-                </span>
-                <button 
-                  type="button" 
-                  onClick={() => setPopularSaveStatus({ type: null, message: '' })}
-                  className="text-white/50 hover:text-white px-2 py-0.5 hover:bg-white/5 rounded cursor-pointer transition font-mono border-0 bg-transparent text-xs"
-                >
-                  ✕
-                </button>
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 font-sans">
-              {/* Left Column: Active Bestsellers */}
-              <div className="bg-black/25 border border-white/5 p-4 rounded-xl space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-xs text-amber-400">當前今日熱銷品項 ({localPopularIds.length})</span>
-                  {showClearAllPopularConfirm ? (
-                    <div className="flex items-center gap-1.5 bg-rose-500/10 border border-rose-500/20 px-2 py-1 rounded-lg">
-                      <span className="text-rose-455 font-bold text-[9px] text-rose-400 shrink-0">確定清空？</span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setLocalPopularIds([]);
-                          setShowClearAllPopularConfirm(false);
-                        }}
-                        className="px-1.5 py-0.5 text-[9px] bg-rose-600 hover:bg-rose-500 text-white font-bold rounded cursor-pointer transition active:scale-90"
-                      >
-                        確定
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setShowClearAllPopularConfirm(false)}
-                        className="px-1.5 py-0.5 text-[9px] bg-zinc-700 hover:bg-zinc-650 text-zinc-300 rounded cursor-pointer transition active:scale-90"
-                      >
-                        取消
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setShowClearAllPopularConfirm(true)}
-                      className="text-[10px] text-rose-400 hover:text-rose-300 font-mono transition cursor-pointer bg-transparent border-0"
-                    >
-                      🗑️ 全部清空
-                    </button>
-                  )}
-                </div>
-
-                <div className="space-y-2 max-h-[250px] overflow-y-auto pr-1">
-                  {localPopularIds.length === 0 ? (
-                    <div className="text-center py-8 text-white/30 text-xs">
-                      目前未選擇任何品項，點餐頁將預設顯示前 4 項上架商品。
-                    </div>
-                  ) : (
-                    localPopularIds.map((itemId) => {
-                      const item = menuItems.find(m => m.id === itemId);
-                      if (!item) return null;
-                      return (
-                        <div
-                          key={itemId}
-                          className="flex items-center justify-between bg-[#1f1f1f] p-2 border border-white/5 rounded-lg text-xs"
-                        >
-                          <div className="flex items-center space-x-2 truncate">
-                            <img
-                              src={item.image || 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=150'}
-                              alt={getLocalizedText(item.name, currentLang)}
-                              className="w-8 h-8 object-cover rounded bg-black flex-shrink-0"
-                              referrerPolicy="no-referrer"
-                            />
-                            <div className="truncate">
-                              <p className="font-bold text-white truncate">{getLocalizedText(item.name, currentLang)}</p>
-                              <p className="text-[9px] text-zinc-400 font-mono">ID: {item.id} • NT$ {item.price}</p>
-                            </div>
-                          </div>
-                          
-                          {popularItemToRemoveId === itemId ? (
-                            <div className="flex items-center gap-1.5 bg-rose-500/10 border border-rose-500/20 p-1 rounded-lg">
-                              <span className="text-rose-455 font-bold text-[9px] text-rose-400 shrink-0">移除？</span>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setLocalPopularIds(prev => prev.filter(id => id !== itemId));
-                                  setPopularItemToRemoveId(null);
-                                }}
-                                className="px-1.5 py-0.5 text-[9px] bg-rose-600 hover:bg-rose-500 text-white font-bold rounded cursor-pointer transition active:scale-90"
-                              >
-                                確定
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setPopularItemToRemoveId(null)}
-                                className="px-1.5 py-0.5 text-[9px] bg-zinc-700 hover:bg-zinc-650 text-zinc-300 rounded cursor-pointer transition active:scale-90"
-                              >
-                                取消
-                              </button>
-                            </div>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => setPopularItemToRemoveId(itemId)}
-                              className="p-1 px-2 text-[10px] bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 hover:border-rose-500/35 rounded transition cursor-pointer font-bold active:scale-95"
-                            >
-                              移除
-                            </button>
-                          )}
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-
-              {/* Right Column: Add New Bestseller */}
-              <div className="bg-black/25 border border-white/5 p-4 rounded-xl space-y-3">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-bold text-xs text-zinc-300">可選餐點清單 (點按餐點快速加入)</span>
-                </div>
-
-                <div className="space-y-2 max-h-[250px] overflow-y-auto pr-1">
-                  {menuItems.map((item) => {
-                    const isSelected = localPopularIds.includes(item.id);
-                    return (
-                      <div
-                        key={item.id}
-                        onClick={() => {
-                          if (isSelected) {
-                            setLocalPopularIds(prev => prev.filter(id => id !== item.id));
-                          } else {
-                            if (localPopularIds.length >= 8) {
-                              alert('💡 為了點餐頁之最佳版面與體驗，今日熱銷品項上限為 8 項，請先移除現有品項。');
-                              return;
-                            }
-                            setLocalPopularIds(prev => prev.includes(item.id) ? prev : [...prev, item.id]);
-                          }
-                        }}
-                        className={`flex items-center justify-between p-2 border rounded-lg cursor-pointer text-xs transition-all select-none ${
-                          isSelected
-                            ? 'bg-amber-500/10 border-amber-500/40 hover:bg-amber-500/15'
-                            : 'bg-white/[0.02] border-white/5 hover:bg-white/5 hover:border-white/10'
-                        }`}
-                      >
-                        <div className="flex items-center space-x-2 truncate">
-                          <img
-                            src={item.image || 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=150'}
-                            alt={getLocalizedText(item.name, currentLang)}
-                            className="w-8 h-8 object-cover rounded bg-black flex-shrink-0"
-                            referrerPolicy="no-referrer"
-                          />
-                          <div className="truncate">
-                            <p className="font-bold text-white truncate">{getLocalizedText(item.name, currentLang)}</p>
-                            <p className="text-[10px] text-zinc-400 font-mono">Category: {item.category}</p>
-                          </div>
-                        </div>
-
-                        <div>
-                          {isSelected ? (
-                            <span className="text-[10px] font-black text-[#E5B453] bg-amber-500/10 border border-amber-500/30 rounded px-1.5 py-0.5">
-                              ✓ 已選中
-                            </span>
-                          ) : (
-                            <span className="text-[10px] font-bold text-zinc-400 bg-white/5 border border-white/10 rounded px-1.5 py-0.5">
-                              + 點選
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
-            {/* Bottom Button Action */}
-            <div className="pt-2 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-t border-white/5 font-sans">
-              <span className="text-[11px] text-zinc-500 font-medium">
-                變更將即時儲存並同步至前台顧客手機點餐首頁。
-              </span>
-              <button
-                type="button"
-                disabled={isSavingPopular}
-                onClick={async () => {
-                  setIsSavingPopular(true);
-                  setPopularSaveStatus({ type: null, message: '' });
-                  try {
-                    if (onUpdatePopularItemIds) {
-                      const res = await onUpdatePopularItemIds(localPopularIds);
-                      if (res && res.success) {
-                        setPopularSaveStatus({
-                          type: 'success',
-                          message: '🎉 今日熱銷設定完成，已成功同步上雲端並更新前台點餐系統！'
-                        });
-                        try {
-                          alert('🎉 今日熱銷設定完成，已成功同步上雲端並更新前台點餐系統！');
-                        } catch (e) {
-                          console.warn('Alert blocked in iframe sandbox', e);
-                        }
-                      } else {
-                        const errorMsg = res?.error || '未知錯誤';
-                        setPopularSaveStatus({
-                          type: 'error',
-                          message: `⚠️ 儲存失敗: ${errorMsg}`
-                        });
-                        try {
-                          alert(`⚠️ 儲存失敗: ${errorMsg}`);
-                        } catch (e) {
-                          console.warn('Alert blocked in iframe sandbox', e);
-                        }
-                      }
-                    } else {
-                      setPopularSaveStatus({
-                        type: 'error',
-                        message: '⚠️ 系統異常：點購率 API 連結未就緒！'
-                      });
-                      try {
-                        alert('⚠️ 系統異常：點購率 API 連結未就緒！');
-                      } catch (e) {
-                        console.warn('Alert blocked', e);
-                      }
-                    }
-                  } catch (err: any) {
-                    console.error('[Save Popular Error]', err);
-                    const errMsg = err?.message || '連線錯誤';
-                    setPopularSaveStatus({
-                      type: 'error',
-                      message: `❌ 連線伺服器失敗: ${errMsg}，請確認網路！`
-                    });
-                    try {
-                      alert('❌ 連線伺服器失敗，請確認網路！');
-                    } catch (e) {
-                      console.warn('Alert blocked', e);
-                    }
-                  } finally {
-                    setIsSavingPopular(false);
-                  }
-                }}
-                className="bg-[#E5B453] hover:bg-amber-400 disabled:bg-amber-500/40 text-[#0F0F0F] font-black text-xs px-4 py-2 rounded-xl cursor-pointer transition-all flex items-center gap-2 border border-[#E5B453]/20 shadow-md shadow-amber-500/5 active:scale-95 text-center min-w-[150px] justify-center h-9"
-              >
-                {isSavingPopular ? '正在儲存同步...' : '確認儲存今日熱銷設定'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <ManagerStatsTab
+          currentLang={currentLang}
+          analytics={analytics}
+          takeoutStatus={takeoutStatus}
+          chartCategoryData={chartCategoryData}
+          chartHourlyData={chartHourlyData}
+          printLogs={printLogs}
+          fetchPrintLogs={fetchPrintLogs}
+          handleExportLast30DaysOrdersCSV={handleExportLast30DaysOrdersCSV}
+          csvExportSuccess={csvExportSuccess}
+          csvExportError={csvExportError}
+          menuItems={menuItems}
+          localPopularIds={localPopularIds}
+          setLocalPopularIds={setLocalPopularIds}
+          showClearAllPopularConfirm={showClearAllPopularConfirm}
+          setShowClearAllPopularConfirm={setShowClearAllPopularConfirm}
+          popularItemToRemoveId={popularItemToRemoveId}
+          setPopularItemToRemoveId={setPopularItemToRemoveId}
+          popularSaveStatus={popularSaveStatus}
+          setPopularSaveStatus={setPopularSaveStatus}
+          isSavingPopular={isSavingPopular}
+          setIsSavingPopular={setIsSavingPopular}
+          onUpdatePopularItemIds={onUpdatePopularItemIds}
+        />
       )}
 
 
@@ -4776,7 +4344,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                                     }
                                     if (onUpdateTableStatus) {
                                       await onUpdateTableStatus(tbId, { 
-                                        status: newStatus, 
+                                        status: newStatus as any, 
                                         preservedFor: newStatus === 'preserved' ? newPresName : '' 
                                       });
                                     }
@@ -6852,7 +6420,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                                       'cleaning',
                                       'preserved'
                                     ];
-                                    const currentIndex = statusOrder.indexOf(tbl.status || 'available');
+                                    const currentIndex = statusOrder.indexOf((tbl.status as any) || 'available');
                                     const nextIndex = (currentIndex + 1) % statusOrder.length;
                                     const nextStatus = statusOrder[nextIndex];
                                     
@@ -6983,7 +6551,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                                   }
                                 }
                                 if (onUpdateTableStatus) {
-                                  await onUpdateTableStatus(tb.id, { status: newStatus, preservedFor: newStatus === 'preserved' ? newPresName : '' });
+                                  await onUpdateTableStatus(tb.id, { status: newStatus as any, preservedFor: newStatus === 'preserved' ? newPresName : '' });
                                 }
                               }}
                               className="w-full bg-[#1a1a1a] border border-white/10 rounded bg-[#1e1e1e] text-white text-[11px] h-7 px-1.5 cursor-pointer outline-none focus:border-amber-400 text-xs"
@@ -7215,8 +6783,6 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                           : '⏳ 待廚房接單製作'}
                     </span>
                   </div>
-
-                  {/* Customer Quick Notes / Remarks */}
                   {(takeoutDetailModalOrder.quickNotes || (takeoutDetailModalOrder as any).feedback) && (
                     <div className="p-2.5 bg-black/40 rounded-lg border border-white/5 text-xs text-zinc-300">
                       <span className="text-amber-400 font-bold">📝 備註事項: </span>
@@ -7250,12 +6816,12 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                                 x{item.qty || 1}
                               </span>
                             </div>
-                            {item.customizations && (
+                            {(item as any).customizations && (
                               <div className="text-[11px] text-zinc-400 space-x-2">
-                                {item.customizations.spiciness && <span>🌶️ {item.customizations.spiciness}</span>}
-                                {item.customizations.soupBase && <span>🥣 {item.customizations.soupBase}</span>}
-                                {item.customizations.noodleType && <span>🍜 {item.customizations.noodleType}</span>}
-                                {item.customizations.notes && <span className="text-amber-300">({item.customizations.notes})</span>}
+                                {(item as any).customizations.spiciness && <span>🌶️ {(item as any).customizations.spiciness}</span>}
+                                {(item as any).customizations.soupBase && <span>🥣 {(item as any).customizations.soupBase}</span>}
+                                {(item as any).customizations.noodleType && <span>🍜 {(item as any).customizations.noodleType}</span>}
+                                {(item as any).customizations.notes && <span className="text-amber-300">({(item as any).customizations.notes})</span>}
                               </div>
                             )}
                           </div>
@@ -7313,3910 +6879,269 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
         </div>
       )}
 
-
       {/* ==================== TAB 2: ACCOUNTING LOG CHART & SINGLE DRILLDOWN ==================== */}
       {activeSubTab === 'orders' && (
-        <div className="space-y-6 animate-fadeIn text-left" id="subtab-section-orders">
-          {/* Preset Buttons & Advanced Filters */}
-          <div className="bg-[#161616] border border-white/10 rounded-xl p-5 space-y-4">
-            <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-white/5 pb-3">
-              <div className="space-y-1">
-                <h4 className="font-bold text-sm text-white font-serif">💳 營業核數、點單明細與自訂統計查詢</h4>
-                <p className="text-white/40 text-xs font-sans">可篩選指定時間、進行單筆交易對帳。點擊表格項目直接下鑽查閱顧客點餐規格細節。</p>
-              </div>
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mt-3 md:mt-0">
-                <button
-                  type="button"
-                  onClick={() => setShowBulkDeleteOrdersModal(true)}
-                  className="flex items-center justify-center space-x-1.5 bg-rose-500/10 hover:bg-rose-500 text-rose-400 hover:text-white px-3.5 py-2 rounded-lg font-bold text-xs active:scale-95 transition whitespace-nowrap cursor-pointer shadow-md border border-rose-500/25"
-                >
-                  <Trash2 size={13} />
-                  <span>批量刪除歷史訂單</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={handleExportOrdersReport}
-                  className="flex items-center justify-center space-x-1.5 bg-[#E5B453] hover:bg-amber-400 text-slate-900 px-4 py-2 rounded-lg font-black text-xs active:scale-95 transition whitespace-nowrap cursor-pointer shadow-md"
-                >
-                  <Download size={13} />
-                  <span>匯出查詢結果 (EXCEL格式報表)</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Date Preset Buttons */}
-            <div className="flex flex-wrap gap-2">
-              {[
-                { id: 'all', label: '全部歷史 orders' },
-                { id: 'today', label: '📅 今日銷售 (Today)' },
-                { id: 'week', label: '📅 本周銷售 (Last 7 Days)' },
-                { id: 'month', label: '📅 本月銷售 (Last 30 Days)' },
-                { id: 'custom', label: '🔍 自訂日期區間 (Custom)' }
-              ].map((btn) => (
-                <button
-                  key={btn.id}
-                  onClick={() => setDateRangeFilter(btn.id as any)}
-                  className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition active:scale-95 cursor-pointer ${
-                    dateRangeFilter === btn.id
-                      ? 'bg-amber-400/20 border-amber-400 text-[#E5B453] font-extrabold'
-                      : 'bg-black/20 border-white/5 text-gray-400 hover:text-white'
-                  }`}
-                >
-                  {btn.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Date Custom Inputs */}
-            {dateRangeFilter === 'custom' && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-black/20 p-4 rounded-lg border border-white/5 animate-slideDown text-xs">
-                <div className="space-y-1">
-                  <span className="text-white/40 font-bold block">起始日期 Start Date</span>
-                  <input
-                    type="date"
-                    value={orderQueryStartDate}
-                    onChange={(e) => setOrderQueryStartDate(e.target.value)}
-                    className="w-full bg-[#1e1e1e] border border-white/10 rounded-lg px-3 py-2 text-white outline-none focus:border-[#E5B453]"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <span className="text-white/40 font-bold block">截止日期 End Date</span>
-                  <input
-                    type="date"
-                    value={orderQueryEndDate}
-                    onChange={(e) => setOrderQueryEndDate(e.target.value)}
-                    className="w-full bg-[#1e1e1e] border border-white/10 rounded-lg px-3 py-2 text-white outline-none focus:border-[#E5B453]"
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Search Key Fields */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-              <div className="space-y-1 sm:col-span-2">
-                <label className="text-white/40 font-bold">單號/顧客別搜尋 Keyword Search</label>
-                <input
-                  type="text"
-                  placeholder="輸入 訂單單號 (如 LM-1001) 或顧客姓名搜尋"
-                  value={orderQueryKeyword}
-                  onChange={(e) => setOrderQueryKeyword(e.target.value)}
-                  className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white outline-none focus:border-[#E5B453] placeholder-white/20"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-white/40 font-bold">點單流向狀態 Order Status</label>
-                <select
-                  value={orderQueryStatus}
-                  onChange={(e) => setOrderQueryStatus(e.target.value)}
-                  className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white outline-none focus:border-[#E5B453]"
-                >
-                  <option value="all">顯示全部種類狀態</option>
-                  <option value="pending">⏳ 待處理 Pending</option>
-                  <option value="preparing">🍳 配備中 Preparing</option>
-                  <option value="completed">✅ 已送出熟餐 Completed</option>
-                  <option value="cancelled">❌ 已取消退料 Cancelled</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          {/* Aggregated analytics widgets */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="bg-gradient-to-br from-[#1c1c1c] to-[#121212] border border-white/5 rounded-xl p-4">
-              <span className="text-[10px] text-white/45 font-black uppercase tracking-wider block">篩選區間總營業額</span>
-              <p className="text-xl font-black text-[#E5B453] font-mono leading-none mt-2">
-                NT$ {(filteredStats.revenue || 0).toLocaleString()}
-              </p>
-              <p className="text-[9px] text-zinc-500 mt-1">（已扣除已取消訂單）</p>
-            </div>
-            <div className="bg-gradient-to-br from-[#1c1c1c] to-[#121212] border border-white/5 rounded-xl p-4">
-              <span className="text-[10px] text-white/45 font-black uppercase tracking-wider block">篩選期間總點單筆數</span>
-              <p className="text-xl font-black text-white font-mono leading-none mt-2">
-                {filteredStats.count} <span className="text-xs text-zinc-400 font-sans">筆</span>
-              </p>
-              <p className="text-[9px] text-zinc-500 mt-1">（含歷史已取消案件）</p>
-            </div>
-            <div className="bg-gradient-to-br from-[#1c1c1c] to-[#121212] border border-white/5 rounded-xl p-4">
-              <span className="text-[10px] text-white/45 font-black uppercase tracking-wider block">篩選客單價 (Average Ticket)</span>
-              <p className="text-xl font-black text-blue-400 font-mono leading-none mt-2">
-                NT$ {(filteredStats.aov || 0).toLocaleString()}
-              </p>
-              <p className="text-[9px] text-zinc-500 mt-1">平均每張訂單消費額</p>
-            </div>
-            <div className="bg-gradient-to-br from-[#1c1c1c] to-[#121212] border border-white/5 rounded-xl p-4">
-              <span className="text-[10px] text-white/45 font-black uppercase tracking-wider block">Google 會員佔銷比率</span>
-              <p className="text-xl font-black text-emerald-400 font-mono leading-none mt-2">
-                {filteredStats.memberShare.toFixed(1)}%
-              </p>
-              <p className="text-[9px] text-zinc-500 mt-1">核定 Google 會員之消費貢獻</p>
-            </div>
-          </div>
-
-          {/* Orders Chronology list */}
-          <div className="bg-[#161616] border border-white/10 rounded-xl overflow-hidden shadow-md">
-            <div className="overflow-x-auto text-xs">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-white/5 text-white/45 border-b border-white/10 font-bold uppercase tracking-wide">
-                    <th className="py-3 px-4 font-normal text-[10px] text-zinc-400">訂單 ID</th>
-                    <th className="py-3 px-4 font-normal text-[10px] text-zinc-400">點單時間</th>
-                    <th className="py-3 px-4 font-normal text-[10px] text-zinc-400">客用桌號</th>
-                    <th className="py-3 px-4 font-normal text-[10px] text-zinc-400">餐客 / 顧客別</th>
-                    <th className="py-3 px-4 font-normal text-[10px] text-zinc-400 text-right">總計金額</th>
-                    <th className="py-3 px-4 font-normal text-[10px] text-zinc-400 text-center">出餐進度</th>
-                    <th className="py-3 px-4 font-normal text-[10px] text-zinc-400 text-center">核對下鑽</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5 text-slate-300">
-                  {filteredOrders.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} className="py-8 text-center text-white/30 font-medium">
-                        無任何符合目前篩選準則的訂單交易紀錄。
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredOrders.map((o) => (
-                      <tr key={o.id} className="hover:bg-white/[2%] transition duration-150">
-                        <td className="py-3 px-4 font-mono font-bold text-white text-sm">{o.id || ''}</td>
-                        <td className="py-3 px-4 text-zinc-500">{o.createdAt ? new Date(o.createdAt).toLocaleString() : 'N/A'}</td>
-                        <td className="py-3 px-4 text-center font-bold text-white">{o.takeoutInfo || o.tableNumber?.includes('外帶') || o.tableNumber === 'takeout' ? `單號: #${o.id}` : `${o.tableNumber || 'N/A'} 桌`}</td>
-                        <td className="py-3 px-4 flex items-center space-x-2.5">
-                          <img src={o.customerAvatar || 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=150'} defaultValue="" alt="avatar" className="w-6 h-6 rounded-full object-cover border border-white/10" referrerPolicy="no-referrer" />
-                          <span className="font-bold text-white truncate max-w-[120px] block">{o.customerName || 'N/A'}</span>
-                          {o.isMember && <span className="bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[9px] font-bold px-1 py-0.2 rounded font-sans">⭐ 會員</span>}
-                        </td>
-                        <td className="py-3 px-4 text-right font-mono text-zinc-100 font-extrabold text-sm">NT$ {(o.total || 0).toLocaleString()}</td>
-                        <td className="py-3 px-4 text-center">
-                          <span className={`inline-block px-2.5 py-1 rounded text-[10px] font-extrabold ${
-                            o.status === 'completed'
-                              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                              : o.status === 'preparing'
-                              ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
-                              : o.status === 'pending'
-                              ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse'
-                              : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
-                          }`}>
-                            {o.status === 'completed' ? '已完成出餐' : (o.status === 'preparing' ? '廚房配餐中' : (o.status === 'pending' ? '新單待理' : '已取消復歸'))}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 text-center">
-                          <button
-                            type="button"
-                            onClick={() => setSelectedOrder(o)}
-                            className="bg-white/5 hover:bg-white/10 border border-white/10 text-white px-3 py-1 rounded-lg font-bold transition active:scale-95 text-[11px] cursor-pointer"
-                          >
-                            🔎 明細單
-                          </button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
+        <ManagerOrdersTab
+          setShowBulkDeleteOrdersModal={setShowBulkDeleteOrdersModal}
+          handleExportOrdersReport={handleExportOrdersReport}
+          dateRangeFilter={dateRangeFilter}
+          setDateRangeFilter={setDateRangeFilter}
+          orderQueryStartDate={orderQueryStartDate}
+          setOrderQueryStartDate={setOrderQueryStartDate}
+          orderQueryEndDate={orderQueryEndDate}
+          setOrderQueryEndDate={setOrderQueryEndDate}
+          orderQueryKeyword={orderQueryKeyword}
+          setOrderQueryKeyword={setOrderQueryKeyword}
+          orderQueryStatus={orderQueryStatus}
+          setOrderQueryStatus={setOrderQueryStatus}
+          filteredStats={filteredStats}
+          filteredOrders={filteredOrders}
+          setSelectedOrder={setSelectedOrder}
+        />
       )}
-
 
       {/* ==================== TAB 3: INVENTORY LEDGER (進銷存) ==================== */}
       {activeSubTab === 'inventory' && (
-        <div className="space-y-6 animate-fadeIn text-left animate-fadeIn" id="subtab-section-inventory">
-          {/* Warning state board */}
-          {analytics.stockWarnings.length > 0 ? (
-            <div className="bg-rose-550/10 border border-rose-500/25 p-4.5 rounded-xl flex items-start space-x-3 text-left">
-              <AlertTriangle className="text-rose-400 shrink-0 mt-0.5" size={18} />
-              <div className="space-y-1">
-                <h5 className="font-bold text-xs text-rose-400 uppercase tracking-wider">下列原料項目已低於安全防線！</h5>
-                <p className="text-white/70 text-[11px] leading-tight">
-                  建議立即辦理原料進貨或利用手動庫存調整以確保正常配餐原料消耗：
-                  {analytics.stockWarnings.map(ig => `【${getLocalizedText(ig.name, 'zh')} 剩餘 ${ig.stock} ${ig.unit}】`).join('、')}
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div className="bg-emerald-500/10 border border-emerald-500/25 p-4 rounded-xl flex items-center space-x-2.5">
-              <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></div>
-              <span className="text-emerald-400 font-bold text-xs">安全保障：目前全店原料大體儲量充足，無任何瀕危低限原料。</span>
-            </div>
-          )}
-
-          {/* Table list from standard ingredients block */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            <div className="lg:col-span-8 bg-[#161616] border border-white/10 rounded-xl p-5 space-y-4">
-              <div className="flex justify-between items-center border-b border-white/5 pb-2">
-                <div className="flex items-center space-x-1.5 text-white">
-                  <Package size={15} />
-                  <h4 className="font-bold text-sm tracking-wide">📦 食材原料庫水位 (安全警備與大宗採購進貨)</h4>
-                </div>
-              </div>
-              {/* Desktop Table view */}
-              <div className="hidden md:block overflow-x-auto text-xs rounded-xl">
-                <table className="w-full text-left">
-                  <thead>
-                    <tr className="bg-white/5 text-white/40 border-b border-white/5 font-bold uppercase tracking-wider">
-                      <th className="py-2.5 px-3">序碼</th>
-                      <th className="py-2.5 px-3">原料項目名稱</th>
-                      <th className="py-2.5 px-3">現有儲量</th>
-                      <th className="py-2.5 px-3">安全水位</th>
-                      <th className="py-2.5 px-3">容量單位</th>
-                      <th className="py-2.5 px-3 text-center">進貨登入額</th>
-                      <th className="py-2.5 px-3 text-center">管理處置</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/5 text-slate-300">
-                    {ingredients.map((ig) => {
-                      const isWarning = ig.stock <= ig.minThreshold;
-                      return (
-                        <tr 
-                          key={ig.id} 
-                          className={isWarning ? 'bg-rose-500/5 hover:bg-rose-500/10 animate-pulse transition-all' : 'hover:bg-white/5'}
-                        >
-                          <td className="py-3 px-3 font-mono text-zinc-500">{ig.id}</td>
-                          <td className="py-3 px-3 font-bold text-white">
-                            <div className="flex items-center space-x-1.5">
-                              {isWarning && (
-                                <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping inline-block shrink-0" />
-                              )}
-                              <span>{getLocalizedText(ig.name, 'zh')}</span>
-                            </div>
-                          </td>
-                          <td className={`py-3 px-3 font-mono font-bold text-sm ${isWarning ? 'text-rose-400 font-extrabold' : 'text-zinc-100'}`}>
-                            <div className="flex items-center space-x-1.5">
-                              <span>{ig.stock}</span>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setQuickRestockItem(ig);
-                                  setQuickRestockQty('');
-                                }}
-                                className="p-1 inline-flex items-center justify-center rounded bg-amber-500/10 hover:bg-amber-500/20 text-[#E5B453] border border-amber-500/25 transition active:scale-90 cursor-pointer shadow-sm"
-                                title="快速補貨 Restock"
-                              >
-                                <Plus size={11} />
-                              </button>
-                            </div>
-                          </td>
-                          <td className="py-3 px-3 font-mono text-zinc-400">{ig.minThreshold}</td>
-                          <td className="py-3 px-3 text-zinc-500 text-[11px]">{ig.unit}</td>
-                          <td className="py-3 px-3 text-center">
-                            <input
-                              type="number"
-                              min={1}
-                              id={`input-restock-${ig.id}`}
-                              placeholder="20"
-                              value={restockAmount[ig.id] === undefined ? '' : (restockAmount[ig.id] === 0 ? '' : restockAmount[ig.id])}
-                              onChange={(e) => setRestockAmount({ ...restockAmount, [ig.id]: Math.max(0, parseInt(e.target.value, 10)) })}
-                              className="w-16 bg-black/60 border border-white/10 rounded px-2 py-1 text-center font-mono font-bold outline-none text-white focus:border-[#E5B453]"
-                            />
-                          </td>
-                          <td className="py-3 px-3 text-center">
-                            <button
-                              type="button"
-                              onClick={() => handleRestockClick(ig.id)}
-                              className="bg-[#E5B453]/15 hover:bg-[#E5B453]/25 text-[#E5B453] border border-[#E5B453]/35 px-2.5 py-1 rounded font-bold transition active:scale-95 text-[11px] cursor-pointer"
-                            >
-                              進貨
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Mobile Card view (High-Comfort & Zero-Overflow) */}
-              <div className="block md:hidden space-y-3.5">
-                {ingredients.map((ig) => {
-                  const isWarning = ig.stock <= ig.minThreshold;
-                  return (
-                    <div 
-                      key={ig.id}
-                      className={`p-4 rounded-xl border flex flex-col justify-between space-y-3 px-3.5 transition-all shadow-md ${
-                        isWarning 
-                          ? 'bg-rose-500/5 hover:bg-rose-500/10 border-rose-500/30' 
-                          : 'bg-black/35 border-white/10 hover:border-zinc-700'
-                      }`}
-                    >
-                      {/* Name & Stock info */}
-                      <div className="flex items-start justify-between gap-3 font-sans">
-                        <div className="space-y-1">
-                          <p className="font-extrabold text-white text-sm sm:text-base flex items-center gap-1.5 flex-wrap">
-                            <span>{getLocalizedText(ig.name, 'zh')}</span>
-                            {isWarning && (
-                              <span className="text-[9px] bg-rose-500/15 text-rose-450 border border-rose-500/20 px-2 py-0.5 rounded font-black animate-pulse text-rose-400">
-                                ⚠️ 低於水位
-                              </span>
-                            )}
-                          </p>
-                          <p className="text-[10px] text-zinc-500 font-mono">ID: {ig.id} | 單位: {ig.unit}</p>
-                        </div>
-                        {/* Current quantity details */}
-                        <div className="text-right shrink-0">
-                          <span className={`text-sm sm:text-base font-black font-mono block ${isWarning ? 'text-rose-400' : 'text-zinc-100'}`}>
-                            {ig.stock} {ig.unit}
-                          </span>
-                          <span className="text-[9px] text-zinc-550 font-mono block text-zinc-500">安全水位: {ig.minThreshold} {ig.unit}</span>
-                        </div>
-                      </div>
-
-                      {/* Control Panel bottom inside card */}
-                      <div className="pt-2.5 border-t border-white/5 flex items-center justify-between gap-2">
-                        {/* Amount input */}
-                        <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                          <span className="text-[10px] text-zinc-400 font-bold shrink-0">量:</span>
-                          <input
-                            type="number"
-                            min={1}
-                            placeholder="20"
-                            value={restockAmount[ig.id] === undefined ? '' : (restockAmount[ig.id] === 0 ? '' : restockAmount[ig.id])}
-                            onChange={(e) => setRestockAmount({ ...restockAmount, [ig.id]: Math.max(0, parseInt(e.target.value, 10)) })}
-                            className="w-full bg-black/60 border border-white/10 rounded-lg px-2.5 py-1.5 text-center font-mono font-bold outline-none text-white focus:border-[#E5B453] text-xs h-8"
-                          />
-                        </div>
-
-                        {/* Action Buttons */}
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setQuickRestockItem(ig);
-                              setQuickRestockQty('');
-                            }}
-                            className="h-8 w-8 inline-flex items-center justify-center rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-[#E5B453] border border-amber-500/25 transition active:scale-90 cursor-pointer shadow-sm"
-                            title="快速特定值補貨"
-                          >
-                            <Plus size={13} />
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => handleRestockClick(ig.id)}
-                            className="bg-[#E5B453] hover:bg-amber-400 text-slate-900 border border-amber-600/20 px-3.5 h-8 rounded-lg font-black transition active:scale-95 text-xs cursor-pointer shadow-md leading-none"
-                          >
-                            進貨
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Manual adjustment and stock audits + Add raw material */}
-            <div className="lg:col-span-4 space-y-6">
-              {/* Manual adjustment card */}
-              <div className="bg-[#161616] border border-white/10 rounded-xl p-5 space-y-4">
-                <div className="border-b border-white/5 pb-2">
-                  <h4 className="font-bold text-sm text-[#E5B453] font-serif">⚙️ 安全盤點。手動核銷調整庫量</h4>
-                  <p className="text-[10px] text-white/40 leading-tight mt-1">耗損、報廢、招待用、補發或期末實際庫存不對時，在此校正，亦將產生過帳明細流向日誌以資備忘備查。</p>
-                </div>
-                <form onSubmit={handleManualAdjustStock} className="space-y-3.5 text-xs">
-                  <div className="space-y-1">
-                    <label className="text-zinc-400">選擇原料 Item Selector</label>
-                    <select
-                      value={manualAdjustId}
-                      onChange={(e) => setManualAdjustId(e.target.value)}
-                      className="w-full bg-black border border-white/10 rounded-lg px-2.5 py-2 outline-none text-white focus:border-[#E5B453]"
-                    >
-                      <option value="">請選擇要盤調的原料...</option>
-                      {ingredients.map(ig => <option key={ig.id} value={ig.id}>{getLocalizedText(ig.name, 'zh')} ({ig.stock} {ig.unit})</option>)}
-                    </select>
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-zinc-400">增減異動量 (Change Amount)</label>
-                    <input
-                      type="number"
-                      step="any"
-                      placeholder="輸入正整數增加，如 10；輸入負數耗扣損，如 -2.5"
-                      value={manualAdjustQty}
-                      onChange={(e) => setManualAdjustQty(e.target.value)}
-                      className="w-full bg-black border border-white/10 rounded-lg px-2.5 py-2 outline-none text-white font-mono focus:border-[#E5B453]"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-zinc-400">日誌記帳備註 Note reason</label>
-                    <input
-                      type="text"
-                      placeholder="例如：櫛瓜發霉毀損、今日盤點損差、招待貴品"
-                      value={manualAdjustNote}
-                      onChange={(e) => setManualAdjustNote(e.target.value)}
-                      className="w-full bg-black border border-white/10 rounded-lg px-2.5 py-2 outline-none text-white focus:border-[#E5B453]"
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    className="w-full py-2 bg-blue-600 hover:bg-blue-500 font-extrabold text-white rounded-lg transition active:scale-95 cursor-pointer shadow-md text-xs"
-                  >
-                    📝 寫入並過帳盤點調整
-                  </button>
-                </form>
-              </div>
-
-              {/* Add raw material card */}
-              <div className="bg-[#161616] border border-white/10 rounded-xl p-5 space-y-4">
-                <div className="border-b border-white/5 pb-2">
-                  <h4 className="font-bold text-sm text-[#E5B453] font-serif">➕ 新增原料項目 (Add Raw Material)</h4>
-                  <p className="text-[10px] text-white/40 leading-tight mt-1">在此登錄全新的食材或包裝大宗物料，設定初始儲量、安全水位與容量單位。</p>
-                </div>
-                <form onSubmit={handleAddNewIngredient} className="space-y-3.5 text-xs">
-                  <div className="space-y-1">
-                    <label className="text-zinc-400">原料庫存識別代號 (Unique ID)</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="例如：egg, tomato, pork-rib"
-                      value={newIngId}
-                      onChange={(e) => setNewIngId(e.target.value)}
-                      className="w-full bg-black border border-white/10 rounded-lg px-2.5 py-2 outline-none text-white font-mono focus:border-[#E5B453]"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-zinc-400">中文名稱 (Name in Chinese)</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="例如：新鮮洗選大雞蛋"
-                      value={newIngNameZh}
-                      onChange={(e) => setNewIngNameZh(e.target.value)}
-                      className="w-full bg-black border border-white/10 rounded-lg px-2.5 py-2 outline-none text-white focus:border-[#E5B453]"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-zinc-400">英文名稱 (Name in English - 選填)</label>
-                    <input
-                      type="text"
-                      placeholder="例如：Fresh Chicken Eggs"
-                      value={newIngNameEn}
-                      onChange={(e) => setNewIngNameEn(e.target.value)}
-                      className="w-full bg-black border border-white/10 rounded-lg px-2.5 py-2 outline-none text-white focus:border-[#E5B453]"
-                    />
-                  </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="space-y-1">
-                      <label className="text-zinc-400">初始水位</label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="any"
-                        placeholder="100"
-                        value={newIngStock}
-                        onChange={(e) => setNewIngStock(e.target.value)}
-                        className="w-full bg-black border border-white/10 rounded-lg px-2.5 py-2 outline-none text-white font-mono focus:border-[#E5B453]"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-zinc-400">安全水位</label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="any"
-                        placeholder="20"
-                        value={newIngMinThreshold}
-                        onChange={(e) => setNewIngMinThreshold(e.target.value)}
-                        className="w-full bg-black border border-white/10 rounded-lg px-2.5 py-2 outline-none text-white font-mono focus:border-[#E5B453]"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-zinc-400">容量單位</label>
-                      <input
-                        type="text"
-                        placeholder="kg, 顆, 包"
-                        value={newIngUnit}
-                        onChange={(e) => setNewIngUnit(e.target.value)}
-                        className="w-full bg-black border border-white/10 rounded-lg px-2.5 py-2 outline-none text-white font-mono focus:border-[#E5B453]"
-                      />
-                    </div>
-                  </div>
-                  <button
-                    type="submit"
-                    className="w-full py-2 mt-2 bg-emerald-600 hover:bg-emerald-500 font-extrabold text-white rounded-lg transition active:scale-95 cursor-pointer shadow-md text-xs"
-                  >
-                    🚀 登記並創建全新原料項目
-                  </button>
-                </form>
-              </div>
-            </div>
-          </div>
-
-          {/* Dynamic Ingredient Recipe recipe cost definitions */}
-          <div className="bg-[#161616] border border-white/10 rounded-xl p-5 text-left">
-            <span className="text-[10px] text-[#E5B453] uppercase font-black tracking-widest block mb-1">食材配方扣減審核卡</span>
-            <h4 className="text-sm font-bold border-b border-white/5 pb-2 mb-3">菜單食材配方定額與消耗原理 (Recipe Composition Specifications)</h4>
-            <div className="grid grid-cols-1 sm:grid-cols-3 md:grid-cols-5 gap-4 text-xs font-sans">
-              {Object.keys(recipeCompositionMap).map((key) => {
-                const menuItem = menuItems.find(m => m.id === key);
-                return (
-                  <div key={key} className="bg-black/30 border border-white/5 p-3 rounded-lg space-y-1.5">
-                    <span className="font-bold text-[#E5B453] line-clamp-1">{menuItem ? menuItem.name.zh : key}</span>
-                    <div className="space-y-1 text-[11px] text-zinc-400">
-                      {recipeCompositionMap[key].map((rec, i) => (
-                        <p key={i} className="flex justify-between">
-                          <span>{rec.name}</span>
-                          <span className="font-mono text-white text-right font-semibold">{rec.qty}</span>
-                        </p>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Searchable Transaction history table list */}
-          <div className="bg-[#161616] border border-white/10 rounded-xl p-5 space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-white/5 pb-2.5">
-              <div className="space-y-1">
-                <h4 className="font-bold text-sm text-white font-serif">📜 進銷存交易流動流水帳 (Inventory Transaction Logs Ledger)</h4>
-                <p className="text-white/40 text-[11px]">本表格詳實記載進貨、點餐系統自動配銷、手動調整、取消歸庫等各類流向明細，保障店鋪帳實吻合。</p>
-              </div>
-              <button
-                type="button"
-                onClick={handleExportInventoryReport}
-                className="mt-3.5 sm:mt-0 flex items-center justify-center space-x-2 bg-blue-600 hover:bg-blue-500 font-black text-xs text-white rounded-lg px-3.5 py-1.5 active:scale-95 transition cursor-pointer"
-              >
-                <Download size={13} />
-                <span>匯出進銷存 CSV 報表</span>
-              </button>
-            </div>
-
-            <div className="flex items-center space-x-2 text-xs">
-              <label className="text-zinc-400 shrink-0">速尋過濾:</label>
-              <input
-                type="text"
-                placeholder="輸入原料名稱、備註描述或單號關鍵字..."
-                value={inventoryLogSearch}
-                onChange={(e) => setInventoryLogSearch(e.target.value)}
-                className="bg-black/40 border border-white/10 rounded px-3 py-1.5 focus:border-[#E5B453] focus:outline-none w-full outline-none placeholder-white/25 text-white"
-              />
-            </div>
-
-            <div className="overflow-x-auto text-xs">
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="bg-white/5 text-white/45 border-b border-white/10 font-bold uppercase tracking-wider">
-                    <th className="py-2.5 px-3">交易過帳時間</th>
-                    <th className="py-2.5 px-3">對象原料</th>
-                    <th className="py-2.5 px-3 text-center">異動類別</th>
-                    <th className="py-2.5 px-3 text-right">變化量額</th>
-                    <th className="py-2.5 px-3 text-right">變動後殘餘</th>
-                    <th className="py-2.5 px-3">交易事件備註原因</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5 text-slate-300">
-                  {dbInventoryLogs.filter(l => {
-                    const k = inventoryLogSearch.toLowerCase().trim();
-                    if (!k) return true;
-                    return l.ingredientName.toLowerCase().includes(k) || l.note.toLowerCase().includes(k);
-                  }).length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="py-8 text-center text-white/30 font-medium">
-                        無任何庫存異動日誌登錄。
-                      </td>
-                    </tr>
-                  ) : (
-                    dbInventoryLogs.filter(l => {
-                      const k = inventoryLogSearch.toLowerCase().trim();
-                      if (!k) return true;
-                      return l.ingredientName.toLowerCase().includes(k) || l.note.toLowerCase().includes(k);
-                    }).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).map((l, i) => (
-                      <tr key={l.id || i} className="hover:bg-white/[2%] font-sans">
-                        <td className="py-2.5 px-3 text-zinc-500 font-mono">{new Date(l.timestamp).toLocaleString()}</td>
-                        <td className="py-2.5 px-3 font-bold text-white">{l.ingredientName}</td>
-                        <td className="py-2.5 px-3 text-center">
-                          <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                            l.type === 'incoming'
-                              ? 'bg-emerald-500/10 text-emerald-400'
-                              : l.type === 'outgoing'
-                              ? 'bg-rose-500/10 text-rose-400'
-                              : 'bg-amber-500/10 text-amber-400'
-                          }`}>
-                            {l.type === 'incoming' ? '進貨流入' : (l.type === 'outgoing' ? '系統配銷' : '手控盤核')}
-                          </span>
-                        </td>
-                        <td className={`py-2.5 px-3 text-right font-mono font-bold ${l.quantityChanged > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                          {l.quantityChanged > 0 ? '+' : ''}{l.quantityChanged}
-                        </td>
-                        <td className="py-2.5 px-3 text-right font-mono text-zinc-400 font-semibold">{l.remainingStock}</td>
-                        <td className="py-2.5 px-3 text-zinc-400 text-[11.5px] max-w-[200px] truncate">{l.note}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
+        <ManagerInventoryTab
+          analytics={analytics}
+          ingredients={ingredients}
+          menuItems={menuItems}
+          restockAmount={restockAmount}
+          setRestockAmount={setRestockAmount}
+          handleRestockClick={handleRestockClick}
+          setQuickRestockItem={setQuickRestockItem}
+          setQuickRestockQty={setQuickRestockQty}
+          manualAdjustId={manualAdjustId}
+          setManualAdjustId={setManualAdjustId}
+          manualAdjustQty={manualAdjustQty}
+          setManualAdjustQty={setManualAdjustQty}
+          manualAdjustNote={manualAdjustNote}
+          setManualAdjustNote={setManualAdjustNote}
+          handleManualAdjustStock={handleManualAdjustStock}
+          newIngId={newIngId}
+          setNewIngId={setNewIngId}
+          newIngNameZh={newIngNameZh}
+          setNewIngNameZh={setNewIngNameZh}
+          newIngNameEn={newIngNameEn}
+          setNewIngNameEn={setNewIngNameEn}
+          newIngStock={newIngStock}
+          setNewIngStock={setNewIngStock}
+          newIngMinThreshold={newIngMinThreshold}
+          setNewIngMinThreshold={setNewIngMinThreshold}
+          newIngUnit={newIngUnit}
+          setNewIngUnit={setNewIngUnit}
+          handleAddNewIngredient={handleAddNewIngredient}
+          recipeCompositionMap={recipeCompositionMap}
+          handleExportInventoryReport={handleExportInventoryReport}
+          inventoryLogSearch={inventoryLogSearch}
+          setInventoryLogSearch={setInventoryLogSearch}
+          dbInventoryLogs={dbInventoryLogs}
+        />
       )}
-
 
       {/* ==================== TAB 4: MENU ITEMS MANAGER ==================== */}
       {activeSubTab === 'menu' && (
-        <div className="space-y-6 animate-fadeIn text-left" id="subtab-section-menu">
-          {/* Main List & Create trigger */}
-          <div className="bg-[#161616] border border-white/10 rounded-xl p-5 space-y-4">
-            <div className="flex justify-between items-center border-b border-white/5 pb-3 flex-wrap gap-3">
-              <div>
-                <h4 className="font-bold text-sm text-white font-serif">🍜 菜單全品編輯與可售狀態 Availability Dashboard</h4>
-                <p className="text-white/40 text-xs mt-1">變更餐點是否沽清、客製配料或上下架（設為沽清之品項將於隔日中午12:00自動恢復販售）。</p>
-              </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                {onReorderMenuItems && (
-                  <>
-                    {!isMenuItemSortingMode ? (
-                      <button
-                        type="button"
-                        onClick={() => setIsMenuItemSortingMode(true)}
-                        className="bg-amber-500/10 hover:bg-[#E5B453] hover:text-black border border-amber-500/35 text-[#E5B453] px-2.5 py-1.5 rounded-lg text-xs font-bold active:scale-95 transition cursor-pointer flex items-center gap-1"
-                        id="btn-menuitem-sort-start"
-                      >
-                        調整品項排序 ↕️
-                      </button>
-                    ) : (
-                      <div className="flex items-center gap-2 bg-zinc-900/80 p-1 rounded-lg border border-white/5">
-                        <button
-                          type="button"
-                          onClick={handleSaveMenuItemOrder}
-                          className="bg-emerald-600 hover:bg-emerald-500 text-white px-2.5 py-1 rounded text-xs font-bold active:scale-95 transition cursor-pointer flex items-center gap-1 shadow-md shadow-emerald-900/40 animate-pulse"
-                          id="btn-menuitem-sort-confirm"
-                        >
-                          💾 確認儲存品項排序
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleCancelMenuItemOrder}
-                          className="bg-white/5 hover:bg-white/10 text-zinc-300 hover:text-white px-2 py-1 rounded text-xs transition cursor-pointer"
-                        >
-                          取消
-                        </button>
-                      </div>
-                    )}
-                  </>
-                )}
-                <button
-                  type="button"
-                  onClick={triggerAddMenuItemMode}
-                  className="flex items-center space-x-1 bg-[#E5B453] hover:bg-amber-400 text-slate-900 border border-white/5 px-3.5 py-1.5 rounded-lg text-xs font-bold active:scale-95 transition cursor-pointer font-sans"
-                >
-                  <Plus size={14} />
-                  <span>新增全新品項 Add</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Excel-style table of menu items catalog */}
-            <div className="overflow-x-auto border border-white/10 rounded-xl bg-black/10">
-              <table className="w-full min-w-[800px] border-collapse text-xs text-left font-sans">
-                <thead>
-                  <tr className="bg-zinc-800/80 border-b border-white/10 text-[11px] font-bold text-amber-400">
-                    <th scope="col" className="p-3 border-r border-white/10 text-center w-10">#</th>
-                    <th scope="col" className="p-3 border-r border-white/10 text-center w-24">手動排序 (Sort)</th>
-                    <th scope="col" className="p-3 border-r border-white/10 font-sans">ID碼 (ID Code)</th>
-                    <th scope="col" className="p-3 border-r border-white/10">菜品分類 (Category)</th>
-                    <th scope="col" className="p-3 border-r border-white/10">品名 (Dish Name)</th>
-                    <th scope="col" className="p-3 border-r border-white/10 text-right">定價 (Price)</th>
-                    <th scope="col" className="p-3 border-r border-white/10 text-center">可售狀態 (Stock Status)</th>
-                    <th scope="col" className="p-3 border-r border-white/10">附加規格 (Options)</th>
-                    <th scope="col" className="p-3 text-center">後端控制 (Operations)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {localMenuItemOrder.map((item, index) => {
-                    const foundCategoryObj = categories.find(c => c.id === item.category);
-                    return (
-                      <tr 
-                        key={item.id} 
-                        className={`hover:bg-[#E5B453]/5 transition-colors ${
-                          index % 2 === 0 ? 'bg-zinc-900/20' : 'bg-black/30'
-                        }`}
-                      >
-                        {/* # Row Index */}
-                        <td className="p-2.5 border-r border-white/10 text-center text-zinc-500 font-mono text-[10px]">{index + 1}</td>
-                        
-                        {/* 排序操作 */}
-                        <td className="p-2.5 border-r border-white/10 text-center">
-                          {isMenuItemSortingMode ? (
-                            <div className="flex items-center justify-center space-x-1.5 animate-pulse bg-amber-500/10 p-1 rounded border border-amber-500/25">
-                              <button
-                                type="button"
-                                disabled={index === 0}
-                                onClick={() => handleMoveMenuItem(item.id, 'up')}
-                                className="p-1 px-2 rounded bg-[#E5B453] hover:bg-amber-400 text-slate-900 transition active:scale-90 cursor-pointer disabled:opacity-20 disabled:cursor-not-allowed text-[10px] font-black flex items-center space-x-0.5"
-                                title="上移此品項"
-                              >
-                                <span>▲</span>
-                                <span className="text-[9px]">上移</span>
-                              </button>
-                              <button
-                                type="button"
-                                disabled={index === localMenuItemOrder.length - 1}
-                                onClick={() => handleMoveMenuItem(item.id, 'down')}
-                                className="p-1 px-2 rounded bg-[#E5B453] hover:bg-amber-400 text-slate-900 transition active:scale-90 cursor-pointer disabled:opacity-20 disabled:cursor-not-allowed text-[10px] font-black flex items-center space-x-0.5"
-                                title="下移此品項"
-                              >
-                                <span>▼</span>
-                                <span className="text-[9px]">下移</span>
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="text-zinc-500 text-[10px] font-mono text-center flex items-center justify-center gap-1">
-                              <span>🔒</span>
-                              <span className="text-[9px]">排序鎖定</span>
-                            </div>
-                          )}
-                        </td>
-                        
-                        {/* ID碼 */}
-                        <td className="p-2.5 border-r border-white/10 font-mono text-zinc-400 font-medium select-all">{item.id}</td>
-                        
-                        {/* 菜品分類 */}
-                        <td className="p-2.5 border-r border-white/10">
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                            {foundCategoryObj?.name?.zh || item.category}
-                          </span>
-                        </td>
-                        
-                        {/* 品名 */}
-                        <td className="p-2.5 border-r border-white/10 font-sans">
-                          <div className="flex items-center space-x-2">
-                            {item.image ? (
-                              <img
-                                src={item.image}
-                                alt={getLocalizedText(item.name, currentLang)}
-                                className="w-10 h-10 object-cover rounded-lg bg-black flex-shrink-0 border border-white/10"
-                                referrerPolicy="no-referrer"
-                              />
-                            ) : (
-                              <div className="w-10 h-10 rounded-lg bg-zinc-800 border border-white/10 flex-shrink-0 flex items-center justify-center text-base text-zinc-500" title="無圖片 No Image">
-                                🥣
-                              </div>
-                            )}
-                            <div className="space-y-0.5 truncate">
-                              <p className="font-bold text-white text-[13px] truncate">{getLocalizedText(item.name, currentLang)}</p>
-                              {typeof item.name === 'object' && item.name?.en && <p className="text-[10px] text-zinc-500 truncate">{item.name.en}</p>}
-                            </div>
-                          </div>
-                        </td>
-                        
-                        {/* 定價 */}
-                        <td className="p-2.5 border-r border-white/10 text-right font-mono font-bold text-white">
-                          NT$ {item.price}
-                        </td>
-                        
-                        {/* 可售狀態 */}
-                        <td className="p-2.5 border-r border-white/10 text-center">
-                          <div className="flex flex-col items-center justify-center gap-0.5">
-                            <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                              item.available
-                                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                                : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
-                            }`}>
-                              {item.available ? '● 販售中 Supply' : '✕ 沽清 Sold Out'}
-                            </span>
-                            {!item.available && (
-                              <span className="text-[9px] text-amber-300/80 tracking-tight" title="隔日中午 12:00 將自動恢復販售">
-                                ⏰ 隔日12:00自動恢復
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        
-                        {/* 附加規格 */}
-                        <td className="p-2.5 border-r border-white/10 text-zinc-400 text-[10px]">
-                          <div className="flex flex-wrap gap-1">
-                            {item.isNotSpicy && (
-                              <span className="bg-emerald-500/10 text-emerald-400 px-1.5 py-0.5 rounded text-[9px] border border-emerald-500/15">完全不辣</span>
-                            )}
-                            {Array.isArray(item.customAddOns) && item.customAddOns.length > 0 ? (
-                              <span className="bg-zinc-500/15 text-zinc-300 px-1.5 py-0.5 rounded text-[9px] border border-zinc-500/20">
-                                加價項目x{item.customAddOns.length}
-                              </span>
-                            ) : (
-                              <span className="text-zinc-550 italic">無加選</span>
-                            )}
-                          </div>
-                        </td>
-
-                        {/* 後端控制 */}
-                        <td className="p-2.5 text-center">
-                          <div className="flex items-center justify-center space-x-1.5">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (onToggleMenuItemAvailability) {
-                                  onToggleMenuItemAvailability(item.id);
-                                }
-                              }}
-                              className={`px-2 py-1 rounded text-[10px] font-bold border transition cursor-pointer select-none active:scale-95 ${
-                                item.available
-                                  ? 'bg-[#E5B453]/10 text-amber-300 border-amber-500/30 hover:bg-[#E5B453]/20'
-                                  : 'bg-rose-500/10 text-rose-455 border border-rose-500/30 hover:bg-rose-500/20'
-                              }`}
-                            >
-                              {item.available ? '設為沽清' : '恢復販售'}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => triggerEditMenuItemMode(item)}
-                              className="bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 border border-sky-500/30 px-2 py-1 rounded text-[10px] font-bold transition cursor-pointer select-none active:scale-95 flex items-center space-x-1"
-                            >
-                              <span>編輯品項 ✏️</span>
-                            </button>
-                            {onDeleteMenuItem && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setConfirmActionModal({
-                                    isOpen: true,
-                                    title: '🚨 刪除餐點品項確認',
-                                    message: `您確定要永久刪除餐點 [${getLocalizedText(item.name, 'zh')}] 嗎？刪除後，線上顧客與員工點餐畫面中將不再顯示此餐點，且此操作無法復原。`,
-                                    actionLabel: '確定刪除 Delete',
-                                    onConfirm: async () => {
-                                      await onDeleteMenuItem(item.id);
-                                    },
-                                  });
-                                }}
-                                className="bg-rose-500/10 hover:bg-rose-550/20 text-rose-400 border border-rose-500/35 px-2 py-1 rounded text-[10px] font-bold transition cursor-pointer select-none active:scale-95 flex items-center space-x-1"
-                              >
-                                <span>刪除 🗑️</span>
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Business categories settings panel */}
-          <div className="bg-[#161616] border border-white/10 rounded-xl p-5 space-y-3" id="manager-categories-panel">
-            <div className="flex justify-between items-center border-b border-white/5 pb-2 flex-wrap gap-2">
-              <div className="flex items-center space-x-1.5">
-                <Layers size={15} className="text-[#E5B453]" />
-                <h4 className="font-bold text-sm">🗂️ 菜色分類標籤控制 Categories Panel</h4>
-              </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                {onReorderCategories && (
-                  <>
-                    {!isCategorySortingMode ? (
-                      <button
-                        type="button"
-                        onClick={() => setIsCategorySortingMode(true)}
-                        className="bg-amber-500/10 hover:bg-[#E5B453] hover:text-black border border-amber-500/35 text-[#E5B453] px-2.5 py-1.5 rounded-lg text-xs font-bold active:scale-95 transition cursor-pointer flex items-center gap-1"
-                        id="btn-category-sort-start"
-                      >
-                        調整分類排序 ↕️
-                      </button>
-                    ) : (
-                      <div className="flex items-center gap-2 bg-zinc-900/80 p-1 rounded-lg border border-white/5">
-                        <button
-                          type="button"
-                          onClick={handleSaveCategoryOrder}
-                          className="bg-emerald-600 hover:bg-emerald-500 text-white px-2.5 py-1 rounded text-xs font-bold active:scale-95 transition cursor-pointer flex items-center gap-1 shadow-md shadow-emerald-900/40 animate-pulse"
-                          id="btn-category-sort-confirm"
-                        >
-                          💾 確認儲存排序
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleCancelCategoryOrder}
-                          className="bg-white/5 hover:bg-white/10 text-zinc-300 hover:text-white px-2 py-1 rounded text-xs transition cursor-pointer"
-                        >
-                          取消
-                        </button>
-                      </div>
-                    )}
-                  </>
-                )}
-                {onAddCategory && (
-                  <button
-                    type="button"
-                    onClick={triggerAddCatMode}
-                    className="bg-white/5 hover:bg-white/10 border border-white/10 text-white px-2.5 py-1.5 rounded-lg text-xs font-bold active:scale-95 transition cursor-pointer"
-                  >
-                    新增菜色分類標籤
-                  </button>
-                )}
-              </div>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 text-xs">
-              {localCategoryOrder.map((cat) => {
-                const catIndex = localCategoryOrder.indexOf(cat);
-                const isFirst = catIndex === 0;
-                return (
-                  <div 
-                    key={cat.id} 
-                    className={`bg-black/35 border p-4 flex flex-col justify-between space-y-3 rounded-xl shadow-md hover:border-[#E5B453]/45 transition duration-200 ${
-                      isFirst 
-                        ? 'border-[#E5B453]/60 bg-gradient-to-br from-[#E5B453]/[0.08] to-transparent ring-[1.5px] ring-[#E5B453]/20 shadow-[0_0_15px_rgba(229,180,83,0.06)]' 
-                        : 'border-white/10'
-                    }`}
-                  >
-                    <div className="text-left font-sans text-xs space-y-1.5">
-                      <div className="flex items-start justify-between gap-2.5 flex-wrap">
-                        <div className="flex items-center space-x-1.5 min-w-0">
-                          <span 
-                            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-[10px] font-mono font-black border ${
-                              isFirst
-                                ? 'bg-[#E5B453] text-black border-[#E5B453]'
-                                : 'bg-white/5 text-zinc-400 border-white/10'
-                            }`}
-                            title={`顯示排序：第 ${catIndex + 1} 順位`}
-                          >
-                            {catIndex + 1}
-                          </span>
-                          <span className="text-xs sm:text-sm font-black text-white truncate">{getLocalizedText(cat.name, 'zh')}</span>
-                        </div>
-                        
-                        {/* 菜色分類排序 (Category Sorting Controls) */}
-                        {isCategorySortingMode ? (
-                          <div className="flex items-center space-x-1 shrink-0 bg-amber-500/10 p-0.5 rounded-lg border border-amber-500/20 animate-pulse">
-                            <button
-                              type="button"
-                              disabled={catIndex === 0}
-                              onClick={() => handleMoveCategory(cat.id, 'up')}
-                              className="p-1 px-1.5 text-[9px] font-black text-[#E5B453] hover:text-amber-400 hover:bg-white/5 rounded transition disabled:opacity-20 disabled:cursor-not-allowed cursor-pointer flex items-center space-x-0.5"
-                              title="往前移動分類 (提升排序)"
-                            >
-                              <span>◀</span>
-                              <span className="text-[8px]">前移</span>
-                            </button>
-                            <button
-                              type="button"
-                              disabled={catIndex === localCategoryOrder.length - 1}
-                              onClick={() => handleMoveCategory(cat.id, 'down')}
-                              className="p-1 px-1.5 text-[9px] font-black text-[#E5B453] hover:text-amber-400 hover:bg-white/5 rounded transition disabled:opacity-20 disabled:cursor-not-allowed cursor-pointer flex items-center space-x-0.5"
-                              title="往後移動分類 (降低排序)"
-                            >
-                              <span className="text-[8px]">後移</span>
-                              <span>▶</span>
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="flex items-center space-x-1 shrink-0 bg-white/5 px-1.5 py-0.5 rounded border border-white/5 text-[9px] text-zinc-500 font-mono">
-                            <span>🔒 排序鎖定中</span>
-                          </div>
-                        )}
-                      </div>
-                      
-                      <div className="flex items-center justify-between mt-1 text-[10px]">
-                        <p className="text-zinc-500 font-mono">標記 ID: {cat.id}</p>
-                        <span className={`px-1.5 py-0.5 rounded-md font-bold text-[9px] shrink-0 ${cat.showOnCustomerPage !== false ? 'bg-emerald-500/10 text-emerald-400 font-extrabold' : 'bg-rose-500/10 text-rose-450 font-extrabold'}`}>
-                          {cat.showOnCustomerPage !== false ? '顧客可見' : '後台限定'}
-                        </span>
-                      </div>
-                    </div>
-                  <div className="flex items-center gap-2 w-full pt-2.5 border-t border-white/5">
-                    {onEditCategory && (
-                      <button
-                        type="button"
-                        onClick={() => triggerEditCatMode(cat)}
-                        className="flex-1 h-9 flex items-center justify-center gap-1.5 bg-amber-500/10 hover:bg-[#E5B453] hover:text-[#0c0c0c] text-[#E5B453] rounded-lg border border-amber-500/20 transition active:scale-95 text-xs font-bold cursor-pointer"
-                        title="編輯該分類名稱"
-                      >
-                        <Edit size={12} />
-                        <span>編輯</span>
-                      </button>
-                    )}
-                    {onDeleteCategory && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setConfirmActionModal({
-                            isOpen: true,
-                            title: '🧩 刪除餐點分類標籤確定',
-                            message: `⚠️ 安全確定：您確定要刪除 [${getLocalizedText(cat.name, 'zh')}] 分類標籤嗎？刪除後，線上顧客與員工點餐畫面中此分類的所有餐點將不再顯示。`,
-                            actionLabel: '確定刪除 Delete',
-                            onConfirm: async () => {
-                              await onDeleteCategory(cat.id);
-                            },
-                          });
-                        }}
-                        className="flex-1 h-9 flex items-center justify-center gap-1.5 bg-rose-500/10 hover:bg-rose-500 hover:text-white text-rose-455 rounded-lg border border-rose-500/20 transition active:scale-95 text-xs font-bold cursor-pointer"
-                        title="刪除"
-                      >
-                        <Trash2 size={12} />
-                        <span>刪除</span>
-                      </button>
-                    )}
-                  </div>
-                </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
+        <ManagerMenuTab
+          currentLang={currentLang}
+          menuItems={menuItems}
+          categories={categories}
+          localMenuItemOrder={localMenuItemOrder}
+          isMenuItemSortingMode={isMenuItemSortingMode}
+          setIsMenuItemSortingMode={setIsMenuItemSortingMode}
+          handleSaveMenuItemOrder={handleSaveMenuItemOrder}
+          handleCancelMenuItemOrder={handleCancelMenuItemOrder}
+          handleMoveMenuItem={handleMoveMenuItem}
+          triggerAddMenuItemMode={triggerAddMenuItemMode}
+          triggerEditMenuItemMode={triggerEditMenuItemMode}
+          onToggleMenuItemAvailability={onToggleMenuItemAvailability}
+          onDeleteMenuItem={onDeleteMenuItem}
+          onReorderMenuItems={onReorderMenuItems}
+          localCategoryOrder={localCategoryOrder}
+          isCategorySortingMode={isCategorySortingMode}
+          setIsCategorySortingMode={setIsCategorySortingMode}
+          handleSaveCategoryOrder={handleSaveCategoryOrder}
+          handleCancelCategoryOrder={handleCancelCategoryOrder}
+          handleMoveCategory={handleMoveCategory}
+          triggerAddCatMode={triggerAddCatMode}
+          triggerEditCatMode={triggerEditCatMode}
+          onAddCategory={onAddCategory}
+          onEditCategory={onEditCategory}
+          onDeleteCategory={onDeleteCategory}
+          onReorderCategories={onReorderCategories}
+          setConfirmActionModal={setConfirmActionModal}
+        />
       )}
 
       {/* ==================== TAB 5: MEMBERS, ACCESS PRIVILEGE AND PIN ==================== */}
       {activeSubTab === 'members' && (
-        <div className="space-y-6 animate-fadeIn text-left animate-fadeIn" id="subtab-section-members">
-          {/* Members Stats & Controls */}
-          <div className="bg-[#161616] border border-white/10 rounded-xl p-5 space-y-4 font-sans">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-white/5 pb-3">
-              <div className="flex items-center space-x-2">
-                <Coins className="text-[#E5B453] shrink-0" size={17} />
-                <div>
-                  <h4 className="font-bold text-sm text-white font-serif tracking-wide">Google Quick Member / 顧客會員累計點數系統</h4>
-                  <p className="text-white/40 text-xs">取代 LINE 傳統推播行銷，本介面詳實登錄全體 Google 帳戶顧客之累計點數。店員可在結算時手動輸入消除或微調點數。</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setNewMemberName('');
-                  setNewMemberEmail('');
-                  setNewMemberBalance('0');
-                  setNewMemberPoints('0');
-                  setAddMemberError(null);
-                  setAddMemberModalOpen(true);
-                }}
-                className="self-start sm:self-center bg-[#E5B453] hover:bg-[#d6a546] text-black font-extrabold px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 transition active:scale-95 text-xs cursor-pointer shadow-md shadow-[#E5B453]/10"
-              >
-                <Plus size={14} />
-                <span>新增顧客會員 Add Member</span>
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="bg-black/30 border border-white/5 rounded-xl p-4">
-                <span className="text-[10px] text-zinc-500 font-bold tracking-widest uppercase block mb-1">已核定 Google 會員</span>
-                <p className="text-2xl font-black text-white font-mono leading-none">
-                  {membersList.length} <span className="text-xs font-semibold text-zinc-400 font-sans">位</span>
-                </p>
-              </div>
-              <div className="bg-black/30 border border-white/5 rounded-xl p-4">
-                <span className="text-[10px] text-zinc-500 font-bold tracking-widest uppercase block mb-1">累存總流通點數</span>
-                <p className="text-2xl font-black text-[#E5B453] font-mono leading-none">
-                  {membersList.reduce((acc, cur) => acc + (cur.points || 0), 0).toLocaleString()} <span className="text-xs font-semibold text-zinc-400 font-sans">點</span>
-                </p>
-              </div>
-              <div className="bg-black/30 border border-white/5 rounded-xl p-4">
-                <span className="text-[10px] text-zinc-500 font-bold tracking-widest uppercase block mb-1">消點累計兑消匯率</span>
-                <p className="text-2xl font-black text-blue-400 font-mono leading-none">
-                  100 <span className="text-xs font-semibold text-zinc-400 font-sans">點抵 NT$10 元</span>
-                </p>
-              </div>
-            </div>
-
-            {/* Members table */}
-            <div className="overflow-x-auto rounded-xl border border-white/5">
-              <table className="w-full text-xs text-left text-zinc-300">
-                <thead>
-                  <tr className="bg-white/5 text-white/50 border-b border-white/5">
-                    <th className="py-3 px-4 text-[10px] uppercase font-bold tracking-wider">成員頭像/名稱</th>
-                    <th className="py-3 px-4 text-[10px] uppercase font-bold tracking-wider">綁定電子郵箱 Email</th>
-                    <th className="py-3 px-4 text-[10px] uppercase font-bold tracking-wider text-center">登載註冊時間</th>
-                    <th className="py-3 px-4 text-[10px] uppercase font-bold tracking-wider text-right">當前統計儲值點數</th>
-                    <th className="py-3 px-4 text-[10px] uppercase font-bold tracking-wider text-center">手動消點累點變更</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {membersList.map((m) => (
-                    <tr key={m.email} className="hover:bg-white/[2%]">
-                      <td className="py-3.5 px-4 flex items-center space-x-3 text-white font-bold">
-                        <img src={m.avatar} alt="member-avatar" className="w-8 h-8 rounded-full border border-blue-500/20 object-cover" referrerPolicy="no-referrer" />
-                        <span>{m.name}</span>
-                      </td>
-                      <td className="py-3.5 px-4 font-mono text-zinc-400">{getMaskedEmail(m.email)}</td>
-                      <td className="py-3.5 px-4 text-center font-mono text-zinc-500">{m.joinedAt || '2026-06-01'}</td>
-                      <td className="py-3.5 px-4 text-right font-mono text-amber-400 font-black text-sm">{(m.points || 0).toLocaleString()} 點</td>
-                      <td className="py-3.5 px-4 text-center">
-                        <div className="flex justify-center space-x-1.5">
-                          <button
-                            type="button"
-                            onClick={() => handleAdjustPoints(m.email)}
-                            className="bg-blue-600/10 hover:bg-blue-600/20 border border-blue-500/20 text-blue-400 px-2.5 py-1 rounded transition text-[10px] cursor-pointer"
-                          >
-                            加減消點
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteMember(m.email)}
-                            className="bg-rose-600/10 hover:bg-rose-600/20 border border-rose-500/20 text-rose-450 rounded transition text-[10px] cursor-pointer"
-                          >
-                            移除帳戶
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* PIN changer & Security configuration */}
-            <div id="pincode-changer-card" className="bg-[#161616] border border-white/10 rounded-xl p-4 space-y-2.5 text-left">
-              <div className="border-b border-white/5 pb-1.5">
-                <span className="text-[10px] font-bold text-[#E5B453] tracking-widest block uppercase">安全鑰控制與系統加密安全</span>
-                <h4 className="font-bold text-xs mt-0.5">變更 6 位數員工解鎖金鑰 PIN Changer</h4>
-              </div>
-              <form onSubmit={handlePinChangeSubmit} className="space-y-2 text-[11px]">
-                {pinChangeError && <div className="p-1.5 bg-rose-500/10 text-rose-400 text-[10px] font-bold rounded-lg">⚠️ {pinChangeError}</div>}
-                {pinChangeSuccess && <div className="p-1.5 bg-emerald-500/10 text-emerald-400 text-[10px] font-bold rounded-lg">🎯 {pinChangeSuccess}</div>}
-                <div className="space-y-0.5">
-                  <label className="text-zinc-500 block text-[10px]">目前解鎖金鑰 Current PIN</label>
-                  <input
-                    id="current-pincode-input"
-                    type="password"
-                    required
-                    maxLength={6}
-                    pattern="\d{6}"
-                    value={currentPinInput}
-                    onChange={(e) => setCurrentPinInput(e.target.value.replace(/\D/g, ''))}
-                    className="w-full bg-black border border-white/10 rounded-lg px-2 py-1 font-mono text-center tracking-widest text-[13px] text-white"
-                    placeholder="輸入目前 6 碼"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-2.5">
-                  <div className="space-y-0.5">
-                    <label className="text-zinc-500 block text-[10px]">新 PIN-Key</label>
-                    <input
-                      id="new-pincode-input"
-                      type="password"
-                      required
-                      maxLength={6}
-                      pattern="\d{6}"
-                      value={newPinInput}
-                      onChange={(e) => setNewPinInput(e.target.value.replace(/\D/g, ''))}
-                      className="w-full bg-black border border-white/10 rounded-lg px-2 py-1 font-mono text-center tracking-widest text-[13px] text-white"
-                      placeholder="全新 6 碼"
-                    />
-                  </div>
-                  <div className="space-y-0.5">
-                    <label className="text-zinc-500 block text-[10px]">對校新 Key</label>
-                    <input
-                      id="confirm-pincode-input"
-                      type="password"
-                      required
-                      maxLength={6}
-                      pattern="\d{6}"
-                      value={confirmPinInput}
-                      onChange={(e) => setConfirmPinInput(e.target.value.replace(/\D/g, ''))}
-                      className="w-full bg-black border border-white/10 rounded-lg px-2 py-1 font-mono text-center tracking-widest text-[13px] text-white"
-                      placeholder="確認新 6 碼"
-                    />
-                  </div>
-                </div>
-                <button
-                  type="submit"
-                  disabled={pinChangeLoading}
-                  className="w-full py-1.5 mt-1 bg-[#E5B453] hover:bg-amber-400 text-slate-900 font-extrabold rounded-lg active:scale-95 cursor-pointer text-[11px] shadow-sm tracking-wide transition"
-                >
-                  {pinChangeLoading ? '執行中...' : '💾 確認變更解鎖 PIN'}
-                </button>
-              </form>
-            </div>
-
-            {/* Minimum Spend per Person configuration */}
-            <div className="bg-[#161616] border border-white/10 rounded-xl p-5 space-y-4 font-sans">
-              <div className="border-b border-white/5 pb-2">
-                <span className="text-[10px] font-bold text-[#E5B453] tracking-widest block uppercase">內用點餐控制與消費門檻</span>
-                <h4 className="font-bold text-sm mt-0.5">內用每人低消限制 Dine-in Min Spend Setting</h4>
-              </div>
-              <div className="space-y-3 text-xs">
-                {minSpendSaveError && <div className="p-2 bg-rose-500/10 text-rose-400 text-[11px] font-bold rounded-lg">⚠️ {minSpendSaveError}</div>}
-                {minSpendSaveSuccess && <div className="p-2 bg-emerald-500/10 text-emerald-400 text-[11px] font-bold rounded-lg">🎯 {minSpendSaveSuccess}</div>}
-                <div className="space-y-1">
-                  <label className="text-zinc-400 block">當前每人最低消費金額 (NT$)</label>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    value={tempMinSpend}
-                    onChange={(e) => setTempMinSpend(Math.max(0, parseInt(e.target.value.replace(/\D/g, ''), 10) || 0))}
-                    className="w-full bg-black border border-white/10 rounded-lg px-2.5 py-1.5 font-mono text-center text-white tracking-wide text-sm"
-                    placeholder="例如: 200"
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={handleSaveMinSpend}
-                  className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold rounded-lg active:scale-95 cursor-pointer text-[12px] shadow-sm tracking-wide transition"
-                >
-                  💾 儲存低消限制門檻 Settings
-                </button>
-              </div>
-            </div>
-
-            {/* Member points and gifts configuration */}
-            <div className="bg-[#161616] border border-white/10 rounded-xl p-5 space-y-4 font-sans text-left">
-              <div className="border-b border-white/5 pb-2">
-                <span className="text-[10px] font-bold text-[#E5B453] tracking-widest block uppercase">會員點數與贈品機制設定</span>
-                <h4 className="font-bold text-sm mt-0.5">點數贈送調整與贈送品項自訂 Member Points & Rewards Config</h4>
-              </div>
-              <div className="space-y-4 text-xs">
-                {memberConfigSaveError && <div className="p-2 bg-rose-500/10 text-rose-400 text-[11px] font-bold rounded-lg border border-rose-500/20">⚠️ {memberConfigSaveError}</div>}
-                {memberConfigSaveSuccess && <div className="p-2 bg-emerald-500/10 text-emerald-400 text-[11px] font-bold rounded-lg border border-emerald-500/20">🎯 {memberConfigSaveSuccess}</div>}
-
-                {/* Points ratio configuration */}
-                <div className="space-y-1.5">
-                  <label className="text-zinc-400 block font-semibold">積點比例：每 消費多少元 贈送 1 點會員積分？</label>
-                  <div className="flex items-center space-x-2">
-                    <span className="text-zinc-500 text-xs">每消費</span>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      value={tempPointsRatio}
-                      onChange={(e) => setTempPointsRatio(Math.max(1, parseInt(e.target.value.replace(/\D/g, ''), 10) || 1))}
-                      className="w-24 bg-black border border-white/10 rounded-lg px-2.5 py-1 font-mono text-center text-white tracking-wide text-xs"
-                      placeholder="20"
-                    />
-                    <span className="text-zinc-400 text-xs">元，獲得 1 點</span>
-                  </div>
-                  <p className="text-[10px] text-zinc-500 italic">預設為 20 元 1 點，可自由調整為 10 元、50 元等任意大於 1 的正整數值。</p>
-                </div>
-
-                {/* Gift reward items selection */}
-                <div className="space-y-3 pt-2 border-t border-white/5">
-                  <label className="text-zinc-400 block font-semibold text-xs uppercase tracking-wider">🎁 回饋贈餐品項與點數自訂</label>
-                  
-                  <div className="space-y-3">
-                    {tempRewards.map((reward, index) => {
-                      return (
-                        <div key={reward.id || index} className="bg-black/40 border border-white/5 rounded-lg p-3 space-y-2">
-                          <div className="flex items-center justify-between">
-                            <span className="font-mono text-[10px] text-zinc-500 uppercase">選項 {index + 1} ({reward.id})</span>
-                            <label className="flex items-center space-x-1.5 cursor-pointer text-zinc-400 hover:text-white select-none">
-                              <input
-                                type="checkbox"
-                                checked={reward.enabled !== false}
-                                onChange={(e) => {
-                                  const updated = [...tempRewards];
-                                  updated[index] = { ...updated[index], enabled: e.target.checked };
-                                  setTempRewards(updated);
-                                }}
-                                className="rounded text-[#E5B453] bg-zinc-950 border-zinc-700 focus:ring-0 focus:ring-offset-0"
-                              />
-                              <span className="text-[11px]">啟用此項贈品</span>
-                            </label>
-                          </div>
-
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                            {/* MenuItem selection */}
-                            <div className="space-y-0.5 text-left">
-                              <span className="text-zinc-500 text-[10px] block">對應單品餐點 Corresponding Item</span>
-                              <select
-                                value={reward.menuItemId}
-                                onChange={(e) => {
-                                  const updated = [...tempRewards];
-                                  const selectedId = e.target.value;
-                                  const matchItem = menuItems.find(m => m.id === selectedId);
-                                  updated[index] = { 
-                                    ...updated[index], 
-                                    menuItemId: selectedId,
-                                    fallbackPrice: matchItem ? matchItem.price : 100,
-                                    fallbackName: matchItem ? matchItem.name : { zh: '贈送項目', en: 'Complimentary Item' }
-                                  };
-                                  setTempRewards(updated);
-                                }}
-                                className="w-full bg-black border border-white/10 rounded-lg px-2 py-1 text-xs text-white"
-                              >
-                                {menuItems.map(item => (
-                                  <option key={item.id} value={item.id}>
-                                    {getLocalizedText(item.name, 'zh') || item.name} (NT$ {item.price})
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
-
-                            {/* Cost index */}
-                            <div className="space-y-0.5 text-left">
-                              <span className="text-zinc-500 text-[10px] block font-sans">兌換所需點數 Reward Points Required</span>
-                              <div className="relative flex items-center">
-                                <input
-                                  type="text"
-                                  inputMode="numeric"
-                                  pattern="[0-9]*"
-                                  value={reward.cost !== undefined ? reward.cost : 900}
-                                  onChange={(e) => {
-                                    const updated = [...tempRewards];
-                                    updated[index] = { 
-                                      ...updated[index], 
-                                      cost: Math.max(0, parseInt(e.target.value.replace(/\D/g, ''), 10) || 0) 
-                                    };
-                                    setTempRewards(updated);
-                                  }}
-                                  className="w-full bg-black border border-white/10 rounded-lg pl-2 py-1 font-mono text-white text-xs"
-                                  placeholder="900"
-                                />
-                                <span className="absolute right-2 text-[10px] font-bold text-amber-500 block uppercase">PTS</span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleSaveMemberConfig}
-                  disabled={isSavingMemberConfig}
-                  className="w-full py-2 bg-[#E5B453] hover:bg-amber-400 text-slate-900 font-extrabold rounded-lg active:scale-95 cursor-pointer text-xs shadow-md tracking-wide transition uppercase"
-                >
-                  {isSavingMemberConfig ? '儲存中...' : '💾 儲存會員機制自訂設定 Save VIP Config'}
-                </button>
-              </div>
-            </div>
-
-            {/* 客戶注意事項欄位 */}
-            <div className="bg-[#161616] border border-white/10 rounded-xl p-5 space-y-4 font-sans text-left">
-              <div className="border-b border-white/5 pb-2">
-                <span className="text-[10px] font-bold text-[#E5B453] tracking-widest block uppercase">客席資訊與跑馬燈公告</span>
-                <h4 className="font-bold text-sm mt-0.5">滾動式客席注意事項公告 Customer Scrolling Notice</h4>
-              </div>
-              <div className="space-y-3.5 text-xs">
-                {noticeError && <div className="p-2 bg-rose-500/10 text-rose-400 text-[11px] font-bold rounded-lg border border-rose-500/20">⚠️ {noticeError}</div>}
-                {noticeSuccess && <div className="p-2 bg-emerald-500/10 text-emerald-400 text-[11px] font-bold rounded-lg border border-emerald-500/20">🎯 {noticeSuccess}</div>}
-                
-                <p className="text-[11px] text-zinc-400 leading-normal">
-                  此訊息會以「滾動式跑馬燈」在所有顧客桌別的點餐頁面最上方即時輪播，適合填寫：最新優惠、滿額贈禮、低消或限時說明。
-                </p>
-
-                <div className="space-y-1">
-                  <label className="text-zinc-500 block font-semibold">公告內容 (字數不限，支援英文及多語系跑馬輪播)</label>
-                  <textarea
-                    rows={3}
-                    value={tempCustomerNotice}
-                    onChange={(e) => setTempCustomerNotice(e.target.value)}
-                    className="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-white leading-relaxed text-xs focus:ring-1 focus:ring-[#E5B453] focus:outline-none focus:border-[#E5B453]"
-                    placeholder="輸入你要在頂部跑馬燈輪播的消息..."
-                  />
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleSaveCustomerNotice}
-                  className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold rounded-lg active:scale-95 cursor-pointer text-[12px] shadow-sm tracking-wide transition flex items-center justify-center gap-1"
-                >
-                  <span>💾 儲存並即時推播公告</span>
-                </button>
-              </div>
-            </div>
-
-            {/* 系統資料清洗 System Sanitize & Reset */}
-            <div className="bg-[#161616] border border-rose-500/20 rounded-xl p-5 space-y-4 font-sans text-left">
-              <div className="border-b border-rose-500/10 pb-2">
-                <span className="text-[10px] font-bold text-rose-500 tracking-widest block uppercase">資料清洗與測試單據重置 Sanitize Data</span>
-                <h4 className="font-bold text-sm mt-0.5 text-white">刪除系統測試用歷史單據及暫存資料 System Data Sanitize</h4>
-              </div>
-              <div className="space-y-3.5 text-xs">
-                <p className="text-[11px] text-zinc-400 leading-normal">
-                  此功能將永久刪除系統中預載的測試性歷史訂單單據、廚房出單日誌、以及庫存調整流水帳。重置後，系統將進入乾淨的初始運行狀態。<strong>此操作需要員工安全 PIN 碼，且無法撤銷！</strong>
-                </p>
-
-                <div className="space-y-1">
-                  <label className="text-zinc-400 block font-semibold">🔑 安全驗證：請輸入 6 位數員工安全 PIN 碼以授權：</label>
-                  <input
-                    type="password"
-                    maxLength={6}
-                    placeholder="請輸入解鎖 PIN"
-                    className="w-full bg-black border border-white/10 rounded-lg px-2.5 py-1.5 font-mono text-center tracking-widest text-[14px] text-white focus:outline-none focus:border-rose-500"
-                    value={sanitizePin}
-                    onChange={(e) => setSanitizePin(e.target.value.replace(/\D/g, ''))}
-                  />
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="sanitize-members-checkbox"
-                    checked={clearLocalMembers}
-                    onChange={(e) => setClearLocalMembers(e.target.checked)}
-                    className="rounded bg-black border-white/10 text-rose-500 focus:ring-0 w-3.5 h-3.5 cursor-pointer"
-                  />
-                  <label htmlFor="sanitize-members-checkbox" className="text-zinc-300 text-[11px] select-none cursor-pointer">
-                    同時清空瀏覽器 LocalStorage 中的 Google 會員列表。
-                  </label>
-                </div>
-
-                {sanitizeError && <div className="p-2 bg-rose-500/10 text-rose-400 text-[11px] font-bold rounded-lg border border-rose-500/20">⚠️ {sanitizeError}</div>}
-                {sanitizeSuccess && <div className="p-2 bg-emerald-500/10 text-emerald-400 text-[11px] font-bold rounded-lg border border-emerald-500/20">🎯 {sanitizeSuccess}</div>}
-
-                <button
-                  type="button"
-                  disabled={sanitizeLoading}
-                  onClick={handleSanitizeSystemData}
-                  className="w-full py-2 bg-rose-600 hover:bg-rose-500 text-white font-extrabold rounded-lg active:scale-95 cursor-pointer text-[12px] shadow-sm tracking-wide transition flex items-center justify-center gap-1.5 align-middle"
-                >
-                  <Trash2 size={13} />
-                  <span>{sanitizeLoading ? '資料清除中...' : '🚨 確認清除所有測試單據及暫存日誌'}</span>
-                </button>
-              </div>
-            </div>
-
-            {/* 時段營業時間設定 (精確到分鐘) */}
-            <div className="bg-[#161616] border border-white/10 rounded-xl p-5 space-y-4 font-sans text-left md:col-span-2">
-              <div className="border-b border-white/5 pb-2">
-                <span className="text-[10px] font-bold text-[#E5B453] tracking-widest block uppercase">營業控制與點餐時間鎖定</span>
-                <h4 className="font-bold text-sm mt-0.5">時段營業時間設定 Custom Operating Hours (精確到分鐘)</h4>
-              </div>
-              <div className="space-y-4 text-xs select-none">
-                {opHoursError && <div className="p-2 bg-rose-500/10 text-rose-400 text-[11px] font-bold rounded-lg border border-rose-500/20">⚠️ {opHoursError}</div>}
-                {opHoursSuccess && <div className="p-2 bg-emerald-500/10 text-emerald-400 text-[11px] font-bold rounded-lg border border-emerald-500/20">🎯 {opHoursSuccess}</div>}
-                
-                <p className="text-[11px] text-zinc-400 leading-normal">
-                  系統在設定的營業時間內自動解鎖「顧客購物車」點餐下單權限。非營業時間，顧客僅能「瀏覽菜單」但無法加入購物車或點餐。安全與時間同步以伺服器為精準標準基準，防止任何用戶端修改時間繞過機制的操作！
-                </p>
-
-                <div className="space-y-4">
-                  {tempOperatingHours.map((slot, idx) => {
-                    const daysOfWeekLabels = ['日', '一', '二', '三', '四', '五', '六'];
-                    return (
-                      <div key={slot.id || idx} className="p-3 bg-black/40 border border-[#E5B453]/10 rounded-xl space-y-3 relative">
-                        <div className="flex items-center justify-between">
-                          <input
-                            type="text"
-                            value={slot.name}
-                            onChange={(e) => {
-                              const updated = [...tempOperatingHours];
-                              updated[idx].name = e.target.value;
-                              setTempOperatingHours(updated);
-                            }}
-                            className="bg-transparent border-b border-white/10 hover:border-white/30 focus:border-[#E5B453] text-[12px] font-bold text-white focus:outline-none pb-0.5 w-[160px] truncate"
-                          />
-                          <div className="flex items-center space-x-2">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const updated = [...tempOperatingHours];
-                                updated[idx].isActive = !updated[idx].isActive;
-                                setTempOperatingHours(updated);
-                              }}
-                              className={`px-2 py-0.5 rounded text-[10px] font-bold transition ${
-                                slot.isActive 
-                                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
-                                  : 'bg-zinc-800 text-zinc-500 border border-zinc-700/50'
-                              }`}
-                            >
-                              {slot.isActive ? '● 啟用中 Open' : '○ 已關閉 Closed'}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const updated = tempOperatingHours.filter((_, sIdx) => sIdx !== idx);
-                                setTempOperatingHours(updated);
-                              }}
-                              className="p-1 hover:bg-rose-500/10 rounded text-rose-400"
-                              title="刪除此時段"
-                            >
-                              <Trash2 size={13} />
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Start and End Inputs */}
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <label className="text-[10px] text-zinc-400 block mb-1 font-semibold">開始時間 (HH:MM)</label>
-                            <input
-                              type="time"
-                              value={slot.start}
-                              onChange={(e) => {
-                                const updated = [...tempOperatingHours];
-                                updated[idx].start = e.target.value;
-                                setTempOperatingHours(updated);
-                              }}
-                              className="w-full bg-black/60 border border-white/10 rounded-lg px-2 py-1 font-mono text-center text-white focus:ring-1 focus:ring-[#E5B453] focus:outline-none"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-[10px] text-zinc-400 block mb-1 font-semibold">結束時間 (HH:MM)</label>
-                            <input
-                              type="time"
-                              value={slot.end}
-                              onChange={(e) => {
-                                const updated = [...tempOperatingHours];
-                                updated[idx].end = e.target.value;
-                                setTempOperatingHours(updated);
-                              }}
-                              className="w-full bg-black/60 border border-white/10 rounded-lg px-2 py-1 font-mono text-center text-white focus:ring-1 focus:ring-[#E5B453] focus:outline-none"
-                            />
-                          </div>
-                        </div>
-
-                        {/* Weekday Selection */}
-                        <div className="space-y-1">
-                          <span className="text-[10px] text-zinc-400 block font-semibold">星期重複設定</span>
-                          <div className="flex flex-wrap gap-1 pt-0.5">
-                            {daysOfWeekLabels.map((label, dayNum) => {
-                              const isSelected = slot.days ? slot.days.includes(dayNum) : false;
-                              return (
-                                <button
-                                  type="button"
-                                  key={dayNum}
-                                  onClick={() => {
-                                    const updated = [...tempOperatingHours];
-                                    let currentDays = slot.days ? [...slot.days] : [];
-                                    if (currentDays.includes(dayNum)) {
-                                      currentDays = currentDays.filter(d => d !== dayNum);
-                                    } else {
-                                      currentDays.push(dayNum);
-                                      currentDays.sort((a, b) => a - b);
-                                    }
-                                    updated[idx].days = currentDays;
-                                    setTempOperatingHours(updated);
-                                  }}
-                                  className={`w-6 h-6 rounded-md text-[10px] font-bold flex items-center justify-center transition border ${
-                                    isSelected
-                                      ? 'bg-thai-gold/20 text-thai-gold border-thai-gold/40'
-                                      : 'bg-black/40 text-zinc-500 border-white/5 hover:border-white/10'
-                                  }`}
-                                >
-                                  {label}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-
-                        {/* 預約專用 / 可預約時段設定 - 整合式雙模切換按鈕 */}
-                        <div className="pt-2 border-t border-white/5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-                          <div>
-                            <span className="text-[10px] font-bold text-zinc-300 block">時段模式與權限</span>
-                            <span className="text-[10px] text-zinc-400 block leading-tight">
-                              {slot.isReservableOnly 
-                                ? '🎟️【僅限預約】：營業時間外開放預約桌席，僅對已預約顧客開放點餐進場。'
-                                : '🌐【一般營業】：開放現場與所有顧客自由進場與點餐。'}
-                            </span>
-                          </div>
-                          <div className="inline-flex bg-black/60 p-1 rounded-xl border border-white/10 shrink-0 select-none">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const updated = [...tempOperatingHours];
-                                updated[idx].isReservableOnly = false;
-                                setTempOperatingHours(updated);
-                              }}
-                              className={`px-3 py-1 rounded-lg text-[10px] font-extrabold transition flex items-center gap-1 cursor-pointer ${
-                                !slot.isReservableOnly
-                                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm'
-                                  : 'text-zinc-400 hover:text-white'
-                              }`}
-                              title="切換為開放現場所有顧客之一般營業時段"
-                            >
-                              <span>🌐 一般營業</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const updated = [...tempOperatingHours];
-                                updated[idx].isReservableOnly = true;
-                                setTempOperatingHours(updated);
-                              }}
-                              className={`px-3 py-1 rounded-lg text-[10px] font-extrabold transition flex items-center gap-1 cursor-pointer ${
-                                slot.isReservableOnly
-                                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm'
-                                  : 'text-zinc-400 hover:text-white'
-                              }`}
-                              title="切換為僅供已預約顧客進場與點餐之預約專用時段"
-                            >
-                              <span>🎟️ 僅限預約</span>
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                <div className="flex flex-col sm:flex-row gap-2 pt-1 font-sans">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const newSlot = {
-                        id: `oh-manual-${Date.now()}`,
-                        name: `營業時段 ${tempOperatingHours.length + 1}`,
-                        start: '11:00',
-                        end: '14:30',
-                        days: [0, 1, 2, 3, 4, 5, 6],
-                        isActive: true,
-                        isReservableOnly: false
-                      };
-                      setTempOperatingHours([...tempOperatingHours, newSlot]);
-                    }}
-                    className="flex-1 py-2 bg-zinc-800 hover:bg-zinc-750 text-white font-extrabold rounded-lg active:scale-95 cursor-pointer text-[11px] shadow-sm tracking-wide border border-white/10 flex items-center justify-center gap-1 transition"
-                  >
-                    <Plus size={13} />
-                    <span>新增一般營業時段</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const newSlot = {
-                        id: `oh-res-${Date.now()}`,
-                        name: `預約專用時段 ${tempOperatingHours.length + 1}`,
-                        start: '14:30',
-                        end: '17:30',
-                        days: [0, 1, 2, 3, 4, 5, 6],
-                        isActive: true,
-                        isReservableOnly: true
-                      };
-                      setTempOperatingHours([...tempOperatingHours, newSlot]);
-                    }}
-                    className="flex-1 py-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-extrabold rounded-lg active:scale-95 cursor-pointer text-[11px] shadow-sm tracking-wide border border-amber-500/30 flex items-center justify-center gap-1 transition"
-                  >
-                    <Plus size={13} />
-                    <span>新增可預約時段 (營業時間外預約專用)</span>
-                  </button>
-                </div>
-
-                <div className="border-t border-white/5 pt-4 mt-2">
-                  <span className="text-[10px] font-bold text-[#E5B453] tracking-widest block uppercase mb-1">公休日 / 特殊店休設定 (Rest Days)</span>
-                  <p className="text-[11px] text-zinc-400 mb-2 leading-relaxed">
-                    在下方指定的日期，系統將會自動處於全天公休店休狀態 (鎖定點餐購物車)。您可以自訂任何日期，格式為 YYYY-MM-DD。
-                  </p>
-                  
-                  {/* Rest days tags list */}
-                  <div className="flex flex-wrap gap-1.5 mb-3">
-                    {tempRestDays.length === 0 ? (
-                      <span className="text-[11px] text-zinc-500 italic">目前無設定公休日 No scheduled rest days.</span>
-                    ) : (
-                      tempRestDays.map((dateStr, dIdx) => (
-                        <div key={dIdx} className="flex items-center gap-1.5 px-2 py-0.5 bg-rose-500/10 text-rose-400 border border-rose-500/25 rounded-md text-[11px] font-mono font-bold">
-                          <span>📅 {dateStr}</span>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setTempRestDays(tempRestDays.filter((_, idx) => idx !== dIdx));
-                            }}
-                            className="bg-transparent text-rose-400 hover:text-rose-200 ml-1 font-bold focus:outline-none cursor-pointer text-xs"
-                          >
-                            ×
-                          </button>
-                        </div>
-                      ))
-                    )}
-                  </div>
-
-                  {/* Add holiday date picker & button */}
-                  <div className="flex flex-wrap items-center gap-2">
-                    <input
-                      type="date"
-                      id="new-rest-day-input"
-                      className="bg-[#121212] border border-white/15 rounded-lg px-2.5 py-1 text-xs text-white focus:ring-1 focus:ring-[#E5B453] focus:outline-none"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const el = document.getElementById('new-rest-day-input') as HTMLInputElement;
-                        if (el && el.value) {
-                          const val = el.value.trim();
-                          if (tempRestDays.includes(val)) {
-                            alert('該公休日期已經存在於列表中！');
-                            return;
-                          }
-                          setTempRestDays([...tempRestDays, val].sort());
-                          el.value = '';
-                        } else {
-                          alert('請先選擇有效的日期！');
-                        }
-                      }}
-                      className="bg-zinc-800 hover:bg-zinc-750 text-white font-extrabold px-3 py-1 rounded-lg text-xs tracking-wider transition active:scale-95 cursor-pointer border border-white/10"
-                    >
-                      + 新增此公休日期
-                    </button>
-                  </div>
-                </div>
-
-                <div className="pt-2 font-sans border-t border-white/5 mt-4">
-                  <button
-                    type="button"
-                    onClick={() => handleSaveOperatingHoursLocal(tempOperatingHours, tempRestDays)}
-                    className="w-full py-2.5 bg-[#E5B453] hover:bg-amber-400 text-[#0F0F0F] font-black rounded-lg active:scale-95 cursor-pointer text-[12px] shadow-md tracking-widest transition flex items-center justify-center gap-1 uppercase"
-                  >
-                    <span>💾 儲存營業時間與公休日配置</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* 📢 客席專用 QR CODE 與 NFC 感應點餐配置面板 (Firebase 託管驗證) */}
-          <div className="bg-[#161616] border border-white/10 rounded-xl p-5 text-left text-xs space-y-4 col-span-2">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-white/5 pb-2.5 gap-2">
-              <div>
-                <span className="text-[10px] font-bold text-[#E5B453] tracking-widest block uppercase">FIREBASE DEPLOYED PORTAL</span>
-                <h4 className="font-bold text-sm text-white">📲 餐廳感應點餐元件：QR Code 暨 NFC 智慧標籤全球管理器</h4>
-              </div>
-              <div className="bg-[#E5B453]/10 text-[#E5B453] px-2.5 py-1 rounded-full font-mono text-[10px] border border-[#E5B453]/20 flex items-center gap-1.5 self-start sm:self-center">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
-                託管網站: sabay-bbq-order.firebaseapp.com
-              </div>
-            </div>
-
-            <p className="text-white/50 leading-relaxed font-sans">
-              系統已對接並完全優化顧客端的 <strong>?table=桌號</strong> 參數監聽器與 <strong>?table=takeout</strong> 外帶自動序號生成邏輯。
-              管理人員在此處可一鍵式預覽、印製各桌別的 NFC 感應與 QR Code 連結，並提供完整 NFC 手機感應燒錄指引，實現顧客貼近手機一鍵極速開網即點！
-            </p>
-
-            {/* Quick validation dashboard */}
-            <div className="bg-black/25 rounded-xl border border-white/5 p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-1.5">
-                <p className="font-bold text-white/40 uppercase tracking-wider text-[9px]">系統核心路由驗證 Network Gateway</p>
-                <div className="space-y-1 text-zinc-300">
-                  <div className="flex items-center text-emerald-400 font-bold gap-1 text-[11px]">
-                    <span className="text-emerald-400">✓</span> 顧客端監聽接收器 (Param Listener) Active
-                  </div>
-                  <div className="flex items-center text-emerald-400 font-bold gap-1 text-[11px]">
-                    <span className="text-emerald-400">✓</span> 外帶自取自動派發序列 (Seq Generator) Active
-                  </div>
-                  <div className="flex items-center text-emerald-400 font-bold gap-1 text-[11px]">
-                    <span className="text-emerald-400">✓</span> NFC NDEF URI 符合 100% 行動裝置規約
-                  </div>
-                </div>
-              </div>
-              
-              <div className="space-y-1.5 md:col-span-2">
-                <p className="font-bold text-white/40 uppercase tracking-wider text-[9px]">Firebase 主域名生產分發鏈 Deployed Routing Target</p>
-                <div className="bg-[#0e0e0e] border border-white/5 rounded-lg p-2 flex items-center justify-between gap-1 font-mono text-[10.5px]">
-                  <span className="text-zinc-400 truncate">https://sabay-bbq-order.web.app/</span>
-                  <div className="flex gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        navigator.clipboard.writeText('https://sabay-bbq-order.web.app/');
-                        setCopiedTableId('main-logo');
-                        setTimeout(() => setCopiedTableId(null), 1500);
-                      }}
-                      className="text-[#E5B453] hover:text-amber-400 p-1 bg-white/[0.03] hover:bg-white/[0.08] rounded transition cursor-pointer"
-                      title="複製主域名"
-                    >
-                      {copiedTableId === 'main-logo' ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
-                    </button>
-                    <a
-                      href="https://sabay-bbq-order.web.app/"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-zinc-500 hover:text-white p-1 bg-white/[0.03] hover:bg-white/[0.08] rounded"
-                    >
-                      <ExternalLink size={12} />
-                    </a>
-                  </div>
-                </div>
-                <p className="text-[10px] text-zinc-500 italic">這是系統部署於 Firebase Hosting 的最終外連網址分發中樞，可對應全店桌席感應需求。</p>
-              </div>
-            </div>
-
-            {/* QR/NFC Selection Slider / Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 pt-1">
-              {/* Left Selector & Link Lists */}
-              <div className="lg:col-span-5 space-y-2.5">
-                <div className="border border-white/5 bg-black/25 rounded-lg p-3">
-                  <span className="text-[10px] font-bold text-[#E5B453] uppercase tracking-wider block mb-2">① 請選擇欲檢視與生成的席位點：</span>
-                  <div className="grid grid-cols-3 gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedQrPreviewId('takeout');
-                        setTableError(null);
-                        setTableSuccess(null);
-                      }}
-                      className={`py-2 px-1 rounded font-bold transition flex flex-col items-center justify-center gap-0.5 border cursor-pointer ${
-                        selectedQrPreviewId === 'takeout'
-                          ? 'bg-[#E5B453] text-[#0F0F0F] border-[#E5B453] shadow-md'
-                          : 'bg-white/5 hover:bg-white/10 border-white/10 text-white/80'
-                      }`}
-                    >
-                      <ShoppingBag size={14} className="mb-0.5" />
-                      <span className="text-[10px]">🥡 外帶專用</span>
-                    </button>
-                    {tables.map(tb => (
-                      <button
-                        key={tb.id}
-                        type="button"
-                        onClick={() => {
-                          setSelectedQrPreviewId(tb.id);
-                          setTableError(null);
-                          setTableSuccess(null);
-                        }}
-                        className={`py-2 px-1 rounded font-bold transition flex flex-col items-center justify-center gap-0.5 border cursor-pointer ${
-                          selectedQrPreviewId === tb.id
-                            ? 'bg-[#E5B453] text-[#0F0F0F] border-[#E5B453] shadow-md'
-                            : 'bg-white/5 hover:bg-white/10 border-white/10 text-white/80'
-                        }`}
-                      >
-                        <QrCode size={14} className="mb-0.5" />
-                        <span className="text-[10px]">{tb.id} 號桌席</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="border border-white/5 bg-black/20 rounded-lg p-3 space-y-2 text-[11px] text-zinc-300">
-                  <span className="text-[10px] font-bold text-[#E5B453] uppercase tracking-wider block">Firebase 託管下的 NFC/QR 精準指向連結</span>
-                  
-                  {(() => {
-                    const isTakeout = selectedQrPreviewId === 'takeout';
-                    const label = isTakeout ? '🥡 外帶自取顧客專用定位點' : `🥢 內用客席第 ${selectedQrPreviewId} 桌`;
-                    const relativePath = isTakeout ? '/?table=takeout' : `/?table=${selectedQrPreviewId}`;
-                    const firebaseProdUrl = `https://sabay-bbq-order.web.app/${isTakeout ? '?table=takeout' : `?table=${selectedQrPreviewId}`}`;
-                    
-                    return (
-                      <div className="space-y-2.5">
-                        <div className="flex justify-between items-center text-white font-extrabold text-xs">
-                          <span>{label}</span>
-                          <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-400/20 px-1.5 py-0.5 rounded text-[9px]">路由校核良好 ✓</span>
-                        </div>
-                        <div className="space-y-1">
-                          <label className="text-[10px] text-zinc-500 block">內部相對路徑 (Local Route Match):</label>
-                          <div className="bg-[#121212] p-1.5 rounded font-mono text-[10px] text-zinc-400 border border-white/5 break-all select-all flex justify-between items-center">
-                            <span>{relativePath}</span>
-                            <span className="text-[8px] bg-sky-500/10 text-sky-400 px-1 rounded-sm uppercase tracking-widest shrink-0 ml-1">模擬運作</span>
-                          </div>
-                        </div>
-                        <div className="space-y-1">
-                          <label className="text-[10px] text-zinc-500 block">Firebase 生產域名路徑 (Production Host URL):</label>
-                          <div className="bg-[#121212] p-1.5 rounded font-mono text-[10px] text-amber-100 border border-white/10 break-all select-all flex items-center justify-between gap-1">
-                            <span className="text-amber-200">{firebaseProdUrl}</span>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                navigator.clipboard.writeText(firebaseProdUrl);
-                                setCopiedTableId(selectedQrPreviewId);
-                                setTimeout(() => setCopiedTableId(null), 1500);
-                              }}
-                              className="text-[#E5B453] hover:text-amber-400 p-1 bg-white/[0.03] hover:bg-white/[0.1] rounded transition shrink-0 cursor-pointer"
-                              title="複製完整點餐網址"
-                            >
-                              {copiedTableId === selectedQrPreviewId ? <Check size={11} className="text-emerald-400" /> : <Copy size={11} />}
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
-              </div>
-
-              {/* Right Media Previews, QR Standee Rendering, NFC Guides */}
-              <div className="lg:col-span-7 grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Visual QR Code Card standee */}
-                {(() => {
-                  const isTakeout = selectedQrPreviewId === 'takeout';
-                  const label = isTakeout ? 'TAKE-OUT' : `TABLE ${selectedQrPreviewId}`;
-                  const labelZh = isTakeout ? '外 帶 自 取 由 此 點 餐' : `第 ${selectedQrPreviewId} 桌 位 內 用 點 餐`;
-                  const prodUrl = isTakeout 
-                    ? 'https://sabay-bbq-order.web.app/?table=takeout' 
-                    : `https://sabay-bbq-order.web.app/?table=${selectedQrPreviewId}`;
-                  
-                  const qrImgUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&color=20-20-20&data=${encodeURIComponent(prodUrl)}`;
-
-                  return (
-                    <div className="border border-white/10 bg-black/35 rounded-xl p-4 flex flex-col items-center justify-center space-y-3 relative overflow-hidden group">
-                      {/* Decorative brand tag */}
-                      <div className="absolute top-0 inset-x-0 bg-[#E5B453] text-[#0F0F0F] text-[9px] font-black tracking-widest text-center uppercase py-0.5 select-none font-mono">
-                        SABAY BBQ Thai Express
-                      </div>
-                      
-                      <div className="bg-white p-3 rounded-xl shadow-lg border border-white/20 mt-3 flex flex-col items-center justify-center max-w-[170px] w-full">
-                        <img 
-                          src={qrImgUrl} 
-                          alt={`QR Code Table ${selectedQrPreviewId}`}
-                          className="w-full aspect-square border border-slate-100 object-contain select-none"
-                          referrerPolicy="no-referrer"
-                        />
-                        <div className="mt-1 text-[8px] text-slate-400 font-mono tracking-tighter uppercase font-bold text-center">
-                          sabay bbq cloud system
-                        </div>
-                      </div>
-
-                      <div className="text-center space-y-1 w-full">
-                        <div className="text-[13px] text-[#E5B453] font-serif font-black tracking-widest uppercase">
-                          {label}
-                        </div>
-                        <div className="text-[10px] text-white/95 font-bold tracking-wider bg-white/5 px-2 py-0.5 rounded truncate">
-                          {labelZh}
-                        </div>
-                        <p className="text-[8.5px] text-zinc-400">請用智慧手機感應 NFC 或相機掃描條碼</p>
-                      </div>
-
-                      <div className="w-full flex gap-1 text-[10px] pt-1">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const printWindow = window.open();
-                            if (printWindow) {
-                              printWindow.document.write(`
-                                <!DOCTYPE html>
-                                <html>
-                                  <head>
-                                    <meta charset="UTF-8">
-                                    <title>列印-席位 QR CODE</title>
-                                    <style>
-                                      body { text-align: center; font-family: "Microsoft JhengHei", "PingFang TC", "Heiti TC", "Noto Sans TC", system-ui, sans-serif; padding: 40px; }
-                                      .card { border: 3px solid #000; padding: 40px; border-radius: 20px; display: inline-block; width: 300px; }
-                                      h1 { font-size: 28px; margin: 0 0 10px; }
-                                      h2 { font-size: 20px; margin: 0 0 20px; color: #555; }
-                                      img { width: 220px; height: 220px; }
-                                      .footer { margin-top: 25px; font-size: 11px; color: #888; }
-                                    </style>
-                                  </head>
-                                  <body>
-                                    <div class="card">
-                                      <h1>SABAY BBQ & THAI HOTPOT</h1>
-                                      <h2>${labelZh}</h2>
-                                      <img src="${qrImgUrl}" />
-                                      <div class="footer">
-                                        NFC 感應同效 • 雙向無接觸點餐元件<br/>
-                                        連結: ${prodUrl}
-                                      </div>
-                                    </div>
-                                    <script>window.onload = function() { window.print(); }</script>
-                                  </body>
-                                </html>
-                              `);
-                              printWindow.document.close();
-                            }
-                          }}
-                          className="flex-1 py-1.5 border border-[#E5B453]/30 hover:border-[#E5B453] text-[#E5B453] hover:bg-[#E5B453]/5 font-bold rounded transition text-[10px] active:scale-95 cursor-pointer text-center"
-                        >
-                          🖨️ 獨立列印
-                        </button>
-                        <a
-                          href={qrImgUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex-1 py-1.5 bg-white/5 hover:bg-white/10 text-white font-bold rounded text-center block transition text-[10px]"
-                        >
-                          📥 下載條碼
-                        </a>
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                {/* NFC Burning Instructions */}
-                <div className="border border-white/10 bg-black/35 rounded-xl p-4 flex flex-col justify-between text-left space-y-3 relative overflow-hidden">
-                  <div className="flex items-center space-x-1.5 text-amber-400 font-extrabold border-b border-white/5 pb-1.5">
-                    <span className="text-[12px]">📶 NTAG 晶片寫入與 NFC 標籤燒錄指示</span>
-                  </div>
-
-                  <p className="text-[10px] text-zinc-400 leading-relaxed font-sans">
-                    NFC (近場通訊貼紙) 為進階點餐的完美體驗。將貼紙貼於餐桌桌面或玻璃立牌，顧客不需打開相機，只需手機靠近即可喚醒此點餐頁面並帶入桌號座次：
-                  </p>
-
-                  <div className="space-y-1.5 bg-[#0A0A0A] p-2 rounded-lg border border-white/5 text-[9.5px]">
-                    <div className="space-y-1">
-                      <span className="text-[#E5B453]/95 block font-bold">🛠️ 燒寫步驟 / Writing Tool Steps</span>
-                      <ol className="list-decimal list-inside text-zinc-400 space-y-0.5 font-sans">
-                        <li>下載手機 App：<span className="text-white">NFC Tools</span> (免費下載)</li>
-                        <li>進入 App 點選：<span className="text-white">【Write (寫入)】</span></li>
-                        <li>選擇：<span className="text-white">【Add a record】</span> &rarr; <span className="text-white">【URL / URI】</span></li>
-                        <li>將下方網址複製並寫入 NTAG213晶片：</li>
-                      </ol>
-                      <div className="bg-black border border-white/10 p-1 rounded font-mono text-[9px] text-[#E5B453] break-all select-all">
-                        {selectedQrPreviewId === 'takeout' 
-                          ? 'https://sabay-bbq-order.web.app/?table=takeout' 
-                          : `https://sabay-bbq-order.web.app/?table=${selectedQrPreviewId}`}
-                      </div>
-                      <ol start="5" className="list-decimal list-inside text-zinc-400 space-y-0.5 font-sans">
-                        <li>點擊 <span className="text-white">【Write】</span>，手機靠貼紙即完成！</li>
-                      </ol>
-                    </div>
-                  </div>
-
-                  <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded p-1.5 flex items-start gap-1 text-[9.5px]">
-                    <span className="shrink-0">ℹ️</span>
-                    <span>建議選用防金屬干擾NTAG213系列貼紙，能防止因鋼製木餐桌造成的電磁波感應下降。</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-
-        </div>
+        <ManagerMembersTab
+          membersList={membersList}
+          setNewMemberName={setNewMemberName}
+          setNewMemberEmail={setNewMemberEmail}
+          setNewMemberBalance={setNewMemberBalance}
+          setNewMemberPoints={setNewMemberPoints}
+          setAddMemberError={setAddMemberError}
+          setAddMemberModalOpen={setAddMemberModalOpen}
+          handleAdjustPoints={handleAdjustPoints}
+          handleDeleteMember={handleDeleteMember}
+          pinChangeError={pinChangeError}
+          pinChangeSuccess={pinChangeSuccess}
+          currentPinInput={currentPinInput}
+          setCurrentPinInput={setCurrentPinInput}
+          newPinInput={newPinInput}
+          setNewPinInput={setNewPinInput}
+          confirmPinInput={confirmPinInput}
+          setConfirmPinInput={setConfirmPinInput}
+          pinChangeLoading={pinChangeLoading}
+          handlePinChangeSubmit={handlePinChangeSubmit}
+          minSpendSaveError={minSpendSaveError}
+          minSpendSaveSuccess={minSpendSaveSuccess}
+          tempMinSpend={tempMinSpend}
+          setTempMinSpend={setTempMinSpend}
+          handleSaveMinSpend={handleSaveMinSpend}
+          memberConfigSaveError={memberConfigSaveError}
+          memberConfigSaveSuccess={memberConfigSaveSuccess}
+          tempPointsRatio={tempPointsRatio}
+          setTempPointsRatio={setTempPointsRatio}
+          tempRewards={tempRewards}
+          setTempRewards={setTempRewards}
+          menuItems={menuItems}
+          isSavingMemberConfig={isSavingMemberConfig}
+          handleSaveMemberConfig={handleSaveMemberConfig}
+          noticeError={noticeError}
+          noticeSuccess={noticeSuccess}
+          tempCustomerNotice={tempCustomerNotice}
+          setTempCustomerNotice={setTempCustomerNotice}
+          handleSaveCustomerNotice={handleSaveCustomerNotice}
+          sanitizePin={sanitizePin}
+          setSanitizePin={setSanitizePin}
+          clearLocalMembers={clearLocalMembers}
+          setClearLocalMembers={setClearLocalMembers}
+          sanitizeError={sanitizeError}
+          sanitizeSuccess={sanitizeSuccess}
+          sanitizeLoading={sanitizeLoading}
+          handleSanitizeSystemData={handleSanitizeSystemData}
+          opHoursError={opHoursError}
+          opHoursSuccess={opHoursSuccess}
+          tempOperatingHours={tempOperatingHours}
+          setTempOperatingHours={setTempOperatingHours}
+          tempRestDays={tempRestDays}
+          setTempRestDays={setTempRestDays}
+          handleSaveOperatingHoursLocal={handleSaveOperatingHoursLocal}
+          tables={tables}
+          selectedQrPreviewId={selectedQrPreviewId}
+          setSelectedQrPreviewId={setSelectedQrPreviewId}
+          setTableError={setTableError}
+          setTableSuccess={setTableSuccess}
+          copiedTableId={copiedTableId}
+          setCopiedTableId={setCopiedTableId}
+        />
       )}
 
 
       {/* ==================== SCREEN SUBTAB: PRINTER SETTINGS ==================== */}
       {activeSubTab === 'printer' && (
-        <div className="space-y-6 animate-fadeIn text-left font-sans" id="subtab-section-printer">
-          <div className="bg-[#161616] border border-white/10 rounded-xl p-5 space-y-4">
-            <div className="flex items-center space-x-2 border-b border-white/5 pb-2">
-              <span className="text-xl">🖨️</span>
-              <div>
-                <h4 className="font-bold text-sm text-white">印表機與硬體規格管理器 (Printer Setup Center)</h4>
-                <p className="text-white/40 text-xs">分離設置廚房KDS備餐印表機與前台帳單收銀印表機，不同模組各司其職，隨寬度自適應縮放字體大小。</p>
-              </div>
-            </div>
-
-            {printerSaveSuccess && (
-              <div className="p-3.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-bold rounded-xl text-center text-xs">
-                {printerSaveSuccess}
-              </div>
-            )}
-
-            {/* 0. LOCAL-PRINTER-POS-BRIDGE (127.0.0.1:8060) Dedicated Hardware Bridge Card */}
-            <div className="bg-gradient-to-r from-zinc-950 via-zinc-900 to-black border border-cyan-500/30 rounded-xl p-4.5 space-y-3.5 shadow-lg relative overflow-hidden">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/10 pb-3">
-                <div className="flex items-center space-x-2.5">
-                  <div className="w-8 h-8 rounded-lg bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-400">
-                    <Cpu size={16} />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-black text-cyan-400 tracking-wider">🖨️ 本機 Windows POS 橋接器服務 (LOCAL-PRINTER-POS-BRIDGE)</span>
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                        posBridgeStatus.online
-                          ? 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-300'
-                          : 'bg-rose-500/20 border border-rose-500/40 text-rose-300'
-                      }`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${posBridgeStatus.online ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'}`}></span>
-                        {posBridgeStatus.online ? '🟢 橋接服務連線正常' : '🔴 未偵測到橋接服務'}
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-zinc-400 mt-0.5">
-                      提供 Windows 瀏覽器端穿透安全沙盒，直接控制 <span className="text-cyan-300 font-mono">LPT1:</span> / <span className="text-cyan-300 font-mono">COM</span> 實體印表機出單與開錢箱脈衝。
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={checkBridgeStatus}
-                    disabled={posBridgeStatus.checking}
-                    className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 active:scale-95 border border-white/10 text-zinc-300 font-bold rounded-lg text-xs transition cursor-pointer flex items-center gap-1.5"
-                  >
-                    <RefreshCw size={12} className={posBridgeStatus.checking ? 'animate-spin text-cyan-400' : 'text-zinc-400'} />
-                    <span>{posBridgeStatus.checking ? '探測中...' : '重新偵測 (Probe)'}</span>
-                  </button>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
-                <div>
-                  <label className="text-zinc-400 block mb-1">橋接服務位址 (Bridge URL)</label>
-                  <input
-                    type="text"
-                    value={posBridgeUrl}
-                    onChange={(e) => {
-                      setPosBridgeUrl(e.target.value);
-                      localStorage.setItem('pos-bridge-url', e.target.value);
-                    }}
-                    className="w-full bg-zinc-950 border border-white/10 rounded-lg p-2 text-cyan-300 font-mono text-xs"
-                    placeholder="http://127.0.0.1:8060"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-zinc-400 block mb-1">預設實體硬體埠 (Target Hardware Port)</label>
-                  <input
-                    type="text"
-                    value={billPrinter.usbPort || 'LPT1:'}
-                    onChange={(e) => setBillPrinter({ ...billPrinter, usbPort: e.target.value })}
-                    className="w-full bg-zinc-950 border border-white/10 rounded-lg p-2 text-white font-mono text-xs"
-                    placeholder="例如: LPT1: 或 COM1"
-                  />
-                </div>
-
-                <div className="flex flex-col justify-end">
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={handleTestBridgeOpenDrawer}
-                      disabled={posBridgeTesting}
-                      className="flex-1 py-2 bg-rose-500/15 hover:bg-rose-500/25 active:scale-95 border border-rose-500/30 text-rose-300 font-extrabold rounded-lg text-xs transition cursor-pointer flex items-center justify-center gap-1"
-                    >
-                      <Unlock size={12} className="text-rose-400" />
-                      <span>⚡ 測試開錢箱</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleTestBridgePrintLPT1}
-                      disabled={posBridgeTesting}
-                      className="flex-1 py-2 bg-cyan-500/15 hover:bg-cyan-500/25 active:scale-95 border border-cyan-500/30 text-cyan-300 font-extrabold rounded-lg text-xs transition cursor-pointer flex items-center justify-center gap-1"
-                    >
-                      <Printer size={12} className="text-cyan-400" />
-                      <span>🖨️ 測試 LPT1 出單</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {posBridgeTestResult && (
-                <div className={`p-2.5 rounded-lg border text-xs font-mono transition animate-fadeIn ${
-                  posBridgeTestResult.startsWith('✓')
-                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
-                    : 'bg-rose-500/10 border-rose-500/30 text-rose-300'
-                }`}>
-                  {posBridgeTestResult}
-                </div>
-              )}
-
-              {!posBridgeStatus.online && (
-                <div className="p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-lg text-[11px] text-amber-300/90 leading-relaxed">
-                  💡 <strong>小提示</strong>：若要在本機 Windows 點餐機控制 LPT1: 熱感應印表機與收銀抽屜，請至 <code className="text-white bg-black/60 px-1 py-0.5 rounded font-mono">LOCAL-PRINTER-POS-BRIDGE</code> 目錄下啟動 <code className="text-white bg-black/60 px-1 py-0.5 rounded font-mono">pos_bridge.exe</code>（或執行 <code className="text-white bg-black/60 px-1 py-0.5 rounded font-mono">python pos_bridge.py</code>），服務將自動常駐於 <code className="text-cyan-300 font-mono">127.0.0.1:8060</code>。
-                </div>
-              )}
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* 1. KDS Kitchen Printer config */}
-              <div className="bg-black/40 border border-[#E5B453]/20 p-4 rounded-xl space-y-4">
-                <span className="text-xs text-[#E5B453] font-extrabold block uppercase tracking-wider">🍳 廚房 KDS 工作票印表機</span>
-                
-                <div className="space-y-3 text-xs">
-                  <div>
-                    <label className="text-zinc-400 block mb-1">連接方式 Connection Type</label>
-                    <div className="grid grid-cols-3 gap-2">
-                      {['USB', 'IP', 'LPT'].map(type => (
-                        <button
-                          key={`kit-conn-${type}`}
-                          type="button"
-                          onClick={() => setKitchenPrinter({ ...kitchenPrinter, connectionType: type as any })}
-                          className={`py-1.5 rounded-lg border font-bold text-center cursor-pointer text-xs ${
-                            kitchenPrinter.connectionType === type
-                              ? 'bg-[#E5B453]/20 border-[#E5B453] text-[#E5B453]'
-                              : 'bg-zinc-900 border-white/5 text-zinc-400'
-                          }`}
-                        >
-                          {type === 'USB' ? '🔌 USB' : type === 'IP' ? '🌐 網路 IP' : '🖨️ LPT 埠'}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {kitchenPrinter.connectionType === 'IP' ? (
-                    <div>
-                      <label className="text-zinc-400 block mb-1">印表機固定 IP 位址</label>
-                      <input
-                        type="text"
-                        value={kitchenPrinter.ip}
-                        onChange={(e) => setKitchenPrinter({ ...kitchenPrinter, ip: e.target.value })}
-                        className="w-full bg-zinc-900 border border-white/10 rounded-lg p-2 text-white font-mono"
-                        placeholder="例如: 192.168.1.101"
-                      />
-                    </div>
-                  ) : kitchenPrinter.connectionType === 'LPT' ? (
-                    <div>
-                      <label className="text-zinc-400 block mb-1">Parallel LPT 埠位置 (LPT1, LPT2...)</label>
-                      <input
-                        type="text"
-                        value={kitchenPrinter.usbPort}
-                        onChange={(e) => setKitchenPrinter({ ...kitchenPrinter, usbPort: e.target.value })}
-                        className="w-full bg-zinc-900 border border-white/10 rounded-lg p-2 text-white font-mono"
-                        placeholder="例如: LPT1"
-                      />
-                    </div>
-                  ) : (
-                    <div>
-                      <label className="text-zinc-400 block mb-1">USB 埠位置 USB Port (ComPath)</label>
-                      <input
-                        type="text"
-                        value={kitchenPrinter.usbPort}
-                        onChange={(e) => setKitchenPrinter({ ...kitchenPrinter, usbPort: e.target.value })}
-                        className="w-full bg-zinc-900 border border-white/10 rounded-lg p-2 text-white font-mono"
-                        placeholder="例如: USB001, /dev/usb/lp0"
-                      />
-                    </div>
-                  )}
-
-                  <div>
-                    <label className="text-zinc-400 block mb-1">紙張出單寬度 Width Specs</label>
-                    <div className="grid grid-cols-2 gap-2">
-                      {['58mm', '80mm'].map(w => (
-                        <button
-                          key={`kit-w-${w}`}
-                          type="button"
-                          onClick={() => setKitchenPrinter({ ...kitchenPrinter, width: w as any, fontSizeFactor: w === '58mm' ? 0.8 : 1.0 })}
-                          className={`py-1.5 rounded-lg border font-bold text-center cursor-pointer ${
-                            kitchenPrinter.width === w
-                              ? 'bg-amber-400/20 border-amber-400 text-amber-300'
-                              : 'bg-zinc-900 border-white/5 text-zinc-400'
-                          }`}
-                        >
-                          {w} {w === '58mm' ? '(縮放 0.8x)' : '(標準 1.0x)'}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="text-zinc-400 block mb-1">出單字體縮放比例 Font Scale</label>
-                    <input
-                      type="range"
-                      min="0.5"
-                      max="2.0"
-                      step="0.1"
-                      value={kitchenPrinter.fontSizeFactor}
-                      onChange={(e) => setKitchenPrinter({ ...kitchenPrinter, fontSizeFactor: parseFloat(e.target.value) })}
-                      className="w-full accent-[#E5B453]"
-                    />
-                    <div className="flex justify-between font-mono text-[10px] text-zinc-500 mt-1">
-                      <span>最小(0.5x)</span>
-                      <span className="text-[#E5B453] font-bold">當前: {kitchenPrinter.fontSizeFactor}x</span>
-                      <span>最大(2.0x)</span>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="text-zinc-400 block mb-1">自訂列印抬頭 (廚房名稱)</label>
-                    <input
-                      type="text"
-                      value={kitchenPrinter.restaurantName}
-                      onChange={(e) => setKitchenPrinter({ ...kitchenPrinter, restaurantName: e.target.value })}
-                      className="w-full bg-zinc-900 border border-white/10 rounded-lg p-2 text-white"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-zinc-400 block mb-1">表頭自訂引言 Pre-title Message</label>
-                    <input
-                      type="text"
-                      value={kitchenPrinter.headerPrefix}
-                      onChange={(e) => setKitchenPrinter({ ...kitchenPrinter, headerPrefix: e.target.value })}
-                      className="w-full bg-zinc-900 border border-white/10 rounded-lg p-2 text-white"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-zinc-400 block mb-1">表尾注意事項 Footer Warning</label>
-                    <input
-                      type="text"
-                      value={kitchenPrinter.footerSuffix}
-                      onChange={(e) => setKitchenPrinter({ ...kitchenPrinter, footerSuffix: e.target.value })}
-                      className="w-full bg-zinc-900 border border-white/10 rounded-lg p-2 text-white"
-                    />
-                  </div>
-
-                  <div className="pt-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setPrintConfirmData({
-                          title: `🍳 KDS 廚房印表機測試列印 (${kitchenPrinter.restaurantName})`,
-                          ip: kitchenPrinter.ip || '192.168.123.100',
-                          onConfirm: async () => {
-                            if (onPrintTestPage) {
-                              try {
-                                const res = await onPrintTestPage('kitchen', { kitchen: kitchenPrinter, bill: billPrinter });
-                                if (res.success) {
-                                  alert(`✓ 🍳 廚房測試列印請求已成功送出！\n${res.message || ''}`);
-                                } else {
-                                  alert(`⚠️ 列印失敗:\n${res.error || '無法存取設備，請確認本機 POS 橋接器 (127.0.0.1:8060) 或印表機 IP 連線'}`);
-                                }
-                              } catch (_err) {
-                                alert('⚠️ 列印失敗，連線異常');
-                              }
-                            } else {
-                              alert('✓ 🍳 廚房測試列印頁已成功產生！');
-                            }
-                          }
-                        });
-                      }}
-                      className="w-full py-2 bg-[#E5B453]/10 hover:bg-[#E5B453]/20 active:scale-95 border border-[#E5B453]/30 text-amber-300 font-extrabold rounded-lg text-xs transition cursor-pointer flex items-center justify-center gap-1.5"
-                    >
-                      <Printer size={12} className="text-amber-400 animate-pulse" />
-                      <span>發送 KDS 測試頁 Test KDS Page</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* 2. Front Receipt/Bill Printer config */}
-              <div className="bg-black/40 border border-blue-500/20 p-4 rounded-xl space-y-4">
-                <span className="text-xs text-blue-400 font-extrabold block uppercase tracking-wider">🧾 前台帳單與收銀明細印表機</span>
-                
-                <div className="space-y-3 text-xs">
-                  <div>
-                    <label className="text-zinc-400 block mb-1">連接方式 Connection Type</label>
-                    <div className="grid grid-cols-3 gap-2">
-                      {['USB', 'IP', 'LPT'].map(type => (
-                        <button
-                          key={`bill-conn-${type}`}
-                          type="button"
-                          onClick={() => setBillPrinter({ ...billPrinter, connectionType: type as any })}
-                          className={`py-1.5 rounded-lg border font-bold text-center cursor-pointer text-xs ${
-                            billPrinter.connectionType === type
-                              ? 'bg-blue-500/20 border-blue-400 text-blue-300'
-                              : 'bg-zinc-900 border-white/5 text-zinc-400'
-                          }`}
-                        >
-                          {type === 'USB' ? '🔌 USB' : type === 'IP' ? '🌐 網路 IP' : '🖨️ LPT 埠'}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {billPrinter.connectionType === 'IP' ? (
-                    <div>
-                      <label className="text-zinc-400 block mb-1">印表機固定 IP 位址</label>
-                      <input
-                        type="text"
-                        value={billPrinter.ip}
-                        onChange={(e) => setBillPrinter({ ...billPrinter, ip: e.target.value })}
-                        className="w-full bg-zinc-900 border border-white/10 rounded-lg p-2 text-white font-mono"
-                        placeholder="例如: 192.168.1.102"
-                      />
-                    </div>
-                  ) : billPrinter.connectionType === 'LPT' ? (
-                    <div>
-                      <label className="text-zinc-400 block mb-1">Parallel LPT 埠位置 (LPT1, LPT2...)</label>
-                      <input
-                        type="text"
-                        value={billPrinter.usbPort}
-                        onChange={(e) => setBillPrinter({ ...billPrinter, usbPort: e.target.value })}
-                        className="w-full bg-zinc-950 border border-white/10 rounded-lg p-2 text-white font-mono"
-                        placeholder="例如: LPT1"
-                      />
-                    </div>
-                  ) : (
-                    <div>
-                      <label className="text-zinc-400 block mb-1">USB 埠位置 USB Port (ComPath)</label>
-                      <input
-                        type="text"
-                        value={billPrinter.usbPort}
-                        onChange={(e) => setBillPrinter({ ...billPrinter, usbPort: e.target.value })}
-                        className="w-full bg-zinc-950 border border-white/10 rounded-lg p-2 text-white font-mono"
-                        placeholder="例如: USB002, /dev/usb/lp1"
-                      />
-                    </div>
-                  )}
-
-                  <div>
-                    <label className="text-zinc-400 block mb-1">紙張出單寬度 Width Specs</label>
-                    <div className="grid grid-cols-2 gap-2">
-                      {['58mm', '80mm'].map(w => (
-                        <button
-                          key={`bill-w-${w}`}
-                          type="button"
-                          onClick={() => setBillPrinter({ ...billPrinter, width: w as any, fontSizeFactor: w === '58mm' ? 0.8 : 1.0 })}
-                          className={`py-1.5 rounded-lg border font-bold text-center cursor-pointer ${
-                            billPrinter.width === w
-                              ? 'bg-blue-400/20 border-blue-400 text-blue-300'
-                              : 'bg-zinc-900 border-white/5 text-zinc-400'
-                          }`}
-                        >
-                          {w} {w === '58mm' ? '(縮放 0.8x)' : '(標準 1.0x)'}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="text-zinc-400 block mb-1">出單字體縮放比例 Font Scale</label>
-                    <input
-                      type="range"
-                      min="0.5"
-                      max="2.0"
-                      step="0.1"
-                      value={billPrinter.fontSizeFactor}
-                      onChange={(e) => setBillPrinter({ ...billPrinter, fontSizeFactor: parseFloat(e.target.value) })}
-                      className="w-full accent-blue-500"
-                    />
-                    <div className="flex justify-between font-mono text-[10px] text-zinc-500 mt-1">
-                      <span>最小(0.5x)</span>
-                      <span className="text-blue-400 font-bold">當前: {billPrinter.fontSizeFactor}x</span>
-                      <span>最大(2.0x)</span>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="text-zinc-400 block mb-1">抬頭餐廳名稱 Restaurant Name</label>
-                    <input
-                      type="text"
-                      value={billPrinter.restaurantName}
-                      onChange={(e) => setBillPrinter({ ...billPrinter, restaurantName: e.target.value })}
-                      className="w-full bg-zinc-900 border border-white/10 rounded-lg p-2 text-white"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-zinc-400 block mb-1">電話 Tel</label>
-                      <input
-                        type="text"
-                        value={billPrinter.printTelephone}
-                        onChange={(e) => setBillPrinter({ ...billPrinter, printTelephone: e.target.value })}
-                        className="w-full bg-zinc-900 border border-white/10 rounded-lg p-2 text-white text-[11px]"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-zinc-400 block mb-1">開啟出單時間戳</label>
-                      <div className="flex items-center h-9 pl-1">
-                        <input
-                          type="checkbox"
-                          id="bill-checkbox-time"
-                          checked={billPrinter.printTimeEnabled}
-                          onChange={(e) => setBillPrinter({ ...billPrinter, printTimeEnabled: e.target.checked })}
-                          className="w-4 h-4 text-blue-500 bg-[#161616] border-white/10 rounded focus:ring-0"
-                        />
-                        <label htmlFor="bill-checkbox-time" className="text-[11px] text-zinc-300 ml-2 cursor-pointer font-bold">列印時標記精確時間</label>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="text-zinc-400 block mb-1">列印餐廳地址 Address</label>
-                    <input
-                      type="text"
-                      value={billPrinter.printAddress}
-                      onChange={(e) => setBillPrinter({ ...billPrinter, printAddress: e.target.value })}
-                      className="w-full bg-zinc-900 border border-white/10 rounded-lg p-2 text-white font-sans text-[11px]"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-zinc-400 block mb-1">表頭促銷首語 Header Slogan</label>
-                    <input
-                      type="text"
-                      value={billPrinter.headerPrefix}
-                      onChange={(e) => setBillPrinter({ ...billPrinter, headerPrefix: e.target.value })}
-                      className="w-full bg-zinc-900 border border-white/10 rounded-lg p-2 text-white"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-zinc-400 block mb-1">副聯結尾致謝辭 Thank You Message</label>
-                    <input
-                      type="text"
-                      value={billPrinter.footerSuffix}
-                      onChange={(e) => setBillPrinter({ ...billPrinter, footerSuffix: e.target.value })}
-                      className="w-full bg-zinc-900 border border-white/10 rounded-lg p-2 text-white"
-                    />
-                  </div>
-
-                  {/* 現金收銀抽屜連動設定 Cash Drawer Interlock Setup */}
-                  <div className="bg-zinc-950 p-4 rounded-xl border border-white/5 space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-rose-400">🔓</span>
-                        <span className="font-bold text-xs text-white">連動開啟現金收銀抽屜 Interlock Drawer</span>
-                      </div>
-                      <label className="relative inline-flex items-center cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={billPrinter.cashDrawerEnabled}
-                          onChange={(e) => setBillPrinter({ ...billPrinter, cashDrawerEnabled: e.target.checked })}
-                          className="sr-only peer"
-                        />
-                        <div className="w-9 h-5 bg-zinc-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-zinc-400 after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-rose-600 peer-checked:after:bg-white"></div>
-                      </label>
-                    </div>
-
-                    {billPrinter.cashDrawerEnabled && (
-                      <div className="space-y-3 pt-2 border-t border-white/5 text-[11px] animate-fadeIn">
-                        <div>
-                          <label className="text-zinc-400 block mb-1">硬體驅動連動技術 Driver Layer</label>
-                          <select
-                            value={billPrinter.cashDrawerDriver}
-                            onChange={(e) => setBillPrinter({ ...billPrinter, cashDrawerDriver: e.target.value as any })}
-                            className="w-full bg-zinc-900 border border-white/10 rounded-lg p-2 text-white font-sans"
-                          >
-                            <option value="OPOS">UPOS / OPOS 控制驅動標準 (EPSON/Star 零售大廠標準)</option>
-                            <option value="POS_NET">POS for .NET 類別庫 (Microsoft 點對點標準)</option>
-                            <option value="ESC_POS_RAW">ESC/POS 直通 RAW 指令 (winspool.drv / 脈衝指令)</option>
-                          </select>
-                        </div>
-
-                        {(billPrinter.cashDrawerDriver === 'OPOS' || billPrinter.cashDrawerDriver === 'POS_NET') && (
-                          <div>
-                            <label className="text-zinc-400 block mb-1">OPOS 宣告之設備編號 (Logical Device Name / ID)</label>
-                            <input
-                              type="text"
-                              value={billPrinter.cashDrawerOposName}
-                              onChange={(e) => setBillPrinter({ ...billPrinter, cashDrawerOposName: e.target.value })}
-                              className="w-full bg-zinc-900 border border-white/10 rounded-lg p-2 text-white font-mono"
-                              placeholder="例如: CashDrawer1, Epson_Drawer_Pin2"
-                            />
-                          </div>
-                        )}
-
-                        {billPrinter.cashDrawerDriver === 'ESC_POS_RAW' && (
-                          <div>
-                            <label className="text-zinc-400 block mb-1">ESC/POS 脈衝開鎖指令 (HEX 16進制碼)</label>
-                            <input
-                              type="text"
-                              value={billPrinter.cashDrawerEscPosCommand}
-                              onChange={(e) => setBillPrinter({ ...billPrinter, cashDrawerEscPosCommand: e.target.value.toUpperCase().replace(/\s/g, '') })}
-                              className="w-full bg-zinc-900 border border-white/10 rounded-lg p-2 text-white font-mono"
-                              placeholder="例如: 1B700019FA"
-                            />
-                            <div className="flex gap-1.5 mt-2">
-                              <button
-                                type="button"
-                                onClick={() => setBillPrinter({ ...billPrinter, cashDrawerEscPosCommand: '1B700019FA' })}
-                                className={`px-2 py-1 rounded text-[10px] border transition ${
-                                  billPrinter.cashDrawerEscPosCommand === '1B700019FA'
-                                    ? 'bg-rose-500/25 border-rose-500/50 text-rose-300'
-                                    : 'bg-zinc-900 border-white/5 text-zinc-400 hover:text-white'
-                                }`}
-                              >
-                                引腳 2 預設 (1B 70 00 19 FA)
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setBillPrinter({ ...billPrinter, cashDrawerEscPosCommand: '1B700119FA' })}
-                                className={`px-2 py-1 rounded text-[10px] border transition ${
-                                  billPrinter.cashDrawerEscPosCommand === '1B700119FA'
-                                    ? 'bg-rose-500/25 border-rose-500/50 text-rose-300'
-                                    : 'bg-zinc-900 border-white/5 text-zinc-400 hover:text-white'
-                                }`}
-                              >
-                                引腳 5 預設 (1B 70 01 19 FA)
-                              </button>
-                            </div>
-                          </div>
-                        )}
-
-                        <div className="pt-1.5">
-                          <button
-                            type="button"
-                            onClick={handleManualOpenDrawer}
-                            className="w-full py-1.5 bg-rose-500/10 hover:bg-rose-500/20 active:scale-95 border border-rose-500/30 text-rose-300 font-extrabold rounded-lg text-[10px] transition cursor-pointer flex items-center justify-center gap-1.5"
-                          >
-                            <Unlock size={10} className="text-rose-400" />
-                            <span>測試開啟現金抽屜 (Direct Open Test)</span>
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="pt-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setPrintConfirmData({
-                          title: `🧾 前台收銀印表機測試列印 (${billPrinter.restaurantName})`,
-                          ip: billPrinter.connectionType === 'IP' ? (billPrinter.ip || '192.168.1.102') : (billPrinter.usbPort || 'LPT1:'),
-                          onConfirm: async () => {
-                            if (onPrintTestPage) {
-                              try {
-                                const res = await onPrintTestPage('bill', { kitchen: kitchenPrinter, bill: billPrinter });
-                                if (res.success) {
-                                  alert(`✓ 🧾 前台收銀測試列印請求已成功送出！\n${res.message || ''}`);
-                                } else {
-                                  alert(`⚠️ 列印失敗:\n${res.error || '無法存取設備，請確認本機 POS 橋接器 (127.0.0.1:8060) 或 LPT 埠口連線'}`);
-                                }
-                              } catch (_err) {
-                                alert('⚠️ 列印失敗，連線異常');
-                              }
-                            } else {
-                              alert('✓ 🧾 前台收銀測試列印頁已成功產生！');
-                            }
-                          }
-                        });
-                      }}
-                      className="w-full py-2 bg-blue-500/10 hover:bg-blue-500/20 active:scale-95 border border-blue-500/30 text-blue-300 font-extrabold rounded-lg text-xs transition cursor-pointer flex items-center justify-center gap-1.5"
-                    >
-                      <Printer size={12} className="text-blue-400 animate-pulse" />
-                      <span>發送前台測試頁 Test Cashier Page</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="pt-4 border-t border-white/5 flex gap-2">
-              <button
-                type="button"
-                onClick={handleSavePrinters}
-                className="flex-1 py-3 bg-[#E5B453] hover:bg-amber-400 text-black font-black rounded-lg text-xs tracking-wider transition active:scale-95 cursor-pointer text-center"
-              >
-                💾 儲存並同步雙模組印表機設定 Store Printer Profiles
-              </button>
-            </div>
-          </div>
-
-          {/* Real-time Virtual Printer Buffer & History Logs */}
-          <div className="bg-[#161616] border border-white/10 rounded-xl p-5 space-y-4 text-left">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-3 border-b border-white/5 gap-2">
-              <div className="flex items-center space-x-2">
-                <span className="text-amber-400 text-base">📄</span>
-                <div>
-                  <h5 className="font-bold text-sm text-white">虛擬熱感印表即時快取管線 (Live Virtual Receipt Spool & Buffer)</h5>
-                  <p className="text-zinc-500 text-[10px]">所有拋送至本機 9100 通訊埠的餐廳交代票與結帳收據，皆會同步寫入此高可靠即時緩衝區。</p>
-                </div>
-              </div>
-              
-              <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!printLogs || printLogs.length === 0) {
-                      alert('⚠️ 目前尚無任何虛擬出單記錄可供匯出！ There is no virtual print history to export.');
-                      return;
-                    }
-                    
-                    // CSV Generation logic with headers or content lines
-                    const headers = ['Index', 'Type', 'Timestamp', 'Header/Table', 'Details Summary', 'Raw Ticket Text'];
-                    
-                    const rows = printLogs.map((log, index) => {
-                      const rawContent = log.content || '';
-                      const cleanContent = rawContent.replace(/"/g, '""');
-                      const lines = rawContent.split('\n');
-                      let tableMark = 'N/A';
-                      let descriptionStr = '';
-                      
-                      lines.forEach((line: string) => {
-                        if (line.includes('桌號/標記') || line.includes('Table')) {
-                          const parts = line.split(':');
-                          tableMark = parts[1] ? parts[1].trim() : '';
-                        }
-                      });
-                      
-                      // Summarize items for high level description
-                      const itemsArr: string[] = [];
-                      lines.forEach((line: string) => {
-                        if (line.includes('[ ]') || line.trim().startsWith('•') || line.includes('x')) {
-                          const trimmedLine = line.replace(/\[\s*\]/g, '').trim();
-                          if (trimmedLine.length > 0 && !trimmedLine.includes('======') && !trimmedLine.includes('------')) {
-                            itemsArr.push(trimmedLine);
-                          }
-                        }
-                      });
-                      descriptionStr = itemsArr.join(' | ');
-
-                      return [
-                        index + 1,
-                        log.type === 'kitchen' ? 'KITCHEN_WORK_TICKET' : 'CUSTOMER_CHECKOUT_RECEIPT',
-                        log.timestamp || '',
-                        tableMark,
-                        descriptionStr ? `"${descriptionStr.replace(/"/g, '""')}"` : 'N/A',
-                        `"${cleanContent}"`
-                      ];
-                    });
-
-                    const csvContent = [
-                      headers.join(','),
-                      ...rows.map(row => row.join(','))
-                    ].join('\n');
-
-                    // Force UTF-8 BOM so Excel opens Chinese text correctly
-                    const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' });
-                    const url = URL.createObjectURL(blob);
-                    const link = document.createElement('a');
-                    link.setAttribute('href', url);
-                    link.setAttribute('download', `Sabay_Manager_Print_Export_${new Date().toISOString().slice(0,10)}.csv`);
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                    alert('🎉 包含中英雙語客製化字元之歷史熱感出單 CSV 已成功產生並下載！');
-                  }}
-                  className="px-3.5 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-[#E5B453] border border-[#E5B453]/20 hover:border-[#E5B453]/40 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer active:scale-95"
-                  title="匯出歷史虛擬出單 CSV Excel 報表"
-                >
-                  <Download size={13} className="text-[#E5B453]" />
-                  <span>匯出 CSV 報表 Export CSV</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setConfirmActionModal({
-                      isOpen: true,
-                      title: '🗑️ 清空出單列印緩衝快取確定',
-                      message: '您確定要永久清空實體 / 虛擬收發出單機所有的出單列印日誌與緩衝快取資料嗎？此操作將永久移除歷史單據紀錄，且無法復原。',
-                      actionLabel: '確定清空 Clear Buffer',
-                      onConfirm: async () => {
-                        try {
-                          const res = await apiFetch('/api/print-logs/clear', { method: 'POST' });
-                          if (res.ok) {
-                            fetchPrintLogs();
-                          }
-                        } catch (err) {
-                          console.error(err);
-                        }
-                      },
-                    });
-                  }}
-                  className="px-2.5 py-1.5 bg-zinc-800 hover:bg-rose-500/20 text-white/50 hover:text-rose-400 border border-zinc-700 hover:border-rose-500/30 rounded-lg text-xs font-bold transition flex items-center justify-center cursor-pointer active:scale-95"
-                  title="清空緩衝區"
-                >
-                  <Trash2 size={13} />
-                </button>
-              </div>
-            </div>
-
-            {printLogs.length === 0 ? (
-              <div className="text-center py-12 bg-black/20 rounded-xl border border-white/5 space-y-2">
-                <Printer size={24} className="mx-auto text-zinc-600 animate-pulse" />
-                <p className="text-xs text-zinc-500">緩衝通道閒置中，今日尚無列印交單 Spool empty</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[360px] overflow-y-auto scrollbar-thin p-1">
-                {printLogs.slice().reverse().map((log: any, idx: number) => (
-                  <div key={idx} className="bg-black/45 border border-white/10 rounded-xl p-3.5 space-y-2 relative overflow-hidden flex flex-col justify-between">
-                    <div>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className={`text-[8.5px] font-black tracking-widest px-1.5 py-0.5 rounded font-mono uppercase ${
-                          log.type === 'kitchen' ? 'bg-amber-500/10 text-amber-300 border border-[#E5B453]/20' : 'bg-blue-500/10 text-blue-300 border border-blue-500/20'
-                        }`}>
-                          {log.type === 'kitchen' ? 'KITCHEN' : 'BILL/BILLING'}
-                        </span>
-                        <span className="text-[9px] text-zinc-500 font-mono">{log.timestamp}</span>
-                      </div>
-                      <pre className="text-[9px] font-mono leading-tight whitespace-pre-wrap text-zinc-300/90 max-h-[140px] overflow-y-auto select-text scrollbar-thin py-1 bg-black/25 px-2 rounded-lg border border-white/5">
-                        {log.content}
-                      </pre>
-                    </div>
-                    <div className="pt-2 border-t border-white/5 flex items-center justify-between text-[8.5px] text-zinc-500 font-sans">
-                      <span>SABAY CORE_V1.2</span>
-                      <span className="text-emerald-400 font-bold font-mono">🟢 OK (V_9100)</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
+        <ManagerPrinterTab
+          printerSaveSuccess={printerSaveSuccess}
+          posBridgeStatus={posBridgeStatus}
+          checkBridgeStatus={checkBridgeStatus}
+          posBridgeUrl={posBridgeUrl}
+          setPosBridgeUrl={setPosBridgeUrl}
+          billPrinter={billPrinter}
+          setBillPrinter={setBillPrinter}
+          kitchenPrinter={kitchenPrinter}
+          setKitchenPrinter={setKitchenPrinter}
+          posBridgeTesting={posBridgeTesting}
+          handleTestBridgeOpenDrawer={handleTestBridgeOpenDrawer}
+          handleTestBridgePrintLPT1={handleTestBridgePrintLPT1}
+          posBridgeTestResult={posBridgeTestResult}
+          onPrintTestPage={onPrintTestPage}
+          setPrintConfirmData={setPrintConfirmData}
+          handleManualOpenDrawer={handleManualOpenDrawer}
+          handleSavePrinters={handleSavePrinters}
+          printLogs={printLogs}
+          fetchPrintLogs={fetchPrintLogs}
+          setConfirmActionModal={setConfirmActionModal}
+        />
       )}
 
       {/* ==================== SCREEN SUBTAB: MENU OPTION RULES MANAGER ==================== */}
       {activeSubTab === 'options' && (
-        <div className="space-y-6 animate-fadeIn text-left font-sans" id="subtab-section-options">
-          <div className="bg-[#161616] border border-white/10 rounded-xl p-5 space-y-4">
-            <div className="flex items-center space-x-2 border-b border-white/5 pb-2">
-              <span className="text-xl">🧩</span>
-              <div>
-                <h4 className="font-bold text-sm text-white">餐點客製附加選項規則管理器 (Global Choice Rules Manager)</h4>
-                <p className="text-white/40 text-xs">在此建立全店共用客製選項規則。例如：加配料與價格、辣度熟度細則等，統一發布至餐點附加池中。</p>
-              </div>
-            </div>
-
-            {/* Create Rule Form */}
-            <div className="bg-[#202020] border border-white/5 p-4 rounded-xl space-y-3">
-              <span className="text-xs font-bold text-[#E5B453] tracking-widest block uppercase">➕ 新增一筆全域附加共用選項規則</span>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                <div className="space-y-1">
-                  <label className="text-zinc-400 text-[11px]">選項名稱 (e.g. 加河粉, 小鮮蝦)</label>
-                  <input
-                    type="text"
-                    value={newRuleName}
-                    onChange={(e) => setNewRuleName(e.target.value)}
-                    className="w-full bg-zinc-900 border border-white/10 rounded-lg p-2 text-xs text-white"
-                    placeholder="輸入例如：加河粉"
-                  />
-                </div>
-                
-                <div className="space-y-1">
-                  <label className="text-zinc-400 text-[11px]">客製項目分類</label>
-                  <select
-                    value={newRuleCategory}
-                    onChange={(e) => setNewRuleCategory(e.target.value)}
-                    className="w-full bg-zinc-900 border border-white/10 rounded-lg p-2 text-xs text-white"
-                  >
-                    <option value="加配料">加配料 (Extra Ingredients)</option>
-                    <option value="熟度調整">熟度調整 (Cooking Level)</option>
-                    <option value="辣度調整">辣度調整 (Spiciness)</option>
-                    <option value="主食更換">主食更換 (Main Carb)</option>
-                  </select>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-zinc-400 text-[11px]">額外附加價格 NT$</label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={newRulePrice === 0 || newRulePrice === '' ? '' : newRulePrice}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      if (val === '') {
-                        setNewRulePrice('');
-                      } else {
-                        const num = parseInt(val, 10);
-                        setNewRulePrice(isNaN(num) ? 0 : num);
-                      }
-                    }}
-                    placeholder="0"
-                    className="w-full bg-zinc-900 border border-white/10 rounded-lg p-2 text-xs text-white font-mono"
-                  />
-                </div>
-
-                <div className="flex items-end">
-                  <button
-                    type="button"
-                    onClick={handleAddGlobalRule}
-                    className="w-full h-9 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold rounded-lg text-xs leading-none transition active:scale-95 cursor-pointer"
-                  >
-                    新增此選項規則
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Rules DB List */}
-            <div className="space-y-2">
-              <span className="text-xs text-zinc-400 font-bold block uppercase tracking-wider">🗂️ 全店共用客製選項規則資料庫</span>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {globalRules.length === 0 ? (
-                  <p className="text-xs text-zinc-500 italic p-4">暫未建立任何全域加選選項</p>
-                ) : (
-                  globalRules.map((rule) => (
-                    <div key={rule.id} className="p-3 bg-zinc-900 border border-white/5 rounded-xl flex items-center justify-between">
-                      <div className="space-y-1">
-                        <div className="flex items-center space-x-2">
-                          <span className="text-[9px] font-bold text-[#E5B453] bg-[#E5B453]/10 px-1.5 py-0.5 rounded border border-[#E5B453]/20">
-                            {rule.category}
-                          </span>
-                          <span className="text-xs font-bold text-white leading-none">{getLocalizedText(rule.name, 'zh')}</span>
-                        </div>
-                        <p className="text-[10px] font-mono text-zinc-400">額外附帶價格: <span className="text-amber-300 font-extrabold">NT$ {rule.price}</span></p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteGlobalRule(rule.id)}
-                        className="text-[10px] bg-rose-500/10 hover:bg-rose-500 border border-rose-500/20 text-rose-400 hover:text-white px-2.5 py-1 rounded-lg transition active:scale-95 cursor-pointer"
-                      >
-                        刪除
-                      </button>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* ==================== AUTOMATIC PACKAGE PROMO COMBO DISCOUNT ==================== */}
-          <div className="bg-[#161616] border border-white/10 rounded-xl p-5 space-y-4">
-            <div className="flex items-center justify-between border-b border-white/5 pb-2">
-              <div className="flex items-center space-x-2">
-                <span className="text-xl">🎁</span>
-                <div>
-                  <h4 className="font-bold text-sm text-white">自動多重套餐組合折抵活動設定 (Multiple Custom Automatic Combo Settings)</h4>
-                  <p className="text-white/40 text-xs">可自訂多個不同名稱、件數及折抵金額的自動套餐規則，並能一鍵將其新增至菜單內作為品項販售！</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  const newCombo = {
-                    id: `combo-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                    name: '',
-                    enabled: false,
-                    requiredQty: 0,
-                    discountAmount: 0,
-                    eligibleItemIds: []
-                  };
-                  setTempPromoCombos([...tempPromoCombos, newCombo]);
-                }}
-                className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-lg transition active:scale-95 flex items-center space-x-1 cursor-pointer shadow"
-              >
-                <span>➕ 新增全新自動套餐組合</span>
-              </button>
-            </div>
-
-            <div className="space-y-6">
-              {tempPromoCombos.length === 0 ? (
-                <div className="text-center py-8 text-zinc-500 text-xs border border-dashed border-white/10 rounded-xl">
-                  目前尚未設定任何自訂套餐組合，點擊右上方按鈕開始新增！
-                </div>
-              ) : (
-                tempPromoCombos.map((combo, comboIdx) => (
-                  <div key={combo.id} className="bg-[#1c1c1c] border border-white/5 rounded-xl p-4 space-y-4 shadow relative">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-white/5">
-                      <div className="flex items-center space-x-2 flex-grow">
-                        <span className="text-amber-500 text-sm">📦</span>
-                        <input
-                          type="text"
-                          value={combo.name}
-                          onChange={(e) => {
-                            const updated = [...tempPromoCombos];
-                            updated[comboIdx].name = e.target.value;
-                            setTempPromoCombos(updated);
-                          }}
-                          className="bg-zinc-900 border border-white/10 rounded px-2.5 py-1 text-xs text-white font-bold max-w-xs focus:border-[#E5B453] focus:outline-none"
-                          placeholder="請輸入套餐組合名稱"
-                        />
-                      </div>
-                      
-                      <div className="flex items-center space-x-3 shrink-0">
-                        <label className="flex items-center space-x-1.5 cursor-pointer select-none">
-                          <input
-                            type="checkbox"
-                            checked={!!combo.enabled}
-                            onChange={(e) => {
-                              const updated = [...tempPromoCombos];
-                              updated[comboIdx].enabled = e.target.checked;
-                              setTempPromoCombos(updated);
-                            }}
-                            className="rounded border-zinc-700 bg-zinc-900 text-[#E5B453] focus:ring-0 w-4 h-4 cursor-pointer"
-                          />
-                          <span className="text-white text-xs font-bold">
-                            啟用 (Active)
-                          </span>
-                        </label>
-
-                        {deleteConfirmComboId === combo.id ? (
-                          <div className="flex items-center space-x-1 animate-fadeIn">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setTempPromoCombos(tempPromoCombos.filter(c => c.id !== combo.id));
-                                setDeleteConfirmComboId(null);
-                              }}
-                              className="text-[10px] bg-red-600 hover:bg-red-500 text-white px-2 py-1 rounded-md font-bold transition active:scale-95 cursor-pointer"
-                            >
-                              確定刪除
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setDeleteConfirmComboId(null)}
-                              className="text-[10px] bg-zinc-800 hover:bg-zinc-750 text-zinc-300 px-2 py-1 rounded-md font-bold transition active:scale-95 cursor-pointer"
-                            >
-                              取消
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => setDeleteConfirmComboId(combo.id)}
-                            className="text-[11px] bg-red-950/40 hover:bg-red-900/60 text-red-400 px-2.5 py-1 rounded-md transition active:scale-95 cursor-pointer border border-red-900/20"
-                          >
-                            🗑️ 刪除規則
-                          </button>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-1 text-left">
-                        <label className="text-zinc-400 text-[11px] font-bold">需選購限定單品數量 (張數/件數)</label>
-                        <div className="flex items-center space-x-2">
-                          <input
-                            type="number"
-                            min="1"
-                            value={combo.requiredQty || ''}
-                            onChange={(e) => {
-                              const val = Math.max(1, parseInt(e.target.value, 10) || 1);
-                              const updated = [...tempPromoCombos];
-                              updated[comboIdx].requiredQty = val;
-                              setTempPromoCombos(updated);
-                            }}
-                            className="w-full bg-zinc-900 border border-white/10 rounded-lg p-2 text-xs text-white font-mono"
-                          />
-                          <span className="text-zinc-400 text-xs font-bold shrink-0">件</span>
-                        </div>
-                      </div>
-
-                      <div className="space-y-1 text-left">
-                        <label className="text-zinc-400 text-[11px] font-bold">達到條件時全自動折抵金額 (NT$)</label>
-                        <div className="flex items-center space-x-2">
-                          <input
-                            type="number"
-                            min="1"
-                            value={combo.discountAmount || ''}
-                            onChange={(e) => {
-                              const val = Math.max(0, parseInt(e.target.value, 10) || 0);
-                              const updated = [...tempPromoCombos];
-                              updated[comboIdx].discountAmount = val;
-                              setTempPromoCombos(updated);
-                            }}
-                            className="w-full bg-zinc-900 border border-white/10 rounded-lg p-2 text-xs text-white font-mono"
-                          />
-                          <span className="text-[#E5B453] text-xs font-bold shrink-0">元</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="space-y-2 pt-2 border-t border-white/5">
-                      <div className="flex items-center justify-between">
-                        <span className="text-zinc-350 text-[11px] font-extrabold flex items-center gap-1">
-                          🎯 適用單品名單 ({combo.eligibleItemIds?.length === 0 ? '無限制過濾：預設適用於所有非飲料且非加麵底/加料的商品' : `已指定適用於下列 ${combo.eligibleItemIds?.length} 個餐品`})
-                        </span>
-                        {combo.eligibleItemIds?.length > 0 && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const updated = [...tempPromoCombos];
-                              updated[comboIdx].eligibleItemIds = [];
-                              setTempPromoCombos(updated);
-                            }}
-                            className="text-[10px] text-zinc-500 hover:text-white cursor-pointer font-bold underline"
-                          >
-                            清空過濾 &amp; 適用所有
-                          </button>
-                        )}
-                      </div>
-                      
-                      <div className="max-h-36 overflow-y-auto border border-white/5 rounded-xl bg-zinc-950/40 p-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                        {menuItems.map((item) => {
-                          const isSelected = combo.eligibleItemIds?.includes(item.id);
-                          return (
-                            <label
-                              key={item.id}
-                              className={`flex items-center space-x-2.5 p-1.5 rounded-lg border transition cursor-pointer select-none ${
-                                isSelected
-                                  ? 'bg-[#E5B453]/10 border-[#E5B453]/20 text-white font-bold'
-                                  : 'bg-zinc-900/30 border-white/5 text-zinc-400 hover:text-white hover:bg-zinc-900/60'
-                              }`}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={!!isSelected}
-                                onChange={(e) => {
-                                  let updatedList = [...(combo.eligibleItemIds || [])];
-                                  if (e.target.checked) {
-                                    if (!updatedList.includes(item.id)) updatedList.push(item.id);
-                                  } else {
-                                    updatedList = updatedList.filter((id: string) => id !== item.id);
-                                  }
-                                  const updated = [...tempPromoCombos];
-                                  updated[comboIdx].eligibleItemIds = updatedList;
-                                  setTempPromoCombos(updated);
-                                }}
-                                className="rounded border-zinc-700 bg-zinc-900 text-[#E5B453] focus:ring-0 w-3.5 h-3.5 cursor-pointer"
-                              />
-                              <div className="flex flex-col text-left truncate">
-                                <span className="text-[10px] truncate">{getLocalizedText(item.name, 'zh') || item.name}</span>
-                                <span className="text-[8px] text-zinc-500 font-mono">NT$ {item.price} • {item.category}</span>
-                              </div>
-                            </label>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    {/* Quick Add to Menu Section */}
-                    <div className="pt-3 border-t border-white/5 flex flex-col space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[11px] text-zinc-400 font-bold">📌 菜單品項管理 (Menu Item Integration)</span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (addComboToMenuId === combo.id) {
-                              setAddComboToMenuId(null);
-                            } else {
-                              setAddComboToMenuId(combo.id);
-                              // precalculate default package price: e.g. requiredQty * average eligible price * 0.9 or static guess
-                              setAddComboPrice(combo.requiredQty * 80 - combo.discountAmount);
-                              setAddComboCategory('skewers');
-                              setAddComboDesc(`超值優惠自動套餐組合：選購達 ${combo.requiredQty} 件適用單品即可自動折扣 NT$ ${combo.discountAmount} 元！`);
-                            }
-                          }}
-                          className="px-3 py-1 bg-[#E5B453]/10 hover:bg-[#E5B453]/20 border border-[#E5B453]/20 text-[#E5B453] font-bold text-xs rounded-lg transition active:scale-95 flex items-center space-x-1 cursor-pointer"
-                        >
-                          <span>⚙️ 一鍵新增此組合至前台菜單品項內</span>
-                        </button>
-                      </div>
-
-                      {addComboToMenuId === combo.id && (
-                        <div className="bg-zinc-950/60 border border-[#E5B453]/10 p-4 rounded-xl space-y-3 text-left animate-fadeIn">
-                          <h5 className="text-[#E5B453] text-xs font-bold">🛠️ 設定欲新增之套餐餐飲品項參數</h5>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div className="space-y-1">
-                              <label className="text-zinc-400 text-[10px] font-bold">前台菜單內顯示之售價 (Price NT$)</label>
-                              <input
-                                type="number"
-                                value={addComboPrice}
-                                onChange={(e) => setAddComboPrice(parseInt(e.target.value, 10) || 0)}
-                                className="w-full bg-zinc-900 border border-white/10 rounded-lg p-2 text-xs text-white font-mono"
-                              />
-                            </div>
-                            <div className="space-y-1">
-                              <label className="text-zinc-400 text-[10px] font-bold">歸屬之菜單分類 (Category)</label>
-                              <select
-                                value={addComboCategory}
-                                onChange={(e) => setAddComboCategory(e.target.value)}
-                                className="w-full bg-zinc-900 border border-white/10 rounded-lg p-2 text-xs text-white"
-                              >
-                                {categories.map(cat => (
-                                  <option key={cat.id} value={cat.id}>{getLocalizedText(cat.name, 'zh') || cat.name}</option>
-                                ))}
-                              </select>
-                            </div>
-                          </div>
-                          <div className="space-y-1">
-                            <label className="text-zinc-400 text-[10px] font-bold">前台描述說明 (Description)</label>
-                            <input
-                              type="text"
-                              value={addComboDesc}
-                              onChange={(e) => setAddComboDesc(e.target.value)}
-                              className="w-full bg-zinc-900 border border-white/10 rounded-lg p-2 text-xs text-white"
-                              placeholder="請輸入餐點描述"
-                            />
-                          </div>
-                          <div className="flex justify-end space-x-2 pt-2">
-                            <button
-                              type="button"
-                              onClick={() => setAddComboToMenuId(null)}
-                              className="px-3 py-1.5 border border-white/10 text-zinc-400 hover:text-white rounded-lg text-[11px] font-bold cursor-pointer"
-                            >
-                              取消
-                            </button>
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                await handleCreateComboMenuItem(combo, addComboPrice, addComboCategory, addComboDesc);
-                                setAddComboToMenuId(null);
-                              }}
-                              className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[11px] font-extrabold cursor-pointer"
-                            >
-                              確認新增至菜單品項
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-
-            {/* Success and Error messages */}
-            {promoComboSaveSuccess && (
-              <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs rounded-lg text-left" id="promo-combo-success-message">
-                {promoComboSaveSuccess}
-              </div>
-            )}
-            {promoComboSaveError && (
-              <div className="p-3 bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs rounded-lg text-left" id="promo-combo-error-message">
-                {promoComboSaveError}
-              </div>
-            )}
-
-            {/* Action confirmation buttons */}
-            <div className="flex justify-end space-x-3 pt-3 border-t border-white/5">
-              <button
-                type="button"
-                onClick={() => {
-                  if (promoCombo) {
-                    setTempPromoCombos(promoCombo.combos || []);
-                  }
-                  setPromoComboSaveError(null);
-                  setPromoComboSaveSuccess(null);
-                }}
-                className="px-4 py-2 border border-white/10 text-white hover:bg-white/5 rounded-lg text-xs font-bold transition active:scale-95 cursor-pointer"
-                id="btn-promo-combo-reset"
-              >
-                重設變更 (Reset)
-              </button>
-              <button
-                type="button"
-                onClick={handleSavePromoCombo}
-                className="px-5 py-2 bg-[#E5B453] hover:bg-[#F0C46B] text-[#0F0F0F] rounded-lg text-xs font-black transition shadow-lg active:scale-95 flex items-center space-x-1 cursor-pointer"
-                id="btn-promo-combo-save-confirm"
-              >
-                確認儲存所有設定 (Confirm Save)
-              </button>
-            </div>
-          </div>
-        </div>
+        <ManagerOptionRulesTab
+          newRuleName={newRuleName}
+          setNewRuleName={setNewRuleName}
+          newRuleCategory={newRuleCategory}
+          setNewRuleCategory={setNewRuleCategory}
+          newRulePrice={newRulePrice}
+          setNewRulePrice={(p: string | number) => setNewRulePrice(p === '' ? '' : Number(p))}
+          handleAddGlobalRule={handleAddGlobalRule}
+          globalRules={globalRules}
+          handleDeleteGlobalRule={handleDeleteGlobalRule}
+          tempPromoCombos={tempPromoCombos}
+          setTempPromoCombos={setTempPromoCombos}
+          deleteConfirmComboId={deleteConfirmComboId}
+          setDeleteConfirmComboId={setDeleteConfirmComboId}
+          menuItems={menuItems}
+          categories={categories}
+          addComboToMenuId={addComboToMenuId}
+          setAddComboToMenuId={setAddComboToMenuId}
+          addComboPrice={addComboPrice}
+          setAddComboPrice={setAddComboPrice}
+          addComboCategory={addComboCategory}
+          setAddComboCategory={setAddComboCategory}
+          addComboDesc={addComboDesc}
+          setAddComboDesc={setAddComboDesc}
+          handleCreateComboMenuItem={handleCreateComboMenuItem}
+          promoComboSaveSuccess={promoComboSaveSuccess}
+          setPromoComboSaveSuccess={setPromoComboSaveSuccess}
+          promoComboSaveError={promoComboSaveError}
+          setPromoComboSaveError={setPromoComboSaveError}
+          promoCombo={promoCombo}
+          handleSavePromoCombo={handleSavePromoCombo}
+        />
       )}
 
       {/* ==================== SCREEN SUBTAB: EOD DAILY CHECKOUT ==================== */}
-      {activeSubTab === 'eod' && (() => {
-        const todayStr = getLocalDateString();
-        const isToday = eodSelectedDate === todayStr;
+      {activeSubTab === 'eod' && (
+        <ManagerEodTab
+          orders={orders}
+          ingredients={ingredients}
+          menuItems={menuItems}
+          eodSelectedDate={eodSelectedDate}
+          setEodSelectedDate={setEodSelectedDate}
+          recipeCompositionMap={recipeCompositionMap}
+          billPrinter={billPrinter}
+          posBridgeUrl={posBridgeUrl}
+          printerIp={printerIp}
+          onRestock={onRestock}
+          fetchInventoryLogs={fetchInventoryLogs}
+          onPayOrder={onPayOrder}
+          setPrintConfirmData={setPrintConfirmData}
+        />
+      )}
 
-        // Filter orders strictly for the selected settlement date (defaulting to today)
-        const dailyOrders = orders.filter(o => isOrderOnLocalDate(o.createdAt, eodSelectedDate));
-        const paidOrders = dailyOrders.filter(o => o.isPaid);
-        const unpaidOrders = dailyOrders.filter(o => !o.isPaid && o.status !== 'cancelled');
-
-        const totalRev = paidOrders.reduce((sum, ord) => sum + calculateOrderTotalWithPayment(ord, menuItems).total, 0);
-        const cashSum = paidOrders.filter(o => o.paymentMethod === 'cash').reduce((sum, ord) => sum + calculateOrderTotalWithPayment(ord, menuItems).total, 0);
-        const creditSum = paidOrders.filter(o => o.paymentMethod === 'credit').reduce((sum, ord) => sum + calculateOrderTotalWithPayment(ord, menuItems).total, 0);
-        const twqrSum = paidOrders.filter(o => o.paymentMethod === 'twqr').reduce((sum, ord) => sum + calculateOrderTotalWithPayment(ord, menuItems).total, 0);
-        const memberSum = paidOrders.filter(o => o.paymentMethod === 'member').reduce((sum, ord) => sum + calculateOrderTotalWithPayment(ord, menuItems).total, 0);
-
-        // Calculate quantities of each item sold ON THIS SETTLEMENT DAY
-        const itemQuants: { [name: string]: { zh: string; qty: number } } = {};
-        paidOrders.forEach(o => {
-          o.items.forEach(it => {
-            const label = getLocalizedText(it.name, 'zh');
-            if (!itemQuants[label]) {
-              itemQuants[label] = { zh: label, qty: 0 };
-            }
-            itemQuants[label].qty += it.qty;
-          });
-        });
-
-        // Calculate standard ingredient consumption based on recipes FOR THIS SETTLEMENT DAY
-        const calculatedDeductions: { [ingId: string]: number } = {};
-        ingredients.forEach(ig => {
-          calculatedDeductions[ig.id] = 0;
-        });
-
-        paidOrders.forEach(o => {
-          o.items.forEach(it => {
-            const targetKey = it.menuItemId || it.id;
-            const recipe = recipeCompositionMap[targetKey] || recipeCompositionMap[it.id];
-            if (recipe) {
-              recipe.forEach(rec => {
-                const ingObj = ingredients.find(ig => getLocalizedText(ig.name, 'zh') === rec.name || ig.id === rec.name);
-                if (ingObj) {
-                  const match = rec.qty.match(/([\d\.]+)/);
-                  const amountPerItem = match ? parseFloat(match[1]) : 1;
-                  calculatedDeductions[ingObj.id] += amountPerItem * it.qty;
-                }
-              });
-            }
-          });
-        });
-
-        const handlePerformInventoryEodDeduction = async () => {
-          let successCount = 0;
-          try {
-            for (const ig of ingredients) {
-              const consumption = calculatedDeductions[ig.id] || 0;
-              if (consumption > 0) {
-                const res = await apiFetch('/api/inventory/adjust', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    ingredientId: ig.id,
-                    quantityChanged: -consumption,
-                    note: `EOD 每日關帳自動扣減 (${eodSelectedDate})：已售餐品配方消耗核銷`
-                  })
-                });
-                if (res.ok) {
-                  successCount++;
-                }
-              }
-            }
-            alert(`🎉 庫存連動扣除成功！已為您同步自動化核銷對應 ${successCount} 項餐品配方食材物料流向 (${eodSelectedDate})。`);
-            if (ingredients.length > 0) {
-              await onRestock(ingredients[0].id, 0); // Sync parent state
-            }
-            await fetchInventoryLogs();
-          } catch (err) {
-            console.error(err);
-            alert('❌ 自動配方庫存扣減時發生預期外錯誤');
-          }
-        };
-
-        const handleEodReceiptPrint = () => {
-          const lines = Object.entries(itemQuants).map(([lbl, val]) => `  • ${lbl.padEnd(16)} x${val.qty}`).join('\n');
-          const ingredientLines = ingredients.map(ig => {
-            const consumption = calculatedDeductions[ig.id] || 0;
-            return `  • ${getLocalizedText(ig.name, 'zh').padEnd(12)}: 剩餘 ${ig.stock} ${ig.unit} (當日已扣減 ${consumption} ${ig.unit})`;
-          }).join('\n');
-
-          const receiptBody = `
-========================================
-       沙貝燒烤 (每日營業結算日報表)
-========================================
-列印時間: ${new Date().toLocaleString()}
-結算日期: ${eodSelectedDate} ${isToday ? '(今日)' : ''}
------------------------------------------
-【${isToday ? '今日' : eodSelectedDate} 營業數據加總】
-實收總額 (Net Revenue): NT$ ${totalRev} 元
-成功收款單數 (Paid Bills): ${paidOrders.length} 筆
-未收細單單數 (Unpaid Bills): ${unpaidOrders.length} 筆
-
-【付款方式明細匯總】
-  - 💵 現金收銀 (Cash):   NT$ ${cashSum} 元
-  - 💳 信用卡結 (Credit): NT$ ${creditSum} 元
-  - 🖥️ 行動支付 (TWQR):   NT$ ${twqrSum} 元
-  - 👤 會員儲值 (Member): NT$ ${memberSum} 元
------------------------------------------
-【餐點熱銷排行明細】
-${lines || `  (${isToday ? '今日' : eodSelectedDate} 尚無完成收銀單商品)`}
------------------------------------------
-【連動數據庫存原料位變動】
-${ingredientLines || '  (尚無庫存異動記錄)'}
------------------------------------------
-設定店名: ${billPrinter.restaurantName}
-聯絡電話: ${billPrinter.printTelephone}
-店鋪地址: ${billPrinter.printAddress}
-========================================
-          `.trim();
-
-          // Direct POS bridge / backend print dispatch
-          const targetPort = billPrinter.usbPort?.includes(':') ? billPrinter.usbPort.toUpperCase() : `${billPrinter.usbPort?.toUpperCase() || 'LPT1'}:`;
-          printViaBridge({
-            text: receiptBody,
-            port: targetPort,
-            autoOpenDrawer: false
-          }, posBridgeUrl).catch(() => {});
-
-          apiFetch('/api/printer/print-receipt', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              target: 'eod',
-              text: receiptBody,
-              settings: { ...billPrinter, usbPort: targetPort },
-              title: `每日結算日報表 (${eodSelectedDate})`
-            })
-          }).catch(() => {});
-
-          const pWin = window.open();
-          if (pWin) {
-            pWin.document.write(`
-              <!DOCTYPE html>
-              <html>
-                <head>
-                  <meta charset="UTF-8">
-                  <title>SABAY 每日結帳報表 (EOD) - ${eodSelectedDate}</title>
-                  <style>
-                    body {
-                      font-family: "Microsoft JhengHei", "PingFang TC", "Heiti TC", "Noto Sans TC", "Segoe UI", sans-serif, monospace;
-                      background: #fff;
-                      color: #000;
-                      padding: 20px;
-                      font-size: ${billPrinter.width === '58mm' ? '12px' : '14px'};
-                      max-width: ${billPrinter.width === '58mm' ? '280px' : '400px'};
-                      margin: 0 auto;
-                      white-space: pre-wrap;
-                      word-break: break-all;
-                    }
-                  </style>
-                </head>
-                <body>
-                  <pre style="font-family: inherit;">${receiptBody}</pre>
-                  <script>window.onload = function() { window.print(); }</script>
-                </body>
-              </html>
-            `);
-            pWin.document.close();
-          }
-        };
-
-        const handleCompleteEodAndLogout = () => {
-          alert('🏁 每日關帳作業與庫存對帳已核銷完畢，即將登出工作人員並鎖定客用介面！');
-          localStorage.removeItem('google-current-member');
-          localStorage.removeItem('line-profile');
-          window.location.href = '/';
-        };
-
-        return (
-          <div className="space-y-6 animate-fadeIn text-left font-sans" id="subtab-section-eod">
-            <div className="bg-[#161616] border border-white/10 rounded-xl p-5 space-y-4">
-              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-white/5 pb-4">
-                <div className="flex items-center space-x-2">
-                  <span className="text-2xl">🏁</span>
-                  <div>
-                    <h4 className="font-bold text-sm text-white">沙貝每日關帳結核系統 (Daily Business EOD Checkout Portal)</h4>
-                    <p className="text-white/40 text-xs">執行每日店面關帳結算，一鍵更新餐點銷售與原料配銷，產印熱感報表與結存變更，強化營運動能。</p>
-                  </div>
-                </div>
-
-                {/* Settlement Date Selector */}
-                <div className="flex flex-wrap items-center gap-2 bg-black/40 border border-white/10 p-1.5 rounded-xl text-xs">
-                  <span className="text-zinc-400 font-semibold pl-1.5 flex items-center gap-1">
-                    <Calendar size={13} className="text-[#E5B453]" />
-                    結算日期:
-                  </span>
-                  <input
-                    type="date"
-                    value={eodSelectedDate}
-                    onChange={(e) => {
-                      if (e.target.value) setEodSelectedDate(e.target.value);
-                    }}
-                    className="bg-zinc-900 border border-white/10 text-[#E5B453] font-mono font-bold px-2 py-1 rounded-lg text-xs outline-none focus:border-[#E5B453]"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setEodSelectedDate(todayStr)}
-                    className={`px-2 py-1 rounded-lg font-bold transition text-xs cursor-pointer ${
-                      isToday ? 'bg-[#E5B453] text-black' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
-                    }`}
-                  >
-                    今日 (Today)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const y = new Date(Date.now() - 24 * 3600 * 1000);
-                      setEodSelectedDate(getLocalDateString(y));
-                    }}
-                    className={`px-2 py-1 rounded-lg font-bold transition text-xs cursor-pointer ${
-                      !isToday && eodSelectedDate === getLocalDateString(new Date(Date.now() - 24 * 3600 * 1000))
-                        ? 'bg-[#E5B453] text-black'
-                        : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
-                    }`}
-                  >
-                    昨日 (Yesterday)
-                  </button>
-                </div>
-              </div>
-
-              {/* Stats KPI Card in Checkout Panel */}
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-3 bg-black/30 p-4 rounded-xl border border-white/5">
-                <div className="text-center p-2.5 bg-zinc-900 border border-white/5 rounded-lg">
-                  <span className="text-[10px] text-zinc-500 block font-semibold">{isToday ? '今日' : eodSelectedDate} 關帳實收金額</span>
-                  <span className="text-lg font-mono font-black text-[#E5B453]">NT$ {totalRev}</span>
-                </div>
-                <div className="text-center p-2.5 bg-zinc-900 border border-white/5 rounded-lg">
-                  <span className="text-[10px] text-zinc-500 block font-semibold">已收款單數 ({isToday ? '今日' : '當日'})</span>
-                  <span className="text-lg font-mono font-black text-white">{paidOrders.length} 筆</span>
-                </div>
-                <div className="text-center p-2.5 bg-zinc-900 border border-white/5 rounded-lg">
-                  <span className="text-[10px] text-zinc-500 block font-semibold">現金收訖 (Cash)</span>
-                  <span className="text-lg font-mono font-black text-emerald-400">NT$ {cashSum}</span>
-                </div>
-                <div className="text-center p-2.5 bg-zinc-900 border border-white/5 rounded-lg">
-                  <span className="text-[10px] text-zinc-500 block font-semibold">信用卡收訖 (Credit)</span>
-                  <span className="text-lg font-mono font-black text-blue-400">NT$ {creditSum}</span>
-                </div>
-                <div className="text-center p-2.5 bg-zinc-900 border border-white/5 rounded-lg">
-                  <span className="text-[10px] text-zinc-500 block font-semibold">TWQR/會員扣抵合計</span>
-                  <span className="text-lg font-mono font-black text-teal-400">NT$ {twqrSum + memberSum}</span>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Column 1: Unpaid orders & Payment State transitions */}
-                <div className="bg-black/20 border border-white/5 rounded-xl p-4 space-y-4">
-                  <div className="space-y-0.5 border-b border-white/5 pb-2">
-                    <h5 className="font-bold text-xs text-white uppercase tracking-wider flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping"></span>
-                      ⏱️ 待核銷未收細單明細 ({unpaidOrders.length})
-                    </h5>
-                    <p className="text-[10px] text-zinc-500">此為 {isToday ? '今日' : eodSelectedDate} 仍維持未結帳狀態之點單，關帳前可一鍵變更支付方式或進行收銀狀態流轉。</p>
-                  </div>
-                  
-                  <div className="space-y-2 max-h-96 overflow-y-auto">
-                    {unpaidOrders.length === 0 ? (
-                      <div className="text-center py-8 text-xs text-zinc-500 italic">
-                        🎉 太棒了！{isToday ? '今日' : eodSelectedDate} 已無任何未結帳點單。
-                      </div>
-                    ) : (
-                      unpaidOrders.map(ord => {
-                        const ordTot = calculateOrderTotalWithPayment(ord, menuItems).total;
-                        return (
-                          <div key={ord.id} className="p-3 bg-zinc-900/80 rounded-lg border border-white/5 text-xs text-zinc-300 space-y-2">
-                            <div className="flex justify-between items-center">
-                              <span className="font-mono font-bold text-white">{ord.id.slice(-6).toUpperCase()} ({ord.tableNumber} 桌)</span>
-                              <span className="font-mono text-[#E5B453] font-black">NT$ {ordTot}</span>
-                            </div>
-                            
-                            <div className="flex gap-1.5 pt-1 border-t border-white/5">
-                              {(['cash', 'credit', 'twqr'] as const).map(pm => (
-                                <button
-                                  key={pm}
-                                  type="button"
-                                  onClick={async () => {
-                                    if (onPayOrder) {
-                                      await onPayOrder(ord.id, {
-                                        paymentMethod: pm,
-                                        isPaid: true
-                                      });
-                                      alert(`💸 已將點單 ${ord.id.slice(-6).toUpperCase()} 修改為【已結款 (${pm === 'cash' ? '現金' : pm === 'credit' ? '信用卡' : 'TWQR'})】`);
-                                    }
-                                  }}
-                                  className="flex-1 py-1 rounded bg-zinc-800 hover:bg-[#E5B453] hover:text-black transition-colors text-[9px] font-black cursor-pointer"
-                                >
-                                  {pm === 'cash' ? '現結' : pm === 'credit' ? '刷卡' : 'TWQR'}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-                </div>
-
-                {/* Column 2: Inventory deductions analysis */}
-                <div className="bg-black/20 border border-white/5 rounded-xl p-4 space-y-4">
-                  <div className="space-y-0.5 border-b border-white/5 pb-2">
-                    <h5 className="font-bold text-xs text-white uppercase tracking-wider">
-                      📦 連動「數據庫存」{isToday ? '今日' : eodSelectedDate} 配餐配銷扣減
-                    </h5>
-                    <p className="text-[10px] text-zinc-500">系統即時比對 {isToday ? '今日' : eodSelectedDate} 已收款餐品之食材配方，模擬計算當日營業流失的理論庫存量。</p>
-                  </div>
-
-                  <div className="space-y-2.5 text-xs text-zinc-300">
-                    <div className="bg-zinc-900/60 p-3 rounded-lg border border-white/5 space-y-1.5 max-h-72 overflow-y-auto">
-                      {ingredients.map(ig => {
-                        const consumption = calculatedDeductions[ig.id] || 0;
-                        const isWarning = ig.stock - consumption <= ig.minThreshold;
-                        return (
-                          <div key={ig.id} className="flex justify-between items-center border-b border-white/5 pb-1">
-                            <span>{getLocalizedText(ig.name, 'zh')}</span>
-                            <div className="text-right font-mono text-[11px]">
-                              <span className="text-zinc-500">{isToday ? '今日' : '當日'}應扣: </span>
-                              <span className="text-amber-400 font-bold pr-2">{consumption} {ig.unit}</span>
-                              <span className="text-zinc-500">預估剩餘: </span>
-                              <span className={isWarning ? 'text-rose-400 font-black' : 'text-zinc-300'}>
-                                {Math.max(0, Math.round((ig.stock - consumption) * 100) / 100)} {ig.unit}
-                              </span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={handlePerformInventoryEodDeduction}
-                      className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-black font-black rounded-lg text-xs tracking-wider transition active:scale-95 cursor-pointer uppercase text-center shadow-lg"
-                    >
-                      📊 連動扣減：一鍵對應「數據庫存」扣位
-                    </button>
-                  </div>
-                </div>
-
-                {/* Column 3: Print Receipt Preview layout */}
-                <div className="bg-black/20 border border-white/5 rounded-xl p-4 space-y-4">
-                  <div className="space-y-0.5 border-b border-white/5 pb-2">
-                    <h5 className="font-bold text-xs text-white uppercase tracking-wider">
-                      🖨️ 每日營業關帳日報表列印預覽
-                    </h5>
-                    <p className="text-[10px] text-zinc-500">根據當前設定之熱感式出單硬體寬度（目前：{billPrinter.width}），模擬產生實體對帳聯（含原料變動紀錄）。</p>
-                  </div>
-
-                  {/* Thermal paper simulator */}
-                  <div className="bg-zinc-950 border border-white/15 p-4 rounded-xl text-[10px] font-mono text-zinc-300 pointer-events-none select-none max-h-64 overflow-y-auto space-y-1 leading-tight">
-                    <p className="text-center font-bold text-white">沙貝燒烤 每日營業日報表</p>
-                    <p className="text-[9px] text-[#E5B453] text-center font-bold">結算日期: {eodSelectedDate} {isToday ? '(今日)' : ''}</p>
-                    <p className="text-[9px] text-zinc-500 text-center">列印時間: {new Date().toLocaleDateString()} {new Date().toLocaleTimeString()}</p>
-                    <div className="border-t border-dashed border-zinc-700 my-1"></div>
-                    <div className="flex justify-between">
-                      <span>{isToday ? '今日' : '當日'}實收總額 (Net):</span>
-                      <span className="font-bold text-[#E5B453]">NT$ {totalRev}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>成功收款單數:</span>
-                      <span>{paidOrders.length} 筆</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>未收細單單數:</span>
-                      <span>{unpaidOrders.length} 筆</span>
-                    </div>
-                    <div className="border-t border-dashed border-zinc-700 my-1"></div>
-                    <p className="text-[9px] text-[#E5B453] uppercase font-bold">付款方式細點明細:</p>
-                    <p>  💵 現金收銀 (Cash):   NT$ {cashSum}元</p>
-                    <p>  💳 信用卡結 (Credit): NT$ {creditSum}元</p>
-                    <p>  🖥️ 行動支付 (TWQR):   NT$ {twqrSum}元</p>
-                    <p>  👤 会員帳抵 (Member): NT$ {memberSum}元</p>
-                    <div className="border-t border-dashed border-zinc-700 my-1"></div>
-                    <p className="text-[9px] text-[#E5B453] uppercase font-bold">{isToday ? '今日' : '當日'}餐點熱售排行:</p>
-                    {Object.entries(itemQuants).length === 0 ? (
-                      <p className="italic text-zinc-650">  ({isToday ? '今日' : eodSelectedDate} 尚無完成結帳商品)</p>
-                    ) : (
-                      Object.entries(itemQuants).map(([lbl, val]) => (
-                        <p key={lbl}>  • {lbl.slice(0, 10).padEnd(12)} x{val.qty}</p>
-                      ))
-                    )}
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const lines = Object.entries(itemQuants).map(([lbl, val]) => `  • ${lbl.padEnd(16)} x${val.qty}`).join('\n');
-                      const ingredientLines = ingredients.map(ig => {
-                        const consumption = calculatedDeductions[ig.id] || 0;
-                        return `  • ${getLocalizedText(ig.name, 'zh').padEnd(12)}: 剩餘 ${ig.stock} ${ig.unit} (當日已扣減 ${consumption} ${ig.unit})`;
-                      }).join('\n');
-
-                      const receiptBody = `
-========================================
-       沙貝燒烤 (每日營業結算日報表)
-========================================
-列印時間: ${new Date().toLocaleString()}
-結算日期: ${eodSelectedDate} ${isToday ? '(今日)' : ''}
------------------------------------------
-【${isToday ? '今日' : eodSelectedDate} 營業數據加總】
-實收總額 (Net Revenue): NT$ ${totalRev} 元
-成功收款單數 (Paid Bills): ${paidOrders.length} 筆
-未收細單單數 (Unpaid Bills): ${unpaidOrders.length} 筆
-
-【付款方式明細匯總】
-  - 💵 現金收銀 (Cash):   NT$ ${cashSum} 元
-  - 💳 信用卡結 (Credit): NT$ ${creditSum} 元
-  - 🖥️ 行動支付 (TWQR):   NT$ ${twqrSum} 元
-  - 👤 會員儲值 (Member): NT$ ${memberSum} 元
------------------------------------------
-【餐點熱銷排行明細】
-${lines || `  (${isToday ? '今日' : eodSelectedDate} 尚無完成收銀單商品)`}
------------------------------------------
-【連動數據庫存原料位變動】
-${ingredientLines || '  (尚無庫存異動記錄)'}
------------------------------------------
-設定店名: ${billPrinter.restaurantName}
-聯絡電話: ${billPrinter.printTelephone}
-店鋪地址: ${billPrinter.printAddress}
-========================================`.trim();
-
-                      setPrintConfirmData({
-                        title: `列印每日營業結算日報表 (${eodSelectedDate})`,
-                        ip: printerIp,
-                        receiptType: 'eod',
-                        receiptBody: receiptBody,
-                        onConfirm: handleEodReceiptPrint
-                      });
-                    }}
-                    className="w-full py-2.5 bg-zinc-800 hover:bg-zinc-700 border border-white/10 text-white font-bold rounded-lg text-xs transition active:scale-95 cursor-pointer uppercase text-center"
-                  >
-                    🖨️ 列印預覽並傳送至熱感印表機 (Print)
-                  </button>
-                </div>
-              </div>
-
-              {/* Action and Safe lock Gate */}
-              <div className="bg-[#202020] border border-rose-500/20 p-4 rounded-xl flex flex-col md:flex-row items-center justify-between gap-4">
-                <div className="text-left space-y-1">
-                  <span className="text-xs font-bold text-rose-400 tracking-widest block uppercase">🏁 安全結帳與登出強制安全鎖</span>
-                  <p className="text-[11px] text-zinc-400">執行總營業終結轉後，為求當日帳款安全，系統將自動清理當日點餐通道並登出，返回訪客用餐前台頁面。</p>
-                </div>
-                
-                <button
-                  type="button"
-                  onClick={handleCompleteEodAndLogout}
-                  className="px-6 py-3 bg-rose-600 hover:bg-rose-500 text-white font-black rounded-lg text-xs tracking-wider transition active:scale-95 cursor-pointer uppercase text-center whitespace-nowrap shrink-0"
-                >
-                  🏁 立即執行每日總結帳登出 Exit Safely
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
-      {activeSubTab === 'terminal' && (() => {
-         const filteredMenuItems = menuItems.filter(item => item.available && (terminalCategory === 'all' || item.category === terminalCategory));
-         const itemsPerPage = 20;
-         const totalPages = Math.max(1, Math.ceil(filteredMenuItems.length / itemsPerPage));
-         const currentPage = Math.min(terminalPage, totalPages);
-         const startIndex = (currentPage - 1) * itemsPerPage;
-         const paginatedItems = filteredMenuItems.slice(startIndex, startIndex + itemsPerPage);
-
-         const cartItemsPerPage = 5;
-         const totalCartPages = Math.max(1, Math.ceil(terminalCart.length / cartItemsPerPage));
-         const currentCartPage = Math.min(terminalCartPage, totalCartPages);
-         const cartStartIndex = (currentCartPage - 1) * cartItemsPerPage;
-         const paginatedCartItems = terminalCart.slice(cartStartIndex, cartStartIndex + cartItemsPerPage);
-
-         return (
-            <div className={isTerminalFullScreen ? "fixed inset-0 z-50 bg-[#0c0c0c] p-6 flex flex-col h-screen w-screen overflow-hidden animate-fadeIn" : "space-y-6 animate-fadeIn"} id="subtab-section-terminal">
-              <div className={`bg-[#121212] border border-white/10 rounded-2xl p-6 shadow-2xl relative ${isTerminalFullScreen ? 'h-full flex flex-col overflow-hidden' : 'overflow-hidden'}`}>
-                 <div className="flex justify-between items-center mb-6 shrink-0">
-                    <div className="space-y-1">
-                       <h3 className="text-xl font-black text-[#E5B453] flex items-center gap-2">
-                          <ShoppingBag size={22} />
-                          管理員快速點餐終端 (Resilient Terminal)
-                       </h3>
-                       <p className="text-xs text-white/40">具備獨立運作能力。離線時訂單將存入本地事務隊列，恢復連線後自動對賬。</p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                       <button
-                          onClick={() => setIsTerminalFullScreen(prev => !prev)}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-xs font-bold text-white transition-all cursor-pointer active:scale-95"
-                       >
-                          {isTerminalFullScreen ? (
-                             <>
-                                <Minimize2 size={14} className="text-[#E5B453]" />
-                                <span>退出全螢幕 Exit</span>
-                             </>
-                          ) : (
-                             <>
-                                <Maximize2 size={14} className="text-[#E5B453]" />
-                                <span>全螢幕 Fullscreen</span>
-                             </>
-                          )}
-                       </button>
-                       <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border ${navigator.onLine ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-rose-500/10 border-rose-500/20 text-rose-400'}`}>
-                          <div className={`w-2 h-2 rounded-full ${navigator.onLine ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500 animate-bounce'}`} />
-                          <span className="text-[10px] font-bold uppercase tracking-widest">{navigator.onLine ? 'Online' : 'OFFLINE - Local Auth Mode'}</span>
-                       </div>
-                    </div>
-                 </div>
-
-                 <div className={`grid grid-cols-[26%_74%] ${isTerminalFullScreen ? 'h-full flex-1 min-h-0' : 'h-[650px]'} gap-8`}>
-                    {/* 1. 訂單預覽與送出 (Cart on the Left) */}
-                    <div className="bg-black/20 rounded-xl p-5 border border-white/5 flex flex-col h-full min-h-0 justify-between">
-                       <div className="flex flex-col flex-1 min-h-0">
-                          <h4 className="text-xs font-bold text-white/60 uppercase tracking-tighter border-b border-white/5 pb-2 mb-4 shrink-0">點餐籃 Cart</h4>
-                          <div className="flex-1 overflow-y-auto space-y-2 mb-4 min-h-0 custom-scrollbar">
-                             {terminalCart.length === 0 ? (
-                                <div className="flex flex-col items-center justify-center py-12 text-white/10">
-                                   <ShoppingCart size={32} className="mb-2 opacity-30" />
-                                   <p className="text-[10px]">請從右側點選菜品</p>
-                                </div>
-                             ) : (
-                                paginatedCartItems.map(item => (
-                                   <div key={item.id} className="flex items-center justify-between bg-white/5 p-2 rounded-lg text-xs">
-                                      <span className="font-bold text-white">{getLocalizedText(item.name, 'zh')}</span>
-                                      <div className="flex items-center gap-3">
-                                         <span className="text-white/40">x{item.qty}</span>
-                                         <span className="font-mono text-[#E5B453]">${item.price * item.qty}</span>
-                                         <button onClick={() => setTerminalCart(prev => prev.filter(i => i.id !== item.id))} className="text-rose-500 hover:text-rose-400 cursor-pointer">
-                                            <Trash2 size={12} />
-                                         </button>
-                                      </div>
-                                   </div>
-                                ))
-                             )}
-                          </div>
-                       </div>
-
-                       <div className="border-t border-white/5 pt-4 space-y-4 shrink-0">
-                          <div className="flex justify-between text-sm font-black text-white">
-                             <span>總計 Total</span>
-                             <span className="text-[#E5B453] font-mono">${terminalCart.reduce((s, i) => s + (i.price * i.qty), 0)}</span>
-                          </div>
-                          <button
-                             onClick={async () => {
-                                if (!onPlaceOrder) return;
-                                const success = await onPlaceOrder({
-                                   tableNumber: terminalTable,
-                                   items: terminalCart,
-                                   paymentMethod: 'cash',
-                                   guestCount: 1
-                                });
-                                if (success) {
-                                   setTerminalCart([]);
-                                   alert('訂單已送出' + (navigator.onLine ? '' : ' (進入離線事務隊列)'));
-                                }
-                             }}
-                             className={`w-full py-3 bg-[#E5B453] text-black font-black text-sm rounded-xl transition-all active:scale-95 ${terminalCart.length === 0 ? 'opacity-50 grayscale cursor-not-allowed' : 'hover:bg-amber-400 cursor-pointer'}`}
-                             disabled={terminalCart.length === 0}
-                          >
-                             🚀 {navigator.onLine ? '即時送出訂單' : '存入離線事務隊列 (Offline Submit)'}
-                          </button>
-
-                          {/* Pagination under the Cart container as well for seamless dual control */}
-                          <div className="flex items-center justify-between gap-3 pt-3 border-t border-white/5">
-                             <button
-                                onClick={() => setTerminalCartPage(p => Math.max(1, p - 1))}
-                                disabled={currentCartPage === 1 || terminalCart.length === 0}
-                                className="flex-1 py-2 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-white font-bold text-xs disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer flex items-center justify-center gap-1 active:scale-95"
-                             >
-                                <ChevronLeft size={16} className="text-[#E5B453]" />
-                                <span>上一頁 Prev</span>
-                             </button>
-                             <span className="text-xs font-bold font-mono text-white/80 bg-white/5 px-3 py-1.5 rounded-full border border-white/5">
-                                {currentCartPage} / {totalCartPages}
-                             </span>
-                             <button
-                                onClick={() => setTerminalCartPage(p => Math.min(totalCartPages, p + 1))}
-                                disabled={currentCartPage === totalCartPages || terminalCart.length === 0}
-                                className="flex-1 py-2 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-white font-bold text-xs disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer flex items-center justify-center gap-1 active:scale-95"
-                              >
-                                <span>下一頁 Next</span>
-                                <ChevronRight size={16} className="text-[#E5B453]" />
-                             </button>
-                          </div>
-                       </div>
-                    </div>
-
-                    {/* 2. 選單選購區 (Menu on the Right) */}
-                    <div className="space-y-4 flex flex-col justify-between h-full min-h-0">
-                       <div className="space-y-4 flex flex-col flex-1 min-h-0">
-                          <div className="flex items-center justify-between border-b border-white/5 pb-2 shrink-0">
-                             <div className="flex items-center gap-2">
-                                <h4 className="text-xs font-bold text-white/60 uppercase tracking-tighter">菜單 Menu</h4>
-                                <span className="text-[10px] font-mono text-white/30">
-                                   ({getLocalizedText(categories.find(c => c.id === terminalCategory)?.name, currentLang) || '全部 All'})
-                                </span>
-                             </div>
-                             <select
-                               value={terminalTable}
-                               onChange={(e) => setTerminalTable(e.target.value)}
-                               className="bg-black/40 border border-white/10 rounded px-2 py-1 text-[10px] text-[#E5B453] font-bold outline-none cursor-pointer"
-                             >
-                                {tables.map(t => <option key={t.id} value={t.id}>桌號: {t.id}</option>)}
-                                <option value="takeout">外帶 Takeout</option>
-                             </select>
-                          </div>
-
-                          {/* 菜色分類標籤控制 Categories Panel */}
-                          <div className="flex border border-[#008ec4] bg-[#008ec4] rounded-lg overflow-hidden shrink-0" id="terminal-categories-panel">
-                             <button
-                                id="btn-term-cat-all"
-                                onClick={() => setTerminalCategory('all')}
-                                className={`flex-1 py-3 text-center text-xs font-black transition-all cursor-pointer outline-none border-r border-white/10 last:border-r-0 ${
-                                   terminalCategory === 'all'
-                                      ? 'bg-[#8ac249] text-white font-extrabold'
-                                      : 'bg-[#008ec4] text-white hover:bg-[#007cb3]'
-                                }`}
-                             >
-                                全部 All
-                             </button>
-                             {categories.map(cat => (
-                                <button
-                                   key={cat.id}
-                                   id={`btn-term-cat-${cat.id}`}
-                                   onClick={() => setTerminalCategory(cat.id)}
-                                   className={`flex-1 py-3 text-center text-xs font-black transition-all cursor-pointer outline-none border-r border-white/10 last:border-r-0 ${
-                                      terminalCategory === cat.id
-                                         ? 'bg-[#8ac249] text-white font-extrabold'
-                                         : 'bg-[#008ec4] text-white hover:bg-[#007cb3]'
-                                   }`}
-                                >
-                                   {getLocalizedText(cat.name, currentLang) || cat.id}
-                                </button>
-                             ))}
-                          </div>
-
-                          <div className="flex-1 flex flex-col justify-between min-h-0">
-                             <div className="grid grid-cols-5 gap-3 overflow-y-auto pr-2 custom-scrollbar flex-1 py-2">
-                                {paginatedItems.map(item => (
-                                   <button
-                                      key={item.id}
-                                      onClick={() => {
-                                         setTerminalCart(prev => {
-                                            const existing = prev.find(i => i.menuItemId === item.id);
-                                            if (existing) {
-                                               return prev.map(i => i.menuItemId === item.id ? { ...i, qty: i.qty + 1 } : i);
-                                            }
-                                            return [...prev, {
-                                               id: `term-${Date.now()}`,
-                                               menuItemId: item.id,
-                                               name: item.name,
-                                               price: item.price,
-                                               qty: 1,
-                                               customization: { spiciness: 0, notes: "" }
-                                            }];
-                                         });
-                                      }}
-                                      className="bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl p-3.5 text-left flex flex-col justify-between transition-all cursor-pointer w-full h-full min-h-[100px] aspect-[1.3/1] shadow-lg hover:border-[#E5B453]/40 active:scale-95 group"
-                                   >
-                                      <div className="text-[clamp(10px,1.15vw,14px)] font-black text-white group-hover:text-[#E5B453] leading-snug tracking-tight whitespace-normal break-words overflow-hidden" style={{ wordBreak: 'break-word' }}>
-                                         {getLocalizedText(item.name, 'zh')}
-                                      </div>
-                                      <div className="text-[clamp(9px,1vw,12px)] font-mono font-black text-[#E5B453] text-right shrink-0 mt-1">
-                                         $ {item.price}
-                                      </div>
-                                   </button>
-                                ))}
-                                {paginatedItems.length === 0 && (
-                                   <div className="col-span-full flex flex-col items-center justify-center py-12 text-white/20">
-                                      無可用菜品 No items available
-                                   </div>
-                                )}
-                             </div>
-
-                             {/* Pagination Controls */}
-                             <div className="flex items-center justify-between gap-4 pt-3 border-t border-white/5 shrink-0">
-                                <button
-                                   onClick={() => setTerminalPage(p => Math.max(1, p - 1))}
-                                   disabled={currentPage === 1}
-                                   className="px-6 py-2.5 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-white font-bold text-xs disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer flex items-center gap-2 active:scale-95"
-                                >
-                                   <ChevronLeft size={16} className="text-[#E5B453]" />
-                                   <span>上一頁 Prev Page</span>
-                                </button>
-                                <span className="text-xs font-bold font-mono text-white/80 bg-white/5 px-4 py-2 rounded-full border border-white/5">
-                                   頁次 {currentPage} / {totalPages}
-                                </span>
-                                <button
-                                   onClick={() => setTerminalPage(p => Math.min(totalPages, p + 1))}
-                                   disabled={currentPage === totalPages}
-                                   className="px-6 py-2.5 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-white font-bold text-xs disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer flex items-center gap-2 active:scale-95"
-                                >
-                                   <span>下一頁 Next Page</span>
-                                   <ChevronRight size={16} className="text-[#E5B453]" />
-                                </button>
-                             </div>
-                          </div>
-                       </div>
-                    </div>
-                 </div>
-              </div>
-            </div>
-         );
-      })()}
-
-
-
+      {/* ==================== SCREEN SUBTAB: FAST ORDER TERMINAL ==================== */}
+      {activeSubTab === 'terminal' && (
+        <ManagerTerminalTab
+          currentLang={currentLang}
+          menuItems={menuItems}
+          categories={categories}
+          tables={tables}
+          terminalCategory={terminalCategory}
+          setTerminalCategory={setTerminalCategory}
+          terminalTable={terminalTable}
+          setTerminalTable={setTerminalTable}
+          terminalCart={terminalCart}
+          setTerminalCart={setTerminalCart}
+          terminalPage={terminalPage}
+          setTerminalPage={setTerminalPage}
+          terminalCartPage={terminalCartPage}
+          setTerminalCartPage={setTerminalCartPage}
+          isTerminalFullScreen={isTerminalFullScreen}
+          setIsTerminalFullScreen={setIsTerminalFullScreen}
+          onPlaceOrder={onPlaceOrder}
+        />
+      )}
 
       {/* ========================================================================= */}
       {/* ==================== SCREEN POPUP RESILIENT MODALS ==================== */}
@@ -12323,7 +8248,7 @@ ${customerDetails}
                 <div className="space-y-1">
                   <label className="text-zinc-400">食材分類標記 category</label>
                   <select value={itemCategory} onChange={(e) => setItemCategory(e.target.value)} className="w-full bg-[#1e1e1e] border border-white/10 rounded px-2.5 py-1.5 text-white leading-tight">
-                    {categories.map(c => <option key={c.id} value={c.id}>{c.name?.zh || c.name || c.id}</option>)}
+                    {categories.map(c => <option key={c.id} value={c.id}>{c.name?.zh || (typeof c.name === 'string' ? c.name : c.id)}</option>)}
                   </select>
                 </div>
                 <div className="space-y-1">
@@ -13109,6 +9034,14 @@ ${customerDetails}
             
             <div className="p-5 space-y-4">
               <div className="bg-black/30 p-3 rounded-xl border border-white/5 space-y-1">
+                {checkoutSuccessData?.mergedCount && checkoutSuccessData.mergedCount > 1 && (
+                  <div className="flex justify-between items-center text-zinc-300 text-[11px]">
+                    <span className="text-zinc-500 font-sans">結帳模式 Mode:</span>
+                    <span className="bg-amber-500/15 text-amber-300 font-bold px-2 py-0.5 rounded text-[10px]">
+                      合併 {checkoutSuccessData.mergedCount} 筆訂單 ({checkoutSuccessData.checkoutScope === 'same_table' ? '同桌合併' : checkoutSuccessData.checkoutScope === 'all_merged' ? '跨桌全併' : '自選合併'})
+                    </span>
+                  </div>
+                )}
                 <div className="flex justify-between text-zinc-500 text-[10px]">
                   <span>當前庫水位 Stock</span>
                   <span>最低安全防禦 Threshold</span>
@@ -13460,11 +9393,11 @@ ${customerDetails}
                     {checkoutSuccessData.tableNumber} 桌
                   </span>
                 </div>
-                {checkoutSuccessData.orderCount && checkoutSuccessData.orderCount > 1 && (
+                {checkoutSuccessData.mergedCount && checkoutSuccessData.mergedCount > 1 && (
                   <div className="flex justify-between items-center text-zinc-300 text-[11px]">
                     <span className="text-zinc-500 font-sans">結帳模式 Mode:</span>
                     <span className="bg-amber-500/15 text-amber-300 font-bold px-2 py-0.5 rounded text-[10px]">
-                      合併 {checkoutSuccessData.orderCount} 筆訂單 ({checkoutSuccessData.scope === 'same_table' ? '同桌合併' : checkoutSuccessData.scope === 'all_merged' ? '跨桌全併' : '自選合併'})
+                      合併 {checkoutSuccessData.mergedCount} 筆訂單 ({checkoutSuccessData.checkoutScope === 'same_table' ? '同桌合併' : checkoutSuccessData.checkoutScope === 'all_merged' ? '跨桌全併' : '自選合併'})
                     </span>
                   </div>
                 )}

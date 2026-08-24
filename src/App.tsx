@@ -1,14 +1,14 @@
-import { useState, useEffect, useRef, lazy, Suspense, useMemo } from 'react';
-import { Language, MenuItem, Ingredient, Order, OrderStatus, OrderItem, Category, TableConfig, OperatingHourSlot, Reservation } from './types';
-import { getOfflineQueue, addRequestToQueue, clearOfflineQueue, removeOrderRequestsFromQueue, processOfflineQueue, QueuedRequest } from './lib/offlineQueue';
+import { useState, useEffect, lazy, Suspense, useMemo } from 'react';
+import { Language } from './types';
+import { clearOfflineQueue } from './lib/offlineQueue';
 import { safeStorage } from './lib/safeStorage';
-import { apiFetch } from './lib/api';
-import { db, isFirebaseSyncEnabled } from './lib/firebase';
-import { collection, onSnapshot, query, orderBy, limit, where } from 'firebase/firestore';
-import { TRANSLATIONS, INITIAL_MENU, INITIAL_CATEGORIES } from './data';
+import { TRANSLATIONS } from './data';
 import { LanguageSelector } from './components/LanguageSelector';
 import { ChefHat, Smartphone, BarChart3, UtensilsCrossed, LogOut, Lock, Phone, MapPin, Eye, EyeOff, Coins, Monitor } from 'lucide-react';
-import { printViaBridge, normalizePort } from './lib/posBridgeClient';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { RestaurantDataProvider, useRestaurantData } from './context/RestaurantDataContext';
+import { OrderDataProvider, useOrderData } from './context/OrderDataContext';
+import { PrinterDataProvider, usePrinterData } from './context/PrinterDataContext';
 
 const CustomerOrderView = lazy(() => import('./components/CustomerOrderView').then(m => ({ default: m.CustomerOrderView })));
 const KitchenDisplaySystem = lazy(() => import('./components/KitchenDisplaySystem').then(m => ({ default: m.KitchenDisplaySystem })));
@@ -24,16 +24,17 @@ const ViewLoadingFallback = () => (
   </div>
 );
 
-interface AnalyticsData {
-  totalRevenue: number;
-  ordersCount: number;
-  categorySales: { category: string; revenue: number }[];
-  hourlyDistribution: { timeSlot: string; orders: number }[];
-  topDishes: { name: string; qty: number }[];
-  stockWarnings: Ingredient[];
-}
-
-export default function App() {
+function AppContent({
+  activeTab,
+  setActiveTab,
+  currentPath,
+  navigateTo,
+}: {
+  activeTab: 'customer' | 'kitchen' | 'admin' | 'cashier';
+  setActiveTab: React.Dispatch<React.SetStateAction<'customer' | 'kitchen' | 'admin' | 'cashier'>>;
+  currentPath: string;
+  navigateTo: (path: string) => void;
+}) {
   const [lang, setLang] = useState<Language>(() => {
     try {
       const stored = safeStorage.getItem('sabay-language');
@@ -48,16 +49,11 @@ export default function App() {
     safeStorage.setItem('sabay-language', newLang);
   };
 
-  const [activeTab, setActiveTab] = useState<'customer' | 'kitchen' | 'admin' | 'cashier'>('customer');
-
   const [adminSubTab, setAdminSubTab] = useState<'stats' | 'orders' | 'inventory' | 'menu' | 'members' | 'cashier' | 'printer' | 'options' | 'eod' | 'terminal' | undefined>(undefined);
-
-  // Secure staff role gating
   const [isStaff, setIsStaff] = useState<boolean>(false);
-
-  // Path & Query routing states for Google Business Profile Direct Links (/reserve, /order)
   const [staffPin] = useState<string>('');
-  const [currentPath, setCurrentPath] = useState<string>(window.location.pathname);
+  const [showContactDetails, setShowContactDetails] = useState<boolean>(false);
+
   const isAtStaffPath = activeTab !== 'customer';
 
   const isReserveRoute = useMemo(() => {
@@ -85,15 +81,7 @@ export default function App() {
     );
   }, [currentPath]);
 
-  useEffect(() => {
-    const handlePopState = () => {
-      setCurrentPath(window.location.pathname);
-    };
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
-
-  // Simple keyboard hotkeys for switching staff workspace tabs instantly (Ctrl+1 to Ctrl+5)
+  // Keyboard hotkeys for switching staff workspace tabs instantly (Ctrl+1 to Ctrl+5)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey) {
@@ -121,1927 +109,83 @@ export default function App() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
-
-  const navigateTo = (path: string) => {
-    window.history.pushState({}, '', path);
-    setCurrentPath(path);
-  };
-
-  // Helper to enrich menu items with missing translations
-  const enrichMenuItems = (items: MenuItem[]): MenuItem[] => {
-    if (!Array.isArray(items)) return [];
-    const defaults = INITIAL_MENU || [];
-    return items.map(item => {
-      const defaultItem = defaults.find(x => x.id === item.id);
-      if (defaultItem) {
-        const cleanName = { ...item.name };
-        const cleanDesc = { ...item.description };
-        ['ko', 'ja', 'th', 'vi', 'ru', 'es'].forEach(lang => {
-          if (cleanName[lang as Language] === cleanName['zh']) delete cleanName[lang as Language];
-          if (cleanDesc[lang as Language] === cleanDesc['zh']) delete cleanDesc[lang as Language];
-        });
-        const name = { ...defaultItem.name, ...cleanName };
-        const description = { ...defaultItem.description, ...cleanDesc };
-        return { ...item, name, description };
-      }
-      return item;
-    });
-  };
-
-  // Helper to enrich categories with missing translations
-  const enrichCategories = (cats: Category[]): Category[] => {
-    if (!Array.isArray(cats)) return [];
-    const defaults = INITIAL_CATEGORIES || [];
-    return cats.map(cat => {
-      const defaultCat = defaults.find(c => c.id === cat.id);
-      if (defaultCat) {
-        const name = { ...defaultCat.name, ...cat.name };
-        return { ...cat, name };
-      }
-      return cat;
-    });
-  };
-
-  // Core synchronized application state
-  const [menuItems, setMenuItemsRaw] = useState<MenuItem[]>([]);
-  const setMenuItems = (val: MenuItem[] | ((prev: MenuItem[]) => MenuItem[])) => {
-    if (typeof val === 'function') {
-      setMenuItemsRaw(prev => enrichMenuItems(val(prev)));
-    } else {
-      setMenuItemsRaw(enrichMenuItems(val));
-    }
-  };
-
-  const [ingredients, setIngredients] = useState<Ingredient[]>([]);
-  const [orders, setOrders] = useState<Order[]>([]);
-
-  const [categories, setCategoriesRaw] = useState<Category[]>([]);
-  const setCategories = (val: Category[] | ((prev: Category[]) => Category[])) => {
-    if (typeof val === 'function') {
-      setCategoriesRaw(prev => enrichCategories(val(prev)));
-    } else {
-      setCategoriesRaw(enrichCategories(val));
-    }
-  };
-  const [tables, setTables] = useState<TableConfig[]>([]);
-  const [reservations, setReservations] = useState<Reservation[]>([]);
-  const [minSpend, setMinSpend] = useState<number>(200);
-  const [promoCombo, setPromoCombo] = useState<any>({ enabled: false, combos: [] });
-  const [operatingHours, setOperatingHours] = useState<OperatingHourSlot[]>([]);
-  const [isOpen, setIsOpen] = useState<boolean>(true);
-  const [restDays, setRestDays] = useState<string[]>([]);
-  const [customerNotice, setCustomerNotice] = useState<string>('');
-  const [servicePaused, setServicePaused] = useState<boolean>(false);
-  const [popularItemIds, setPopularItemIds] = useState<string[]>(['ty-01', 'nd-01', 'sk-02', 'sk-01']);
-  const [memberPointsRatio, setMemberPointsRatio] = useState<number>(20);
-  const [memberRewards, setMemberRewards] = useState<any[]>([]);
-  const lastCategoryReorderTimeRef = useRef<number>(0);
-  const lastMenuReorderTimeRef = useRef<number>(0);
-
-  const [printLogs, setPrintLogs] = useState<any[]>([]);
-  const [printerIp, setPrinterIp] = useState<string>('192.168.123.100');
-  const [pushNotifications, setPushNotifications] = useState<any[]>([]);
-  const [analytics, setAnalytics] = useState<AnalyticsData>({
-    totalRevenue: 0,
-    ordersCount: 0,
-    categorySales: [],
-    hourlyDistribution: [],
-    topDishes: [],
-    stockWarnings: [],
-  });
-
-  const [, setLocalOrderIds] = useState<string[]>(() => {
-    try {
-      const stored = safeStorage.getItem('sabay-my-submitted-order-ids');
-      return stored ? JSON.parse(stored) : [];
-    } catch {
-      return [];
-    }
-  });
-
-  const [loading, setLoading] = useState(true);
-  const [showContactDetails, setShowContactDetails] = useState(false);
-
-  interface RecentOrderTransition {
-    status?: OrderStatus;
-    items?: any[];
-    tableNumber?: string;
-    quickNotes?: string;
-    isFlagged?: boolean;
-    flagReason?: string;
-    isPaid?: boolean;
-    timestamp: number;
-  }
-
-  const pollingCycleRef = useRef<number>(0);
-  const activeOrderSubmissionsRef = useRef<Set<string>>(new Set());
-  const recentStatusTransitionsRef = useRef<Map<string, RecentOrderTransition>>(new Map());
-
-  // 🛡️ 統一訂單異動對齊防護函式 (防止 Firestore onSnapshot 與定時輪詢覆寫樂觀狀態造成回滾/Lag)
-  const reconcileOrdersWithRecentTransitions = (incomingOrders: Order[]): Order[] => {
-    if (!Array.isArray(incomingOrders)) return [];
-    const nowMs = Date.now();
-
-    // 1. 清理超過 30 秒的過期暫態鎖定
-    for (const [tId, tRecord] of recentStatusTransitionsRef.current.entries()) {
-      if (nowMs - tRecord.timestamp > 30000) {
-        recentStatusTransitionsRef.current.delete(tId);
-      }
-    }
-
-    // 2. 比對並強制維持最新樂觀操作
-    return incomingOrders.map((ord: Order) => {
-      const transition = recentStatusTransitionsRef.current.get(ord.id);
-      if (!transition) return ord;
-
-      let reconciled = { ...ord };
-
-      // 防範訂單主狀態回滾
-      if (transition.status) {
-        if (ord.status === transition.status) {
-          reconciled.isOfflinePending = false;
-        } else {
-          reconciled.status = transition.status;
-          reconciled.isOfflinePending = false;
-        }
-      }
-
-      // 防範已付款狀態回滾
-      if (transition.isPaid !== undefined) {
-        reconciled.isPaid = transition.isPaid;
-      }
-
-      // 防範桌號回滾
-      if (transition.tableNumber !== undefined && ord.tableNumber !== transition.tableNumber) {
-        reconciled.tableNumber = transition.tableNumber;
-      }
-
-      // 防範語音/口述備註回滾
-      if (transition.quickNotes !== undefined && ord.quickNotes !== transition.quickNotes) {
-        reconciled.quickNotes = transition.quickNotes;
-      }
-
-      // 防範關注旗幟狀態回滾
-      if (transition.isFlagged !== undefined) {
-        reconciled.isFlagged = transition.isFlagged;
-        if (transition.flagReason !== undefined) reconciled.flagReason = transition.flagReason;
-      }
-
-      // 防範單品項備餐/出餐完成勾選回滾
-      if (transition.items && Array.isArray(transition.items)) {
-        const itemMap = new Map((transition.items as any[]).map((it: any) => [it.id, it]));
-        reconciled.items = ord.items.map(it => {
-          const transIt: any = itemMap.get(it.id);
-          if (transIt) {
-            return {
-              ...it,
-              isCompleted: transIt.isCompleted !== undefined ? transIt.isCompleted : it.isCompleted,
-              isPrepared: transIt.isPrepared !== undefined ? transIt.isPrepared : it.isPrepared
-            };
-          }
-          return it;
-        });
-      }
-
-      return reconciled;
-    });
-  };
-
-  // Offline sync queue states
-  const [offlineQueue, setOfflineQueue] = useState<QueuedRequest[]>(getOfflineQueue());
-  const [isSyncing, setIsSyncing] = useState<boolean>(false);
-  const [syncProgressMsg, setSyncProgressMsg] = useState<string>('');
-  const [isNetworkOnline, setIsNetworkOnline] = useState<boolean>(typeof navigator !== 'undefined' ? navigator.onLine : true);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const updateOnlineStatus = () => {
-      setIsNetworkOnline(typeof navigator !== 'undefined' ? navigator.onLine : true);
-    };
-    window.addEventListener('online', updateOnlineStatus);
-    window.addEventListener('offline', updateOnlineStatus);
-
-    const handleQueueChange = (e: Event) => {
-      const customEvent = e as CustomEvent<QueuedRequest[]>;
-      setOfflineQueue(customEvent.detail || getOfflineQueue());
-    };
-    window.addEventListener('offline_queue_changed', handleQueueChange);
-
-    return () => {
-      window.removeEventListener('online', updateOnlineStatus);
-      window.removeEventListener('offline', updateOnlineStatus);
-      window.removeEventListener('offline_queue_changed', handleQueueChange);
-    };
-  }, []);
-
-  // Automatic sync when connection is restored
-  useEffect(() => {
-    if (isNetworkOnline && offlineQueue.length > 0) {
-      handleForceSync();
-    }
-  }, [isNetworkOnline, offlineQueue.length]);
-
-  const handleForceSync = async () => {
-    if (isSyncing) return;
-    setIsSyncing(true);
-    setSyncProgressMsg('正在準備批次重發...');
-    try {
-      const result = await processOfflineQueue((progress) => setSyncProgressMsg(progress));
-      if (result.successCount > 0) {
-        console.log(`[Offline Sync] Successfully synced ${result.successCount} requests!`);
-        await fetchData(true);
-      }
-    } catch (e) {
-      console.error('[Offline Sync Error]', e);
-    } finally {
-      setIsSyncing(false);
-      setSyncProgressMsg('');
-    }
-  };
-
-  // Fetch initial data
-  const fetchData = async (forceFull: boolean = true, bypassReorderLock: boolean = false) => {
-    const fetchStartTime = Date.now();
-    try {
-      const fallbackAnalytics = {
-        totalRevenue: 0,
-        ordersCount: 0,
-        categorySales: [],
-        hourlyDistribution: [],
-        topDishes: [],
-        stockWarnings: [],
-      };
-
-      const safeFetch = async (url: string, fallbackVal: any) => {
-        try {
-          const res = await fetch(url);
-          return res;
-        } catch (err) {
-          console.warn(`[Sabay Sync] Failed network fetch for ${url}:`, err);
-          return {
-            ok: false,
-            status: 503,
-            headers: new Headers(),
-            json: async () => fallbackVal,
-            text: async () => '',
-            clone: function() { return this; }
-          } as unknown as Response;
-        }
-      };
-
-      const isFullCycle = forceFull || pollingCycleRef.current === 0 || pollingCycleRef.current % 5 === 0;
-      pollingCycleRef.current = pollingCycleRef.current + 1;
-
-      const safeJson = async (res: Response, fallback: any) => {
-        try {
-          if (!res || !res.ok) return fallback;
-          const contentType = res.headers?.get ? res.headers.get('content-type') : null;
-          if (contentType && !contentType.includes('application/json')) return fallback;
-          return await res.json();
-        } catch (_e) {
-          return fallback;
-        }
-      };
-
-      const isCustomerView = activeTab === 'customer';
-
-      if (isFullCycle) {
-        const syncEnabled = isFirebaseSyncEnabled();
-        const fetchPromises: Promise<Response>[] = [
-          safeFetch('/api/bootstrap', null),
-          syncEnabled ? Promise.resolve({ ok: true, json: async () => null } as unknown as Response) : safeFetch('/api/orders', [])
-        ];
-
-        if (!isCustomerView) {
-          fetchPromises.push(
-            safeFetch('/api/push-notifications', []),
-            safeFetch('/api/print-logs', [])
-          );
-        }
-
-        const results = await Promise.all(fetchPromises);
-        const bootstrapData = await safeJson(results[0], null);
-        const ordData = await safeJson(results[1], []);
-
-        let notifData = [];
-        let printData = [];
-        let alyData = fallbackAnalytics;
-
-        if (!isCustomerView) {
-          notifData = await safeJson(results[2], []);
-          printData = await safeJson(results[3], []);
-        }
-
-        if (Array.isArray(ordData) && ordData.length > 0) {
-          setOrders(reconcileOrdersWithRecentTransitions(ordData));
-        }
-        setPrintLogs(printData);
-        setAnalytics(alyData);
-        if (Array.isArray(notifData)) setPushNotifications(notifData.filter((n: any) => !n.isRead));
-
-        if (bootstrapData) {
-          if (bootstrapData.ingredients) setIngredients(bootstrapData.ingredients);
-          if (bootstrapData.tables) setTables(bootstrapData.tables);
-          if (bootstrapData.reservations) setReservations(bootstrapData.reservations);
-          if (bootstrapData.servicePaused) setServicePaused(!!bootstrapData.servicePaused.servicePaused);
-          if (bootstrapData.menu && (bypassReorderLock || fetchStartTime > lastMenuReorderTimeRef.current)) {
-            setMenuItems(bootstrapData.menu);
-          }
-          if (bootstrapData.categories && (bypassReorderLock || fetchStartTime > lastCategoryReorderTimeRef.current)) {
-            setCategories(bootstrapData.categories);
-          }
-          if (bootstrapData.printerConfig?.ip) setPrinterIp(bootstrapData.printerConfig.ip);
-          if (Array.isArray(bootstrapData.popularItemIds)) setPopularItemIds(bootstrapData.popularItemIds);
-          if (bootstrapData.membersConfig) {
-            if (bootstrapData.membersConfig.pointsRatio !== undefined) setMemberPointsRatio(bootstrapData.membersConfig.pointsRatio);
-            if (bootstrapData.membersConfig.rewards) setMemberRewards(bootstrapData.membersConfig.rewards);
-          }
-          if (bootstrapData.promoCombo) setPromoCombo(bootstrapData.promoCombo);
-          if (bootstrapData.minSpend?.minSpend !== undefined) setMinSpend(bootstrapData.minSpend.minSpend);
-          if (bootstrapData.operatingHours) {
-            if (bootstrapData.operatingHours.slots) setOperatingHours(bootstrapData.operatingHours.slots);
-            if (bootstrapData.operatingHours.restDays) setRestDays(bootstrapData.operatingHours.restDays);
-            setIsOpen(bootstrapData.operatingHours.isOpen ?? true);
-          }
-          if (bootstrapData.customerNotice?.notice !== undefined) setCustomerNotice(bootstrapData.customerNotice.notice);
-        }
-      } else {
-        // Lightweight polling cycle for active dynamic state
-        const syncEnabled = isFirebaseSyncEnabled();
-        const fetchPromises: Promise<Response>[] = [
-          safeFetch('/api/orders', []),
-          safeFetch('/api/tables', []),
-          safeFetch('/api/settings/service-pause', { servicePaused: false }),
-          syncEnabled ? Promise.resolve({ ok: true, json: async () => null } as unknown as Response) : safeFetch('/api/ingredients', [])
-        ];
-
-        if (!isCustomerView) {
-          fetchPromises.push(safeFetch('/api/push-notifications', []));
-        }
-
-        const results = await Promise.all(fetchPromises);
-        const ordData = await safeJson(results[0], []);
-        const tablesData = await safeJson(results[1], []);
-        const servicePauseData = await safeJson(results[2], { servicePaused: false });
-        const ingData = await safeJson(results[3], []);
-
-        let notifData = [];
-        if (!isCustomerView) {
-          notifData = await safeJson(results[4], []);
-        }
-
-        if (Array.isArray(ordData) && ordData.length > 0) {
-          setOrders(reconcileOrdersWithRecentTransitions(ordData));
-        }
-        if (Array.isArray(tablesData)) setTables(tablesData);
-        if (!syncEnabled && Array.isArray(ingData)) setIngredients(ingData);
-        if (servicePauseData) setServicePaused(!!servicePauseData.servicePaused);
-        if (Array.isArray(notifData)) setPushNotifications(notifData.filter((n: any) => !n.isRead));
-      }
-
-      // 清理遺留的數字路徑（如舊版掃碼 QR 直連路徑），統一導向首頁
-      const legacyNumericPath = window.location.pathname.match(/^\/\d{4,6}$/);
-      if (legacyNumericPath) {
-        window.history.replaceState({}, '', '/');
-        setCurrentPath('/');
-      }
-    } catch (err: any) {
-      console.warn('[Sabay Sync] Fetch error:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-  useEffect(() => {
-    fetchData();
-
-    // 保障本地沙盒與託管環境實時輪詢更新
-    const localPollingTimer = setInterval(() => {
-      fetchData(false);
-    }, 5000);
-
-    return () => {
-      if (localPollingTimer) clearInterval(localPollingTimer);
-    };
-  }, []);
-
-  useEffect(() => {
-    let unsubscribeOrders = () => {};
-    let unsubscribeIngredients = () => {};
-
-    if (isFirebaseSyncEnabled()) {
-      try {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const startOfDay = today.toISOString();
-        const isCustomerView = activeTab === 'customer';
-        const currentTable = currentPath.replace('/', '');
-
-        let ordersQuery;
-        if (isCustomerView && currentTable && currentTable !== '') {
-          ordersQuery = query(collection(db, "orders"), where("tableNumber", "==", currentTable), where("createdAt", ">=", startOfDay), orderBy("createdAt", "desc"));
-        } else if (isCustomerView) {
-          // If customer hasn't selected a table, no need to listen to all orders
-          ordersQuery = query(collection(db, "orders"), where("tableNumber", "==", "NONE"), limit(1));
-        } else {
-          ordersQuery = query(collection(db, "orders"), where("createdAt", ">=", startOfDay), orderBy("createdAt", "desc"), limit(300));
-        }
-
-        unsubscribeOrders = onSnapshot(ordersQuery, (snapshot) => {
-          const updatedOrders = snapshot.docs.map(doc => ({ ...doc.data() } as Order));
-          setOrders(reconcileOrdersWithRecentTransitions(updatedOrders));
-        }, (error) => {
-          console.warn('[Firebase Sync] Orders listener paused/disabled:', error);
-        });
-
-        if (!isCustomerView) {
-          unsubscribeIngredients = onSnapshot(collection(db, "ingredients"), (snapshot) => {
-            const updatedIngredients = snapshot.docs.map(doc => doc.data() as Ingredient);
-            setIngredients(updatedIngredients);
-          }, (error) => {
-            console.warn('[Firebase Sync] Ingredients listener paused/disabled:', error);
-          });
-        }
-      } catch (e) {
-        console.warn('[Firebase Sync] Realtime listener initialization skipped:', e);
-      }
-    }
-
-    return () => {
-      unsubscribeOrders();
-      unsubscribeIngredients();
-    };
-  }, [activeTab, currentPath]);
-
-  // 🔄 自動連動桌席狀態與訂單/KDS/預約 (Real-time Table Status Auto-Sync)
-  useEffect(() => {
-    if (!tables || tables.length === 0) return;
-
-    const checkAndSyncTables = () => {
-      const nowMs = Date.now();
-      const now = new Date();
-      const yr = now.getFullYear();
-      const mo = String(now.getMonth() + 1).padStart(2, '0');
-      const dy = String(now.getDate()).padStart(2, '0');
-      const todayStr = `${yr}-${mo}-${dy}`;
-
-      setTables(prevTables => {
-        let hasChanges = false;
-        const newTables = prevTables.map(tb => {
-          const tblId = String(tb.id).trim();
-
-          // 1. 該桌目前尚未結帳/取消的有效訂單
-          const activeOrders = orders.filter(o => 
-            String(o.tableNumber).trim() === tblId && 
-            o.status !== 'cancelled'
-          );
-
-          const unpaidActiveOrders = activeOrders.filter(o => !o.isPaid && o.status !== 'completed' && o.status !== 'paid');
-
-          if (unpaidActiveOrders.length > 0) {
-            const targetStatus = tb.status === 'pending_checkout' ? 'pending_checkout' : 'in_use';
-            if (tb.status !== targetStatus || tb.preservedFor || tb.cleaningStartedAt) {
-              hasChanges = true;
-              return { ...tb, status: targetStatus, preservedFor: '', cleaningStartedAt: null };
-            }
-            return tb;
-          }
-
-          // 2. 原本為入座或待結帳，但已無未付款的有效訂單 -> 自動轉為「清潔中」15 分鐘緩衝
-          if (tb.status === 'in_use' || tb.status === 'pending_checkout') {
-            hasChanges = true;
-            return {
-              ...tb,
-              status: 'cleaning',
-              cleaningStartedAt: tb.cleaningStartedAt || new Date().toISOString()
-            };
-          }
-
-          // 3. 若處於清潔中，檢查是否已超過 15 分鐘無新訂單
-          if (tb.status === 'cleaning') {
-            let cleaningStartMs = tb.cleaningStartedAt ? new Date(tb.cleaningStartedAt).getTime() : 0;
-            if (!cleaningStartMs || isNaN(cleaningStartMs)) {
-              // Fallback to latest paid order timestamp
-              const latestOrder = activeOrders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
-              if (latestOrder && latestOrder.createdAt) {
-                cleaningStartMs = new Date(latestOrder.createdAt).getTime();
-              } else {
-                cleaningStartMs = nowMs;
-              }
-            }
-
-            // 15 分鐘 (900,000 毫秒) 緩衝結束且無新訂單 -> 自動轉為「空桌」或「預約」
-            if (nowMs - cleaningStartMs >= 15 * 60 * 1000) {
-              // 檢查今日後續是否有預約
-              const todayPendingRes = reservations.find(r => 
-                String(r.tableNumber).trim() === tblId &&
-                (r.status === 'pending' || r.status === 'upcoming' || r.status === 'confirmed') &&
-                r.date.trim() === todayStr
-              );
-
-              hasChanges = true;
-              if (todayPendingRes) {
-                return {
-                  ...tb,
-                  status: 'preserved',
-                  preservedFor: `${todayPendingRes.customerName} (${todayPendingRes.time})`,
-                  cleaningStartedAt: null
-                };
-              }
-              return {
-                ...tb,
-                status: 'available',
-                preservedFor: '',
-                cleaningStartedAt: null
-              };
-            }
-
-            // 仍在 15 分鐘清潔緩衝期中
-            return tb;
-          }
-
-          // 4. 檢查今日是否有預約訂位
-          const todayPendingRes = reservations.find(r => 
-            String(r.tableNumber).trim() === tblId &&
-            (r.status === 'pending' || r.status === 'upcoming' || r.status === 'confirmed') &&
-            r.date.trim() === todayStr
-          );
-
-          if (todayPendingRes) {
-            const presText = `${todayPendingRes.customerName} (${todayPendingRes.time})`;
-            if (tb.status !== 'preserved' || tb.preservedFor !== presText) {
-              hasChanges = true;
-              return { ...tb, status: 'preserved', preservedFor: presText, cleaningStartedAt: null };
-            }
-          } else if (tb.status === 'preserved') {
-            hasChanges = true;
-            return { ...tb, status: 'available', preservedFor: '', cleaningStartedAt: null };
-          }
-
-          return tb;
-        });
-
-        return hasChanges ? newTables : prevTables;
-      });
-    };
-
-    checkAndSyncTables();
-    const interval = setInterval(checkAndSyncTables, 10000);
-    return () => clearInterval(interval);
-  }, [orders, reservations]);
-
-  // 1. Submit Online Order
-  const handlePlaceOrder = async (orderData: {
-    tableNumber: string;
-    items: OrderItem[];
-    paymentMethod: 'cash' | 'credit' | 'member' | 'twqr';
-    guestCount?: number;
-    clientOrderId?: string;
-    reservationNo?: string;
-    reservationDate?: string;
-    reservationTime?: string;
-  }) => {
-    const clientOrderId = orderData.clientOrderId || `client_ord_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-    
-    if (activeOrderSubmissionsRef.current.has(clientOrderId)) {
-      console.log(`[Sabay App] Already submitting order with clientOrderId: ${clientOrderId}. Blocking duplicate call.`);
-      return null;
-    }
-    activeOrderSubmissionsRef.current.add(clientOrderId);
-
-    if (orderData.tableNumber && orderData.tableNumber !== '外帶' && orderData.tableNumber !== 'takeout') {
-      handleUpdateTableStatus(orderData.tableNumber, { status: 'in_use', preservedFor: '', cleaningStartedAt: null });
-    }
-
-    const orderPayload = {
-      ...orderData,
-      customerName: undefined,
-      customerAvatar: undefined,
-      isMember: false,
-      clientOrderId,
-    };
-    const totalAmount = orderData.items.reduce((sum, item) => {
-      let unitP = item.price;
-      if (item.customization?.soupBase === 'coconut-milk') unitP += 50;
-      if (item.customization?.selectedAddOns && Array.isArray(item.customization.selectedAddOns)) {
-        unitP += item.customization.selectedAddOns.reduce((s, a) => s + (Number(a.price) || 0), 0);
-      }
-      return sum + unitP * item.qty;
-    }, 0);
-    const tempId = `offline_temp_${Date.now()}`;
-    const description = `桌號 🥢 ${orderData.tableNumber || '外帶'} • 點購 ${orderData.items.length} 份餐點 (金額: $${totalAmount})`;
-
-    // Check if offline
-    if (!navigator.onLine) {
-      console.log('[Sabay Offline] Intercepting order submission offline...');
-      addRequestToQueue('/api/orders', 'POST', orderPayload, description);
-      
-      const offlineSvc = (orderData.paymentMethod === 'credit' || orderData.paymentMethod === 'twqr') ? Math.round(totalAmount * 0.1) : 0;
-      const completedOrder: Order = {
-        id: tempId,
-        tableNumber: orderData.tableNumber,
-        items: orderData.items,
-        paymentMethod: orderData.paymentMethod,
-        status: 'pending',
-        createdAt: new Date().toISOString(),
-        subtotal: totalAmount,
-        serviceCharge: offlineSvc,
-        total: totalAmount + offlineSvc,
-        customerName: orderPayload.customerName || '',
-        customerAvatar: orderPayload.customerAvatar || '',
-        isMember: orderPayload.isMember || false,
-        isOfflinePending: true,
-      };
-
-      setOrders((prev) => [completedOrder, ...prev]);
-      setLocalOrderIds((prev) => {
-        const updated = [...prev, tempId];
-        safeStorage.setItem('sabay-my-submitted-order-ids', JSON.stringify(updated));
-        return updated;
-      });
-      activeOrderSubmissionsRef.current.delete(clientOrderId);
-      return completedOrder;
-    }
-
-    try {
-      const res = await apiFetch('/api/orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(orderPayload),
-      });
-
-      if (!res.ok) {
-        const errorDetail = await res.json();
-        console.error('[Sabay Ordering Error]', errorDetail.error);
-        activeOrderSubmissionsRef.current.delete(clientOrderId);
-        return null;
-      }
-
-      const completedOrder = await res.json();
-      if (completedOrder && completedOrder.id) {
-        setOrders((prev) => [completedOrder, ...prev.filter(o => o.id !== completedOrder.id)]);
-        setLocalOrderIds((prev) => {
-          const updated = [...prev, completedOrder.id];
-          safeStorage.setItem('sabay-my-submitted-order-ids', JSON.stringify(updated));
-          return updated;
-        });
-      }
-      await fetchData();
-      activeOrderSubmissionsRef.current.delete(clientOrderId);
-      return completedOrder;
-    } catch (err) {
-      console.warn('[Sabay Ordering failed, falling back to cache queue]', err);
-      addRequestToQueue('/api/orders', 'POST', orderPayload, description);
-      
-      const offlineSvc = (orderData.paymentMethod === 'credit' || orderData.paymentMethod === 'twqr') ? Math.round(totalAmount * 0.1) : 0;
-      const completedOrder: Order = {
-        id: tempId,
-        tableNumber: orderData.tableNumber,
-        items: orderData.items,
-        paymentMethod: orderData.paymentMethod,
-        status: 'pending',
-        createdAt: new Date().toISOString(),
-        subtotal: totalAmount,
-        serviceCharge: offlineSvc,
-        total: totalAmount + offlineSvc,
-        customerName: orderPayload.customerName || '',
-        customerAvatar: orderPayload.customerAvatar || '',
-        isMember: orderPayload.isMember || false,
-        isOfflinePending: true,
-      };
-
-      setOrders((prev) => [completedOrder, ...prev]);
-      setLocalOrderIds((prev) => {
-        const updated = [...prev, tempId];
-        safeStorage.setItem('sabay-my-submitted-order-ids', JSON.stringify(updated));
-        return updated;
-      });
-      activeOrderSubmissionsRef.current.delete(clientOrderId);
-      return completedOrder;
-    }
-  };
-
-  // 2. Kitchen Status Updater
-  const handleUpdateOrderStatus = async (orderId: string, status: OrderStatus) => {
-    const description = `更新 🥢 訂單 #${orderId.replace('offline_temp_', '離線')} 狀態至「${status}」`;
-    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
-    
-    // Check if offline
-    if (!isOnline || orderId.startsWith('offline_temp_')) {
-      console.log('[Sabay Offline] Intercepting state change offline...');
-      addRequestToQueue(`/api/orders/${orderId}/status`, 'PUT', { status }, description);
-      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status, isOfflinePending: true } : o));
-      return;
-    }
-
-    // ONLINE MODE:
-    // 1. Immediately purge any queued offline/stale requests for this order
-    removeOrderRequestsFromQueue(orderId);
-
-    // 2. Lock in-memory status transition timestamp to prevent polling race condition overwrites
-    recentStatusTransitionsRef.current.set(orderId, {
-      ...recentStatusTransitionsRef.current.get(orderId),
-      status,
-      timestamp: Date.now()
-    });
-
-    // 3. Instant Optimistic local UI update (0ms latency for kitchen screen)
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status, isOfflinePending: false } : o));
-
-    // 4. Synchronize immediately with backend API
-    try {
-      const res = await apiFetch(`/api/orders/${orderId}/status`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status }),
-      });
-      if (res.ok) {
-        console.log(`[KDS Sync] Order #${orderId} status synced to "${status}" successfully`);
-        setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status, isOfflinePending: false } : o));
-      } else {
-        console.warn(`[KDS Sync] Server returned status ${res.status}, keeping optimistic update`);
-      }
-    } catch (err) {
-      console.warn('[KDS Sync Error]', err);
-    }
-
-    // 5. If there are other items in offline queue, trigger background drain
-    if (getOfflineQueue().length > 0) {
-      processOfflineQueue().catch(() => {});
-    }
-  };
-
-  // 2.2.5 Toggle Single Order Item Complete / Prepared
-  const handleToggleOrderItemComplete = async (orderId: string, itemId: string, isCompleted: boolean, isPrepared?: boolean) => {
-    const description = `更新 🥢 訂單 #${orderId.replace('offline_temp_', '離線')} 內單一商品狀態`;
-    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
-    
-    let nextStatus: OrderStatus | undefined;
-    let nextItems: any[] = [];
-
-    // Optimistically update local orders state
-    setOrders(prev => prev.map(o => {
-      if (o.id === orderId) {
-        const updatedItems = o.items.map(it => {
-          if (it.id === itemId) {
-            const prep = typeof isPrepared !== 'undefined' ? isPrepared : (isCompleted ? true : (it.isPrepared || false));
-            return { ...it, isCompleted, isPrepared: prep };
-          }
-          return it;
-        });
-        nextItems = updatedItems;
-        const allCompleted = updatedItems.every(item => item.isCompleted);
-        // Don't auto-complete paid orders — kitchen must explicitly press 出餐完成
-        const status = allCompleted && o.status !== 'paid' ? 'completed' : (o.status === 'completed' ? 'preparing' : o.status);
-        nextStatus = status;
-        return { ...o, items: updatedItems, status, isOfflinePending: !isOnline };
-      }
-      return o;
-    }));
-
-    if (!isOnline || orderId.startsWith('offline_temp_')) {
-      addRequestToQueue(`/api/orders/${orderId}/items/${itemId}/complete`, 'PUT', { isCompleted, isPrepared }, description);
-      return;
-    }
-
-    // ONLINE MODE:
-    removeOrderRequestsFromQueue(orderId);
-    recentStatusTransitionsRef.current.set(orderId, {
-      ...recentStatusTransitionsRef.current.get(orderId),
-      items: nextItems,
-      status: nextStatus,
-      timestamp: Date.now()
-    });
-
-    try {
-      const res = await apiFetch(`/api/orders/${orderId}/items/${itemId}/complete`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isCompleted, isPrepared }),
-      });
-      if (res.ok) {
-        const updatedOrder = await res.json();
-        setOrders(prev => prev.map(o => o.id === orderId ? { ...updatedOrder, isOfflinePending: false } : o));
-      } else {
-        addRequestToQueue(`/api/orders/${orderId}/items/${itemId}/complete`, 'PUT', { isCompleted, isPrepared }, description);
-      }
-    } catch (err) {
-      console.warn('[Offline Fallback] Toggle order item state failed, queued:', err);
-      addRequestToQueue(`/api/orders/${orderId}/items/${itemId}/complete`, 'PUT', { isCompleted, isPrepared }, description);
-    }
-
-    if (getOfflineQueue().length > 0) {
-      processOfflineQueue().catch(() => {});
-    }
-  };
-
-  // 2.3 Order Table Number / Takeout Modifier (Admin/Cashier View Override)
-  const handleUpdateTableNumber = async (orderId: string, tableNumber: string) => {
-    const description = `修改 🥢 訂單 #${orderId.replace('offline_temp_', '離線')} 的桌號至 ${tableNumber} 桌`;
-    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, tableNumber, isOfflinePending: !isOnline } : o));
-    
-    if (!isOnline || orderId.startsWith('offline_temp_')) {
-      addRequestToQueue(`/api/orders/${orderId}/table-number`, 'PUT', { tableNumber }, description);
-      return { success: true };
-    }
-
-    // ONLINE MODE:
-    removeOrderRequestsFromQueue(orderId);
-    recentStatusTransitionsRef.current.set(orderId, {
-      ...recentStatusTransitionsRef.current.get(orderId),
-      tableNumber,
-      timestamp: Date.now()
-    });
-
-    try {
-      const res = await apiFetch(`/api/orders/${orderId}/table-number`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tableNumber }),
-      });
-      if (res.ok) {
-        return { success: true };
-      }
-      addRequestToQueue(`/api/orders/${orderId}/table-number`, 'PUT', { tableNumber }, description);
-      return { success: true };
-    } catch (err: any) {
-      console.warn('[Offline Fallback] Update table number failed, queued:', err);
-      addRequestToQueue(`/api/orders/${orderId}/table-number`, 'PUT', { tableNumber }, description);
-      return { success: true };
-    }
-  };
-
-  // 2.3.5 Order Quick Notes Updater (Speech / Audio Text input on KDS)
-  const handleUpdateQuickNotes = async (orderId: string, quickNotes: string) => {
-    const description = `更新 🥢 訂單 #${orderId.replace('offline_temp_', '離線')} 備註: "${quickNotes}"`;
-    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, quickNotes, isOfflinePending: !isOnline } : o));
-
-    if (!isOnline || orderId.startsWith('offline_temp_')) {
-      addRequestToQueue(`/api/orders/${orderId}/quick-notes`, 'PUT', { quickNotes }, description);
-      return { success: true };
-    }
-
-    // ONLINE MODE:
-    removeOrderRequestsFromQueue(orderId);
-    recentStatusTransitionsRef.current.set(orderId, {
-      ...recentStatusTransitionsRef.current.get(orderId),
-      quickNotes,
-      timestamp: Date.now()
-    });
-
-    try {
-      const res = await apiFetch(`/api/orders/${orderId}/quick-notes`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ quickNotes }),
-      });
-      if (res.ok) {
-        return { success: true };
-      }
-      addRequestToQueue(`/api/orders/${orderId}/quick-notes`, 'PUT', { quickNotes }, description);
-      return { success: true };
-    } catch (err: any) {
-      console.warn('[Offline Fallback] Update quick notes failed, queued:', err);
-      addRequestToQueue(`/api/orders/${orderId}/quick-notes`, 'PUT', { quickNotes }, description);
-      return { success: true };
-    }
-  };
-
-  // 2.3.6 Toggle Attention Flag status & update flagged custom reason on order
-  const handleToggleOrderFlag = async (orderId: string, isFlagged: boolean, flagReason: string) => {
-    const description = `設定 🥢 訂單 #${orderId.replace('offline_temp_', '離線')} 關注旗幟 ${isFlagged ? 'ON' : 'OFF'}`;
-    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, isFlagged, flagReason, isOfflinePending: !isOnline } : o));
-
-    if (!isOnline || orderId.startsWith('offline_temp_')) {
-      addRequestToQueue(`/api/orders/${orderId}/flag`, 'PUT', { isFlagged, flagReason }, description);
-      return { success: true };
-    }
-
-    // ONLINE MODE:
-    removeOrderRequestsFromQueue(orderId);
-    recentStatusTransitionsRef.current.set(orderId, {
-      ...recentStatusTransitionsRef.current.get(orderId),
-      isFlagged,
-      flagReason,
-      timestamp: Date.now()
-    });
-
-    try {
-      const res = await apiFetch(`/api/orders/${orderId}/flag`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isFlagged, flagReason }),
-      });
-      if (res.ok) {
-        return { success: true };
-      }
-      addRequestToQueue(`/api/orders/${orderId}/flag`, 'PUT', { isFlagged, flagReason }, description);
-      return { success: true };
-    } catch (err: any) {
-      console.warn('[Offline Fallback] Toggle order flag failed, queued:', err);
-      addRequestToQueue(`/api/orders/${orderId}/flag`, 'PUT', { isFlagged, flagReason }, description);
-      return { success: true };
-    }
-  };
-
-  // 2.4 Update Order Items list (add / remove qty inside order items)
-  const handleUpdateOrderItems = async (orderId: string, items: any[], refundLogs?: any[]) => {
-    const description = `調整 🥢 訂單 #${orderId.replace('offline_temp_', '離線')} 品項數量`;
-    const totalAmount = items.reduce((sum, item) => sum + (item.price * (item.qty || item.quantity || 0)), 0);
-    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, items, subtotal: totalAmount, total: totalAmount, isOfflinePending: !isOnline } : o));
-
-    if (!isOnline || orderId.startsWith('offline_temp_')) {
-      addRequestToQueue(`/api/orders/${orderId}/items`, 'PUT', { items, refundLogs }, description);
-      return;
-    }
-
-    // ONLINE MODE:
-    removeOrderRequestsFromQueue(orderId);
-    recentStatusTransitionsRef.current.set(orderId, {
-      ...recentStatusTransitionsRef.current.get(orderId),
-      items,
-      timestamp: Date.now()
-    });
-
-    try {
-      const res = await apiFetch(`/api/orders/${orderId}/items`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items, refundLogs }),
-      });
-      if (!res.ok) {
-        addRequestToQueue(`/api/orders/${orderId}/items`, 'PUT', { items, refundLogs }, description);
-      }
-    } catch (err) {
-      console.warn('[Offline Fallback] Update order items failed, queued:', err);
-      addRequestToQueue(`/api/orders/${orderId}/items`, 'PUT', { items, refundLogs }, description);
-    }
-  };
-
-  // 2.5 Order Cashier Register Checkout handler
-  const handlePayOrder = async (
-    orderId: string,
-    checkoutData?: {
-      paymentMethod?: string;
-      subtotal?: number;
-      serviceCharge?: number;
-      total?: number;
-      discount?: number;
-      isPaid?: boolean;
-    },
-    skipRefresh?: boolean
-  ) => {
-    const isOnline = navigator.onLine;
-    const description = `結帳 🥢 訂單 #${orderId.replace('offline_temp_', '離線')}`;
-    
-    // 🛡️ 保持已經「製餐完成 (completed)」或「取消 (cancelled)」的訂單狀態，防止結帳時回滾為 'paid' 導致已完成訂單重複浮現於廚房 KDS
-    const targetOrder = orders.find(o => o.id === orderId);
-    const resolvedStatus: OrderStatus = (targetOrder?.status === 'completed' || targetOrder?.status === 'cancelled')
-      ? targetOrder.status
-      : 'paid';
-
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, isPaid: true, status: (o.status === 'completed' || o.status === 'cancelled') ? o.status : 'paid', isOfflinePending: !isOnline } : o));
-
-    // 🔒 結帳完成後一併刪除相對應的「預約訂位點餐專屬通道」
-    if (targetOrder) {
-      if (targetOrder.tableNumber && targetOrder.tableNumber !== '外帶' && targetOrder.tableNumber !== 'takeout') {
-        const remainingUnpaid = orders.filter(o => o.tableNumber === targetOrder.tableNumber && o.id !== orderId && !o.isPaid && o.status !== 'cancelled');
-        if (remainingUnpaid.length === 0) {
-          handleUpdateTableStatus(targetOrder.tableNumber, {
-            status: 'cleaning',
-            cleaningStartedAt: new Date().toISOString()
-          });
-        }
-      }
-      const resNo = targetOrder.reservationNo;
-      const matchingRes = (reservations || []).find(r =>
-        (resNo && (r.id === resNo || (r as any).reservationNo === resNo)) ||
-        (r.tableNumber === targetOrder.tableNumber && r.date === targetOrder.reservationDate)
-      );
-      if (matchingRes) {
-        console.log(`[Checkout Cleanup] Deleting reservation ${matchingRes.id} associated with paid order ${orderId}`);
-        handleDeleteReservation(matchingRes.id);
-      }
-    }
-
-    if (!isOnline || orderId.startsWith('offline_temp_')) {
-      addRequestToQueue(`/api/orders/${orderId}/checkout`, 'PUT', checkoutData || { isPaid: true }, description);
-      return;
-    }
-
-    // ONLINE MODE:
-    removeOrderRequestsFromQueue(orderId);
-    recentStatusTransitionsRef.current.set(orderId, {
-      ...recentStatusTransitionsRef.current.get(orderId),
-      isPaid: true,
-      status: resolvedStatus,
-      timestamp: Date.now()
-    });
-
-    try {
-      const res = await apiFetch(`/api/orders/${orderId}/checkout`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(checkoutData || { isPaid: true }),
-      });
-      if (res.ok) {
-        if (!skipRefresh) {
-          await fetchData();
-        }
-      } else {
-        addRequestToQueue(`/api/orders/${orderId}/checkout`, 'PUT', checkoutData || { isPaid: true }, description);
-      }
-    } catch (err) {
-      console.warn('[Offline Fallback] Pay order failed, queued:', err);
-      addRequestToQueue(`/api/orders/${orderId}/checkout`, 'PUT', checkoutData || { isPaid: true }, description);
-    }
-  };
-
-  // 2.4.5 Delete Order
-  const handleDeleteOrder = async (orderId: string) => {
-    const description = `刪除 🥢 訂單 #${orderId.replace('offline_temp_', '離線')}`;
-    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
-    setOrders(prev => prev.filter(o => o.id !== orderId));
-
-    if (!isOnline || orderId.startsWith('offline_temp_')) {
-      addRequestToQueue(`/api/orders/${orderId}`, 'DELETE', {}, description);
-      return { success: true };
-    }
-
-    // ONLINE MODE:
-    removeOrderRequestsFromQueue(orderId);
-    recentStatusTransitionsRef.current.delete(orderId);
-
-    try {
-      const res = await apiFetch(`/api/orders/${orderId}`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-      });
-      if (res.ok) {
-        return { success: true };
-      } else {
-        addRequestToQueue(`/api/orders/${orderId}`, 'DELETE', {}, description);
-        return { success: false };
-      }
-    } catch (err) {
-      console.warn('[Offline Fallback] Delete order failed, queued:', err);
-      addRequestToQueue(`/api/orders/${orderId}`, 'DELETE', {}, description);
-      return { success: true };
-    }
-  };
-
-  // 3. Manager Raw materials Restock
-  const handleRestock = async (id: string, amount: number) => {
-    try {
-      await apiFetch('/api/ingredients/restock', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, amount }),
-      });
-      await fetchData();
-    } catch (err) {
-      console.error('[Sabay Stocking update error]', err);
-    }
-  };
-
-  const handleAddIngredient = async (id: string, name: { zh: string; en?: string }, stock: number, minThreshold: number, unit: string) => {
-    try {
-      const res = await apiFetch('/api/ingredients', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, name, stock, minThreshold, unit }),
-      });
-      if (!res.ok) {
-        const errData = await res.json();
-        return { success: false, error: errData.error || 'Failed to add ingredient' };
-      }
-      await fetchData();
-      return { success: true };
-    } catch (err) {
-      console.error('[Add Ingredient Error]', err);
-      return { success: false, error: 'Network error adding ingredient' };
-    }
-  };
-
-  // 4. Send Promotional Push Notification Coupon
-  const handleSendPromoPush = async (notif: { title: string; message: string; badge: string }) => {
-    try {
-      await apiFetch('/api/send-promo-push', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(notif),
-      });
-      await fetchData();
-    } catch (err) {
-      console.error('[Sabay Push delivery failed]', err);
-    }
-  };
-
-  // 5. Hide / Show out-of-stock items (設為沽清 / 恢復販售)
-  const handleToggleMenuItemAvailability = async (id: string) => {
-    lastMenuReorderTimeRef.current = Date.now() + 15000;
-
-    // Optimistic UI state update so button toggles instantly
-    setMenuItems(prev => prev.map(m => m.id === id ? { ...m, available: !m.available } : m));
-
-    try {
-      const res = await apiFetch('/api/menu/toggle-available', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.item) {
-          setMenuItems(prev => prev.map(m => m.id === id ? { ...m, available: data.item.available } : m));
-        }
-      } else {
-        // Revert on HTTP failure
-        setMenuItems(prev => prev.map(m => m.id === id ? { ...m, available: !m.available } : m));
-      }
-      await fetchData(true, false);
-    } catch (err) {
-      console.error('[Sabay Menu lock toggle error]', err);
-      // Revert on exception
-      setMenuItems(prev => prev.map(m => m.id === id ? { ...m, available: !m.available } : m));
-    }
-  };
-
-  // 5.5 Adjust ingredient stock count manually
-  const handleAdjustIngredientStock = async (ingredientId: string, quantityChanged: number, note: string) => {
-    const description = `調整原料庫存 ID:${ingredientId} (${quantityChanged > 0 ? '+' : ''}${quantityChanged})`;
-    if (!navigator.onLine) {
-      addRequestToQueue('/api/inventory/adjust', 'POST', { ingredientId, quantityChanged, note }, description);
-      setIngredients(prev => prev.map(i => i.id === ingredientId ? { ...i, stock: i.stock + quantityChanged } : i));
-      return;
-    }
-    try {
-      await apiFetch('/api/inventory/adjust', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ingredientId, quantityChanged, note }),
-      });
-      await fetchData();
-    } catch (_err) {
-      addRequestToQueue('/api/inventory/adjust', 'POST', { ingredientId, quantityChanged, note }, description);
-    }
-  };
-
-  // 6. Virtual Printing Tray Cleared
-  const handleClearPrintLogs = async () => {
-    try {
-      await apiFetch('/api/print-logs/clear', { method: 'POST' });
-      await fetchData();
-    } catch (err) {
-      console.error('[Sabay Printer Clear error]', err);
-    }
-  };
-
-  // 7. Add Menu Item (Dishes)
-  const handleAddMenuItem = async (itemData: any) => {
-    lastMenuReorderTimeRef.current = Date.now();
-    try {
-      const res = await apiFetch('/api/menu', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(itemData),
-      });
-      if (res.ok) {
-        await fetchData(true, true);
-      }
-    } catch (err) {
-      console.error('[Sabay Menu Add error]', err);
-    }
-  };
-
-  // 8. Edit Menu Item (Dishes)
-  const handleEditMenuItem = async (id: string, itemData: any) => {
-    lastMenuReorderTimeRef.current = Date.now();
-    try {
-      const res = await apiFetch(`/api/menu/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(itemData),
-      });
-      if (res.ok) {
-        await fetchData(true, true);
-      }
-    } catch (err) {
-      console.error('[Sabay Menu Edit error]', err);
-    }
-  };
-
-  // 8.5 Delete Menu Item
-  const handleDeleteMenuItem = async (id: string) => {
-    lastMenuReorderTimeRef.current = Date.now();
-    try {
-      const res = await apiFetch(`/api/menu/${id}`, {
-        method: 'DELETE',
-      });
-      if (res.ok) {
-        await fetchData(true, true);
-      }
-    } catch (err) {
-      console.error('[Sabay Menu Delete error]', err);
-    }
-  };
-
-  // Category Mutation Handlers
-  const handleAddCategory = async (id: string, name: any, showOnCustomerPage?: boolean) => {
-    lastCategoryReorderTimeRef.current = Date.now();
-    try {
-      const res = await apiFetch('/api/categories', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, name, showOnCustomerPage }),
-      });
-      if (res.ok) {
-        await fetchData(true, true);
-        return { success: true };
-      } else {
-        const data = await res.json();
-        return { success: false, error: data.error || '無法新增類別' };
-      }
-    } catch (err: any) {
-      console.error('[Sabay Category Add error]', err);
-      return { success: false, error: err.message || '連線錯誤' };
-    }
-  };
-
-  const handleEditCategory = async (id: string, name: any, showOnCustomerPage?: boolean) => {
-    lastCategoryReorderTimeRef.current = Date.now();
-    try {
-      const res = await apiFetch(`/api/categories/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, showOnCustomerPage }),
-      });
-      if (res.ok) {
-        await fetchData(true, true);
-        return { success: true };
-      } else {
-        const data = await res.json();
-        return { success: false, error: data.error || '無法編輯類別' };
-      }
-    } catch (err: any) {
-      console.error('[Sabay Category Edit error]', err);
-      return { success: false, error: err.message || '連線錯誤' };
-    }
-  };
-
-  const handleDeleteCategory = async (id: string) => {
-    lastCategoryReorderTimeRef.current = Date.now();
-    try {
-      const res = await apiFetch(`/api/categories/${id}`, {
-        method: 'DELETE',
-      });
-      if (res.ok) {
-        await fetchData(true, true);
-        return { success: true };
-      } else {
-        const data = await res.json();
-        return { success: false, error: data.error || '無法刪除類別' };
-      }
-    } catch (err: any) {
-      console.error('[Sabay Category Delete error]', err);
-      return { success: false, error: err.message || '連線錯誤' };
-    }
-  };
-
-  const handleReorderCategories = async (order: string[]) => {
-    lastCategoryReorderTimeRef.current = Date.now() + 15000;
-    // Optimistic UI state update to prevent consecutive-click race conditions and latency lag
-    const mappedCategories = order
-      .map(id => categories.find(c => c.id === id))
-      .filter((c): c is Category => !!c);
-    setCategories(mappedCategories);
-
-    try {
-      const res = await apiFetch('/api/categories/reorder', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ order }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && Array.isArray(data.categories)) {
-          setCategories(data.categories);
-        }
-        // Fetch remaining components but respect the 15-second reorder lock to prevent instant revert
-        await fetchData(true, false);
-      }
-    } catch (err) {
-      console.error('[Sabay Categories Reorder error]', err);
-    }
-  };
-
-  const handleReorderMenuItems = async (order: string[]) => {
-    lastMenuReorderTimeRef.current = Date.now() + 15000;
-    // Optimistic UI state update to prevent consecutive-click race conditions and latency lag
-    const mappedItems = order
-      .map(id => menuItems.find(m => m.id === id))
-      .filter((m): m is any => !!m);
-    setMenuItems(mappedItems);
-
-    try {
-      const res = await apiFetch('/api/menu/reorder', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ order }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && Array.isArray(data.menu)) {
-          setMenuItems(data.menu);
-        }
-        // Fetch remaining components but respect the 15-second reorder lock to prevent instant revert
-        await fetchData(true, false);
-      }
-    } catch (err) {
-      console.error('[Sabay Menu Reorder error]', err);
-    }
-  };
-
-  const handleToggleServicePause = async (paused: boolean) => {
-    try {
-      const res = await apiFetch('/api/settings/service-pause', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ servicePaused: paused }),
-      });
-      if (res.ok) {
-        await fetchData();
-      }
-    } catch (err) {
-      console.error('[Sabay Service Pause Toggle Error]', err);
-    }
-  };
-
-  // Table Mutation Handlers
-  const handleAddTable = async (id: string, qrCodeUrl?: string, maxCapacity?: number) => {
-    try {
-      const res = await apiFetch('/api/tables', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, qrCodeUrl, maxCapacity }),
-      });
-      if (res.ok) {
-        await fetchData();
-        return { success: true };
-      } else {
-        const data = await res.json();
-        return { success: false, error: data.error || '無法新增桌號' };
-      }
-    } catch (err: any) {
-      console.error('[Add Table error]', err);
-      return { success: false, error: err.message || '連線錯誤' };
-    }
-  };
-
-  const handleEditTable = async (id: string, qrCodeUrl: string, maxCapacity?: number) => {
-    try {
-      const res = await apiFetch(`/api/tables/${encodeURIComponent(id)}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ qrCodeUrl, maxCapacity }),
-      });
-      if (res.ok) {
-        await fetchData();
-        return { success: true };
-      } else {
-        const data = await res.json();
-        return { success: false, error: data.error || '無法編輯桌號 QR CODE' };
-      }
-    } catch (err: any) {
-      console.error('[Edit Table error]', err);
-      return { success: false, error: err.message || '連線錯誤' };
-    }
-  };
-
-  const handleDeleteTable = async (id: string) => {
-    try {
-      const res = await apiFetch(`/api/tables/${encodeURIComponent(id)}`, {
-        method: 'DELETE',
-      });
-      if (res.ok) {
-        await fetchData();
-        return { success: true };
-      } else {
-        const data = await res.json();
-        return { success: false, error: data.error || '無法刪除桌號' };
-      }
-    } catch (err: any) {
-      console.error('[Delete Table error]', err);
-      return { success: false, error: err.message || '連線錯誤' };
-    }
-  };
-
-  const handleUpdateTableStatus = async (id: string, updates: Partial<Omit<TableConfig, 'id' | 'qrCodeUrl'>>) => {
-    const description = `變更 🥢 ${id} 桌狀態 -> ${updates.status || '設定項目'}`;
-    setTables(prev => prev.map(t => t.id === id ? { ...t, ...updates, isOfflinePending: true } : t));
-
-    if (!navigator.onLine) {
-      addRequestToQueue(`/api/tables/${encodeURIComponent(id)}`, 'PUT', updates, description);
-      return { success: true };
-    }
-
-    try {
-      const res = await apiFetch(`/api/tables/${encodeURIComponent(id)}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates),
-      });
-      if (res.ok) {
-        await fetchData();
-        return { success: true };
-      } else {
-        addRequestToQueue(`/api/tables/${encodeURIComponent(id)}`, 'PUT', updates, description);
-        return { success: true };
-      }
-    } catch (err: any) {
-      console.warn('[Offline Fallback] Update Table Status failed, queued:', err);
-      addRequestToQueue(`/api/tables/${encodeURIComponent(id)}`, 'PUT', updates, description);
-      return { success: true };
-    }
-  };
-
-  const handleAddReservation = async (reservation: Omit<Reservation, 'id' | 'createdAt'>) => {
-    const maxThreeMonthsDateStr = (() => {
-      const now = new Date();
-      now.setMonth(now.getMonth() + 3);
-      const yr = now.getFullYear();
-      const mo = String(now.getMonth() + 1).padStart(2, '0');
-      const dy = String(now.getDate()).padStart(2, '0');
-      return `${yr}-${mo}-${dy}`;
-    })();
-
-    if (reservation.date && reservation.date.trim() > maxThreeMonthsDateStr) {
-      return {
-        success: false,
-        error: `預約日期最多只能提前 3 個月 (最晚至 ${maxThreeMonthsDateStr})！`
-      };
-    }
-
-    // 預約時段衝突與桌席容量檢測 (3小時用餐時間，同桌次同日期)
-    const parseMins = (t: string) => {
-      if (!t) return 0;
-      const [h, m] = t.split(':').map(Number);
-      return (h || 0) * 60 + (m || 0);
-    };
-
-    const targetMins = parseMins(reservation.time);
-    const targetDateStr = String(reservation.date).trim();
-    const requestedTables = String(reservation.tableNumber).split(',').map(t => t.trim()).filter(Boolean);
-    const selectedTablesCapacity = (tables || [])
-      .filter(t => requestedTables.includes(t.id))
-      .reduce((sum, t) => sum + (t.maxCapacity || 4), 0);
-    const newGuestCount = Number(reservation.guestCount) || 1;
-
-    if (selectedTablesCapacity > 0 && selectedTablesCapacity < newGuestCount) {
-      return {
-        success: false,
-        error: `指定桌號加總人數上限 (${selectedTablesCapacity}人) 不足：不可低於用餐人數 (${newGuestCount}人)！`
-      };
-    }
-
-    const conflict = (reservations || []).find(r => {
-      if (r.status === 'cancelled' || (r as any).status === 'rejected') return false;
-      if (String(r.date).trim() !== targetDateStr) return false;
-      const rMins = parseMins(r.time);
-      if (Math.abs(rMins - targetMins) >= 180) return false;
-      const rTables = String(r.tableNumber || '').split(',').map(t => t.trim()).filter(Boolean);
-      return requestedTables.some(t => rTables.includes(t));
-    });
-
-    if (conflict) {
-      return {
-        success: false,
-        error: `預約時段衝突：所選桌號【${reservation.tableNumber}】在 ${reservation.date} ${reservation.time} 前後 3 小時內已有預約 (${conflict.time} ${conflict.customerName})，該時段無法重複預約。`
-      };
-    }
-
-    try {
-      const res = await apiFetch('/api/reservations', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(reservation),
-      });
-      if (res.ok) {
-        await fetchData();
-        return { success: true };
-      } else {
-        const data = await res.json();
-        return { success: false, error: data.error || '無法新增預約' };
-      }
-    } catch (err: any) {
-      console.error('[Add Reservation Error]', err);
-      return { success: false, error: err.message || '連線錯誤' };
-    }
-  };
-
-  const handleUpdateReservation = async (id: string, updates: Partial<Reservation>) => {
-    if (updates.date || updates.time || updates.tableNumber || updates.guestCount !== undefined) {
-      const current = (reservations || []).find(r => r.id === id);
-      const targetDate = (updates.date || current?.date || '').trim();
-      const targetTime = (updates.time || current?.time || '').trim();
-      const targetTable = String(updates.tableNumber || current?.tableNumber || '').trim();
-      const targetStatus = updates.status || current?.status;
-      const targetGuestCount = updates.guestCount !== undefined ? Number(updates.guestCount) || 1 : (current?.guestCount || 1);
-
-      if (targetDate && targetTime && targetTable && targetStatus !== 'cancelled' && targetStatus !== 'rejected') {
-        const parseMins = (t: string) => {
-          if (!t) return 0;
-          const [h, m] = t.split(':').map(Number);
-          return (h || 0) * 60 + (m || 0);
-        };
-        const targetMins = parseMins(targetTime);
-        const requestedTables = targetTable.split(',').map(t => t.trim()).filter(Boolean);
-        const selectedTablesCapacity = (tables || [])
-          .filter(t => requestedTables.includes(t.id))
-          .reduce((sum, t) => sum + (t.maxCapacity || 4), 0);
-
-        if (selectedTablesCapacity > 0 && selectedTablesCapacity < targetGuestCount) {
-          return {
-            success: false,
-            error: `指定桌號加總人數上限 (${selectedTablesCapacity}人) 不足：不可低於用餐人數 (${targetGuestCount}人)！`
-          };
-        }
-
-        const conflict = (reservations || []).find(r => {
-          if (r.id === id) return false;
-          if (r.status === 'cancelled' || (r as any).status === 'rejected') return false;
-          if (String(r.date).trim() !== targetDate) return false;
-          const rMins = parseMins(r.time);
-          if (Math.abs(rMins - targetMins) >= 180) return false;
-          const rTables = String(r.tableNumber || '').split(',').map(t => t.trim()).filter(Boolean);
-          return requestedTables.some(t => rTables.includes(t));
-        });
-
-        if (conflict) {
-          return {
-            success: false,
-            error: `預約時段衝突：所選桌號【${targetTable}】在 ${targetDate} ${targetTime} 前後 3 小時內已有預約 (${conflict.time} ${conflict.customerName})，該時段無法重複預約。`
-          };
-        }
-      }
-    }
-
-    try {
-      const res = await apiFetch(`/api/reservations/${encodeURIComponent(id)}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates),
-      });
-      if (res.ok) {
-        await fetchData();
-        return { success: true };
-      } else {
-        const data = await res.json();
-        return { success: false, error: data.error || '無法更新預約狀態' };
-      }
-    } catch (err: any) {
-      console.error('[Update Reservation Error]', err);
-      return { success: false, error: err.message || '連線錯誤' };
-    }
-  };
-
-  // ⏱️ Auto-check mechanism: Automatically mark pending reservations within 1 hour as "upcoming"
-  useEffect(() => {
-    if (!reservations || reservations.length === 0) return;
-    const checkUpcomingInterval = setInterval(() => {
-      const now = new Date();
-      reservations.forEach(res => {
-        if (res.status === 'pending') {
-          const [year, month, day] = res.date.split('-').map(Number);
-          const [hour, minute] = res.time.split(':').map(Number);
-          if (!isNaN(year) && !isNaN(month) && !isNaN(day) && !isNaN(hour) && !isNaN(minute)) {
-            const resDateTime = new Date(year, month - 1, day, hour, minute);
-            const diffMinutes = (resDateTime.getTime() - now.getTime()) / (1000 * 60);
-            if (diffMinutes > -120 && diffMinutes <= 60) {
-              console.log(`[Client Auto-Check] Reservation ${res.id} (${res.customerName}) is within 1 hour, marking as upcoming.`);
-              handleUpdateReservation(res.id, { status: 'upcoming' });
-            }
-          }
-        }
-      });
-    }, 10000);
-    return () => clearInterval(checkUpcomingInterval);
-  }, [reservations]);
-
-  const handleDeleteReservation = async (id: string) => {
-    try {
-      const res = await apiFetch(`/api/reservations/${encodeURIComponent(id)}`, {
-        method: 'DELETE',
-      });
-      if (res.ok) {
-        await fetchData();
-        return { success: true };
-      } else {
-        const data = await res.json();
-        return { success: false, error: data.error || '無法刪除預約' };
-      }
-    } catch (err: any) {
-      console.error('[Delete Reservation Error]', err);
-      return { success: false, error: err.message || '連線錯誤' };
-    }
-  };
-
-  const handleSavePromoComboConfig = async (newConfig: any) => {
-    try {
-      const res = await apiFetch('/api/promo-combo', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newConfig)
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.config) {
-          setPromoCombo(data.config);
-          return { success: true };
-        }
-      }
-      return { success: false, error: '無法更新優惠套餐設定' };
-    } catch (e: any) {
-      console.error('[Save Promo Combo Config Error]', e);
-      return { success: false, error: e.message || '連線錯誤' };
-    }
-  };
-
-  const handleUpdateMinSpend = async (newVal: number) => {
-    try {
-      const res = await apiFetch('/api/settings/min-spend', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ minSpend: newVal }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.minSpend !== undefined) {
-          setMinSpend(data.minSpend);
-          return { success: true };
-        }
-      }
-      return { success: false, error: '無法更新低消設定' };
-    } catch (e: any) {
-      console.error('[Update Min Spend Error]', e);
-      return { success: false, error: e.message || '連線錯誤' };
-    }
-  };
-
-  const handleUpdateOperatingHours = async (slots: OperatingHourSlot[], restDays?: string[]) => {
-    try {
-      const res = await apiFetch('/api/settings/operating-hours', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slots, restDays }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.slots) {
-          setOperatingHours(data.slots);
-          if (data.restDays) {
-            setRestDays(data.restDays);
-          }
-          setIsOpen(data.isOpen ?? true);
-          return { success: true };
-        }
-      }
-      return { success: false, error: '無法更新營業時間設定' };
-    } catch (e: any) {
-      console.error('[Update Operating Hours Error]', e);
-      return { success: false, error: e.message || '連線錯誤' };
-    }
-  };
-
-  const handleUpdateCustomerNotice = async (notice: string) => {
-    try {
-      const res = await apiFetch('/api/settings/customer-notice', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ notice }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.notice !== undefined) {
-          setCustomerNotice(data.notice);
-          return { success: true };
-        }
-      }
-      return { success: false, error: '無法更新顧客注意事項' };
-    } catch (e: any) {
-      console.error('[Update Customer Notice Error]', e);
-      return { success: false, error: e.message || '連線錯誤' };
-    }
-  };
-
-  const handleUpdatePopularItemIds = async (ids: string[]) => {
-    try {
-      const res = await apiFetch('/api/settings/popular-item-ids', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ popularItemIds: ids }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.popularItemIds) {
-          setPopularItemIds(data.popularItemIds);
-          return { success: true };
-        }
-      }
-      return { success: false, error: '無法更新今日熱銷品項' };
-    } catch (e: any) {
-      console.error('[Update Popular Item Ids Error]', e);
-      return { success: false, error: e.message || '連線錯誤' };
-    }
-  };
-
-  const handleUpdatePrinterIp = async (ip: string) => {
-    try {
-      const res = await apiFetch('/api/printer/config', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ip }),
-      });
-      if (res.ok) {
-        const d = await res.json();
-        setPrinterIp(d.ip);
-        return { success: true };
-      } else {
-        const d = await res.json();
-        return { success: false, error: d.error || '無法更新印表機 IP' };
-      }
-    } catch (err: any) {
-      console.error('[Update printer IP error]', err);
-      return { success: false, error: err.message || '連線錯誤' };
-    }
-  };
-
-  const handlePrintTestPage = async (
-    target?: 'kitchen' | 'bill' | 'all',
-    customSettings?: { kitchen?: any; bill?: any }
-  ) => {
-    try {
-      const targetVal = typeof target === 'string' ? target : 'all';
-      const isKitchen = targetVal === 'kitchen' || targetVal === 'all';
-      const isBill = targetVal === 'bill' || targetVal === 'all';
-
-      const kitchenConfig = customSettings?.kitchen || {};
-      const billConfig = customSettings?.bill || {};
-
-      const kitchenIp = kitchenConfig.ip || printerIp || '192.168.123.100';
-      const kitchenPort = kitchenConfig.usbPort || 'USB001';
-      const kitchenConn = kitchenConfig.connectionType || 'IP';
-
-      const billPort = normalizePort(billConfig.usbPort || 'LPT1:');
-      const billIp = billConfig.ip || '192.168.1.102';
-      const billConn = billConfig.connectionType || 'LPT';
-
-      const bridgeSuccesses: string[] = [];
-      const bridgeWarnings: string[] = [];
-
-      // Step 1: Direct Local Check-in POS Bridge Print (http://127.0.0.1:8060)
-      if (typeof window !== 'undefined') {
-        const activeBridgeUrl = localStorage.getItem('pos-bridge-url') || DEFAULT_POS_BRIDGE_URL;
-
-        if (isKitchen) {
-          try {
-            const kSampleText = [
-              '================================',
-              '    SABAY BBQ KDS 測試頁',
-              '================================',
-              `類別: 廚房工作票 (${kitchenConn === 'IP' ? `IP ${kitchenIp}` : `Port ${kitchenPort}`})`,
-              `時間: ${new Date().toLocaleString()}`,
-              '品項: 1. 泰式烤豬肉串 x 2 (小辣)',
-              '      2. 泰式冬蔭功海鮮湯 x 1',
-              '================================',
-              '狀態: POS 橋接器通訊正常',
-              '================================\n\n'
-            ].join('\n');
-
-            const kRes = await printViaBridge({
-              text: kSampleText,
-              ip: kitchenConn === 'IP' ? kitchenIp : undefined,
-              port: kitchenConn === 'IP' ? undefined : kitchenPort,
-              connectionType: kitchenConn,
-              target: 'kitchen',
-              autoOpenDrawer: false
-            }, activeBridgeUrl);
-
-            if (kRes.success) {
-              bridgeSuccesses.push(`🍳 廚房測試頁已成功送出 (${kitchenConn === 'IP' ? kitchenIp : kitchenPort})`);
-            } else {
-              bridgeWarnings.push(`🍳 廚房橋接: ${kRes.message}`);
-            }
-          } catch (e: any) {
-            bridgeWarnings.push(`🍳 廚房連線: ${e?.message || e}`);
-          }
-        }
-
-        if (isBill) {
-          try {
-            const bSampleText = [
-              '================================',
-              '    SABAY BBQ 前台收銀測試頁',
-              '================================',
-              `類別: 前台帳單與收銀明細`,
-              `埠口: ${billConn === 'IP' ? `IP ${billIp}` : billPort}`,
-              `時間: ${new Date().toLocaleString()}`,
-              `型態: ${billConn} (硬體連動)`,
-              '================================',
-              '狀態: POS 橋接器與錢箱驅動就緒',
-              '================================\n\n'
-            ].join('\n');
-
-            const bRes = await printViaBridge({
-              text: bSampleText,
-              ip: billConn === 'IP' ? billIp : undefined,
-              port: billConn === 'IP' ? undefined : billPort,
-              connectionType: billConn,
-              target: 'bill',
-              autoOpenDrawer: true
-            }, activeBridgeUrl);
-
-            if (bRes.success) {
-              bridgeSuccesses.push(`🧾 前台測試頁已成功送出 (${billConn === 'IP' ? billIp : billPort})`);
-            } else {
-              bridgeWarnings.push(`🧾 前台橋接: ${bRes.message}`);
-            }
-          } catch (e: any) {
-            bridgeWarnings.push(`🧾 前台連線: ${e?.message || e}`);
-          }
-        }
-      }
-
-      // If at least one bridge call succeeded, return success and asynchronously record logs
-      if (bridgeSuccesses.length > 0) {
-        apiFetch('/api/printer/test', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            target: targetVal,
-            settings: { kitchen: kitchenConfig, bill: billConfig },
-            bridgeSuccess: true
-          }),
-        }).catch(() => {});
-
-        return {
-          success: true,
-          message: bridgeSuccesses.join('\n')
-        };
-      }
-
-      // Step 2: Fallback to Server API dispatch
-      let data: any = null;
-      let res: Response | null = null;
-      try {
-        res = await apiFetch('/api/printer/test', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            target: targetVal,
-            settings: { kitchen: kitchenConfig, bill: billConfig }
-          }),
-        });
-        if (res.ok) {
-          data = await res.json();
-        }
-      } catch (err: any) {
-        console.warn('[Server API test page warning]:', err);
-      }
-
-      if (data && data.success) {
-        await fetchData();
-        return {
-          success: true,
-          message: data.message || '測試頁指令已成功送出！'
-        };
-      }
-
-      const serverErr = data?.error || (res ? `HTTP ${res.status}` : null);
-      const combinedErrMsg = [
-        ...bridgeWarnings,
-        serverErr ? `伺服器回應: ${serverErr}` : '本機 Check-in 橋接器未啟動 (請確認 http://127.0.0.1:8060)'
-      ].filter(Boolean).join('\n');
-
-      return {
-        success: false,
-        error: combinedErrMsg || '列印測試頁失敗，請確認印表機與本機 POS 橋接器狀態'
-      };
-    } catch (err: any) {
-      console.error('[Print test page error]', err);
-      return { success: false, error: err?.message || '連線錯誤' };
-    }
-  };
-
-  // Clear a single push notifying coupon on click
-  const handleMarkNotificationRead = (notifId: string) => {
-    setPushNotifications(pushNotifications.filter((n) => n.id !== notifId));
-  };
-
+  }, [setActiveTab, navigateTo]);
+
+  // Context consumers
+  const {
+    menuItems,
+    categories,
+    tables,
+    ingredients,
+    reservations,
+    minSpend,
+    promoCombo,
+    operatingHours,
+    isOpen,
+    restDays,
+    customerNotice,
+    servicePaused,
+    popularItemIds,
+    memberPointsRatio,
+    memberRewards,
+    analytics,
+    loading,
+    fetchData,
+    handleAddMenuItem,
+    handleEditMenuItem,
+    handleDeleteMenuItem,
+    handleToggleMenuItemAvailability,
+    handleReorderMenuItems,
+    handleAddCategory,
+    handleEditCategory,
+    handleDeleteCategory,
+    handleReorderCategories,
+    handleAddTable,
+    handleEditTable,
+    handleDeleteTable,
+    handleUpdateTableStatus,
+    handleAddReservation,
+    handleUpdateReservation,
+    handleDeleteReservation,
+    handleRestock,
+    handleAddIngredient,
+    handleAdjustIngredientStock,
+    handleToggleServicePause,
+    handleSavePromoComboConfig,
+    handleUpdateMinSpend,
+    handleUpdateOperatingHours,
+    handleUpdateCustomerNotice,
+    handleUpdatePopularItemIds,
+  } = useRestaurantData();
+
+  const {
+    orders,
+    pushNotifications,
+    offlineQueue,
+    isSyncing,
+    syncProgressMsg,
+    isNetworkOnline,
+    handlePlaceOrder,
+    handleUpdateOrderStatus,
+    handleToggleOrderItemComplete,
+    handleUpdateTableNumber,
+    handleUpdateQuickNotes,
+    handleToggleOrderFlag,
+    handleUpdateOrderItems,
+    handlePayOrder,
+    handleDeleteOrder,
+    handleForceSync,
+    handleSendPromoPush,
+    handleMarkNotificationRead,
+  } = useOrderData();
+
+  const {
+    printerIp,
+    printLogs,
+    handleUpdatePrinterIp,
+    handleClearPrintLogs,
+    handlePrintTestPage,
+  } = usePrinterData();
 
   return (
     <div className="min-h-screen bg-[#0F0F0F] text-white flex flex-col font-sans">
@@ -2061,7 +205,7 @@ export default function App() {
                       ? '沙貝泰式燒烤 經營管理中心' 
                       : (lang === 'zh' 
                           ? '沙貝燒烤'
-                          : TRANSLATIONS.sabayBBQ[lang])}
+                          : (TRANSLATIONS.sabayBBQ?.[lang] || 'Sabay BBQ'))}
                   </span>
                 </h1>
                 <span className="text-[10px] text-white/50 hidden sm:block font-sans tracking-wide truncate">
@@ -2187,7 +331,7 @@ export default function App() {
               ) : null}
             </div>
 
-            {/* Loyalty LINE login & Multilingual flags selectors */}
+            {/* Language Selector */}
             <div className="flex items-center space-x-3">
               <LanguageSelector currentLang={lang} onLanguageChange={handleLanguageChange} />
             </div>
@@ -2195,7 +339,7 @@ export default function App() {
         </div>
       </nav>
 
-      {/* Interactive Collapsible Contact Banner (Middle Area between First Column/Navbar and Second Column/Workspace) */}
+      {/* Contact Info Reveal Bar */}
       {!isAtStaffPath && (
         <div className="bg-[#121212] border-b border-white/5 py-1.5 px-4" id="contact-info-reveal-bar">
           <div className="max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5">
@@ -2247,7 +391,7 @@ export default function App() {
         </div>
       )}
 
-      {/* Mobile Sticky Tab selectors, only shown to logged-in staff on staff login path */}
+      {/* Mobile Sticky Tab selectors */}
       {isAtStaffPath && isStaff && (
         <div className="lg:hidden bg-[#121212] border-b border-white/10 p-2 flex justify-around sticky top-18 z-30 shadow-md" id="mobile-tab-selector">
           <button
@@ -2443,141 +587,146 @@ export default function App() {
                   本頁面為管理階層專屬之獨立防護選單。已與顧客共用選單安全防禦硬化，防止任何未授權之側錄、入侵或探測。
                 </p>
               </div>
-              <Suspense fallback={<ViewLoadingFallback />}>
-                <StaffLoginGate
-                  onLoginSuccess={() => {
-                    setIsStaff(true);
-                    setActiveTab('admin');
-                  }}
-                  onCancel={() => {
-                    navigateTo('/');
-                  }}
-                />
-              </Suspense>
+              <ErrorBoundary>
+                <Suspense fallback={<ViewLoadingFallback />}>
+                  <StaffLoginGate
+                    onLoginSuccess={() => {
+                      setIsStaff(true);
+                      setActiveTab('admin');
+                    }}
+                    onCancel={() => {
+                      navigateTo('/');
+                    }}
+                  />
+                </Suspense>
+              </ErrorBoundary>
             </div>
           ) : (
             <div>
-              <Suspense fallback={<ViewLoadingFallback />}>
-                {activeTab === 'kitchen' ? (
-                  <KitchenDisplaySystem
-                    currentLang={lang}
-                    orders={orders}
-                    onUpdateOrderStatus={handleUpdateOrderStatus}
-                    printLogs={printLogs}
-                    onClearPrintLogs={handleClearPrintLogs}
-                    printerIp={printerIp}
-                    onUpdatePrinterIp={handleUpdatePrinterIp}
-                    onPrintTestPage={handlePrintTestPage}
-                    onUpdateTableNumber={handleUpdateTableNumber}
-                    onUpdateQuickNotes={handleUpdateQuickNotes}
-                    onToggleOrderFlag={handleToggleOrderFlag}
-                    tables={tables}
-                    menuItems={menuItems}
-                    categories={categories}
-                    onToggleMenuItemAvailability={handleToggleMenuItemAvailability}
-                    ingredients={ingredients}
-                    onAdjustIngredientStock={handleAdjustIngredientStock}
-                    operatingHours={operatingHours}
-                    servicePaused={servicePaused}
-                    onToggleServicePause={handleToggleServicePause}
-                    onToggleOrderItemComplete={handleToggleOrderItemComplete}
-                    reservations={reservations}
-                  />
-                ) : (
-                  <ManagerDashboard
-                    currentLang={lang}
-                    analytics={analytics}
-                    ingredients={ingredients}
-                    orders={orders}
-                    onUpdateOrderStatus={handleUpdateOrderStatus}
-                    onRestock={handleRestock}
-
-                    onToggleMenuItemAvailability={handleToggleMenuItemAvailability}
-                    onSendPromoPush={handleSendPromoPush}
-                    menuItems={menuItems}
-                    onAddMenuItem={handleAddMenuItem}
-                    onEditMenuItem={handleEditMenuItem}
-                    onDeleteMenuItem={handleDeleteMenuItem}
-                    categories={categories}
-                    onAddCategory={handleAddCategory}
-                    onEditCategory={handleEditCategory}
-                    onDeleteCategory={handleDeleteCategory}
-                    onReorderCategories={handleReorderCategories}
-                    onReorderMenuItems={handleReorderMenuItems}
-                    tables={tables}
-                    onAddTable={handleAddTable}
-                    onEditTable={handleEditTable}
-                    onDeleteTable={handleDeleteTable}
-                    onUpdateTableStatus={handleUpdateTableStatus}
-                    reservations={reservations}
-                    onAddReservation={handleAddReservation}
-                    onEditReservation={handleUpdateReservation}
-                    onDeleteReservation={handleDeleteReservation}
-                    onPayOrder={handlePayOrder}
-                    onPlaceOrder={handlePlaceOrder}
-                    onDeleteOrder={handleDeleteOrder}
-                    onUpdateTableNumber={handleUpdateTableNumber}
-                    onUpdateOrderItems={handleUpdateOrderItems}
-                    defaultSubTab={adminSubTab || (activeTab === 'cashier' ? 'cashier' : 'stats')}
-                    onSubTabChange={(subTab) => setAdminSubTab(subTab)}
-                    minSpend={minSpend}
-                    onUpdateMinSpend={handleUpdateMinSpend}
-                    promoCombo={promoCombo}
-                    onSavePromoCombo={handleSavePromoComboConfig}
-                    operatingHours={operatingHours}
-                    restDays={restDays}
-                    isOpen={isOpen}
-                    onUpdateOperatingHours={handleUpdateOperatingHours}
-                    customerNotice={customerNotice}
-                    onUpdateCustomerNotice={handleUpdateCustomerNotice}
-                    staffPin={staffPin}
-                    popularItemIds={popularItemIds}
-                    onUpdatePopularItemIds={handleUpdatePopularItemIds}
-                    printerIp={printerIp}
-                    onPrintTestPage={handlePrintTestPage}
-                    onAddIngredient={handleAddIngredient}
-                    servicePaused={servicePaused}
-                    onToggleServicePause={handleToggleServicePause}
-                    memberPointsRatio={memberPointsRatio}
-                    memberRewards={memberRewards}
-                    onUpdateMemberConfig={fetchData}
-                  />
-                )}
-              </Suspense>
+              <ErrorBoundary>
+                <Suspense fallback={<ViewLoadingFallback />}>
+                  {activeTab === 'kitchen' ? (
+                    <KitchenDisplaySystem
+                      currentLang={lang}
+                      orders={orders}
+                      onUpdateOrderStatus={handleUpdateOrderStatus}
+                      printLogs={printLogs}
+                      onClearPrintLogs={handleClearPrintLogs}
+                      printerIp={printerIp}
+                      onUpdatePrinterIp={handleUpdatePrinterIp}
+                      onPrintTestPage={handlePrintTestPage}
+                      onUpdateTableNumber={handleUpdateTableNumber}
+                      onUpdateQuickNotes={handleUpdateQuickNotes}
+                      onToggleOrderFlag={handleToggleOrderFlag}
+                      tables={tables}
+                      menuItems={menuItems}
+                      categories={categories}
+                      onToggleMenuItemAvailability={handleToggleMenuItemAvailability}
+                      ingredients={ingredients}
+                      onAdjustIngredientStock={handleAdjustIngredientStock}
+                      operatingHours={operatingHours}
+                      servicePaused={servicePaused}
+                      onToggleServicePause={handleToggleServicePause}
+                      onToggleOrderItemComplete={handleToggleOrderItemComplete}
+                      reservations={reservations}
+                    />
+                  ) : (
+                    <ManagerDashboard
+                      currentLang={lang}
+                      analytics={analytics}
+                      ingredients={ingredients}
+                      orders={orders}
+                      onUpdateOrderStatus={handleUpdateOrderStatus}
+                      onRestock={handleRestock}
+                      onToggleMenuItemAvailability={handleToggleMenuItemAvailability}
+                      onSendPromoPush={handleSendPromoPush}
+                      menuItems={menuItems}
+                      onAddMenuItem={handleAddMenuItem}
+                      onEditMenuItem={handleEditMenuItem}
+                      onDeleteMenuItem={handleDeleteMenuItem}
+                      categories={categories}
+                      onAddCategory={handleAddCategory}
+                      onEditCategory={handleEditCategory}
+                      onDeleteCategory={handleDeleteCategory}
+                      onReorderCategories={handleReorderCategories}
+                      onReorderMenuItems={handleReorderMenuItems}
+                      tables={tables}
+                      onAddTable={handleAddTable}
+                      onEditTable={handleEditTable}
+                      onDeleteTable={handleDeleteTable}
+                      onUpdateTableStatus={handleUpdateTableStatus}
+                      reservations={reservations}
+                      onAddReservation={handleAddReservation}
+                      onEditReservation={handleUpdateReservation}
+                      onDeleteReservation={handleDeleteReservation}
+                      onPayOrder={handlePayOrder}
+                      onPlaceOrder={handlePlaceOrder}
+                      onDeleteOrder={handleDeleteOrder}
+                      onUpdateTableNumber={handleUpdateTableNumber}
+                      onUpdateOrderItems={handleUpdateOrderItems}
+                      defaultSubTab={adminSubTab || (activeTab === 'cashier' ? 'cashier' : 'stats')}
+                      onSubTabChange={(subTab) => setAdminSubTab(subTab)}
+                      minSpend={minSpend}
+                      onUpdateMinSpend={handleUpdateMinSpend}
+                      promoCombo={promoCombo}
+                      onSavePromoCombo={handleSavePromoComboConfig}
+                      operatingHours={operatingHours}
+                      restDays={restDays}
+                      isOpen={isOpen}
+                      onUpdateOperatingHours={handleUpdateOperatingHours}
+                      customerNotice={customerNotice}
+                      onUpdateCustomerNotice={handleUpdateCustomerNotice}
+                      staffPin={staffPin}
+                      popularItemIds={popularItemIds}
+                      onUpdatePopularItemIds={handleUpdatePopularItemIds}
+                      printerIp={printerIp}
+                      onPrintTestPage={handlePrintTestPage}
+                      onAddIngredient={handleAddIngredient}
+                      servicePaused={servicePaused}
+                      onToggleServicePause={handleToggleServicePause}
+                      memberPointsRatio={memberPointsRatio}
+                      memberRewards={memberRewards}
+                      onUpdateMemberConfig={fetchData}
+                    />
+                  )}
+                </Suspense>
+              </ErrorBoundary>
             </div>
           )
         ) : (
           <div>
-            <Suspense fallback={<ViewLoadingFallback />}>
-              <CustomerOrderView
-                currentLang={lang}
-                menuItems={menuItems}
-                categories={categories}
-                tables={tables}
-                reservations={reservations}
-                onAddReservation={handleAddReservation}
-                onPlaceOrder={handlePlaceOrder}
-                activeOrders={orders}
-                pushNotifications={pushNotifications}
-                onMarkNotificationRead={handleMarkNotificationRead}
-                inventoryWarnings={analytics.stockWarnings}
-                minSpend={minSpend}
-                isOpen={isOpen}
-                customerNotice={customerNotice}
-                operatingHours={operatingHours}
-                restDays={restDays}
-                promoCombo={promoCombo}
-                ingredients={ingredients}
-                onToggleMenuItemAvailability={handleToggleMenuItemAvailability}
-                onAdjustIngredientStock={handleAdjustIngredientStock}
-                popularItemIds={popularItemIds}
-                servicePaused={servicePaused}
-                memberPointsRatio={memberPointsRatio}
-                memberRewards={memberRewards}
-                autoOpenReservationModal={isReserveRoute}
-                isOrderRoute={isOrderRoute}
-              />
-            </Suspense>
+            <ErrorBoundary>
+              <Suspense fallback={<ViewLoadingFallback />}>
+                <CustomerOrderView
+                  currentLang={lang}
+                  menuItems={menuItems}
+                  categories={categories}
+                  tables={tables}
+                  reservations={reservations}
+                  onAddReservation={handleAddReservation}
+                  onPlaceOrder={handlePlaceOrder}
+                  activeOrders={orders}
+                  pushNotifications={pushNotifications}
+                  onMarkNotificationRead={handleMarkNotificationRead}
+                  inventoryWarnings={analytics.stockWarnings}
+                  minSpend={minSpend}
+                  isOpen={isOpen}
+                  customerNotice={customerNotice}
+                  operatingHours={operatingHours}
+                  restDays={restDays}
+                  promoCombo={promoCombo}
+                  ingredients={ingredients}
+                  onToggleMenuItemAvailability={handleToggleMenuItemAvailability}
+                  onAdjustIngredientStock={handleAdjustIngredientStock}
+                  popularItemIds={popularItemIds}
+                  servicePaused={servicePaused}
+                  memberPointsRatio={memberPointsRatio}
+                  memberRewards={memberRewards}
+                  autoOpenReservationModal={isReserveRoute}
+                  isOrderRoute={isOrderRoute}
+                />
+              </Suspense>
+            </ErrorBoundary>
           </div>
         )}
       </main>
@@ -2597,19 +746,19 @@ export default function App() {
             </a>
           </span>
         </p>
-         {isAtStaffPath && (
-           <div className="flex items-center justify-center space-x-4 pt-1">
-             <button
-               type="button"
-               id="footer-customer-portal-link"
-               onClick={() => navigateTo('/')}
-               className="text-[#E5B453]/30 hover:text-[#E5B453] text-[9px] font-mono tracking-widest uppercase cursor-pointer transition py-0.5 px-1 rounded flex items-center space-x-1"
-             >
-               <Smartphone size={11} />
-               <span>Customer View</span>
-             </button>
-           </div>
-         )}
+        {isAtStaffPath && (
+          <div className="flex items-center justify-center space-x-4 pt-1">
+            <button
+              type="button"
+              id="footer-customer-portal-link"
+              onClick={() => navigateTo('/')}
+              className="text-[#E5B453]/30 hover:text-[#E5B453] text-[9px] font-mono tracking-widest uppercase cursor-pointer transition py-0.5 px-1 rounded flex items-center space-x-1"
+            >
+              <Smartphone size={11} />
+              <span>Customer View</span>
+            </button>
+          </div>
+        )}
         <div className="text-[9px] text-[#E5B453]/20 italic font-mono uppercase tracking-widest pt-1 flex items-center justify-center">
           <span>A.S.R. Cloud Engine v4.2 // Secured Connection Terminal</span>
           <button
@@ -2626,5 +775,91 @@ export default function App() {
         </div>
       </footer>
     </div>
+  );
+}
+
+function AppWithProviders({
+  activeTab,
+  setActiveTab,
+  currentPath,
+  navigateTo,
+}: {
+  activeTab: 'customer' | 'kitchen' | 'admin' | 'cashier';
+  setActiveTab: React.Dispatch<React.SetStateAction<'customer' | 'kitchen' | 'admin' | 'cashier'>>;
+  currentPath: string;
+  navigateTo: (path: string) => void;
+}) {
+  return (
+    <RestaurantDataProvider activeTab={activeTab}>
+      <OrderDataConsumerWrapper
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        currentPath={currentPath}
+        navigateTo={navigateTo}
+      />
+    </RestaurantDataProvider>
+  );
+}
+
+function OrderDataConsumerWrapper({
+  activeTab,
+  setActiveTab,
+  currentPath,
+  navigateTo,
+}: {
+  activeTab: 'customer' | 'kitchen' | 'admin' | 'cashier';
+  setActiveTab: React.Dispatch<React.SetStateAction<'customer' | 'kitchen' | 'admin' | 'cashier'>>;
+  currentPath: string;
+  navigateTo: (path: string) => void;
+}) {
+  const { tables, setTables, reservations, handleDeleteReservation, handleUpdateTableStatus, fetchData } = useRestaurantData();
+
+  return (
+    <OrderDataProvider
+      activeTab={activeTab}
+      currentPath={currentPath}
+      tables={tables}
+      setTables={setTables}
+      reservations={reservations}
+      handleDeleteReservation={handleDeleteReservation}
+      handleUpdateTableStatus={handleUpdateTableStatus}
+      onRefreshData={fetchData}
+    >
+      <PrinterDataProvider activeTab={activeTab}>
+        <AppContent
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          currentPath={currentPath}
+          navigateTo={navigateTo}
+        />
+      </PrinterDataProvider>
+    </OrderDataProvider>
+  );
+}
+
+export default function App() {
+  const [activeTab, setActiveTab] = useState<'customer' | 'kitchen' | 'admin' | 'cashier'>('customer');
+  const [currentPath, setCurrentPath] = useState<string>(typeof window !== 'undefined' ? window.location.pathname : '/');
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setCurrentPath(window.location.pathname);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  const navigateTo = (path: string) => {
+    window.history.pushState({}, '', path);
+    setCurrentPath(path);
+  };
+
+  return (
+    <AppWithProviders
+      activeTab={activeTab}
+      setActiveTab={setActiveTab}
+      currentPath={currentPath}
+      navigateTo={navigateTo}
+    />
   );
 }

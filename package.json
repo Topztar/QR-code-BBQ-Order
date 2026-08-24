@@ -8,18 +8,26 @@
     "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
     "start": "node dist/server.cjs",
     "clean": "rm -rf dist server.js",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test": "vitest run",
+    "audit:security": "node scripts/run_security_audit.cjs",
+    "audit:perf": "node scripts/run_perf_audit.cjs",
+    "audit:cost": "node scripts/run_cost_audit.cjs",
+    "audit:all": "node scripts/run_all_checks.cjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/compression": "^1.8.1",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
     "@typescript-eslint/eslint-plugin": "^8.65.0",
     "@typescript-eslint/parser": "^8.65.0",
     "eslint": "^10.7.0",
     "eslint-plugin-unused-imports": "^4.4.1",
     "firebase-tools": "^13.12.0",
     "globals": "^17.9.0",
-    "vite-plugin-compression": "^0.5.1"
+    "vite-plugin-compression": "^0.5.1",
+    "vitest": "^4.1.11"
   },
   "dependencies": {
     "@google-cloud/storage": "^7.21.0",

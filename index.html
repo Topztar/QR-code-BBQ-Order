@@ -16,6 +16,7 @@
     <link rel="dns-prefetch" href="https://images.unsplash.com" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Outfit:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" />
     
     <title>沙貝燒烤 SABAY BBQ | 線上預約訂位與點餐系統 Online Reservation & Order</title>
     <meta name="description" content="沙貝泰式燒烤 SABAY BBQ 官方線上預約訂位與點餐系統。直通櫃檯客席保留，提供泰式串燒、泰式海鮮與特色熱炒線上預訂。" />
@@ -88,14 +89,17 @@
     }
     </script>
     <script>
-      // Global error listener to automatically reload with cache-busting if a script/chunk fails to load
+      // Global error listener to automatically reload with cache-busting ONLY if a JS script or critical stylesheet fails
       window.addEventListener('error', function(e) {
-        if (e.target && (e.target.tagName === 'SCRIPT' || e.target.tagName === 'LINK')) {
-          console.warn('Resource load failed:', e.target.src || e.target.href);
-          const url = new URL(window.location.href);
-          if (!url.searchParams.has('_cb')) {
-            url.searchParams.set('_cb', Date.now().toString());
-            window.location.replace(url.toString());
+        if (e.target && (e.target.tagName === 'SCRIPT' || (e.target.tagName === 'LINK' && e.target.rel === 'stylesheet'))) {
+          const src = e.target.src || e.target.href;
+          if (src && !src.includes('analytics') && !src.includes('googletagmanager')) {
+            console.warn('[Sabay] Critical resource load failed:', src);
+            const url = new URL(window.location.href);
+            if (!url.searchParams.has('_cb')) {
+              url.searchParams.set('_cb', Date.now().toString());
+              window.location.replace(url.toString());
+            }
           }
         }
       }, true);

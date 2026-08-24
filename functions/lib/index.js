@@ -61,19 +61,72 @@ const PIN_SALT = process.env.PIN_SALT || 'sabay-bbq-secure-salt-2026';
 function hashPin(pin) {
     return crypto.createHash('sha256').update(`${String(pin).trim()}:${PIN_SALT}`).digest('hex');
 }
+let cachedAuthCredentials = null;
+const AUTH_CACHE_TTL_MS = 30 * 1000;
+async function getStoredActiveToken() {
+    const now = Date.now();
+    if (cachedAuthCredentials && (now - cachedAuthCredentials.cachedAt < AUTH_CACHE_TTL_MS)) {
+        return { token: cachedAuthCredentials.token, expiresAt: cachedAuthCredentials.expiresAt };
+    }
+    const credsDoc = await db.collection('secrets').doc('credentials').get();
+    const data = credsDoc.data();
+    if (!data?.activeSessionToken)
+        return null;
+    const token = data.activeSessionToken;
+    const expiresAt = data.tokenExpiresAt ? (typeof data.tokenExpiresAt === 'number' ? data.tokenExpiresAt : new Date(data.tokenExpiresAt).getTime()) : (now + 8 * 60 * 60 * 1000);
+    cachedAuthCredentials = { token, expiresAt, cachedAt: now };
+    return { token, expiresAt };
+}
+function invalidateAuthCache() {
+    cachedAuthCredentials = null;
+}
 const requireStaffAuth = async (req, res, next) => {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
         return res.status(401).json({ error: '未授權存取：缺少有效安全憑證 (Unauthorized)' });
     }
     const token = authHeader.split('Bearer ')[1]?.trim();
-    if (token === 'valid-staff-session' || token.startsWith('st_')) {
-        return next();
+    if (!token) {
+        return res.status(401).json({ error: '未授權存取：Token 為空 (Unauthorized)' });
     }
-    return res.status(403).json({ error: '安全憑證無效或已過期，請重新輸入 PIN 碼' });
+    try {
+        const storedAuth = await getStoredActiveToken();
+        const now = Date.now();
+        if (storedAuth && storedAuth.token === token) {
+            if (storedAuth.expiresAt && now > storedAuth.expiresAt) {
+                invalidateAuthCache();
+                return res.status(403).json({ error: '安全憑證已過期，請重新輸入 PIN 碼 (Token Expired)' });
+            }
+            return next();
+        }
+        return res.status(403).json({ error: '安全憑證無效或已過期，請重新輸入 PIN 碼' });
+    }
+    catch (error) {
+        console.error('[Auth Error] Token verification failed:', error);
+        return res.status(500).json({ error: '認證服務暫時無法使用，請稍後重試' });
+    }
 };
 exports.requireStaffAuth = requireStaffAuth;
-app.use((0, cors_1.default)({ origin: true }));
+const allowedOrigins = [
+    'https://sabay-bbq-order.web.app',
+    'https://sabay-bbq-order.firebaseapp.com',
+    'http://localhost:3000',
+    'http://localhost:3001'
+];
+app.use((0, cors_1.default)({
+    origin: (origin, callback) => {
+        if (!origin)
+            return callback(null, true);
+        if (allowedOrigins.includes(origin) ||
+            /\.web\.app$/.test(origin) ||
+            /\.firebaseapp\.com$/.test(origin) ||
+            /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
+            return callback(null, true);
+        }
+        return callback(null, false);
+    },
+    credentials: true
+}));
 app.use(express_1.default.json({ limit: '10mb' }));
 app.use(express_1.default.urlencoded({ limit: '10mb', extended: true }));
 const get = (routePath, ...handlers) => {
@@ -153,14 +206,15 @@ async function getCachedSettings() {
 }
 get('/bootstrap', async (_req, res) => {
     try {
-        res.setHeader('Cache-Control', 'public, max-age=15, s-maxage=300, stale-while-revalidate=600');
+        res.setHeader('Cache-Control', 'public, max-age=15, s-maxage=180, stale-while-revalidate=600');
+        const todayStr = new Date().toISOString().split('T')[0];
         const [categoriesSnap, menuSnap, tablesSnap, systemDoc, ingredientsSnap, reservationsSnap] = await Promise.all([
-            db.collection('categories').orderBy('orderIndex').get(),
-            db.collection('menu').orderBy('orderIndex').get(),
-            db.collection('tables').get(),
+            db.collection('categories').select('id', 'name', 'showOnCustomerPage', 'orderIndex').orderBy('orderIndex').get(),
+            db.collection('menu').select('id', 'category', 'name', 'price', 'image', 'description', 'available', 'isAvailable', 'isSetMeal', 'requiredSaucesOption', 'hasNoodlesOption', 'hasCoconutsMilkOption', 'containsBeef', 'containsPork', 'containsSeafood', 'isNotSpicy', 'customAddOns', 'recipe', 'orderIndex', 'isTakeoutAvailable', 'soldOutAt').orderBy('orderIndex').get(),
+            db.collection('tables').select('id', 'qrCodeUrl', 'status', 'cleaningStartedAt', 'maxCapacity', 'positionX', 'positionY', 'preservedFor', 'mergedWith').get(),
             db.collection('settings').doc('system').get(),
-            db.collection('ingredients').get(),
-            db.collection('reservations').where('date', '>=', new Date().toISOString().split('T')[0]).limit(100).get()
+            db.collection('ingredients').select('id', 'name', 'stock', 'minThreshold', 'unit').get(),
+            db.collection('reservations').select('id', 'customerName', 'phone', 'guestCount', 'tableNumber', 'date', 'time', 'status', 'notes', 'createdAt', 'reservationNo').where('date', '>=', todayStr).limit(100).get()
         ]);
         const now = new Date();
         const items = menuSnap.docs.map(doc => {
@@ -241,12 +295,12 @@ get('/bootstrap', async (_req, res) => {
 });
 get('/categories', async (_req, res) => {
     try {
-        res.setHeader('Cache-Control', 'public, max-age=15, s-maxage=60, stale-while-revalidate=300');
+        res.setHeader('Cache-Control', 'public, max-age=30, s-maxage=300, stale-while-revalidate=600');
         const nowMs = Date.now();
         if (cachedCategories && (nowMs - cachedCategories.timestamp < CACHE_TTL_MS)) {
             return res.json(cachedCategories.data);
         }
-        const snapshot = await db.collection('categories').orderBy('orderIndex').get();
+        const snapshot = await db.collection('categories').select('id', 'name', 'showOnCustomerPage', 'orderIndex').orderBy('orderIndex').get();
         const categories = snapshot.docs.map(doc => doc.data());
         cachedCategories = { data: categories, timestamp: nowMs };
         res.json(categories);
@@ -258,7 +312,7 @@ get('/categories', async (_req, res) => {
 });
 get('/menu', async (_req, res) => {
     try {
-        res.setHeader('Cache-Control', 'public, max-age=15, s-maxage=60, stale-while-revalidate=300');
+        res.setHeader('Cache-Control', 'public, max-age=15, s-maxage=120, stale-while-revalidate=300');
         const nowMs = Date.now();
         if (cachedMenu && (nowMs - cachedMenu.timestamp < CACHE_TTL_MS)) {
             return res.json(cachedMenu.data);
@@ -303,7 +357,8 @@ get('/menu', async (_req, res) => {
 });
 get('/ingredients', async (_req, res) => {
     try {
-        const snapshot = await db.collection('ingredients').get();
+        res.setHeader('Cache-Control', 'public, max-age=10, s-maxage=60, stale-while-revalidate=120');
+        const snapshot = await db.collection('ingredients').select('id', 'name', 'stock', 'minThreshold', 'unit').get();
         const ingredients = snapshot.docs.map(doc => doc.data());
         res.json(ingredients);
     }
@@ -479,8 +534,8 @@ del('/ingredients/:id', exports.requireStaffAuth, async (req, res) => {
 });
 get('/tables', async (_req, res) => {
     try {
-        res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=10, stale-while-revalidate=30');
-        const snapshot = await db.collection('tables').get();
+        res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=5, stale-while-revalidate=15');
+        const snapshot = await db.collection('tables').select('id', 'qrCodeUrl', 'status', 'cleaningStartedAt', 'maxCapacity', 'positionX', 'positionY', 'preservedFor', 'mergedWith').get();
         const nowMs = Date.now();
         const tables = snapshot.docs.map(doc => {
             const tb = doc.data();
@@ -505,8 +560,9 @@ get('/tables', async (_req, res) => {
 });
 get('/reservations', async (_req, res) => {
     try {
+        res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=10, stale-while-revalidate=30');
         const todayStr = new Date().toISOString().split('T')[0];
-        const snapshot = await db.collection('reservations').where('date', '>=', todayStr).limit(100).get();
+        const snapshot = await db.collection('reservations').select('id', 'customerName', 'phone', 'guestCount', 'tableNumber', 'date', 'time', 'status', 'notes', 'createdAt', 'reservationNo').where('date', '>=', todayStr).limit(100).get();
         const reservations = snapshot.docs.map(doc => doc.data());
         res.json(reservations);
     }
@@ -518,7 +574,7 @@ get('/reservations', async (_req, res) => {
 get('/orders', async (_req, res) => {
     try {
         res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=5, stale-while-revalidate=10');
-        const snapshot = await db.collection('orders').orderBy('createdAt', 'desc').limit(200).get();
+        const snapshot = await db.collection('orders').select('id', 'tableNumber', 'items', 'subtotal', 'serviceCharge', 'total', 'status', 'createdAt', 'customerName', 'customerAvatar', 'paymentMethod', 'isMember', 'isPaid', 'guestCount', 'refundLogs', 'discount', 'quickNotes', 'isFlagged', 'flagReason', 'takeoutInfo', 'rating', 'feedback', 'isOfflinePending', 'clientOrderId', 'reservationNo', 'reservationDate', 'reservationTime').orderBy('createdAt', 'desc').limit(200).get();
         const orders = snapshot.docs.map(doc => doc.data());
         res.json(orders);
     }
@@ -530,7 +586,7 @@ get('/orders', async (_req, res) => {
 let cachedServicePause = null;
 get('/settings/service-pause', async (_req, res) => {
     try {
-        res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=300, stale-while-revalidate=600');
+        res.setHeader('Cache-Control', 'public, max-age=30, s-maxage=300, stale-while-revalidate=600');
         const nowMs = Date.now();
         if (cachedServicePause && (nowMs - cachedServicePause.timestamp < CACHE_TTL_MS)) {
             return res.json(cachedServicePause.data);
@@ -546,6 +602,7 @@ get('/settings/service-pause', async (_req, res) => {
 });
 get('/settings/min-spend', async (_req, res) => {
     try {
+        res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=600, stale-while-revalidate=1800');
         const sysData = await getCachedSettings();
         res.json({ minSpend: sysData?.liveMinSpendPerPerson ?? 200 });
     }
@@ -602,6 +659,7 @@ function isStoreOpenFromData(sysData, timestamp, isReservation = false) {
 }
 get('/settings/operating-hours', async (_req, res) => {
     try {
+        res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=600, stale-while-revalidate=1800');
         const sysData = await getCachedSettings();
         const data = sysData || {};
         const isOpen = isStoreOpenFromData(data);
@@ -617,6 +675,7 @@ get('/settings/operating-hours', async (_req, res) => {
 });
 get('/settings/customer-notice', async (_req, res) => {
     try {
+        res.setHeader('Cache-Control', 'public, max-age=30, s-maxage=300, stale-while-revalidate=600');
         const sysData = await getCachedSettings();
         res.json({ notice: sysData?.liveCustomerNotice || '' });
     }
@@ -626,6 +685,7 @@ get('/settings/customer-notice', async (_req, res) => {
 });
 get('/settings/popular-item-ids', async (_req, res) => {
     try {
+        res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=600, stale-while-revalidate=1800');
         const sysData = await getCachedSettings();
         res.json(sysData?.livePopularItemIds || []);
     }
@@ -635,6 +695,7 @@ get('/settings/popular-item-ids', async (_req, res) => {
 });
 get('/settings/members-config', async (_req, res) => {
     try {
+        res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=600, stale-while-revalidate=1800');
         const sysData = await getCachedSettings();
         const data = sysData;
         res.json({
@@ -648,6 +709,7 @@ get('/settings/members-config', async (_req, res) => {
 });
 get('/promo-combo', async (_req, res) => {
     try {
+        res.setHeader('Cache-Control', 'public, max-age=30, s-maxage=300, stale-while-revalidate=600');
         const sysData = await getCachedSettings();
         res.json(sysData?.livePromoCombo || { enabled: false, requiredQty: 0, discountAmount: 0, eligibleItemIds: [] });
     }
@@ -657,6 +719,7 @@ get('/promo-combo', async (_req, res) => {
 });
 get('/option-rules', async (_req, res) => {
     try {
+        res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=600, stale-while-revalidate=1800');
         const sysData = await getCachedSettings();
         const defaultRules = [
             {
@@ -686,6 +749,7 @@ get('/option-rules', async (_req, res) => {
 });
 get('/printer/config', async (_req, res) => {
     try {
+        res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=600, stale-while-revalidate=1800');
         const sysData = await getCachedSettings();
         res.json({ ip: sysData?.livePrinterIp || '192.168.123.100' });
     }
@@ -695,6 +759,7 @@ get('/printer/config', async (_req, res) => {
 });
 get('/print-logs', async (_req, res) => {
     try {
+        res.setHeader('Cache-Control', 'private, no-cache, no-store, must-revalidate');
         const logsDoc = await db.collection('settings').doc('logs').get();
         res.json(logsDoc.data()?.printLogs || []);
     }
@@ -704,6 +769,7 @@ get('/print-logs', async (_req, res) => {
 });
 get('/push-notifications', async (_req, res) => {
     try {
+        res.setHeader('Cache-Control', 'private, no-cache, no-store, must-revalidate');
         const logsDoc = await db.collection('settings').doc('logs').get();
         res.json(logsDoc.data()?.promoNotifications || []);
     }
@@ -1045,7 +1111,13 @@ post('/staff/pin/check-path', async (req, res) => {
     try {
         const credsRef = db.collection('secrets').doc('credentials');
         const credsDoc = await credsRef.get();
-        let storedHash = credsDoc.data()?.staffPinHash;
+        const credsData = credsDoc.data() || {};
+        const now = Date.now();
+        const lockedUntil = credsData.lockedUntil ? Number(credsData.lockedUntil) : 0;
+        if (lockedUntil && now < lockedUntil) {
+            return res.json({ valid: false, locked: true });
+        }
+        let storedHash = credsData.staffPinHash;
         if (!storedHash) {
             const systemDoc = await db.collection('settings').doc('system').get();
             const legacyPin = systemDoc.data()?.liveStaffPin || '000000';
@@ -1067,7 +1139,19 @@ post('/staff/pin/verify', async (req, res) => {
     try {
         const credsRef = db.collection('secrets').doc('credentials');
         const credsDoc = await credsRef.get();
-        let storedHash = credsDoc.data()?.staffPinHash;
+        const credsData = credsDoc.data() || {};
+        const now = Date.now();
+        const lockedUntil = credsData.lockedUntil ? Number(credsData.lockedUntil) : 0;
+        if (lockedUntil && now < lockedUntil) {
+            const remainingMinutes = Math.ceil((lockedUntil - now) / (60 * 1000));
+            return res.status(429).json({
+                success: false,
+                error: `連續輸入錯誤次數過多，系統已安全鎖定！請於 ${remainingMinutes} 分鐘後再試。`,
+                locked: true,
+                remainingMinutes
+            });
+        }
+        let storedHash = credsData.staffPinHash;
         if (!storedHash) {
             const systemDoc = await db.collection('settings').doc('system').get();
             const legacyPin = systemDoc.data()?.liveStaffPin || '000000';
@@ -1077,10 +1161,39 @@ post('/staff/pin/verify', async (req, res) => {
         const inputHash = hashPin(pin);
         if (inputHash === storedHash) {
             const sessionToken = `st_${Date.now()}_${crypto.randomBytes(16).toString('hex')}`;
-            await credsRef.set({ activeSessionToken: sessionToken, lastLoginAt: new Date().toISOString() }, { merge: true });
-            return res.json({ success: true, access_token: sessionToken });
+            const tokenExpiresAt = now + (8 * 60 * 60 * 1000);
+            await credsRef.set({
+                activeSessionToken: sessionToken,
+                tokenExpiresAt,
+                lastLoginAt: new Date().toISOString(),
+                failedAttempts: 0,
+                lockedUntil: null
+            }, { merge: true });
+            invalidateAuthCache();
+            return res.json({ success: true, access_token: sessionToken, expires_in: 28800 });
         }
-        return res.status(400).json({ success: false, error: '解鎖金鑰錯誤！' });
+        const failedAttempts = (credsData.failedAttempts || 0) + 1;
+        const updateData = {
+            failedAttempts,
+            lastFailedAt: new Date().toISOString()
+        };
+        if (failedAttempts >= 5) {
+            const lockDuration = 15 * 60 * 1000;
+            updateData.lockedUntil = now + lockDuration;
+            await credsRef.set(updateData, { merge: true });
+            return res.status(429).json({
+                success: false,
+                error: '連續 5 次輸入金鑰錯誤，系統已啟動防護鎖定 15 分鐘！',
+                locked: true,
+                remainingMinutes: 15
+            });
+        }
+        await credsRef.set(updateData, { merge: true });
+        const remainingTries = 5 - failedAttempts;
+        return res.status(400).json({
+            success: false,
+            error: `解鎖金鑰錯誤！剩餘嘗試次數：${remainingTries} 次`
+        });
     }
     catch (error) {
         console.error('Error verifying PIN:', error);
@@ -1108,7 +1221,13 @@ put('/staff/pin', exports.requireStaffAuth, async (req, res) => {
             return res.status(400).json({ error: '目前金鑰輸入錯誤！' });
         }
         const newHash = hashPin(newPin);
-        await credsRef.set({ staffPinHash: newHash, updatedAt: new Date().toISOString() }, { merge: true });
+        await credsRef.set({
+            staffPinHash: newHash,
+            updatedAt: new Date().toISOString(),
+            failedAttempts: 0,
+            lockedUntil: null
+        }, { merge: true });
+        invalidateAuthCache();
         await db.collection('settings').doc('system').update({ liveStaffPin: firestore_1.FieldValue.delete() }).catch(() => { });
         return res.json({ success: true, message: '員工解鎖金鑰已成功變更並安全儲存！' });
     }
@@ -1138,7 +1257,13 @@ post('/printer/pin', exports.requireStaffAuth, async (req, res) => {
             return res.status(400).json({ error: '目前解鎖金鑰輸入錯誤！' });
         }
         const newHash = hashPin(newPin);
-        await credsRef.set({ staffPinHash: newHash, updatedAt: new Date().toISOString() }, { merge: true });
+        await credsRef.set({
+            staffPinHash: newHash,
+            updatedAt: new Date().toISOString(),
+            failedAttempts: 0,
+            lockedUntil: null
+        }, { merge: true });
+        invalidateAuthCache();
         await db.collection('settings').doc('system').update({ liveStaffPin: firestore_1.FieldValue.delete() }).catch(() => { });
         return res.json({ success: true, message: '員工解鎖金鑰已成功變更並安全儲存！' });
     }

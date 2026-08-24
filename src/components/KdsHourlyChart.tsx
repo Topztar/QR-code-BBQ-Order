@@ -12,7 +12,7 @@ interface KdsHourlyChartProps {
   CustomTooltip: any;
 }
 
-export const KdsHourlyChart: React.FC<KdsHourlyChartProps> = ({
+export const KdsHourlyChart: React.FC<KdsHourlyChartProps> = React.memo(({
   activeChartTab,
   setActiveChartTab,
   orders,
@@ -262,4 +262,4 @@ export const KdsHourlyChart: React.FC<KdsHourlyChartProps> = ({
       )}
     </div>
   );
-};
+});

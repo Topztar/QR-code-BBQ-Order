@@ -4,7 +4,7 @@ import * as admin from 'firebase-admin';
 import { getStorage } from 'firebase-admin/storage';
 import express from 'express';
 
-setGlobalOptions({ maxInstances: 10, minInstances: 0, memory: "512MiB", region: "asia-east1", concurrency: 80, invoker: 'public' });
+setGlobalOptions({ maxInstances: 10, minInstances: 0, memory: "256MiB", region: "asia-east1", concurrency: 80, invoker: 'public' });
 import cors from 'cors';
 import * as net from 'net';
 import * as crypto from 'crypto';
@@ -25,30 +25,87 @@ const db = getFirestore('ai-studio-sabaythaibbqtabl-84418196-9d0c-459c-bced-ddc4
 const storageBucket = getStorage().bucket('sabay-bbq-order.firebasestorage.app');
 const app = express();
 
-// 🔐 安全雜湊輔助函式 (PIN Hash with Salt)
-const PIN_SALT = process.env.PIN_SALT || 'sabay-bbq-secure-salt-2026';
-function hashPin(pin: string): string {
-  return crypto.createHash('sha256').update(`${String(pin).trim()}:${PIN_SALT}`).digest('hex');
-}
+// 🔐 安全認證與驗證模組
+import { hashPin, createStaffAuthMiddleware, invalidateAuthCache } from './auth';
+import { validateOrderPayload, validateReservationPayload, validateImageUploadPayload, sanitizeString } from './validators';
 
-// 🛡️ 員工授權驗證 Middleware
-export const requireStaffAuth: express.RequestHandler = async (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: '未授權存取：缺少有效安全憑證 (Unauthorized)' });
-  }
+export const requireStaffAuth = createStaffAuthMiddleware(db);
 
-  const token = authHeader.split('Bearer ')[1]?.trim();
-  if (token === 'valid-staff-session' || token.startsWith('st_')) {
-    return next();
-  }
-  return res.status(403).json({ error: '安全憑證無效或已過期，請重新輸入 PIN 碼' });
-};
+// 🌐 CORS 安全來源白名單限制
+const allowedOrigins = [
+  'https://sabay-bbq-order.web.app',
+  'https://sabay-bbq-order.firebaseapp.com',
+  'http://localhost:3000',
+  'http://localhost:3001'
+];
 
-// app.use(compression() as unknown as express.RequestHandler); // Removed to save CPU, CDN handles compression
-app.use(cors({ origin: true }));
+app.use(cors({
+  origin: (origin, callback) => {
+    // 允許無 origin 的請求 (如同源請求、後端直接呼叫、行動裝置 Webview)
+    if (!origin) return callback(null, true);
+    if (
+      allowedOrigins.includes(origin) ||
+      /\.web\.app$/.test(origin) ||
+      /\.firebaseapp\.com$/.test(origin) ||
+      /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)
+    ) {
+      return callback(null, true);
+    }
+    return callback(null, false);
+  },
+  credentials: true
+}));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
+
+// 🛡️ Security Headers Middleware
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(self), geolocation=()');
+  res.setHeader(
+    'Content-Security-Policy',
+    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.firebaseapp.com https://*.googleapis.com https://apis.google.com https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://*.firebaseio.com https://*.googleapis.com https://firestore.googleapis.com https://*.cloudfunctions.net https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.google.com/recaptcha/ http://127.0.0.1:8060 http://localhost:8060; frame-src 'self' https://*.firebaseapp.com https://accounts.google.com https://www.google.com/recaptcha/; object-src 'none'; base-uri 'self';"
+  );
+  next();
+});
+
+// 🚦 記憶體 IP 速率限制器 (Rate Limiter for public write endpoints)
+interface RateLimitBucket {
+  count: number;
+  resetAt: number;
+}
+const rateLimitStore = new Map<string, RateLimitBucket>();
+
+export function createRateLimiter(maxRequests: number, windowMs: number = 60 * 1000, actionName: string = '操作') {
+  return (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip || '127.0.0.1';
+    const key = `${actionName}:${ip}`;
+    const now = Date.now();
+
+    let bucket = rateLimitStore.get(key);
+    if (!bucket || now > bucket.resetAt) {
+      bucket = { count: 1, resetAt: now + windowMs };
+      rateLimitStore.set(key, bucket);
+      return next();
+    }
+
+    if (bucket.count >= maxRequests) {
+      const waitSec = Math.ceil((bucket.resetAt - now) / 1000);
+      return res.status(429).json({
+        error: `請求頻率過高：${actionName} 頻率已達上限，請於 ${waitSec} 秒後再試 (Too Many Requests)`
+      });
+    }
+
+    bucket.count++;
+    return next();
+  };
+}
+
+const orderRateLimiter = createRateLimiter(15, 60 * 1000, '訂單提交');
+const reservationRateLimiter = createRateLimiter(10, 60 * 1000, '預約提交');
 
 
 // Helper functions to register routes under both '/api/path' and '/path'
@@ -69,33 +126,18 @@ const del = (routePath: string, ...handlers: express.RequestHandler[]) => {
 // 2. Upload Image to Google Cloud Storage
 post('/images/upload', requireStaffAuth, async (req, res) => {
   try {
-    const { base64, data, filename, contentType, folder = 'dishes' } = req.body;
-    const rawData = base64 || data;
-    if (!rawData) {
-      return res.status(400).json({ error: 'Missing image data (base64) / 缺少圖片資料' });
+    const validation = validateImageUploadPayload(req.body);
+    if (!validation.isValid || !validation.sanitizedData) {
+      return res.status(400).json({ error: validation.error || 'Missing or invalid image data' });
     }
 
-    let mime = contentType || 'image/jpeg';
-    let base64Clean = rawData;
-    if (rawData.includes(';base64,')) {
-      const parts = rawData.split(';base64,');
-      const mimeMatch = parts[0].match(/data:(.*?)$/);
-      if (mimeMatch) mime = mimeMatch[1];
-      base64Clean = parts[1];
-    }
-
+    const { base64Clean, mime, cleanExt, targetFolder, targetFilename } = validation.sanitizedData;
     const buffer = Buffer.from(base64Clean, 'base64');
-    const ext = mime.split('/')[1] || 'jpg';
-    const cleanExt = ext === 'jpeg' ? 'jpg' : ext.replace(/[^a-zA-Z0-9]/g, '') || 'jpg';
-    let targetFilename = filename
-      ? filename.replace(/[^a-zA-Z0-9._-]/g, '')
-      : `dish-${Date.now()}.${cleanExt}`;
-    targetFilename = targetFilename.replace(/-+\./g, '.').replace(/\.+/g, '.').replace(/^-+|-+$/g, '');
-    if (!targetFilename.includes('.')) {
-      targetFilename = `${targetFilename}.${cleanExt}`;
+    if (buffer.length > 10 * 1024 * 1024) {
+      return res.status(400).json({ error: '圖片大小超出 10MB 上限 (Max 10MB)' });
     }
-    const targetPath = `${folder}/${targetFilename}`.replace(/^\/+/, '');
 
+    const targetPath = `${targetFolder}/${targetFilename}`;
     const file = storageBucket.file(targetPath);
     await file.save(buffer, {
       metadata: {
@@ -141,7 +183,8 @@ async function getCachedSettings() {
 // 0. Consolidated Bootstrap endpoint for fast initial load
 get('/bootstrap', async (_req, res) => {
   try {
-    res.setHeader('Cache-Control', 'public, max-age=15, s-maxage=300, stale-while-revalidate=600');
+    res.setHeader('Cache-Control', 'public, max-age=15, s-maxage=180, stale-while-revalidate=600');
+    const todayStr = new Date().toISOString().split('T')[0];
     const [
       categoriesSnap,
       menuSnap,
@@ -150,12 +193,12 @@ get('/bootstrap', async (_req, res) => {
       ingredientsSnap,
       reservationsSnap
     ] = await Promise.all([
-      db.collection('categories').orderBy('orderIndex').get(),
-      db.collection('menu').orderBy('orderIndex').get(),
-      db.collection('tables').get(),
+      db.collection('categories').select('id', 'name', 'showOnCustomerPage', 'orderIndex').orderBy('orderIndex').get(),
+      db.collection('menu').select('id', 'category', 'name', 'price', 'image', 'description', 'available', 'isAvailable', 'isSetMeal', 'requiredSaucesOption', 'hasNoodlesOption', 'hasCoconutsMilkOption', 'containsBeef', 'containsPork', 'containsSeafood', 'isNotSpicy', 'customAddOns', 'recipe', 'orderIndex', 'isTakeoutAvailable', 'soldOutAt').orderBy('orderIndex').get(),
+      db.collection('tables').select('id', 'qrCodeUrl', 'status', 'cleaningStartedAt', 'maxCapacity', 'positionX', 'positionY', 'preservedFor', 'mergedWith').get(),
       db.collection('settings').doc('system').get(),
-      db.collection('ingredients').get(),
-      db.collection('reservations').where('date', '>=', new Date().toISOString().split('T')[0]).limit(100).get()
+      db.collection('ingredients').select('id', 'name', 'stock', 'minThreshold', 'unit').get(),
+      db.collection('reservations').select('id', 'customerName', 'phone', 'guestCount', 'tableNumber', 'date', 'time', 'status', 'notes', 'createdAt', 'reservationNo').where('date', '>=', todayStr).limit(100).get()
     ]);
 
     const now = new Date();
@@ -242,14 +285,14 @@ get('/bootstrap', async (_req, res) => {
 // 1. Get Categories
 get('/categories', async (_req, res) => {
   try {
-    res.setHeader('Cache-Control', 'public, max-age=15, s-maxage=60, stale-while-revalidate=300');
+    res.setHeader('Cache-Control', 'public, max-age=30, s-maxage=300, stale-while-revalidate=600');
     
     const nowMs = Date.now();
     if (cachedCategories && (nowMs - cachedCategories.timestamp < CACHE_TTL_MS)) {
       return res.json(cachedCategories.data);
     }
 
-    const snapshot = await db.collection('categories').orderBy('orderIndex').get();
+    const snapshot = await db.collection('categories').select('id', 'name', 'showOnCustomerPage', 'orderIndex').orderBy('orderIndex').get();
     const categories = snapshot.docs.map(doc => doc.data());
     
     cachedCategories = { data: categories, timestamp: nowMs };
@@ -263,7 +306,7 @@ get('/categories', async (_req, res) => {
 // 2. Get Menu
 get('/menu', async (_req, res) => {
   try {
-    res.setHeader('Cache-Control', 'public, max-age=15, s-maxage=60, stale-while-revalidate=300');
+    res.setHeader('Cache-Control', 'public, max-age=15, s-maxage=120, stale-while-revalidate=300');
     
     const nowMs = Date.now();
     if (cachedMenu && (nowMs - cachedMenu.timestamp < CACHE_TTL_MS)) {
@@ -312,7 +355,8 @@ get('/menu', async (_req, res) => {
 // 3. Get Ingredients
 get('/ingredients', async (_req, res) => {
   try {
-    const snapshot = await db.collection('ingredients').get();
+    res.setHeader('Cache-Control', 'public, max-age=10, s-maxage=60, stale-while-revalidate=120');
+    const snapshot = await db.collection('ingredients').select('id', 'name', 'stock', 'minThreshold', 'unit').get();
     const ingredients = snapshot.docs.map(doc => doc.data());
     res.json(ingredients);
   } catch (error) {
@@ -503,8 +547,8 @@ del('/ingredients/:id', requireStaffAuth, async (req, res) => {
 // 4. Get Tables
 get('/tables', async (_req, res) => {
   try {
-    res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=10, stale-while-revalidate=30');
-    const snapshot = await db.collection('tables').get();
+    res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=5, stale-while-revalidate=15');
+    const snapshot = await db.collection('tables').select('id', 'qrCodeUrl', 'status', 'cleaningStartedAt', 'maxCapacity', 'positionX', 'positionY', 'preservedFor', 'mergedWith').get();
     const nowMs = Date.now();
     const tables = snapshot.docs.map(doc => {
       const tb = doc.data() as any;
@@ -531,8 +575,9 @@ get('/tables', async (_req, res) => {
 // 5. Get Reservations
 get('/reservations', async (_req, res) => {
   try {
+    res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=10, stale-while-revalidate=30');
     const todayStr = new Date().toISOString().split('T')[0];
-    const snapshot = await db.collection('reservations').where('date', '>=', todayStr).limit(100).get();
+    const snapshot = await db.collection('reservations').select('id', 'customerName', 'phone', 'guestCount', 'tableNumber', 'date', 'time', 'status', 'notes', 'createdAt', 'reservationNo').where('date', '>=', todayStr).limit(100).get();
     const reservations = snapshot.docs.map(doc => doc.data());
     res.json(reservations);
   } catch (error) {
@@ -545,7 +590,7 @@ get('/reservations', async (_req, res) => {
 get('/orders', async (_req, res) => {
   try {
     res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=5, stale-while-revalidate=10');
-    const snapshot = await db.collection('orders').orderBy('createdAt', 'desc').limit(200).get();
+    const snapshot = await db.collection('orders').select('id', 'tableNumber', 'items', 'subtotal', 'serviceCharge', 'total', 'status', 'createdAt', 'customerName', 'customerAvatar', 'paymentMethod', 'isMember', 'isPaid', 'guestCount', 'refundLogs', 'discount', 'quickNotes', 'isFlagged', 'flagReason', 'takeoutInfo', 'rating', 'feedback', 'isOfflinePending', 'clientOrderId', 'reservationNo', 'reservationDate', 'reservationTime').orderBy('createdAt', 'desc').limit(200).get();
     const orders = snapshot.docs.map(doc => doc.data());
     res.json(orders);
   } catch (error) {
@@ -561,7 +606,7 @@ let cachedServicePause: { data: any; timestamp: number } | null = null;
 // 7. Service Pause Settings
 get('/settings/service-pause', async (_req, res) => {
   try {
-    res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=300, stale-while-revalidate=600');
+    res.setHeader('Cache-Control', 'public, max-age=30, s-maxage=300, stale-while-revalidate=600');
     
     const nowMs = Date.now();
     if (cachedServicePause && (nowMs - cachedServicePause.timestamp < CACHE_TTL_MS)) {
@@ -580,6 +625,7 @@ get('/settings/service-pause', async (_req, res) => {
 // 8. Minimum Spend Settings
 get('/settings/min-spend', async (_req, res) => {
   try {
+    res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=600, stale-while-revalidate=1800');
     const sysData = await getCachedSettings();
     res.json({ minSpend: sysData?.liveMinSpendPerPerson ?? 200 });
   } catch (error) {
@@ -644,6 +690,7 @@ function isStoreOpenFromData(sysData: any, timestamp?: number, isReservation: bo
 // 9. Operating Hours Settings
 get('/settings/operating-hours', async (_req, res) => {
   try {
+    res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=600, stale-while-revalidate=1800');
     const sysData = await getCachedSettings();
     const data = sysData || {};
     const isOpen = isStoreOpenFromData(data);
@@ -660,6 +707,7 @@ get('/settings/operating-hours', async (_req, res) => {
 // 10. Customer Notice
 get('/settings/customer-notice', async (_req, res) => {
   try {
+    res.setHeader('Cache-Control', 'public, max-age=30, s-maxage=300, stale-while-revalidate=600');
     const sysData = await getCachedSettings();
     res.json({ notice: sysData?.liveCustomerNotice || '' });
   } catch (error) {
@@ -670,6 +718,7 @@ get('/settings/customer-notice', async (_req, res) => {
 // 11. Popular Item IDs
 get('/settings/popular-item-ids', async (_req, res) => {
   try {
+    res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=600, stale-while-revalidate=1800');
     const sysData = await getCachedSettings();
     res.json(sysData?.livePopularItemIds || []);
   } catch (error) {
@@ -680,6 +729,7 @@ get('/settings/popular-item-ids', async (_req, res) => {
 // 12. Members Configuration
 get('/settings/members-config', async (_req, res) => {
   try {
+    res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=600, stale-while-revalidate=1800');
     const sysData = await getCachedSettings();
     const data = sysData;
     res.json({
@@ -694,6 +744,7 @@ get('/settings/members-config', async (_req, res) => {
 // 13. Promo Combo Config
 get('/promo-combo', async (_req, res) => {
   try {
+    res.setHeader('Cache-Control', 'public, max-age=30, s-maxage=300, stale-while-revalidate=600');
     const sysData = await getCachedSettings();
     res.json(sysData?.livePromoCombo || { enabled: false, requiredQty: 0, discountAmount: 0, eligibleItemIds: [] });
   } catch (error) {
@@ -704,6 +755,7 @@ get('/promo-combo', async (_req, res) => {
 // 13.5. Option Rules Config
 get('/option-rules', async (_req, res) => {
   try {
+    res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=600, stale-while-revalidate=1800');
     const sysData = await getCachedSettings();
     const defaultRules = [
       {
@@ -734,6 +786,7 @@ get('/option-rules', async (_req, res) => {
 // 14. Printer Configuration
 get('/printer/config', async (_req, res) => {
   try {
+    res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=600, stale-while-revalidate=1800');
     const sysData = await getCachedSettings();
     res.json({ ip: sysData?.livePrinterIp || '192.168.123.100' });
   } catch (error) {
@@ -744,6 +797,7 @@ get('/printer/config', async (_req, res) => {
 // 15. Print Logs
 get('/print-logs', async (_req, res) => {
   try {
+    res.setHeader('Cache-Control', 'private, no-cache, no-store, must-revalidate');
     const logsDoc = await db.collection('settings').doc('logs').get();
     res.json(logsDoc.data()?.printLogs || []);
   } catch (error) {
@@ -754,6 +808,7 @@ get('/print-logs', async (_req, res) => {
 // 16. Push Notifications
 get('/push-notifications', async (_req, res) => {
   try {
+    res.setHeader('Cache-Control', 'private, no-cache, no-store, must-revalidate');
     const logsDoc = await db.collection('settings').doc('logs').get();
     res.json(logsDoc.data()?.promoNotifications || []);
   } catch (error) {
@@ -764,8 +819,12 @@ get('/push-notifications', async (_req, res) => {
 // --- POST/PUT/DELETE APIs ---
 
 // 17. Submit Order
-post('/orders', async (req, res) => {
-  const orderData = req.body;
+post('/orders', orderRateLimiter, async (req, res) => {
+  const validation = validateOrderPayload(req.body);
+  if (!validation.isValid || !validation.sanitizedData) {
+    return res.status(400).json({ error: validation.error || '無效的訂單資料格式' });
+  }
+  const orderData = validation.sanitizedData;
   const orderId = orderData.id || `ORD-${Date.now().toString(36).toUpperCase()}`;
 
   try {
@@ -1141,7 +1200,16 @@ post('/staff/pin/check-path', async (req, res) => {
   try {
     const credsRef = db.collection('secrets').doc('credentials');
     const credsDoc = await credsRef.get();
-    let storedHash = credsDoc.data()?.staffPinHash;
+    const credsData = credsDoc.data() || {};
+
+    // 🛡️ 檢查是否處於暴力破解鎖定狀態
+    const now = Date.now();
+    const lockedUntil = credsData.lockedUntil ? Number(credsData.lockedUntil) : 0;
+    if (lockedUntil && now < lockedUntil) {
+      return res.json({ valid: false, locked: true });
+    }
+
+    let storedHash = credsData.staffPinHash;
     if (!storedHash) {
       // Fallback & automatic migration from legacy settings
       const systemDoc = await db.collection('settings').doc('system').get();
@@ -1165,7 +1233,22 @@ post('/staff/pin/verify', async (req, res) => {
   try {
     const credsRef = db.collection('secrets').doc('credentials');
     const credsDoc = await credsRef.get();
-    let storedHash = credsDoc.data()?.staffPinHash;
+    const credsData = credsDoc.data() || {};
+
+    // 🛡️ 檢查是否處於暴力破解鎖定狀態
+    const now = Date.now();
+    const lockedUntil = credsData.lockedUntil ? Number(credsData.lockedUntil) : 0;
+    if (lockedUntil && now < lockedUntil) {
+      const remainingMinutes = Math.ceil((lockedUntil - now) / (60 * 1000));
+      return res.status(429).json({
+        success: false,
+        error: `連續輸入錯誤次數過多，系統已安全鎖定！請於 ${remainingMinutes} 分鐘後再試。`,
+        locked: true,
+        remainingMinutes
+      });
+    }
+
+    let storedHash = credsData.staffPinHash;
     if (!storedHash) {
       // Fallback & automatic migration from legacy settings
       const systemDoc = await db.collection('settings').doc('system').get();
@@ -1177,10 +1260,45 @@ post('/staff/pin/verify', async (req, res) => {
     const inputHash = hashPin(pin);
     if (inputHash === storedHash) {
       const sessionToken = `st_${Date.now()}_${crypto.randomBytes(16).toString('hex')}`;
-      await credsRef.set({ activeSessionToken: sessionToken, lastLoginAt: new Date().toISOString() }, { merge: true });
-      return res.json({ success: true, access_token: sessionToken });
+      const tokenExpiresAt = now + (8 * 60 * 60 * 1000); // 8 小時有效期
+
+      await credsRef.set({
+        activeSessionToken: sessionToken,
+        tokenExpiresAt,
+        lastLoginAt: new Date().toISOString(),
+        failedAttempts: 0,
+        lockedUntil: null
+      }, { merge: true });
+
+      invalidateAuthCache();
+      return res.json({ success: true, access_token: sessionToken, expires_in: 28800 });
     }
-    return res.status(400).json({ success: false, error: '解鎖金鑰錯誤！' });
+
+    // PIN 錯誤：累計失敗次數並進行安全防護
+    const failedAttempts = (credsData.failedAttempts || 0) + 1;
+    const updateData: any = {
+      failedAttempts,
+      lastFailedAt: new Date().toISOString()
+    };
+
+    if (failedAttempts >= 5) {
+      const lockDuration = 15 * 60 * 1000; // 鎖定 15 分鐘
+      updateData.lockedUntil = now + lockDuration;
+      await credsRef.set(updateData, { merge: true });
+      return res.status(429).json({
+        success: false,
+        error: '連續 5 次輸入金鑰錯誤，系統已啟動防護鎖定 15 分鐘！',
+        locked: true,
+        remainingMinutes: 15
+      });
+    }
+
+    await credsRef.set(updateData, { merge: true });
+    const remainingTries = 5 - failedAttempts;
+    return res.status(400).json({
+      success: false,
+      error: `解鎖金鑰錯誤！剩餘嘗試次數：${remainingTries} 次`
+    });
   } catch (error) {
     console.error('Error verifying PIN:', error);
     res.status(500).send(error);
@@ -1212,7 +1330,14 @@ put('/staff/pin', requireStaffAuth, async (req, res) => {
     }
 
     const newHash = hashPin(newPin);
-    await credsRef.set({ staffPinHash: newHash, updatedAt: new Date().toISOString() }, { merge: true });
+    await credsRef.set({
+      staffPinHash: newHash,
+      updatedAt: new Date().toISOString(),
+      failedAttempts: 0,
+      lockedUntil: null
+    }, { merge: true });
+    invalidateAuthCache();
+
     // Remove plaintext pin from system settings if exists
     await db.collection('settings').doc('system').update({ liveStaffPin: FieldValue.delete() }).catch(() => {});
 
@@ -1248,7 +1373,13 @@ post('/printer/pin', requireStaffAuth, async (req, res) => {
     }
 
     const newHash = hashPin(newPin);
-    await credsRef.set({ staffPinHash: newHash, updatedAt: new Date().toISOString() }, { merge: true });
+    await credsRef.set({
+      staffPinHash: newHash,
+      updatedAt: new Date().toISOString(),
+      failedAttempts: 0,
+      lockedUntil: null
+    }, { merge: true });
+    invalidateAuthCache();
     await db.collection('settings').doc('system').update({ liveStaffPin: FieldValue.delete() }).catch(() => {});
 
     return res.json({ success: true, message: '員工解鎖金鑰已成功變更並安全儲存！' });
@@ -1448,27 +1579,23 @@ del('/tables/:id', requireStaffAuth, async (req, res) => {
 });
 
 // --- Missing Reservations APIs ---
-post('/reservations', async (req, res) => {
-  const data = req.body;
-  
-  if (data.date) {
-    const now = new Date();
-    now.setMonth(now.getMonth() + 3);
-    const maxDateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-    if (data.date.trim() > maxDateStr) {
-      res.status(400).json({ error: `預約日期最多只能提前 3 個月 (最晚至 ${maxDateStr})！` });
-      return;
-    }
+post('/reservations', reservationRateLimiter, async (req, res) => {
+  const validation = validateReservationPayload(req.body);
+  if (!validation.isValid || !validation.sanitizedData) {
+    return res.status(400).json({ error: validation.error || '無效的預約資料格式' });
   }
+  const data = validation.sanitizedData;
+
   const newReservation = {
-    id: 'res-' + Math.random().toString(36).substring(2, 11),
+    id: data.id || ('res-' + Math.random().toString(36).substring(2, 11)),
     ...data,
-    createdAt: new Date().toISOString()
+    status: data.status || 'pending',
+    createdAt: data.createdAt || new Date().toISOString()
   };
   try {
     await db.collection('reservations').doc(newReservation.id).set(newReservation);
     // sync table status if pending
-    if (newReservation.status === 'pending') {
+    if (newReservation.status === 'pending' && newReservation.tableNumber) {
       const tableRef = db.collection('tables').doc(newReservation.tableNumber);
       await tableRef.update({ status: 'preserved', preservedFor: `${newReservation.customerName} (${newReservation.time})` });
     }

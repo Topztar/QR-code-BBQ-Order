@@ -8,47 +8,47 @@ interface StaffLoginGateProps {
 
 export const StaffLoginGate: React.FC<StaffLoginGateProps> = ({ onLoginSuccess, onCancel }) => {
   const [pin, setPin] = useState('');
-  const [errorCode, setErrorCode] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string>('');
   const [loading, setLoading] = useState(false);
 
   const handleNumberClick = (num: string) => {
     if (pin.length < 6) {
       setPin(prev => prev + num);
-      setErrorCode(false);
+      setErrorMessage('');
     }
   };
 
   const handleBackspace = () => {
     setPin(prev => prev.slice(0, -1));
-    setErrorCode(false);
+    setErrorMessage('');
   };
 
   const handleClear = () => {
     setPin('');
-    setErrorCode(false);
+    setErrorMessage('');
   };
 
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setLoading(true);
-    setErrorCode(false);
+    setErrorMessage('');
     try {
       const res = await fetch('/api/staff/pin/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ pin }),
       });
-      if (res.ok) {
-        const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data?.access_token) {
         localStorage.setItem("sabay_jwt_token", data.access_token);
         onLoginSuccess();
       } else {
-        setErrorCode(true);
+        setErrorMessage(data?.error || '解鎖金鑰錯誤！(請輸入正確的 6 位數金鑰)');
         setPin('');
       }
     } catch (err) {
       console.error('[Verify error]', err);
-      setErrorCode(true);
+      setErrorMessage('網路連線或伺服器驗證失敗，請稍後再試');
       setPin('');
     } finally {
       setLoading(false);
@@ -95,10 +95,10 @@ export const StaffLoginGate: React.FC<StaffLoginGateProps> = ({ onLoginSuccess, 
           ))}
         </div>
 
-        {errorCode && (
+        {errorMessage && (
           <div className="bg-red-500/15 border border-red-500/20 text-red-400 text-[11px] py-1.5 px-3 rounded-xl flex items-center justify-center space-x-1.5 animate-bounce">
-            <AlertCircle size={13} />
-            <span>解鎖金鑰錯誤！(請輸入正確的 6 位數金鑰)</span>
+            <AlertCircle size={13} className="shrink-0" />
+            <span>{errorMessage}</span>
           </div>
         )}
 
