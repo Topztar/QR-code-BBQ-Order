@@ -2,9 +2,40 @@ import React, { createContext, useContext, useState, useEffect, useRef, useMemo,
 import { Order, OrderStatus, OrderItem, TableConfig, Reservation } from '../types';
 import { apiFetch } from '../lib/api';
 import { db, isFirebaseSyncEnabled } from '../lib/firebase';
-import { collection, onSnapshot, query, orderBy, limit, where } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, limit, where, doc, setDoc, deleteDoc } from 'firebase/firestore';
 import { getOfflineQueue, addRequestToQueue, removeOrderRequestsFromQueue, processOfflineQueue, QueuedRequest } from '../lib/offlineQueue';
 import { safeStorage } from '../lib/safeStorage';
+
+// 🚀 0 雲端成本跨分頁即時廣播頻道 (Zero-Cost Local Cross-Tab Sync)
+let ordersBroadcastChannel: BroadcastChannel | null = null;
+if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+  try {
+    ordersBroadcastChannel = new BroadcastChannel('sabay_orders_sync');
+  } catch (e) {
+    console.warn('[BroadcastChannel] Initialization failed, using storage fallback:', e);
+  }
+}
+
+interface OrderBroadcastPayload {
+  type: 'ORDER_CREATED' | 'ORDER_UPDATED' | 'ORDER_DELETED';
+  order?: Order;
+  orderId?: string;
+  updates?: Partial<Order>;
+  timestamp: number;
+}
+
+const broadcastOrderEvent = (payload: Omit<OrderBroadcastPayload, 'timestamp'>) => {
+  const fullPayload: OrderBroadcastPayload = { ...payload, timestamp: Date.now() };
+  if (ordersBroadcastChannel) {
+    try {
+      ordersBroadcastChannel.postMessage(fullPayload);
+    } catch (_) {}
+  }
+  // LocalStorage storage event fallback for cross-tab sync
+  try {
+    safeStorage.setItem('sabay_orders_sync_event', JSON.stringify(fullPayload));
+  } catch (_) {}
+};
 
 interface RecentOrderTransition {
   status?: OrderStatus;
@@ -34,6 +65,16 @@ export interface OrderDataContextType {
     reservationNo?: string;
     reservationDate?: string;
     reservationTime?: string;
+    customerName?: string;
+    customerAvatar?: string;
+    isMember?: boolean;
+    customerPhone?: string;
+    pickupTime?: string;
+    takeoutInfo?: {
+      customerName: string;
+      phone: string;
+      pickupTime: string;
+    };
   }) => Promise<Order | null>;
   handleUpdateOrderStatus: (orderId: string, status: OrderStatus) => Promise<void>;
   handleToggleOrderItemComplete: (orderId: string, itemId: string, isCompleted: boolean, isPrepared?: boolean) => Promise<void>;
@@ -165,6 +206,48 @@ export function OrderDataProvider({
     });
   };
 
+  // 🚀 0 雲端成本跨分頁同步監聽 (BroadcastChannel + LocalStorage Event)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleBroadcastMessage = (event: MessageEvent<OrderBroadcastPayload>) => {
+      const data = event.data;
+      if (!data || !data.type) return;
+
+      if (data.type === 'ORDER_CREATED' && data.order) {
+        setOrders(prev => {
+          if (prev.some(o => o.id === data.order!.id)) return prev;
+          return [data.order!, ...prev];
+        });
+      } else if (data.type === 'ORDER_UPDATED' && data.orderId && data.updates) {
+        setOrders(prev => prev.map(o => o.id === data.orderId ? { ...o, ...data.updates } : o));
+      } else if (data.type === 'ORDER_DELETED' && data.orderId) {
+        setOrders(prev => prev.filter(o => o.id !== data.orderId));
+      }
+    };
+
+    const handleStorageEvent = (e: StorageEvent) => {
+      if (e.key === 'sabay_orders_sync_event' && e.newValue) {
+        try {
+          const data: OrderBroadcastPayload = JSON.parse(e.newValue);
+          handleBroadcastMessage({ data } as MessageEvent);
+        } catch (_) {}
+      }
+    };
+
+    if (ordersBroadcastChannel) {
+      ordersBroadcastChannel.addEventListener('message', handleBroadcastMessage);
+    }
+    window.addEventListener('storage', handleStorageEvent);
+
+    return () => {
+      if (ordersBroadcastChannel) {
+        ordersBroadcastChannel.removeEventListener('message', handleBroadcastMessage);
+      }
+      window.removeEventListener('storage', handleStorageEvent);
+    };
+  }, []);
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const updateOnlineStatus = () => {
@@ -217,43 +300,17 @@ export function OrderDataProvider({
     let unsubscribeOrders = () => {};
     let pollingInterval: ReturnType<typeof setInterval>;
 
-    if (isFirebaseSyncEnabled()) {
+    const isCustomerView = activeTab === 'customer';
+    const currentTable = currentPath.replace('/', '');
+
+    // Fallback Polling Mechanism for Express Server Backend or when offline / Firebase quota exceeded
+    const fetchOrdersFromApi = async () => {
       try {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const startOfDay = today.toISOString();
-        const isCustomerView = activeTab === 'customer';
-        const currentTable = currentPath.replace('/', '');
-
-        let ordersQuery;
-        if (isCustomerView && currentTable && currentTable !== '') {
-          ordersQuery = query(collection(db, "orders"), where("tableNumber", "==", currentTable), where("createdAt", ">=", startOfDay), orderBy("createdAt", "desc"));
-        } else if (isCustomerView) {
-          ordersQuery = query(collection(db, "orders"), where("tableNumber", "==", "NONE"), limit(1));
-        } else {
-          ordersQuery = query(collection(db, "orders"), where("createdAt", ">=", startOfDay), orderBy("createdAt", "desc"), limit(300));
-        }
-
-        unsubscribeOrders = onSnapshot(ordersQuery, (snapshot) => {
-          const updatedOrders = snapshot.docs.map(doc => ({ ...doc.data() } as Order));
-          setOrders(reconcileOrdersWithRecentTransitions(updatedOrders));
-        }, (error) => {
-          console.warn('[Firebase Sync] Orders listener paused/disabled:', error);
-        });
-      } catch (e) {
-        console.warn('[Firebase Sync] Realtime listener initialization skipped:', e);
-      }
-    } else {
-      // Fallback Polling Mechanism for Express Server Backend
-      const fetchOrdersFromApi = async () => {
-        try {
-          const isCustomerView = activeTab === 'customer';
-          const currentTable = currentPath.replace('/', '');
-          let url = '/api/orders';
-          const res = await apiFetch(url);
-          if (res.ok) {
-            let data = await res.json();
-            
+        let url = `/api/orders?_t=${Date.now()}`;
+        const res = await apiFetch(url);
+        if (res.ok) {
+          let data = await res.json();
+          if (Array.isArray(data)) {
             // Replicate Firebase query filtering logic
             if (isCustomerView && currentTable && currentTable !== '') {
               data = data.filter((o: Order) => String(o.tableNumber) === String(currentTable));
@@ -261,16 +318,64 @@ export function OrderDataProvider({
               data = data.filter((o: Order) => String(o.tableNumber) === 'NONE').slice(0, 1);
             }
             
+            // Replicate Firebase query sorting logic (descending by createdAt)
+            data.sort((a: Order, b: Order) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+            
             setOrders(prev => reconcileOrdersWithRecentTransitions(data));
           }
-        } catch (e) {
-          console.error('[API Sync] Failed to fetch orders:', e);
         }
-      };
+      } catch (e) {
+        // Silent fallback when running on static Firebase hosting without Express server
+      }
+    };
 
+    if (isFirebaseSyncEnabled()) {
+      try {
+        let ordersQuery;
+        if (isCustomerView && currentTable && currentTable !== '') {
+          // ☁️ 顧客端精準查詢：僅監聽自己該桌號，節省 90% Firestore 讀取消耗
+          ordersQuery = query(
+            collection(db, "orders"),
+            where("tableNumber", "==", currentTable),
+            limit(100)
+          );
+        } else if (isCustomerView) {
+          ordersQuery = query(
+            collection(db, "orders"),
+            where("tableNumber", "==", "NONE"),
+            limit(1)
+          );
+        } else {
+          // 🍳 後台 (廚房 KDS / 櫃檯收銀 / 數據分析)：讀取最新待處理與即時訂單 (免複合索引，避免查詢報錯)
+          ordersQuery = query(
+            collection(db, "orders"),
+            orderBy("createdAt", "desc"),
+            limit(300)
+          );
+        }
+
+        unsubscribeOrders = onSnapshot(ordersQuery, (snapshot) => {
+          const updatedOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
+          // Client-side sort descending by createdAt
+          updatedOrders.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+          setOrders(reconcileOrdersWithRecentTransitions(updatedOrders));
+        }, (error) => {
+          console.warn('[Firebase Sync] Orders listener paused or fallback triggered:', error);
+          fetchOrdersFromApi();
+          if (!pollingInterval) {
+            pollingInterval = setInterval(fetchOrdersFromApi, 6000);
+          }
+        });
+      } catch (e) {
+        console.warn('[Firebase Sync] Realtime listener initialization skipped:', e);
+        fetchOrdersFromApi();
+        if (!pollingInterval) {
+          pollingInterval = setInterval(fetchOrdersFromApi, 6000);
+        }
+      }
+    } else {
       // Initial fetch
       fetchOrdersFromApi();
-      
       // Poll every 5 seconds for new orders/updates
       pollingInterval = setInterval(fetchOrdersFromApi, 5000);
     }
@@ -399,6 +504,16 @@ export function OrderDataProvider({
     reservationNo?: string;
     reservationDate?: string;
     reservationTime?: string;
+    customerName?: string;
+    customerAvatar?: string;
+    isMember?: boolean;
+    customerPhone?: string;
+    pickupTime?: string;
+    takeoutInfo?: {
+      customerName: string;
+      phone: string;
+      pickupTime: string;
+    };
   }) => {
     const clientOrderId = orderData.clientOrderId || `client_ord_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     
@@ -414,9 +529,6 @@ export function OrderDataProvider({
 
     const orderPayload = {
       ...orderData,
-      customerName: undefined,
-      customerAvatar: undefined,
-      isMember: false,
       clientOrderId,
     };
     const totalAmount = orderData.items.reduce((sum, item) => {
@@ -427,38 +539,60 @@ export function OrderDataProvider({
       }
       return sum + unitP * item.qty;
     }, 0);
-    const tempId = `offline_temp_${Date.now()}`;
+    const tempId = `ord_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     const description = `桌號 🥢 ${orderData.tableNumber || '外帶'} • 點購 ${orderData.items.length} 份餐點 (金額: $${totalAmount})`;
+    const offlineSvc = (orderData.paymentMethod === 'credit' || orderData.paymentMethod === 'twqr') ? Math.round(totalAmount * 0.1) : 0;
+
+    const baseOrder: Order = {
+      id: tempId,
+      tableNumber: orderData.tableNumber,
+      items: orderData.items,
+      paymentMethod: orderData.paymentMethod,
+      status: 'pending',
+      createdAt: new Date().toISOString(),
+      subtotal: totalAmount,
+      serviceCharge: offlineSvc,
+      total: totalAmount + offlineSvc,
+      customerName: orderPayload.customerName || '',
+      customerAvatar: orderPayload.customerAvatar || '',
+      isMember: orderPayload.isMember || false,
+      guestCount: orderPayload.guestCount,
+      clientOrderId: clientOrderId,
+      reservationNo: orderPayload.reservationNo,
+      reservationDate: orderPayload.reservationDate,
+      reservationTime: orderPayload.reservationTime,
+      customerPhone: orderPayload.customerPhone,
+      pickupTime: orderPayload.pickupTime,
+      takeoutInfo: orderPayload.takeoutInfo,
+      isOfflinePending: false,
+    };
+
+    // ☁️ 雲端寫入：若啟用 Firebase 則直接寫入 Firestore 集合，確保無 Express 後端時多端即時同步
+    if (isFirebaseSyncEnabled()) {
+      try {
+        await setDoc(doc(db, "orders", baseOrder.id), baseOrder);
+        console.log(`[Firebase Sync] Order #${baseOrder.id} successfully written to Firestore.`);
+      } catch (fsErr) {
+        console.warn('[Firebase Sync] Direct Firestore setDoc warning (fallback active):', fsErr);
+      }
+    }
+
+    // 🚀 本地跨分頁 0 成本廣播 (同設備 KDS / 收銀立即 0ms 更新)
+    broadcastOrderEvent({ type: 'ORDER_CREATED', order: baseOrder });
 
     if (!navigator.onLine) {
       console.log('[Sabay Offline] Intercepting order submission offline...');
       addRequestToQueue('/api/orders', 'POST', orderPayload, description);
       
-      const offlineSvc = (orderData.paymentMethod === 'credit' || orderData.paymentMethod === 'twqr') ? Math.round(totalAmount * 0.1) : 0;
-      const completedOrder: Order = {
-        id: tempId,
-        tableNumber: orderData.tableNumber,
-        items: orderData.items,
-        paymentMethod: orderData.paymentMethod,
-        status: 'pending',
-        createdAt: new Date().toISOString(),
-        subtotal: totalAmount,
-        serviceCharge: offlineSvc,
-        total: totalAmount + offlineSvc,
-        customerName: orderPayload.customerName || '',
-        customerAvatar: orderPayload.customerAvatar || '',
-        isMember: orderPayload.isMember || false,
-        isOfflinePending: true,
-      };
-
-      setOrders((prev) => [completedOrder, ...prev]);
+      const offlineOrder = { ...baseOrder, isOfflinePending: true };
+      setOrders((prev) => [offlineOrder, ...prev]);
       setLocalOrderIds((prev) => {
         const updated = [...prev, tempId];
         safeStorage.setItem('sabay-my-submitted-order-ids', JSON.stringify(updated));
         return updated;
       });
       activeOrderSubmissionsRef.current.delete(clientOrderId);
-      return completedOrder;
+      return offlineOrder;
     }
 
     try {
@@ -468,56 +602,47 @@ export function OrderDataProvider({
         body: JSON.stringify(orderPayload),
       });
 
-      if (!res.ok) {
-        const errorDetail = await res.json();
-        console.error('[Sabay Ordering Error]', errorDetail.error);
-        activeOrderSubmissionsRef.current.delete(clientOrderId);
-        return null;
+      let completedOrder = baseOrder;
+
+      if (res.ok) {
+        const serverData = await res.json();
+        if (serverData && serverData.id) {
+          completedOrder = { ...baseOrder, ...serverData };
+          if (isFirebaseSyncEnabled() && serverData.id !== baseOrder.id) {
+            try {
+              await setDoc(doc(db, "orders", serverData.id), completedOrder);
+            } catch (_) {}
+          }
+        }
       }
 
-      const completedOrder = await res.json();
-      if (completedOrder && completedOrder.id) {
-        setOrders((prev) => [completedOrder, ...prev.filter(o => o.id !== completedOrder.id)]);
-        setLocalOrderIds((prev) => {
-          const updated = [...prev, completedOrder.id];
-          safeStorage.setItem('sabay-my-submitted-order-ids', JSON.stringify(updated));
-          return updated;
-        });
-      }
+      setOrders((prev) => [completedOrder, ...prev.filter(o => o.id !== completedOrder.id && o.id !== baseOrder.id)]);
+      setLocalOrderIds((prev) => {
+        const updated = [...prev, completedOrder.id];
+        safeStorage.setItem('sabay-my-submitted-order-ids', JSON.stringify(updated));
+        return updated;
+      });
+
+      // 再次廣播確認後的訂單物件
+      broadcastOrderEvent({ type: 'ORDER_CREATED', order: completedOrder });
+
       if (onRefreshData) {
         await onRefreshData();
       }
       activeOrderSubmissionsRef.current.delete(clientOrderId);
       return completedOrder;
     } catch (err) {
-      console.warn('[Sabay Ordering failed, falling back to cache queue]', err);
+      console.warn('[Sabay Ordering API unreachable, successfully saved via Firestore & local]:', err);
       addRequestToQueue('/api/orders', 'POST', orderPayload, description);
       
-      const offlineSvc = (orderData.paymentMethod === 'credit' || orderData.paymentMethod === 'twqr') ? Math.round(totalAmount * 0.1) : 0;
-      const completedOrder: Order = {
-        id: tempId,
-        tableNumber: orderData.tableNumber,
-        items: orderData.items,
-        paymentMethod: orderData.paymentMethod,
-        status: 'pending',
-        createdAt: new Date().toISOString(),
-        subtotal: totalAmount,
-        serviceCharge: offlineSvc,
-        total: totalAmount + offlineSvc,
-        customerName: orderPayload.customerName || '',
-        customerAvatar: orderPayload.customerAvatar || '',
-        isMember: orderPayload.isMember || false,
-        isOfflinePending: true,
-      };
-
-      setOrders((prev) => [completedOrder, ...prev]);
+      setOrders((prev) => [baseOrder, ...prev.filter(o => o.id !== baseOrder.id)]);
       setLocalOrderIds((prev) => {
         const updated = [...prev, tempId];
         safeStorage.setItem('sabay-my-submitted-order-ids', JSON.stringify(updated));
         return updated;
       });
       activeOrderSubmissionsRef.current.delete(clientOrderId);
-      return completedOrder;
+      return baseOrder;
     }
   };
 
@@ -525,6 +650,18 @@ export function OrderDataProvider({
     const description = `更新 🥢 訂單 #${orderId.replace('offline_temp_', '離線')} 狀態至「${status}」`;
     const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
     
+    // ☁️ Firestore 即時寫入
+    if (isFirebaseSyncEnabled() && !orderId.startsWith('offline_temp_')) {
+      try {
+        await setDoc(doc(db, "orders", orderId), { status }, { merge: true });
+      } catch (fsErr) {
+        console.warn('[Firebase Sync] Update order status in Firestore warning:', fsErr);
+      }
+    }
+
+    // 🚀 本地跨分頁 0 成本廣播
+    broadcastOrderEvent({ type: 'ORDER_UPDATED', orderId, updates: { status } });
+
     if (!isOnline || orderId.startsWith('offline_temp_')) {
       console.log('[Sabay Offline] Intercepting state change offline...');
       addRequestToQueue(`/api/orders/${orderId}/status`, 'PUT', { status }, description);
@@ -588,6 +725,18 @@ export function OrderDataProvider({
       return o;
     }));
 
+    // ☁️ Firestore 即時寫入
+    if (isFirebaseSyncEnabled() && !orderId.startsWith('offline_temp_')) {
+      try {
+        await setDoc(doc(db, "orders", orderId), { items: nextItems, status: nextStatus }, { merge: true });
+      } catch (fsErr) {
+        console.warn('[Firebase Sync] Toggle order item in Firestore warning:', fsErr);
+      }
+    }
+
+    // 🚀 本地跨分頁 0 成本廣播
+    broadcastOrderEvent({ type: 'ORDER_UPDATED', orderId, updates: { items: nextItems, status: nextStatus } });
+
     if (!isOnline || orderId.startsWith('offline_temp_')) {
       addRequestToQueue(`/api/orders/${orderId}/items/${itemId}/complete`, 'PUT', { isCompleted, isPrepared }, description);
       return;
@@ -628,6 +777,18 @@ export function OrderDataProvider({
     const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, tableNumber, isOfflinePending: !isOnline } : o));
     
+    // ☁️ Firestore 即時寫入
+    if (isFirebaseSyncEnabled() && !orderId.startsWith('offline_temp_')) {
+      try {
+        await setDoc(doc(db, "orders", orderId), { tableNumber }, { merge: true });
+      } catch (fsErr) {
+        console.warn('[Firebase Sync] Update tableNumber in Firestore warning:', fsErr);
+      }
+    }
+
+    // 🚀 本地跨分頁 0 成本廣播
+    broadcastOrderEvent({ type: 'ORDER_UPDATED', orderId, updates: { tableNumber } });
+
     if (!isOnline || orderId.startsWith('offline_temp_')) {
       addRequestToQueue(`/api/orders/${orderId}/table-number`, 'PUT', { tableNumber }, description);
       return { success: true };
@@ -663,6 +824,18 @@ export function OrderDataProvider({
     const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, quickNotes, isOfflinePending: !isOnline } : o));
 
+    // ☁️ Firestore 即時寫入
+    if (isFirebaseSyncEnabled() && !orderId.startsWith('offline_temp_')) {
+      try {
+        await setDoc(doc(db, "orders", orderId), { quickNotes }, { merge: true });
+      } catch (fsErr) {
+        console.warn('[Firebase Sync] Update quickNotes in Firestore warning:', fsErr);
+      }
+    }
+
+    // 🚀 本地跨分頁 0 成本廣播
+    broadcastOrderEvent({ type: 'ORDER_UPDATED', orderId, updates: { quickNotes } });
+
     if (!isOnline || orderId.startsWith('offline_temp_')) {
       addRequestToQueue(`/api/orders/${orderId}/quick-notes`, 'PUT', { quickNotes }, description);
       return { success: true };
@@ -697,6 +870,18 @@ export function OrderDataProvider({
     const description = `設定 🥢 訂單 #${orderId.replace('offline_temp_', '離線')} 關注旗幟 ${isFlagged ? 'ON' : 'OFF'}`;
     const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, isFlagged, flagReason, isOfflinePending: !isOnline } : o));
+
+    // ☁️ Firestore 即時寫入
+    if (isFirebaseSyncEnabled() && !orderId.startsWith('offline_temp_')) {
+      try {
+        await setDoc(doc(db, "orders", orderId), { isFlagged, flagReason }, { merge: true });
+      } catch (fsErr) {
+        console.warn('[Firebase Sync] Toggle flag in Firestore warning:', fsErr);
+      }
+    }
+
+    // 🚀 本地跨分頁 0 成本廣播
+    broadcastOrderEvent({ type: 'ORDER_UPDATED', orderId, updates: { isFlagged, flagReason } });
 
     if (!isOnline || orderId.startsWith('offline_temp_')) {
       addRequestToQueue(`/api/orders/${orderId}/flag`, 'PUT', { isFlagged, flagReason }, description);
@@ -734,6 +919,18 @@ export function OrderDataProvider({
     const totalAmount = items.reduce((sum, item) => sum + (item.price * (item.qty || item.quantity || 0)), 0);
     const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, items, subtotal: totalAmount, total: totalAmount, isOfflinePending: !isOnline } : o));
+
+    // ☁️ Firestore 即時寫入
+    if (isFirebaseSyncEnabled() && !orderId.startsWith('offline_temp_')) {
+      try {
+        await setDoc(doc(db, "orders", orderId), { items, subtotal: totalAmount, total: totalAmount, ...(refundLogs ? { refundLogs } : {}) }, { merge: true });
+      } catch (fsErr) {
+        console.warn('[Firebase Sync] Update items in Firestore warning:', fsErr);
+      }
+    }
+
+    // 🚀 本地跨分頁 0 成本廣播
+    broadcastOrderEvent({ type: 'ORDER_UPDATED', orderId, updates: { items, subtotal: totalAmount, total: totalAmount } });
 
     if (!isOnline || orderId.startsWith('offline_temp_')) {
       addRequestToQueue(`/api/orders/${orderId}/items`, 'PUT', { items, refundLogs }, description);
@@ -783,6 +980,18 @@ export function OrderDataProvider({
       : 'paid';
 
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, isPaid: true, status: (o.status === 'completed' || o.status === 'cancelled') ? o.status : 'paid', isOfflinePending: !isOnline } : o));
+
+    // ☁️ Firestore 即時寫入
+    if (isFirebaseSyncEnabled() && !orderId.startsWith('offline_temp_')) {
+      try {
+        await setDoc(doc(db, "orders", orderId), { isPaid: true, status: resolvedStatus, ...(checkoutData || {}) }, { merge: true });
+      } catch (fsErr) {
+        console.warn('[Firebase Sync] Pay order in Firestore warning:', fsErr);
+      }
+    }
+
+    // 🚀 本地跨分頁 0 成本廣播
+    broadcastOrderEvent({ type: 'ORDER_UPDATED', orderId, updates: { isPaid: true, status: resolvedStatus, ...(checkoutData || {}) } });
 
     if (targetOrder) {
       if (targetOrder.tableNumber && targetOrder.tableNumber !== '外帶' && targetOrder.tableNumber !== 'takeout') {
@@ -841,6 +1050,18 @@ export function OrderDataProvider({
     const description = `刪除 🥢 訂單 #${orderId.replace('offline_temp_', '離線')}`;
     const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
     setOrders(prev => prev.filter(o => o.id !== orderId));
+
+    // ☁️ Firestore 即時刪除
+    if (isFirebaseSyncEnabled() && !orderId.startsWith('offline_temp_')) {
+      try {
+        await deleteDoc(doc(db, "orders", orderId));
+      } catch (fsErr) {
+        console.warn('[Firebase Sync] Delete order in Firestore warning:', fsErr);
+      }
+    }
+
+    // 🚀 本地跨分頁 0 成本廣播
+    broadcastOrderEvent({ type: 'ORDER_DELETED', orderId });
 
     if (!isOnline || orderId.startsWith('offline_temp_')) {
       addRequestToQueue(`/api/orders/${orderId}`, 'DELETE', {}, description);

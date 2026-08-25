@@ -1,0 +1,356 @@
+import express from 'express';
+import { Firestore, FieldValue, Timestamp } from 'firebase-admin/firestore';
+import { Bucket } from '@google-cloud/storage';
+import * as crypto from 'crypto';
+import { hashPin, invalidateAuthCache } from '../auth';
+import { validateOrderPayload, sanitizeString } from '../validators';
+import { isStoreOpenFromData, createGetCachedSettings } from '../helpers';
+
+// ============================================================
+// ORDERS 路由模組（含 print-logs）
+// ============================================================
+
+type RouteRegister = (path: string, ...handlers: express.RequestHandler[]) => void;
+
+export interface RouteContext {
+  db: Firestore;
+  storageBucket: Bucket;
+  requireStaffAuth: express.RequestHandler;
+  createRateLimiter: (max: number, windowMs: number, name: string) => express.RequestHandler;
+  sendErrorResponse: (res: express.Response, error: any, ctx?: string) => void;
+}
+
+export function registerOrdersRoutes(app: express.Application, ctx: RouteContext) {
+  const { db, storageBucket, requireStaffAuth, createRateLimiter, sendErrorResponse } = ctx;
+  const getCachedSettings = createGetCachedSettings(db);
+  const orderRateLimiter = createRateLimiter(20, 60 * 1000, '訂單提交');
+
+  // 雙路徑路由包裝器
+  const get: RouteRegister = (routePath, ...handlers) => app.get([`/api${routePath}`, routePath], ...handlers);
+  const post: RouteRegister = (routePath, ...handlers) => app.post([`/api${routePath}`, routePath], ...handlers);
+  const put: RouteRegister = (routePath, ...handlers) => app.put([`/api${routePath}`, routePath], ...handlers);
+  const del: RouteRegister = (routePath, ...handlers) => app.delete([`/api${routePath}`, routePath], ...handlers);
+
+get('/orders', async (_req, res) => {
+  try {
+    res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=5, stale-while-revalidate=10');
+    const snapshot = await db.collection('orders').select('id', 'tableNumber', 'items', 'subtotal', 'serviceCharge', 'total', 'status', 'createdAt', 'customerName', 'customerAvatar', 'paymentMethod', 'isMember', 'isPaid', 'guestCount', 'refundLogs', 'discount', 'quickNotes', 'isFlagged', 'flagReason', 'takeoutInfo', 'rating', 'feedback', 'isOfflinePending', 'clientOrderId', 'reservationNo', 'reservationDate', 'reservationTime').orderBy('createdAt', 'desc').limit(200).get();
+    const orders = snapshot.docs.map(doc => doc.data());
+    res.json(orders);
+  } catch (error) {
+    console.error('Error fetching orders:', error);
+    res.status(500).send(error);
+  }
+});
+
+// --- System & settings GET APIs ---
+
+let cachedServicePause: { data: any; timestamp: number } | null = null;
+
+// 7. Service Pause Settings
+
+get('/print-logs', async (_req, res) => {
+  try {
+    res.setHeader('Cache-Control', 'private, no-cache, no-store, must-revalidate');
+    const logsDoc = await db.collection('settings').doc('logs').get();
+    res.json(logsDoc.data()?.printLogs || []);
+  } catch (error) {
+    res.status(500).send(error);
+  }
+});
+
+// 16. Push Notifications
+
+post('/orders', orderRateLimiter, async (req, res) => {
+  const validation = validateOrderPayload(req.body);
+  if (!validation.isValid || !validation.sanitizedData) {
+    return res.status(400).json({ error: validation.error || '無效的訂單資料格式' });
+  }
+  const orderData = validation.sanitizedData;
+  const orderId = orderData.id || `ORD-${Date.now().toString(36).toUpperCase()}`;
+
+  try {
+    const systemDoc = await db.collection('settings').doc('system').get();
+    const sysData = systemDoc.data();
+    
+    // 預約專屬點餐 (reservationNo/reservationDate) 或 外帶點餐 (takeoutInfo/外帶) 豁免一般營業時間限制
+    const isTakeoutOrder = !!(orderData.takeoutInfo || String(orderData.tableNumber || '').includes('外帶') || String(orderData.tableNumber || '').toLowerCase() === 'takeout');
+    const isReservationOrder = !!(orderData.reservationNo || orderData.reservationDate);
+    if (!isReservationOrder && !isTakeoutOrder && !isStoreOpenFromData(sysData)) {
+      return res.status(403).json({ error: '目前不在營業時間內（店鋪休息中），系統不開放下單點餐！' });
+    }
+
+    const savedOrder = {
+      ...orderData,
+      id: orderId,
+      status: orderData.status || 'pending',
+      createdAt: orderData.createdAt || new Date().toISOString(),
+    };
+
+    await db.collection('orders').doc(orderId).set(savedOrder);
+
+    // Mark table as in_use and clear cleaningStartedAt
+    if (orderData.tableNumber && !String(orderData.tableNumber).includes('外帶') && String(orderData.tableNumber).toLowerCase() !== 'takeout') {
+      const tblId = String(orderData.tableNumber).trim();
+      const tableRef = db.collection('tables').doc(tblId);
+      const tableSnap = await tableRef.get();
+      if (tableSnap.exists) {
+        await tableRef.update({ status: 'in_use', cleaningStartedAt: null });
+      }
+    }
+
+    res.status(201).json(savedOrder);
+  } catch (error) {
+    console.error('Error submitting order:', error);
+    res.status(500).send(error);
+  }
+});
+
+// 18. Update Order Status
+
+put('/orders/:id/status', requireStaffAuth, async (req, res) => {
+  const id = req.params.id as string;
+  const { status } = req.body;
+  try {
+    await db.collection('orders').doc(id).update({ status });
+    res.json({ id, status });
+  } catch (error) {
+    res.status(500).send(error);
+  }
+});
+
+// 19. Update Order Table Number
+
+put('/orders/:id/table-number', requireStaffAuth, async (req, res) => {
+  const id = req.params.id as string;
+  const { tableNumber } = req.body;
+  try {
+    await db.collection('orders').doc(id).update({ tableNumber });
+    res.json({ id, tableNumber });
+  } catch (error) {
+    res.status(500).send(error);
+  }
+});
+
+// 20. Update Order Quick Notes
+
+put('/orders/:id/quick-notes', requireStaffAuth, async (req, res) => {
+  const id = req.params.id as string;
+  const { quickNotes } = req.body;
+  try {
+    await db.collection('orders').doc(id).update({ quickNotes });
+    res.json({ id, quickNotes });
+  } catch (error) {
+    res.status(500).send(error);
+  }
+});
+
+// 21. Update Order Flag
+
+put('/orders/:id/flag', requireStaffAuth, async (req, res) => {
+  const id = req.params.id as string;
+  const { isFlagged, flagReason } = req.body;
+  try {
+    await db.collection('orders').doc(id).update({ isFlagged, flagReason });
+    res.json({ id, isFlagged, flagReason });
+  } catch (error) {
+    res.status(500).send(error);
+  }
+});
+
+// 22. Update Order Items
+
+put('/orders/:id/items', requireStaffAuth, async (req, res) => {
+  const id = req.params.id as string;
+  const { items, refundLogs } = req.body;
+  try {
+    await db.collection('orders').doc(id).update({ items, refundLogs });
+    res.json({ id, items, refundLogs });
+  } catch (error) {
+    res.status(500).send(error);
+  }
+});
+
+// 23. Checkout Order
+
+put('/orders/:id/checkout', requireStaffAuth, async (req, res) => {
+  const id = req.params.id as string;
+  const checkoutData = req.body;
+  try {
+    // Check if the order has a reservationNo
+    const orderDoc = await db.collection('orders').doc(id).get();
+    const orderData = orderDoc.data();
+
+    // 🛡️ If order was already completed or cancelled, keep its status instead of rolling back to 'paid'
+    const currentStatus = orderData?.status;
+    const resolvedStatus = (currentStatus === 'completed' || currentStatus === 'cancelled') ? currentStatus : 'paid';
+
+    await db.collection('orders').doc(id).update({
+      ...checkoutData,
+      isPaid: true,
+      status: resolvedStatus
+    });
+
+    if (orderData && orderData.tableNumber && !String(orderData.tableNumber).includes('外帶') && String(orderData.tableNumber).toLowerCase() !== 'takeout') {
+      const tblId = String(orderData.tableNumber).trim();
+      const tableRef = db.collection('tables').doc(tblId);
+      const tableSnap = await tableRef.get();
+      if (tableSnap.exists) {
+        await tableRef.update({
+          status: 'cleaning',
+          preservedFor: '',
+          cleaningStartedAt: new Date().toISOString()
+        });
+      }
+    }
+
+    if (orderData && orderData.reservationNo) {
+      // Find the reservation by reservationNo (it could be stored as `id` or `reservationNo`)
+      const resQuery = await db.collection('reservations').where('reservationNo', '==', orderData.reservationNo).get();
+      if (!resQuery.empty) {
+        for (const doc of resQuery.docs) {
+          await db.collection('reservations').doc(doc.id).delete();
+        }
+      } else {
+        // Fallback: it might be stored directly as the document ID
+        const resDoc = await db.collection('reservations').doc(orderData.reservationNo).get();
+        if (resDoc.exists) {
+          await db.collection('reservations').doc(orderData.reservationNo).delete();
+        }
+      }
+    }
+
+    res.json({ id, ...checkoutData, isPaid: true, status: resolvedStatus });
+  } catch (error) {
+    res.status(500).send(error);
+  }
+});
+
+// 23.5. Kitchen Complete (出餐完成) - Mark a paid order as completed from KDS
+
+put('/orders/:id/complete', requireStaffAuth, async (req, res) => {
+  const id = req.params.id as string;
+  try {
+    await db.collection('orders').doc(id).update({
+      status: 'completed'
+    });
+    res.json({ id, status: 'completed' });
+  } catch (error) {
+    res.status(500).send(error);
+  }
+});
+
+// 23.6. Toggle single order item completed state
+
+put('/orders/:id/items/:itemId/complete', requireStaffAuth, async (req, res) => {
+  const id = req.params.id as string;
+  const itemId = req.params.itemId as string;
+  const { isCompleted, isPrepared } = req.body;
+
+  try {
+    const docRef = db.collection('orders').doc(id);
+    const docSnap = await docRef.get();
+    if (!docSnap.exists) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    const order = docSnap.data() as any;
+    const item = order.items.find((it: any) => it.id === itemId);
+    if (!item) {
+      return res.status(404).json({ error: 'Item not found' });
+    }
+
+    if (typeof isCompleted !== 'undefined') {
+      item.isCompleted = !!isCompleted;
+      if (item.isCompleted) {
+        item.isPrepared = true;
+      }
+    }
+
+    if (typeof isPrepared !== 'undefined') {
+      item.isPrepared = !!isPrepared;
+    }
+
+    const allCompleted = order.items.every((it: any) => it.isCompleted);
+    if (allCompleted && order.status !== 'paid') {
+      order.status = 'completed';
+    } else if (order.status === 'completed') {
+      order.status = 'preparing';
+    }
+
+    await docRef.set(order, { merge: true });
+    return res.json(order);
+  } catch (error) {
+    res.status(500).send(error);
+  }
+});
+
+// 24. Delete Order
+
+del('/orders/:id', requireStaffAuth, async (req, res) => {
+  const id = req.params.id as string;
+  try {
+    await db.collection('orders').doc(id).delete();
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).send(error);
+  }
+});
+
+// 25. Adjust Inventory Stock
+
+post('/print-logs/clear', requireStaffAuth, async (_req, res) => {
+  try {
+    await db.collection('settings').doc('logs').set({ printLogs: [] }, { merge: true });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).send(error);
+  }
+});
+
+// --- Write Settings APIs ---
+
+// 28. Save Service Pause State
+
+put('/orders/:id/pay', requireStaffAuth, async (req, res) => {
+  const id = req.params.id as string;
+  const { isPaid } = req.body;
+  try {
+    const orderDoc = await db.collection('orders').doc(id).get();
+    const orderData = orderDoc.data();
+
+    await db.collection('orders').doc(id).update({ isPaid });
+
+    if (isPaid && orderData && orderData.tableNumber && !String(orderData.tableNumber).includes('外帶') && String(orderData.tableNumber).toLowerCase() !== 'takeout') {
+      const tblId = String(orderData.tableNumber).trim();
+      const tableRef = db.collection('tables').doc(tblId);
+      const tableSnap = await tableRef.get();
+      if (tableSnap.exists) {
+        await tableRef.update({
+          status: 'cleaning',
+          preservedFor: '',
+          cleaningStartedAt: new Date().toISOString()
+        });
+      }
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).send(error);
+  }
+});
+
+
+put('/orders/:id/rate', async (req, res) => {
+  const id = req.params.id as string;
+  const { rating, feedback } = req.body;
+  try {
+    await db.collection('orders').doc(id).update({ rating, feedback });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).send(error);
+  }
+});
+
+
+}

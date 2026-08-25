@@ -180,7 +180,21 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
   );
 
   const lineProfile: any = null;
-  const [selectedTable, setSelectedTable] = useState('5');
+  const [selectedTable, setSelectedTable] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const searchParams = new URLSearchParams(window.location.search);
+      const tableParam = searchParams.get('table');
+      if (tableParam && isValidTableFormat(tableParam)) {
+        return tableParam;
+      }
+      const path = window.location.pathname.toLowerCase();
+      if (path === '/order' || searchParams.get('mode') === 'order' || searchParams.get('action') === 'order') {
+        const nextNum = Math.floor(100 + Math.random() * 900);
+        return `外帶 ${nextNum}`;
+      }
+    }
+    return '5';
+  });
   const [activeCustomerReservation, setActiveCustomerReservation] = useState<Reservation | null>(null);
   const [urlReservationParams, setUrlReservationParams] = useState<any>(null);
 
@@ -207,8 +221,12 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
     if (tableParam && isValidTableFormat(tableParam)) {
       setSelectedTable(tableParam);
       setIsTableFixed(true);
+    } else if (isOrderRoute) {
+      const nextNum = Math.floor(100 + Math.random() * 900);
+      setSelectedTable(`外帶 ${nextNum}`);
+      setIsTableFixed(true);
     }
-  }, []);
+  }, [isOrderRoute]);
 
   const [selectedCategory, setSelectedCategory] = useState('tomyum');
   const [selectedDetailItem, setSelectedDetailItem] = useState<MenuItem | null>(null);
@@ -304,6 +322,9 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
     return true;
   }, [isOpen, isTaiwanRestDay]);
 
+  const isTakeoutMode = selectedTable.includes('外帶') || selectedTable === 'takeout' || isOrderRoute;
+  const effectiveIsStoreCurrentlyOpen = isStoreCurrentlyOpen || isTakeoutMode;
+
   // Hook: useCustomerCart
   const {
     cart,
@@ -329,10 +350,8 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
   } = useCustomerCart({
     promoCombo,
     paymentMethod,
-    isStoreCurrentlyOpen,
+    isStoreCurrentlyOpen: effectiveIsStoreCurrentlyOpen,
   });
-
-  const isTakeoutMode = selectedTable.includes('外帶') || selectedTable === 'takeout';
 
   // Displayed menu items
   const displayedMenuItems = useMemo(() => {
@@ -416,6 +435,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
       return;
     }
     if (isTakeoutMode && !skipTakeoutCheck) {
+      setIsCartOpen(false);
       setShowTakeoutFormModal(true);
       return;
     }
@@ -433,12 +453,23 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
         paymentMethod,
         guestCount,
         clientOrderId,
+        customerName: takeoutCustomerName || undefined,
+        customerPhone: takeoutPhone || undefined,
+        pickupTime: takeoutPickupTime || undefined,
+        takeoutInfo: isTakeoutMode
+          ? {
+              customerName: takeoutCustomerName,
+              phone: takeoutPhone,
+              pickupTime: takeoutPickupTime,
+            }
+          : undefined,
       });
 
       if (result) {
         setOrderSentSuccess(result.id || clientOrderId);
         clearCart();
         setIsCartOpen(false);
+        setShowTakeoutFormModal(false);
       } else {
         setOrderError('送出訂單失敗，請洽詢現場工作人員。');
       }
@@ -607,6 +638,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
         lineProfile={lineProfile}
         isCheckoutSubmitting={isCheckoutSubmitting}
         handleCheckout={handleCheckout}
+        setIsCartOpen={setIsCartOpen}
       />
 
       {/* Reservation Modal */}
@@ -714,7 +746,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
       />
 
       {/* Floating Bottom Cart Bar */}
-      {cart.length > 0 && isStoreCurrentlyOpen && (
+      {cart.length > 0 && effectiveIsStoreCurrentlyOpen && (
         <div
           className="fixed bottom-6 left-1/2 -translate-x-1/2 w-full max-w-sm px-4 z-40 animate-slide-up"
           id="floating-cart-bar"
@@ -1089,7 +1121,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
         setSelectedDetailItem={setSelectedDetailItem}
         currentLang={currentLang}
         isSimplifiedMode={isSimplifiedMode}
-        isStoreCurrentlyOpen={isStoreCurrentlyOpen}
+        isStoreCurrentlyOpen={effectiveIsStoreCurrentlyOpen}
         isMerchantMode={isMerchantMode}
         qty={qty}
         setQty={setQty}
@@ -1144,7 +1176,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
         categories={categories}
         displayedMenuItems={displayedMenuItems}
         popularItemIds={popularItemIds}
-        isStoreCurrentlyOpen={isStoreCurrentlyOpen}
+        isStoreCurrentlyOpen={effectiveIsStoreCurrentlyOpen}
         lineProfile={lineProfile}
         loginCount={loginCount}
         ratingStates={ratingStates}

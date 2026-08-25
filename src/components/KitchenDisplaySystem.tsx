@@ -707,74 +707,82 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
         />
 
         {/* View Mode Router */}
-        {isMergedView ? (
-          <KdsMergedView
-            mergedDishes={mergedDishes}
-            currentLang={currentLang}
-            t={t}
-            getElapsedTime={getElapsedTime}
-            isCloseToClosing={isCloseToClosing}
-            operatingHours={operatingHours}
-            setQuickViewOrder={setQuickViewOrder}
-          />
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5" id="kds-tickets-grid">
-            {filteredOrders.map((order) => (
-              <KdsTicketCard
-                key={order.id}
-                order={order}
-                menuItems={menuItems}
-                tables={tables}
-                reservations={reservations}
-                currentLang={currentLang}
-                t={t}
-                selectedCategory={selectedCategory}
-                printerIp={printerIp}
-                operatingHours={operatingHours}
-                dragStates={dragStates}
-                handleCardTouchStart={handleCardTouchStart}
-                handleCardTouchMove={handleCardTouchMove}
-                handleCardTouchEnd={handleCardTouchEnd}
-                getUrgencyText={getUrgencyText}
-                getElapsedTime={getElapsedTime}
-                getTableOccupancyElapsedTime={getTableOccupancyElapsedTime}
-                isOrderLateForPrepTime={isOrderLateForPrepTime}
-                checkReservationOrderHoldStatus={checkReservationOrderHoldStatus}
-                isCloseToClosing={isCloseToClosing}
-                collapsedOrders={collapsedOrders}
-                toggleOrderCollapse={toggleOrderCollapse}
-                editingOrderId={editingOrderId}
-                setEditingOrderId={setEditingOrderId}
-                editingTableValue={editingTableValue}
-                setEditingTableValue={setEditingTableValue}
-                onUpdateTableNumber={onUpdateTableNumber}
-                setQuickViewOrder={setQuickViewOrder}
-                setPrintConfirmData={setPrintConfirmData}
-                toggleFlagState={toggleFlagState}
-                flaggingOrderId={flaggingOrderId}
-                setFlaggingOrderId={setFlaggingOrderId}
-                flagReasonInput={flagReasonInput}
-                setFlagReasonInput={setFlagReasonInput}
-                flagError={flagError}
-                setFlagError={setFlagError}
-                submitFlagReason={submitFlagReason}
-                handleItemStatusToggle={handleItemStatusToggle}
-                startDictation={startDictation}
-                dictatingOrderId={dictatingOrderId}
-                isDictating={isDictating}
-                dictatedText={dictatedText}
-                setDictatedText={setDictatedText}
-                noteError={noteError}
-                cancelDictation={cancelDictation}
-                stopRecordingAndParse={stopRecordingAndParse}
-                saveDictatedNote={saveDictatedNote}
-                clearQuickNote={clearQuickNote}
-                handleStatusChange={handleStatusChange}
-                processingOrderIds={processingOrderIds}
-              />
-            ))}
-          </div>
-        )}
+        <div aria-label="訂單/餐點列表" className="min-h-[300px]">
+          {filteredOrders.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-64 bg-black/20 border border-white/5 rounded-xl text-white/40">
+              <span className="text-4xl mb-3">🍳</span>
+              <p className="text-lg font-bold">目前沒有新訂單/餐點</p>
+              <p className="text-sm mt-1">請等待顧客下單...</p>
+            </div>
+          ) : isMergedView ? (
+            <KdsMergedView
+              mergedDishes={mergedDishes}
+              currentLang={currentLang}
+              t={t}
+              getElapsedTime={getElapsedTime}
+              isCloseToClosing={isCloseToClosing}
+              operatingHours={operatingHours}
+              setQuickViewOrder={setQuickViewOrder}
+            />
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5" id="kds-tickets-grid">
+              {filteredOrders.map((order) => (
+                <KdsTicketCard
+                  key={order.id}
+                  order={order}
+                  menuItems={menuItems}
+                  tables={tables}
+                  reservations={reservations}
+                  currentLang={currentLang}
+                  t={t}
+                  selectedCategory={selectedCategory}
+                  printerIp={printerIp}
+                  operatingHours={operatingHours}
+                  dragStates={dragStates}
+                  handleCardTouchStart={handleCardTouchStart}
+                  handleCardTouchMove={handleCardTouchMove}
+                  handleCardTouchEnd={handleCardTouchEnd}
+                  getUrgencyText={getUrgencyText}
+                  getElapsedTime={getElapsedTime}
+                  getTableOccupancyElapsedTime={getTableOccupancyElapsedTime}
+                  isOrderLateForPrepTime={isOrderLateForPrepTime}
+                  checkReservationOrderHoldStatus={checkReservationOrderHoldStatus}
+                  isCloseToClosing={isCloseToClosing}
+                  collapsedOrders={collapsedOrders}
+                  toggleOrderCollapse={toggleOrderCollapse}
+                  editingOrderId={editingOrderId}
+                  setEditingOrderId={setEditingOrderId}
+                  editingTableValue={editingTableValue}
+                  setEditingTableValue={setEditingTableValue}
+                  onUpdateTableNumber={onUpdateTableNumber}
+                  setQuickViewOrder={setQuickViewOrder}
+                  setPrintConfirmData={setPrintConfirmData}
+                  toggleFlagState={toggleFlagState}
+                  flaggingOrderId={flaggingOrderId}
+                  setFlaggingOrderId={setFlaggingOrderId}
+                  flagReasonInput={flagReasonInput}
+                  setFlagReasonInput={setFlagReasonInput}
+                  flagError={flagError}
+                  setFlagError={setFlagError}
+                  submitFlagReason={submitFlagReason}
+                  handleItemStatusToggle={handleItemStatusToggle}
+                  startDictation={startDictation}
+                  dictatingOrderId={dictatingOrderId}
+                  isDictating={isDictating}
+                  dictatedText={dictatedText}
+                  setDictatedText={setDictatedText}
+                  noteError={noteError}
+                  cancelDictation={cancelDictation}
+                  stopRecordingAndParse={stopRecordingAndParse}
+                  saveDictatedNote={saveDictatedNote}
+                  clearQuickNote={clearQuickNote}
+                  handleStatusChange={handleStatusChange}
+                  processingOrderIds={processingOrderIds}
+                />
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* Progress & Hourly Analytics Bar Chart */}
         <KdsHourlyChart

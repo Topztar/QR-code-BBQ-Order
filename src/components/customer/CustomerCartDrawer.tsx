@@ -367,7 +367,7 @@ export const CustomerCartDrawer: React.FC<CustomerCartDrawerProps> = ({
                                     ? 'Acumula puntos de Google'
                                     : 'Thành viên Google tích điểm'}
                     </span>
-                    <span className="font-mono">+{Math.round(cartSubtotal * 0.1)} 點</span>
+                    <span className="font-mono">+{Math.round(cartSubtotal * 0.1)} {currentLang === 'zh' ? '點' : currentLang === 'en' ? 'pts' : currentLang === 'ja' ? 'pt' : currentLang === 'th' ? 'คะแนน' : 'pts'}</span>
                   </div>
                 )}
 
@@ -613,7 +613,7 @@ export const CustomerCartDrawer: React.FC<CustomerCartDrawerProps> = ({
             <button
               id="checkout-confirm-btn"
               disabled={(servicePaused && !urlReservationParams?.reservationNo) || isCheckoutSubmitting}
-              onClick={handleCheckout}
+              onClick={() => handleCheckout()}
               className={`w-full font-black px-2 min-[360px]:px-4 rounded-xl transition text-center flex items-center justify-center space-x-1 sm:space-x-1.5 whitespace-nowrap ${
                 (servicePaused && !urlReservationParams?.reservationNo) || isCheckoutSubmitting
                   ? 'bg-zinc-800 text-zinc-500 border border-zinc-700/50 cursor-not-allowed py-3 text-xs opacity-60'

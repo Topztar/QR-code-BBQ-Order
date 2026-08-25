@@ -5,6 +5,10 @@ import { getFirestore } from 'firebase-admin/firestore';
 // 🔐 安全雜湊輔助函式 (PIN Hash with Salt)
 export const PIN_SALT = process.env.PIN_SALT || 'sabay-bbq-secure-salt-2026';
 
+if (!process.env.PIN_SALT && process.env.NODE_ENV === 'production') {
+  console.warn('[Security Warning] PIN_SALT is not explicitly defined in environment variables! Using configured fallback salt.');
+}
+
 export function hashPin(pin: string, salt: string = PIN_SALT): string {
   return crypto.createHash('sha256').update(`${String(pin).trim()}:${salt}`).digest('hex');
 }

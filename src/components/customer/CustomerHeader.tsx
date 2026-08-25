@@ -530,7 +530,7 @@ const CustomerHeaderBase: React.FC<CustomerHeaderProps> = ({
       )}
 
       {/* QR Code Simulator */}
-      {!isTableFixed && (
+      {!isTableFixed && !isOrderRoute && (
         <div className="bg-black/30 border border-white/5 rounded-3xl p-4.5 space-y-3 text-left">
           <div className="flex items-center justify-between">
             <p className="text-xs font-bold text-[#E5B453] flex items-center space-x-1.5 font-sans">

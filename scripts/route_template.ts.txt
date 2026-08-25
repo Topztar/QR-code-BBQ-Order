@@ -1,0 +1,19 @@
+import express from 'express';
+import { Firestore, FieldValue, Timestamp } from 'firebase-admin/firestore';
+import { Bucket } from '@google-cloud/storage';
+import { validateImageUploadPayload } from '../validators';
+import { sendErrorResponse } from '../index';
+import { requireStaffAuth } from '../index';
+
+export function registerImagesRoutes(
+  app: express.Application,
+  db: Firestore,
+  storageBucket: Bucket,
+  _get: Function, post: Function, _put: Function, _del: Function
+) {
+  // --- Google Cloud Storage APIs ---
+  // 2. Upload Image to Google Cloud Storage
+  post('/images/upload', requireStaffAuth, async (req: express.Request, res: express.Response) => {
+    // ROUTE_CONTENT_PLACEHOLDER
+  });
+}

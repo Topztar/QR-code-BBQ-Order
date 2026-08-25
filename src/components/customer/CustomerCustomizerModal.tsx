@@ -455,7 +455,7 @@ export const CustomerCustomizerModal: React.FC<CustomerCustomizerModalProps> = (
                             className="flex items-center justify-between bg-black/45 p-2 rounded border border-white/5"
                           >
                             <div className="text-white/80 shrink-0">
-                              <span className="font-bold">{getLocalizedText(ing.name, 'zh')}</span>
+                              <span className="font-bold">{getLocalizedText(ing.name, currentLang)}</span>
                               <span className="text-[10px] text-zinc-500 ml-1">
                                 ({ing.stock} {ing.unit})
                               </span>

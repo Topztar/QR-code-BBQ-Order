@@ -26,20 +26,31 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // 5. orders (訂單) - 允許前台讀取與送單（建立），禁止前端直接任意刪除或竄改訂單狀態
+    // 5. orders (訂單) - 嚴格限制欄位格式與長度，禁止前端直接任意刪除或竄改訂單狀態
     match /orders/{id} {
       allow read: if true;
       allow create: if request.resource.data.tableNumber is string &&
+                       request.resource.data.tableNumber.size() > 0 &&
+                       request.resource.data.tableNumber.size() <= 50 &&
                        request.resource.data.items is list &&
-                       request.resource.data.totalAmount is number;
+                       request.resource.data.items.size() > 0 &&
+                       request.resource.data.items.size() <= 200 &&
+                       request.resource.data.totalAmount is number &&
+                       request.resource.data.totalAmount >= 0;
       allow update, delete: if false;
     }
 
-    // 6. reservations (預約) - 允許顧客建立預約，禁止公開遍歷或任意竄改
+    // 6. reservations (預約) - 嚴格限制格式與人數範圍，禁止公開遍歷或任意竄改
     match /reservations/{id} {
       allow create: if request.resource.data.customerName is string &&
+                       request.resource.data.customerName.size() > 0 &&
+                       request.resource.data.customerName.size() <= 50 &&
                        request.resource.data.phone is string &&
-                       request.resource.data.guestCount is number;
+                       request.resource.data.phone.size() >= 7 &&
+                       request.resource.data.phone.size() <= 30 &&
+                       request.resource.data.guestCount is number &&
+                       request.resource.data.guestCount >= 1 &&
+                       request.resource.data.guestCount <= 100;
       allow read, update, delete: if false;
     }
 
@@ -59,7 +70,12 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // 10. test (測試連線用 - 生產環境停用)
+    // 10. _ratelimits (分散式速率限制內部記錄) - 嚴格封鎖前端讀寫
+    match /_ratelimits/{id} {
+      allow read, write: if false;
+    }
+
+    // 11. test (測試連線用 - 生產環境停用)
     match /test/{id} {
       allow read, write: if false;
     }

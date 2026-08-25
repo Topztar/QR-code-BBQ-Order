@@ -164,6 +164,7 @@ export interface CustomerTakeoutModalProps {
   lineProfile?: any;
   isCheckoutSubmitting: boolean;
   handleCheckout: (skipTakeoutCheck?: boolean) => Promise<void>;
+  setIsCartOpen?: (val: boolean) => void;
 }
 
 export const CustomerTakeoutModal: React.FC<CustomerTakeoutModalProps> = ({
@@ -181,11 +182,12 @@ export const CustomerTakeoutModal: React.FC<CustomerTakeoutModalProps> = ({
   lineProfile,
   isCheckoutSubmitting,
   handleCheckout,
+  setIsCartOpen,
 }) => {
   if (!showTakeoutFormModal) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto animate-fadeIn">
+    <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-[60] flex items-center justify-center p-4 overflow-y-auto animate-fadeIn">
       <div className="bg-[#121824] border border-blue-500/25 rounded-2xl w-full max-w-md shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]">
         <div className="p-4 border-b border-blue-500/20 bg-black/20 shrink-0">
           <h3 className="text-base font-black text-white flex items-center gap-2">
@@ -319,7 +321,10 @@ export const CustomerTakeoutModal: React.FC<CustomerTakeoutModalProps> = ({
           <div className="p-4 border-t border-white/10 bg-zinc-950 flex justify-end items-center gap-2.5 shrink-0">
             <button
               type="button"
-              onClick={() => setShowTakeoutFormModal(false)}
+              onClick={() => {
+                setShowTakeoutFormModal(false);
+                if (setIsCartOpen) setIsCartOpen(true);
+              }}
               className="px-5 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold rounded-xl transition cursor-pointer text-xs"
             >
               返回修改訂單
