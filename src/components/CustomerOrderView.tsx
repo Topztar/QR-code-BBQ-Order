@@ -120,6 +120,14 @@ interface CustomerOrderViewProps {
     paymentMethod: 'cash' | 'credit' | 'member' | 'twqr';
     guestCount?: number;
     clientOrderId?: string;
+    customerName?: string;
+    customerPhone?: string;
+    pickupTime?: string;
+    takeoutInfo?: {
+      customerName?: string;
+      phone?: string;
+      pickupTime?: string;
+    };
   }) => Promise<Order | null>;
   activeOrders: Order[];
   pushNotifications: any[];

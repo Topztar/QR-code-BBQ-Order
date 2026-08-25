@@ -50,7 +50,10 @@ try {
     : '';
 
   const hasPersistentLocalCache = firebaseClientSrc.includes('persistentLocalCache') && firebaseClientSrc.includes('persistentMultipleTabManager');
-  const hasServerBootstrapProjection = functionsSrc.includes('.select(') && functionsSrc.includes('/bootstrap');
+  const functionsDir = path.join(ROOT_DIR, 'functions', 'src', 'routes');
+  const functionFiles = fs.readdirSync(functionsDir).filter(f => /\.(ts|js)$/.test(f));
+  const allFunctionsSrcContent = functionFiles.map(f => fs.readFileSync(path.join(functionsDir, f), 'utf8')).join('\n');
+  const hasServerBootstrapProjection = allFunctionsSrcContent.includes('.select') && allFunctionsSrcContent.includes('/bootstrap');
   const hasServerAuthCache = authSrc.includes('AUTH_CACHE_TTL_MS') || authSrc.includes('cachedAuthCredentials') || functionsSrc.includes('AUTH_CACHE_TTL_MS');
 
   recordCheck('Firestore: Client Multi-Tab IndexedDB persistentLocalCache Enabled', hasPersistentLocalCache);

@@ -82,9 +82,12 @@ try {
 
   const hasValidators = fs.existsSync(validatorsPath);
   const hasAuthModule = fs.existsSync(authPath);
-  const hasRateLimiting = functionsContent.includes('orderRateLimiter') && functionsContent.includes('reservationRateLimiter');
-  const hasOrderSanitization = functionsContent.includes('validateOrderPayload');
-  const hasReservationSanitization = functionsContent.includes('validateReservationPayload');
+  const functionsDir = path.join(ROOT_DIR, 'functions', 'src', 'routes');
+  const functionFiles = fs.readdirSync(functionsDir).filter(f => /\.(ts|js)$/.test(f));
+  const allFunctionsContent = functionFiles.map(f => fs.readFileSync(path.join(functionsDir, f), 'utf8')).join('\n') + functionsContent;
+  const hasRateLimiting = allFunctionsContent.includes('createRateLimiter') && (allFunctionsContent.includes('orderRateLimiter') || allFunctionsContent.includes('reservationRateLimiter'));
+  const hasOrderSanitization = allFunctionsContent.includes('validateOrderPayload');
+  const hasReservationSanitization = allFunctionsContent.includes('validateReservationPayload');
 
   recordCheck('Cloud Functions: Input Sanitization & Payload Validators Module', hasValidators && hasOrderSanitization && hasReservationSanitization);
   recordCheck('Cloud Functions: Modularized Salt-Hashed Auth & PIN Lockout', hasAuthModule);

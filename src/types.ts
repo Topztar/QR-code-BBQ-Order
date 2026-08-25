@@ -64,9 +64,10 @@ export interface Order {
   total: number;
   status: OrderStatus;
   createdAt: string;
-  customerName: string;
+  customerName?: string;
+  customerPhone?: string;
   customerAvatar: string;
-  paymentMethod: 'cash' | 'credit' | 'member' | 'twqr';
+  paymentMethod: 'cash' | 'credit' | 'member' | 'twqr' | string;
   isMember: boolean;
   isPaid?: boolean;
   guestCount?: number;
@@ -76,10 +77,11 @@ export interface Order {
   isFlagged?: boolean;
   flagReason?: string;
   takeoutInfo?: {
-    customerName: string;
-    phone: string;
-    pickupTime: string;
+    customerName?: string;
+    phone?: string;
+    pickupTime?: string;
   };
+  pickupTime?: string;
   rating?: number;
   feedback?: string;
   isOfflinePending?: boolean;
