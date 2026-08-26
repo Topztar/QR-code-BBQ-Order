@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
 import {
   MenuItem,
   OrderItem,
@@ -18,10 +18,10 @@ import { useCustomerCart } from '../hooks/useCustomerCart';
 import { CustomerHeader } from './customer/CustomerHeader';
 import { CustomerCategoryTabs } from './customer/CustomerCategoryTabs';
 import { CustomerMenuGrid } from './customer/CustomerMenuGrid';
-import { CustomerCustomizerModal } from './customer/CustomerCustomizerModal';
-import { CustomerCartDrawer } from './customer/CustomerCartDrawer';
+const CustomerCustomizerModal = lazy(() => import('./customer/CustomerCustomizerModal').then(m => ({ default: m.CustomerCustomizerModal })));
+const CustomerCartDrawer = lazy(() => import('./customer/CustomerCartDrawer').then(m => ({ default: m.CustomerCartDrawer })));
 import { CustomerOrderTracker } from './customer/CustomerOrderTracker';
-import { CustomerReservationModal } from './customer/CustomerReservationModal';
+const CustomerReservationModal = lazy(() => import('./customer/CustomerReservationModal').then(m => ({ default: m.CustomerReservationModal })));
 import {
   CustomerStaffPinModal,
   CustomerLightboxModal,
@@ -650,7 +650,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
       />
 
       {/* Reservation Modal */}
-      <CustomerReservationModal
+      <Suspense fallback={null}><CustomerReservationModal
         showReservationModal={showReservationModal}
         setShowReservationModal={setShowReservationModal}
         autoOpenReservationModal={autoOpenReservationModal}
@@ -682,7 +682,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
         resFeedback={resFeedback}
         resSubmitting={resSubmitting}
         handleReservationSubmit={handleReservationSubmit}
-      />
+      /></Suspense>
 
       {/* Customer Header and Banners */}
       <CustomerHeader
@@ -1124,7 +1124,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
       )}
 
       {/* Customizer Modal */}
-      <CustomerCustomizerModal
+      <Suspense fallback={null}><CustomerCustomizerModal
         selectedDetailItem={selectedDetailItem}
         setSelectedDetailItem={setSelectedDetailItem}
         currentLang={currentLang}
@@ -1145,10 +1145,10 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
         onAdjustIngredientStock={onAdjustIngredientStock}
         handleAddToCart={handleCustomizerAddToCart}
         setActiveLightboxImg={setActiveLightboxImg}
-      />
+      /></Suspense>
 
       {/* Cart Drawer */}
-      <CustomerCartDrawer
+      <Suspense fallback={null}><CustomerCartDrawer
         isCartOpen={isCartOpen}
         setIsCartOpen={setIsCartOpen}
         cart={cart}
@@ -1172,7 +1172,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
         handleCheckout={handleCheckout}
         selectedTable={selectedTable}
         t={t}
-      />
+      /></Suspense>
 
       {/* Order Tracker and History */}
       <CustomerOrderTracker
