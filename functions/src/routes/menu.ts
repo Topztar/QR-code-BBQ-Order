@@ -106,8 +106,31 @@ export function registerMenuRoutes(app: express.Application, ctx: RouteContext) 
       const now = new Date();
       const snapshot = await db.collection('menu').select('id', 'category', 'name', 'price', 'image', 'description', 'available', 'isAvailable', 'isSetMeal', 'requiredSaucesOption', 'hasNoodlesOption', 'hasCoconutsMilkOption', 'containsBeef', 'containsPork', 'containsSeafood', 'isNotSpicy', 'customAddOns', 'recipe', 'orderIndex', 'isTakeoutAvailable', 'soldOutAt').orderBy('orderIndex').get();
       const items = snapshot.docs.map(doc => {
-        const data = doc.data();
-        return { ...data, _docId: doc.id };
+        const d = doc.data() as any;
+        return {
+          id: d.id ?? doc.id,
+          category: d.category ?? 'uncategorized',
+          name: d.name ?? { zh: '' },
+          price: typeof d.price === 'number' ? d.price : 0,
+          image: d.image ?? '',
+          description: d.description ?? { zh: '' },
+          available: !!d.available,
+          isAvailable: d.isAvailable,
+          isSetMeal: !!d.isSetMeal,
+          requiredSaucesOption: !!d.requiredSaucesOption,
+          hasNoodlesOption: !!d.hasNoodlesOption,
+          hasCoconutsMilkOption: !!d.hasCoconutsMilkOption,
+          containsBeef: !!d.containsBeef,
+          containsPork: !!d.containsPork,
+          containsSeafood: !!d.containsSeafood,
+          isNotSpicy: !!d.isNotSpicy,
+          customAddOns: d.customAddOns ?? [],
+          recipe: d.recipe ?? [],
+          orderIndex: typeof d.orderIndex === 'number' ? d.orderIndex : 0,
+          isTakeoutAvailable: d.isTakeoutAvailable !== false,
+          soldOutAt: d.soldOutAt ?? null,
+          _docId: doc.id
+        };
       });
 
       const processedItems = items.map((item: any) => {
