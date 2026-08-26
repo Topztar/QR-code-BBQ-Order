@@ -4,7 +4,7 @@ exports.registerOrdersRoutes = registerOrdersRoutes;
 const validators_1 = require("../validators");
 const helpers_1 = require("../helpers");
 function registerOrdersRoutes(app, ctx) {
-    const { db, storageBucket, requireStaffAuth, createRateLimiter, sendErrorResponse } = ctx;
+    const { db, storageBucket, requireStaffAuth, requireAppCheck, createRateLimiter, sendErrorResponse } = ctx;
     const getCachedSettings = (0, helpers_1.createGetCachedSettings)(db);
     const orderRateLimiter = createRateLimiter(20, 60 * 1000, '訂單提交');
     const get = (routePath, ...handlers) => app.get([`/api${routePath}`, routePath], ...handlers);
@@ -34,7 +34,7 @@ function registerOrdersRoutes(app, ctx) {
             res.status(500).send(error);
         }
     });
-    post('/orders', orderRateLimiter, async (req, res) => {
+    post('/orders', requireAppCheck, orderRateLimiter, async (req, res) => {
         const validation = (0, validators_1.validateOrderPayload)(req.body);
         if (!validation.isValid || !validation.sanitizedData) {
             return res.status(400).json({ error: validation.error || '無效的訂單資料格式' });
@@ -42,32 +42,40 @@ function registerOrdersRoutes(app, ctx) {
         const orderData = validation.sanitizedData;
         const orderId = orderData.id || `ORD-${Date.now().toString(36).toUpperCase()}`;
         try {
-            const systemDoc = await db.collection('settings').doc('system').get();
-            const sysData = systemDoc.data();
-            const isTakeoutOrder = !!(orderData.takeoutInfo || String(orderData.tableNumber || '').includes('外帶') || String(orderData.tableNumber || '').toLowerCase() === 'takeout');
-            const isReservationOrder = !!(orderData.reservationNo || orderData.reservationDate);
-            if (!isReservationOrder && !isTakeoutOrder && !(0, helpers_1.isStoreOpenFromData)(sysData)) {
-                return res.status(403).json({ error: '目前不在營業時間內（店鋪休息中），系統不開放下單點餐！' });
-            }
-            const savedOrder = {
-                ...orderData,
-                id: orderId,
-                status: orderData.status || 'pending',
-                createdAt: orderData.createdAt || new Date().toISOString(),
-            };
-            await db.collection('orders').doc(orderId).set(savedOrder);
-            if (orderData.tableNumber && !String(orderData.tableNumber).includes('外帶') && String(orderData.tableNumber).toLowerCase() !== 'takeout') {
-                const tblId = String(orderData.tableNumber).trim();
-                const tableRef = db.collection('tables').doc(tblId);
-                const tableSnap = await tableRef.get();
-                if (tableSnap.exists) {
-                    await tableRef.update({ status: 'in_use', cleaningStartedAt: null });
+            const savedOrder = await db.runTransaction(async (t) => {
+                const systemDoc = await t.get(db.collection('settings').doc('system'));
+                const sysData = systemDoc.data();
+                const isTakeoutOrder = !!(orderData.takeoutInfo || String(orderData.tableNumber || '').includes('外帶') || String(orderData.tableNumber || '').toLowerCase() === 'takeout');
+                const isReservationOrder = !!(orderData.reservationNo || orderData.reservationDate);
+                if (!isReservationOrder && !isTakeoutOrder && !(0, helpers_1.isStoreOpenFromData)(sysData)) {
+                    throw new Error('CLOSED:目前不在營業時間內（店鋪休息中），系統不開放下單點餐！');
                 }
-            }
+                let tableSnap = null;
+                let tableRef = null;
+                if (orderData.tableNumber && !isTakeoutOrder) {
+                    const tblId = String(orderData.tableNumber).trim();
+                    tableRef = db.collection('tables').doc(tblId);
+                    tableSnap = await t.get(tableRef);
+                }
+                const orderToSave = {
+                    ...orderData,
+                    id: orderId,
+                    status: orderData.status || 'pending',
+                    createdAt: orderData.createdAt || new Date().toISOString(),
+                };
+                t.set(db.collection('orders').doc(orderId), orderToSave);
+                if (tableRef && tableSnap && tableSnap.exists) {
+                    t.update(tableRef, { status: 'in_use', cleaningStartedAt: null });
+                }
+                return orderToSave;
+            });
             res.status(201).json(savedOrder);
         }
         catch (error) {
             console.error('Error submitting order:', error);
+            if (error instanceof Error && error.message.startsWith('CLOSED:')) {
+                return res.status(403).json({ error: error.message.replace('CLOSED:', '') });
+            }
             res.status(500).send(error);
         }
     });

@@ -1,6 +1,10 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerMenuRoutes = registerMenuRoutes;
+const sharp_1 = __importDefault(require("sharp"));
 const validators_1 = require("../validators");
 const helpers_1 = require("../helpers");
 function registerMenuRoutes(app, ctx) {
@@ -20,13 +24,17 @@ function registerMenuRoutes(app, ctx) {
             if (buffer.length > 10 * 1024 * 1024) {
                 return res.status(400).json({ error: '圖片大小超出 10MB 上限 (Max 10MB)' });
             }
+            const webpBuffer = await (0, sharp_1.default)(buffer)
+                .resize(800, null, { withoutEnlargement: true })
+                .webp({ quality: 80 })
+                .toBuffer();
             const nameWithoutExt = rawFilename.replace(/\.[^/.]+$/, '');
-            const versionedFilename = `${nameWithoutExt}-${Date.now()}.${cleanExt}`;
+            const versionedFilename = `${nameWithoutExt}-${Date.now()}.webp`;
             const targetPath = `${targetFolder}/${versionedFilename}`;
             const file = storageBucket.file(targetPath);
-            await file.save(buffer, {
+            await file.save(webpBuffer, {
                 metadata: {
-                    contentType: mime,
+                    contentType: 'image/webp',
                     cacheControl: 'public, max-age=31536000, immutable'
                 },
                 resumable: false
@@ -37,8 +45,8 @@ function registerMenuRoutes(app, ctx) {
                 url: publicUrl,
                 path: targetPath,
                 filename: versionedFilename,
-                size: buffer.length,
-                contentType: mime
+                size: webpBuffer.length,
+                contentType: 'image/webp'
             });
         }
         catch (error) {

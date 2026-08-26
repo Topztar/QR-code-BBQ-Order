@@ -2,6 +2,7 @@ import { onRequest } from 'firebase-functions/v2/https';
 import { setGlobalOptions } from 'firebase-functions/v2';
 import * as admin from 'firebase-admin';
 import { getStorage } from 'firebase-admin/storage';
+import { getAppCheck } from 'firebase-admin/app-check';
 import express from 'express';
 
 setGlobalOptions({ maxInstances: 10, minInstances: 0, memory: "256MiB", region: "asia-east1", concurrency: 80, invoker: 'public' });
@@ -117,6 +118,28 @@ export const sendErrorResponse = (res: express.Response, error: any, contextMsg:
   });
 };
 
+// =================================================================
+// 🤖 App Check 驗證 Middleware (防止機器人與未授權 API 呼叫)
+// =================================================================
+export const requireAppCheck = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (process.env.FUNCTIONS_EMULATOR === 'true' || process.env.NODE_ENV !== 'production') {
+    return next();
+  }
+  
+  const appCheckToken = req.header('X-Firebase-AppCheck');
+  if (!appCheckToken) {
+    return res.status(401).json({ error: '拒絕連線：缺少有效 App Check 安全認證' });
+  }
+
+  try {
+    await getAppCheck().verifyToken(appCheckToken);
+    return next();
+  } catch (err) {
+    console.error('App Check 驗證失敗:', err);
+    return res.status(401).json({ error: '拒絕連線：App Check 驗證失敗 (Unauthorized Bot)' });
+  }
+};
+
 // ============================================================
 // 路由模組 imports (Phase 3 拆分)
 // ============================================================
@@ -136,6 +159,7 @@ const routeCtx = {
   db,
   storageBucket,
   requireStaffAuth,
+  requireAppCheck,
   createRateLimiter,
   sendErrorResponse,
 };

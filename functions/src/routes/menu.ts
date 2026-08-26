@@ -1,4 +1,5 @@
 import express from 'express';
+import sharp from 'sharp';
 import { Firestore, FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { Bucket } from '@google-cloud/storage';
 import * as net from 'net';
@@ -44,14 +45,20 @@ export function registerMenuRoutes(app: express.Application, ctx: RouteContext) 
         return res.status(400).json({ error: '圖片大小超出 10MB 上限 (Max 10MB)' });
       }
 
+      // 🚀 使用 sharp 自動產生 WebP 縮圖並限制寬度為 800px
+      const webpBuffer = await sharp(buffer)
+        .resize(800, null, { withoutEnlargement: true })
+        .webp({ quality: 80 })
+        .toBuffer();
+
       // 🚀 加入版本時間戳避免 CDN 同名覆蓋快取陳舊
       const nameWithoutExt = rawFilename.replace(/\.[^/.]+$/, '');
-      const versionedFilename = `${nameWithoutExt}-${Date.now()}.${cleanExt}`;
+      const versionedFilename = `${nameWithoutExt}-${Date.now()}.webp`;
       const targetPath = `${targetFolder}/${versionedFilename}`;
       const file = storageBucket.file(targetPath);
-      await file.save(buffer, {
+      await file.save(webpBuffer, {
         metadata: {
-          contentType: mime,
+          contentType: 'image/webp',
           cacheControl: 'public, max-age=31536000, immutable'
         },
         resumable: false
@@ -63,8 +70,8 @@ export function registerMenuRoutes(app: express.Application, ctx: RouteContext) 
         url: publicUrl,
         path: targetPath,
         filename: versionedFilename,
-        size: buffer.length,
-        contentType: mime
+        size: webpBuffer.length,
+        contentType: 'image/webp'
       });
     } catch (error: any) {
       console.error('[Cloud Functions Storage Upload Error]:', error);

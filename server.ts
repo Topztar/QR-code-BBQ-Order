@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import express from 'express';
+import sharp from 'sharp';
 import path from 'path';
 import net from 'net';
 import { initializeApp as initializeClientApp, getApps as getClientApps } from 'firebase/app';
@@ -1801,20 +1802,24 @@ app.post('/api/images/upload', async (req, res) => {
     }
 
     const buffer = Buffer.from(base64Clean, 'base64');
-    const ext = mime.split('/')[1] || 'jpg';
-    const cleanExt = ext === 'jpeg' ? 'jpg' : ext.replace(/[^a-zA-Z0-9]/g, '') || 'jpg';
-    let targetFilename = filename ? filename.replace(/[^a-zA-Z0-9._-]/g, '') : `dish-${Date.now()}.${cleanExt}`;
+    
+    // 🚀 使用 sharp 自動產生 WebP 縮圖並限制寬度為 800px
+    const webpBuffer = await sharp(buffer)
+      .resize(800, null, { withoutEnlargement: true })
+      .webp({ quality: 80 })
+      .toBuffer();
+
+    let targetFilename = filename ? filename.replace(/[^a-zA-Z0-9._-]/g, '') : `dish-${Date.now()}.webp`;
     targetFilename = targetFilename.replace(/-+\./g, '.').replace(/\.+/g, '.').replace(/^-+|-+$/g, '');
-    if (!targetFilename.includes('.')) {
-      targetFilename = `${targetFilename}.${cleanExt}`;
-    }
+    const nameWithoutExt = targetFilename.replace(/\.[^/.]+$/, '');
+    targetFilename = `${nameWithoutExt}-${Date.now()}.webp`;
     const targetPath = `${folder}/${targetFilename}`.replace(/^\/+/, '');
 
     if (gcsBucket) {
       const file = gcsBucket.file(targetPath);
-      await file.save(buffer, {
+      await file.save(webpBuffer, {
         metadata: {
-          contentType: mime,
+          contentType: 'image/webp',
           cacheControl: 'public, max-age=86400, stale-while-revalidate=604800'
         },
         resumable: false
@@ -1826,18 +1831,19 @@ app.post('/api/images/upload', async (req, res) => {
         url: publicUrl,
         path: targetPath,
         filename: targetFilename,
-        size: buffer.length,
-        contentType: mime
+        size: webpBuffer.length,
+        contentType: 'image/webp'
       });
     } else {
       // Local development fallback
+      const finalBase64 = webpBuffer.toString('base64');
       return res.json({
         success: true,
-        url: `data:${mime};base64,${base64Clean}`,
+        url: `data:image/webp;base64,${finalBase64}`,
         path: targetPath,
         filename: targetFilename,
-        size: buffer.length,
-        contentType: mime
+        size: webpBuffer.length,
+        contentType: 'image/webp'
       });
     }
   } catch (error: any) {

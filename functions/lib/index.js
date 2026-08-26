@@ -36,12 +36,13 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.api = exports.sendErrorResponse = exports.requireStaffAuth = void 0;
+exports.api = exports.requireAppCheck = exports.sendErrorResponse = exports.requireStaffAuth = void 0;
 exports.createRateLimiter = createRateLimiter;
 const https_1 = require("firebase-functions/v2/https");
 const v2_1 = require("firebase-functions/v2");
 const admin = __importStar(require("firebase-admin"));
 const storage_1 = require("firebase-admin/storage");
+const app_check_1 = require("firebase-admin/app-check");
 const express_1 = __importDefault(require("express"));
 (0, v2_1.setGlobalOptions)({ maxInstances: 10, minInstances: 0, memory: "256MiB", region: "asia-east1", concurrency: 80, invoker: 'public' });
 const cors_1 = __importDefault(require("cors"));
@@ -120,6 +121,24 @@ const sendErrorResponse = (res, error, contextMsg = '伺服器內部錯誤') => 
     });
 };
 exports.sendErrorResponse = sendErrorResponse;
+const requireAppCheck = async (req, res, next) => {
+    if (process.env.FUNCTIONS_EMULATOR === 'true' || process.env.NODE_ENV !== 'production') {
+        return next();
+    }
+    const appCheckToken = req.header('X-Firebase-AppCheck');
+    if (!appCheckToken) {
+        return res.status(401).json({ error: '拒絕連線：缺少有效 App Check 安全認證' });
+    }
+    try {
+        await (0, app_check_1.getAppCheck)().verifyToken(appCheckToken);
+        return next();
+    }
+    catch (err) {
+        console.error('App Check 驗證失敗:', err);
+        return res.status(401).json({ error: '拒絕連線：App Check 驗證失敗 (Unauthorized Bot)' });
+    }
+};
+exports.requireAppCheck = requireAppCheck;
 const menu_1 = require("./routes/menu");
 const bootstrap_1 = require("./routes/bootstrap");
 const inventory_1 = require("./routes/inventory");
@@ -132,6 +151,7 @@ const routeCtx = {
     db,
     storageBucket,
     requireStaffAuth: exports.requireStaffAuth,
+    requireAppCheck: exports.requireAppCheck,
     createRateLimiter,
     sendErrorResponse: exports.sendErrorResponse,
 };

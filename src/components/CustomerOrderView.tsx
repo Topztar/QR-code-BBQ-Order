@@ -442,7 +442,9 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
       showToast('購物車內尚無任何餐點！', 'error');
       return;
     }
-    if (isTakeoutMode && !skipTakeoutCheck) {
+    // 只有在線上點餐獨立連結 (/order) 且為外帶時才強制顯示外帶表單
+    // 針對店內掃碼外帶 (?table=takeout) 則直接送出訂單，免填表單以加速結帳流程
+    if (isTakeoutMode && isOrderRoute && !skipTakeoutCheck) {
       setIsCartOpen(false);
       setShowTakeoutFormModal(true);
       return;
