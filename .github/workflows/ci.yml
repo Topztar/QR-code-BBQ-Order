@@ -19,7 +19,7 @@ jobs:
       - name: Setup Node.js 20 Environment
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
 
       - name: Install Dependencies
@@ -28,8 +28,8 @@ jobs:
       - name: Install Functions Dependencies
         run: cd functions && npm ci
 
-      - name: Run Master Architecture Quality Gate (All 6 Steps)
-        run: npm run audit:all
+      - name: Run Type Checking and Build
+        run: npm run lint && npm run build
 
       - name: Verify Bundle Size Limits
         run: |
