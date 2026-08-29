@@ -1,3 +1,4 @@
+/* eslint-disable no-control-regex */
 /**
  * Server-Side Input Sanitization and Validation
  * Prevents NoSQL/SQL injection, XSS vectors, prototype pollution, and malformed payloads
@@ -219,6 +220,33 @@ export function validateImageUploadPayload(body: any): ValidationResult<{
       cleanExt,
       targetFolder,
       targetFilename
+    }
+  };
+}
+
+/**
+ * Validates and sanitizes Order Rating payload
+ */
+export function validateRatingPayload(body: any): ValidationResult<{
+  rating: number;
+  feedback: string;
+}> {
+  if (!body || typeof body !== 'object') {
+    return { isValid: false, error: '無效的評價資料格式 (Invalid rating payload)' };
+  }
+
+  const ratingNum = Number(body.rating);
+  if (!Number.isInteger(ratingNum) || ratingNum < 1 || ratingNum > 5) {
+    return { isValid: false, error: '評分星級必須為 1 到 5 之間的整數 (Rating must be 1-5)' };
+  }
+
+  const feedback = sanitizeString(body.feedback || '', 500);
+
+  return {
+    isValid: true,
+    sanitizedData: {
+      rating: ratingNum,
+      feedback
     }
   };
 }

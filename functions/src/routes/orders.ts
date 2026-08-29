@@ -1,9 +1,7 @@
 import express from 'express';
-import { Firestore, FieldValue, Timestamp } from 'firebase-admin/firestore';
+import { Firestore } from 'firebase-admin/firestore';
 import { Bucket } from '@google-cloud/storage';
-import * as crypto from 'crypto';
-import { hashPin, invalidateAuthCache } from '../auth';
-import { validateOrderPayload, sanitizeString } from '../validators';
+import { validateOrderPayload, validateRatingPayload } from '../validators';
 import { isStoreOpenFromData, createGetCachedSettings } from '../helpers';
 
 // ============================================================
@@ -356,7 +354,11 @@ put('/orders/:id/pay', requireStaffAuth, async (req, res) => {
 
 put('/orders/:id/rate', async (req, res) => {
   const id = req.params.id as string;
-  const { rating, feedback } = req.body;
+  const validation = validateRatingPayload(req.body);
+  if (!validation.isValid || !validation.sanitizedData) {
+    return res.status(400).json({ error: validation.error || '無效的評價資料' });
+  }
+  const { rating, feedback } = validation.sanitizedData;
   try {
     await db.collection('orders').doc(id).update({ rating, feedback });
     res.json({ success: true });

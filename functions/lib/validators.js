@@ -4,6 +4,7 @@ exports.sanitizeString = sanitizeString;
 exports.validateOrderPayload = validateOrderPayload;
 exports.validateReservationPayload = validateReservationPayload;
 exports.validateImageUploadPayload = validateImageUploadPayload;
+exports.validateRatingPayload = validateRatingPayload;
 function sanitizeString(input, maxLength = 255) {
     if (input === null || input === undefined)
         return '';
@@ -160,6 +161,23 @@ function validateImageUploadPayload(body) {
             cleanExt,
             targetFolder,
             targetFilename
+        }
+    };
+}
+function validateRatingPayload(body) {
+    if (!body || typeof body !== 'object') {
+        return { isValid: false, error: '無效的評價資料格式 (Invalid rating payload)' };
+    }
+    const ratingNum = Number(body.rating);
+    if (!Number.isInteger(ratingNum) || ratingNum < 1 || ratingNum > 5) {
+        return { isValid: false, error: '評分星級必須為 1 到 5 之間的整數 (Rating must be 1-5)' };
+    }
+    const feedback = sanitizeString(body.feedback || '', 500);
+    return {
+        isValid: true,
+        sanitizedData: {
+            rating: ratingNum,
+            feedback
         }
     };
 }

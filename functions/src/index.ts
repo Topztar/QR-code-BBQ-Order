@@ -5,11 +5,9 @@ import { getStorage } from 'firebase-admin/storage';
 import { getAppCheck } from 'firebase-admin/app-check';
 import express from 'express';
 
-setGlobalOptions({ maxInstances: 10, minInstances: 0, memory: "256MiB", region: "asia-east1", concurrency: 80, invoker: 'public' });
+setGlobalOptions({ maxInstances: 10, minInstances: 0, memory: "256MiB", region: "asia-east1", concurrency: 80, timeoutSeconds: 30, invoker: 'public' });
 import cors from 'cors';
-import * as net from 'net';
-import * as crypto from 'crypto';
-import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { getFirestore } from 'firebase-admin/firestore';
 
 process.on('unhandledRejection', (reason, promise) => {
   console.error('[Cloud Functions] Unhandled Rejection at:', promise, 'reason:', reason);
@@ -27,8 +25,7 @@ const storageBucket = getStorage().bucket('sabay-bbq-order.firebasestorage.app')
 const app = express();
 
 // 🔐 安全認證與驗證模組
-import { hashPin, createStaffAuthMiddleware, invalidateAuthCache } from './auth';
-import { validateOrderPayload, validateReservationPayload, validateImageUploadPayload, sanitizeString } from './validators';
+import { createStaffAuthMiddleware } from './auth';
 
 export const requireStaffAuth = createStaffAuthMiddleware(db);
 

@@ -37,9 +37,9 @@ function registerTablesRoutes(app, ctx) {
             sendErrorResponse(res, error);
         }
     });
-    get('/reservations', async (_req, res) => {
+    get('/reservations', requireStaffAuth, async (_req, res) => {
         try {
-            res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=10, stale-while-revalidate=30');
+            res.setHeader('Cache-Control', 'private, no-cache, no-store, must-revalidate');
             const todayStr = new Date().toISOString().split('T')[0];
             const snapshot = await db.collection('reservations').select('id', 'customerName', 'phone', 'guestCount', 'tableNumber', 'date', 'time', 'status', 'notes', 'createdAt', 'reservationNo').where('date', '>=', todayStr).limit(100).get();
             const reservations = snapshot.docs.map(doc => doc.data());

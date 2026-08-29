@@ -52,7 +52,7 @@ function registerBootstrapRoutes(app, ctx) {
                 db.collection('tables').select('id', 'qrCodeUrl', 'status', 'cleaningStartedAt', 'maxCapacity', 'positionX', 'positionY', 'preservedFor', 'mergedWith').get(),
                 db.collection('settings').doc('system').get(),
                 db.collection('ingredients').select('id', 'name', 'stock', 'minThreshold', 'unit').get(),
-                db.collection('reservations').select('id', 'customerName', 'phone', 'guestCount', 'tableNumber', 'date', 'time', 'status', 'notes', 'createdAt', 'reservationNo').where('date', '>=', todayStr).limit(100).get()
+                db.collection('reservations').select('id', 'guestCount', 'tableNumber', 'date', 'time', 'status', 'reservationNo').where('date', '>=', todayStr).limit(100).get()
             ]);
             const now = new Date();
             const items = menuSnap.docs.map(doc => {

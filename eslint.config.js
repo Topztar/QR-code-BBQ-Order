@@ -6,7 +6,7 @@ import globals from 'globals';
 
 export default [
   {
-    ignores: ['dist/**', 'functions/lib/**', 'node_modules/**', '.firebase/**']
+    ignores: ['dist/**', 'functions/lib/**', 'node_modules/**', '.firebase/**', 'hardware/**']
   },
   eslint.configs.recommended,
   {

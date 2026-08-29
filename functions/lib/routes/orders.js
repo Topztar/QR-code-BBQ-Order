@@ -275,7 +275,11 @@ function registerOrdersRoutes(app, ctx) {
     });
     put('/orders/:id/rate', async (req, res) => {
         const id = req.params.id;
-        const { rating, feedback } = req.body;
+        const validation = (0, validators_1.validateRatingPayload)(req.body);
+        if (!validation.isValid || !validation.sanitizedData) {
+            return res.status(400).json({ error: validation.error || '無效的評價資料' });
+        }
+        const { rating, feedback } = validation.sanitizedData;
         try {
             await db.collection('orders').doc(id).update({ rating, feedback });
             res.json({ success: true });

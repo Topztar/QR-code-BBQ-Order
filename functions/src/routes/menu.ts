@@ -1,11 +1,8 @@
 import express from 'express';
 import sharp from 'sharp';
-import { Firestore, FieldValue, Timestamp } from 'firebase-admin/firestore';
+import { Firestore } from 'firebase-admin/firestore';
 import { Bucket } from '@google-cloud/storage';
-import * as net from 'net';
-import * as crypto from 'crypto';
-import { hashPin, invalidateAuthCache } from '../auth';
-import { validateOrderPayload, validateReservationPayload, validateImageUploadPayload, sanitizeString } from '../validators';
+import { validateImageUploadPayload } from '../validators';
 import { cachedMenu, cachedCategories, setCachedMenu, setCachedCategories, CACHE_TTL_MS, processMenuItemSoldOut } from '../helpers';
 
 // ============================================================

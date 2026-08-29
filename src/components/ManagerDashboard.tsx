@@ -2,7 +2,7 @@ import { apiFetch } from "../lib/api";
 import React, { Component, useState, useEffect, useMemo, useCallback } from 'react';
 import { Ingredient, Language, Category, TableConfig, Order, OrderStatus, Reservation } from '../types';
 import { getLocalizedText } from '../utils/i18n';
-import { AlertTriangle, Sparkles, Coins, Lock, Unlock, QrCode, Trash2, Plus, Edit, Download, Calendar, FileText, ShoppingBag, Copy, Check, Minus, Printer, Maximize2, Phone, Clock, User } from 'lucide-react';
+import { AlertTriangle, Sparkles, Coins, Trash2, Plus, Download, Check, Minus, Printer } from 'lucide-react';
 import { db, isFirebaseSyncEnabled } from '../lib/firebase';
 import { safeStorage } from '../lib/safeStorage';
 import { doc, setDoc, writeBatch, collection, getDocs, query, where } from 'firebase/firestore';

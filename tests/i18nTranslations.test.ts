@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { TRANSLATIONS, CAT_NAMES } from '../src/data';
-import { translateKey, getLocalizedText } from '../src/utils/i18n';
+import { getLocalizedText } from '../src/utils/i18n';
 import { Language } from '../src/types';
 
 const ALL_LANGUAGES: Language[] = ['zh', 'en', 'th', 'ja', 'ko', 'vi', 'ru', 'es'];

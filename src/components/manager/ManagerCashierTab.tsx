@@ -4,7 +4,7 @@ import {
   Lock, Maximize2, Minus, Phone, Plus, QrCode, ShoppingBag,
   Trash2, Unlock, User
 } from 'lucide-react';
-import { Language, Category, TableConfig, Order, OrderStatus, Reservation } from '../../types';
+import { Language, Category, TableConfig, Order, Reservation } from '../../types';
 import { getLocalizedText } from '../../utils/i18n';
 import {
   getMaskedEmail,
