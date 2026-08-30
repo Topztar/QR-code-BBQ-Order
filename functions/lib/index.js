@@ -56,6 +56,7 @@ process.on('uncaughtException', (err) => {
 });
 admin.initializeApp();
 const db = (0, firestore_2.getFirestore)('ai-studio-sabaythaibbqtabl-84418196-9d0c-459c-bced-ddc424dfba07');
+db.settings({ ignoreUndefinedProperties: true });
 const storageBucket = (0, storage_1.getStorage)().bucket('sabay-bbq-order.firebasestorage.app');
 const app = (0, express_1.default)();
 const auth_1 = require("./auth");

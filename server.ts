@@ -1267,7 +1267,19 @@ function loadStateFromDisk() {
           liveServicePaused = !!parsed.liveServicePaused;
         }
         if (Array.isArray(parsed.liveOrders)) {
-          liveOrders = parsed.liveOrders.filter((o: any) => o && !o.id.startsWith('LM-100') && !o.id.startsWith('LM-099'));
+          const nowMs = Date.now();
+          const oneDayMs = 24 * 60 * 60 * 1000;
+          liveOrders = parsed.liveOrders.filter((o: any) => {
+            if (!o) return false;
+            if (o.id.startsWith('LM-100') || o.id.startsWith('LM-099')) return false;
+            if (o.createdAt) {
+               const orderTimeMs = new Date(o.createdAt).getTime();
+               if (!isNaN(orderTimeMs) && (nowMs - orderTimeMs > oneDayMs)) {
+                 return false;
+               }
+            }
+            return true;
+          });
         }
         if (Array.isArray(parsed.inventoryLogs)) {
           inventoryLogs = parsed.inventoryLogs;
@@ -1399,15 +1411,16 @@ app.get('/api/printer/ping', (req, res) => {
   const socket = new net.Socket();
   let completed = false;
   
-  socket.setTimeout(1200);
+  socket.setTimeout(1500);
 
   const cleanUp = () => {
+    socket.removeAllListeners();
     if (!socket.destroyed) {
       socket.destroy();
     }
   };
 
-  socket.connect(9100, ip, () => {
+  socket.on('connect', () => {
     if (!completed) {
       completed = true;
       cleanUp();
@@ -1445,11 +1458,32 @@ app.get('/api/printer/ping', (req, res) => {
         ip,
         port: 9100,
         simulated: true,
-        error: 'Network connection timeout (ETIMEDOUT)',
+        error: 'Network connection timeout (ETIMEDOUT) - Socket destroyed',
         timestamp: new Date().toISOString()
       });
     }
   });
+
+  socket.on('close', () => {
+    cleanUp();
+  });
+
+  try {
+    socket.connect(9100, ip);
+  } catch (err: any) {
+    if (!completed) {
+      completed = true;
+      cleanUp();
+      res.json({
+        reachable: true,
+        ip,
+        port: 9100,
+        simulated: true,
+        error: err?.message || 'Failed to initiate connect',
+        timestamp: new Date().toISOString()
+      });
+    }
+  }
 });
 
 // Update printer IP configuration
@@ -2550,6 +2584,11 @@ app.post('/api/reservations', reservationRateLimiter, (req, res) => {
 
   // Sync table status with reservation (only for today's reservations)
   syncTableStatusesWithTodayReservations();
+
+  if (firestoreDb) {
+    setDoc(doc(firestoreDb, 'reservations', newReservation.id), newReservation)
+      .catch(err => console.error('[Firebase] Failed to sync new reservation to firestore:', err));
+  }
 
   saveStateToDisk();
   res.status(201).json(newReservation);

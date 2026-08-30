@@ -186,7 +186,7 @@ export const KdsQuickViewModal: React.FC<KdsQuickViewModalProps> = ({
             <div className="space-y-3">
               {quickViewOrder.items.map((it, idx) => {
                 const spicinessText =
-                  it.customization.spiciness === 1 ? t('spicy') : t('notSpicy');
+                  it.customization?.spiciness === 1 ? t('spicy') : t('notSpicy');
 
                 return (
                   <div
@@ -270,22 +270,24 @@ export const KdsQuickViewModal: React.FC<KdsQuickViewModalProps> = ({
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2">
-                      <div
-                        className={`p-2.5 rounded-lg border text-xs ${
-                          it.customization.spiciness === 0
-                            ? 'bg-zinc-900 border-zinc-800 text-zinc-400'
-                            : it.customization.spiciness >= 2
-                              ? 'bg-red-500/10 border-red-500/30 text-red-400 font-black'
-                              : 'bg-amber-500/10 border-amber-500/25 text-amber-400 font-bold'
-                        }`}
-                      >
-                        <span className="text-[10px] text-zinc-500 font-bold block uppercase mb-1">
-                          {t('spiciness')} Spiciness
-                        </span>
-                        <span className="text-xs">{spicinessText}</span>
-                      </div>
+                      {it.customization?.spiciness !== undefined && (
+                        <div
+                          className={`p-2.5 rounded-lg border text-xs ${
+                            it.customization.spiciness === 0
+                              ? 'bg-zinc-900 border-zinc-800 text-zinc-400'
+                              : it.customization.spiciness >= 2
+                                ? 'bg-red-500/10 border-red-500/30 text-red-400 font-black'
+                                : 'bg-amber-500/10 border-amber-500/25 text-amber-400 font-bold'
+                          }`}
+                        >
+                          <span className="text-[10px] text-zinc-500 font-bold block uppercase mb-1">
+                            {t('spiciness')} Spiciness
+                          </span>
+                          <span className="text-xs">{spicinessText}</span>
+                        </div>
+                      )}
 
-                      {it.customization.noodleType && (
+                      {it.customization?.noodleType && (
                         <div className="p-2.5 bg-white/5 border border-white/10 rounded-lg text-xs text-white">
                           <span className="text-[10px] text-zinc-500 font-bold block uppercase mb-1">
                             {t('noodleOption')} Noodle Type
@@ -300,7 +302,7 @@ export const KdsQuickViewModal: React.FC<KdsQuickViewModalProps> = ({
                         </div>
                       )}
 
-                      {it.customization.soupBase && (
+                      {it.customization?.soupBase && (
                         <div className="p-2.5 bg-white/5 border border-white/10 rounded-lg text-xs text-white">
                           <span className="text-[10px] text-zinc-500 font-bold block uppercase mb-1">
                             {t('soupBaseLabel')} Soup Base
@@ -313,7 +315,7 @@ export const KdsQuickViewModal: React.FC<KdsQuickViewModalProps> = ({
                         </div>
                       )}
 
-                      {it.customization.selectedAddOns &&
+                      {it.customization?.selectedAddOns &&
                         it.customization.selectedAddOns.length > 0 && (
                           <div className="col-span-1 sm:col-span-2 p-2.5 bg-amber-500/5 border border-amber-500/15 rounded-lg text-xs text-amber-300">
                             <span className="text-[10px] text-amber-500/70 font-bold block uppercase mb-1">
@@ -336,7 +338,7 @@ export const KdsQuickViewModal: React.FC<KdsQuickViewModalProps> = ({
                           </div>
                         )}
 
-                      {it.customization.notes && (
+                      {it.customization?.notes && (
                         <div className="col-span-1 sm:col-span-2 p-3 bg-red-500/5 border border-red-500/15 rounded-xl text-xs text-red-400">
                           <span className="text-[10px] text-red-500/60 font-bold block uppercase mb-1">
                             📌 該品項特殊客製備註 Item Notes
@@ -364,14 +366,14 @@ export const KdsQuickViewModal: React.FC<KdsQuickViewModalProps> = ({
                 const specLines = quickViewOrder.items
                   .map((it) => {
                     const spec = [
-                      it.customization.spiciness === 1 ? t('spicy') : t('notSpicy'),
-                      it.customization.noodleType === 'rice-noodle'
+                      it.customization?.spiciness === 1 ? t('spicy') : it.customization?.spiciness === 0 ? t('notSpicy') : '',
+                      it.customization?.noodleType === 'rice-noodle'
                         ? t('riceNoodle')
-                        : it.customization.noodleType === 'vermicelli'
+                        : it.customization?.noodleType === 'vermicelli'
                           ? t('vermicelli')
                           : '',
-                      it.customization.soupBase === 'coconut-milk' ? t('coconutMilkAdd') : '',
-                      it.customization.notes ? `${t('notesLabel')}: ${it.customization.notes}` : '',
+                      it.customization?.soupBase === 'coconut-milk' ? t('coconutMilkAdd') : '',
+                      it.customization?.notes ? `${t('notesLabel')}: ${it.customization.notes}` : '',
                     ]
                       .filter(Boolean)
                       .join('/');

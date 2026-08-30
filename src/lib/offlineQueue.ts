@@ -142,8 +142,23 @@ export async function processOfflineQueue(onProgress?: (msg: string) => void): P
 
   console.log(`[OfflineQueue] Starting sync for ${queue.length} queued offset transactions...`);
 
+  const PROCESSED_QUEUE_KEY = 'sabay_offline_sync_processed_v1';
+  let processedIds: string[] = [];
+  try {
+    const raw = safeStorage.getItem(PROCESSED_QUEUE_KEY);
+    if (raw) processedIds = JSON.parse(raw);
+  } catch (e) {}
+
   for (let i = 0; i < queue.length; i++) {
     const item = queue[i];
+
+    if (processedIds.includes(item.id)) {
+       const idx = remaining.findIndex(r => r.id === item.id);
+       if (idx > -1) remaining.splice(idx, 1);
+       saveOfflineQueue([...remaining]);
+       continue;
+    }
+
     item.retryCount = (item.retryCount || 0) + 1;
 
     if (onProgress) {
@@ -154,6 +169,11 @@ export async function processOfflineQueue(onProgress?: (msg: string) => void): P
       const response = await executeRequest(item);
       if (response.ok) {
         successCount++;
+        
+        processedIds.push(item.id);
+        if (processedIds.length > 500) processedIds = processedIds.slice(-500);
+        try { safeStorage.setItem(PROCESSED_QUEUE_KEY, JSON.stringify(processedIds)); } catch(e) {}
+
         // Remove from remaining list
         const idx = remaining.findIndex(r => r.id === item.id);
         if (idx > -1) remaining.splice(idx, 1);

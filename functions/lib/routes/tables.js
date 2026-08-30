@@ -87,12 +87,24 @@ function registerTablesRoutes(app, ctx) {
             sendErrorResponse(res, error);
         }
     });
+    function parseTimeToMinutes(t) {
+        if (!t)
+            return 0;
+        const [h, m] = t.split(':').map(Number);
+        return (h || 0) * 60 + (m || 0);
+    }
     post('/reservations', reservationRateLimiter, async (req, res) => {
         const validation = (0, validators_1.validateReservationPayload)(req.body);
         if (!validation.isValid || !validation.sanitizedData) {
             return res.status(400).json({ error: validation.error || '無效的預約資料格式' });
         }
         const data = validation.sanitizedData;
+        const now = new Date();
+        now.setMonth(now.getMonth() + 3);
+        const maxDateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        if (data.date && data.date.trim() > maxDateStr) {
+            return res.status(400).json({ error: `預約日期最多只能提前 3 個月 (最晚至 ${maxDateStr})！` });
+        }
         const newReservation = {
             id: data.id || ('res-' + Math.random().toString(36).substring(2, 11)),
             ...data,
@@ -100,14 +112,73 @@ function registerTablesRoutes(app, ctx) {
             createdAt: data.createdAt || new Date().toISOString()
         };
         try {
-            await db.collection('reservations').doc(newReservation.id).set(newReservation);
-            if (newReservation.status === 'pending' && newReservation.tableNumber) {
-                const tableRef = db.collection('tables').doc(newReservation.tableNumber);
-                await tableRef.update({ status: 'preserved', preservedFor: `${newReservation.customerName} (${newReservation.time})` });
-            }
+            await db.runTransaction(async (transaction) => {
+                const dateReservationsQuery = db.collection('reservations')
+                    .where('date', '==', data.date.trim());
+                const dateReservationsSnap = await transaction.get(dateReservationsQuery);
+                const tablesSnap = await transaction.get(db.collection('tables'));
+                const allTables = tablesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+                const targetMins = parseTimeToMinutes(data.time);
+                const overlapping = dateReservationsSnap.docs
+                    .map(d => ({ id: d.id, ...d.data() }))
+                    .filter(r => {
+                    if (r.id === newReservation.id)
+                        return false;
+                    if (r.status === 'cancelled' || r.status === 'rejected')
+                        return false;
+                    const rMins = parseTimeToMinutes(r.time);
+                    return Math.abs(rMins - targetMins) < 180;
+                });
+                const newGuestCount = parseInt(String(data.guestCount), 10) || 1;
+                const unavailableTableIds = new Set();
+                for (const r of overlapping) {
+                    const rTables = String(r.tableNumber || '').split(',').map(t => t.trim()).filter(Boolean);
+                    rTables.forEach(tId => unavailableTableIds.add(tId));
+                }
+                const availableTables = allTables.filter(t => !unavailableTableIds.has(String(t.id).trim()));
+                const availableWindowCapacity = availableTables.reduce((sum, t) => sum + (t.maxCapacity || 4), 0);
+                if (allTables.length > 0 && (availableTables.length === 0 || availableWindowCapacity <= 0)) {
+                    throw new Error('CONFLICT:該時段已額滿！全店客席在前後3小時內皆已有預約。');
+                }
+                if (allTables.length > 0 && newGuestCount > availableWindowCapacity && availableWindowCapacity > 0) {
+                    throw new Error(`CONFLICT:用餐人數 (${newGuestCount}人) 超過該時段（含3小時用餐時段）可容納之剩餘客席上限 (${availableWindowCapacity}人)！`);
+                }
+                const requestedTables = String(data.tableNumber).split(',').map(t => t.trim()).filter(Boolean);
+                const selectedTablesCapacity = allTables
+                    .filter(t => requestedTables.includes(String(t.id).trim()))
+                    .reduce((sum, t) => sum + (t.maxCapacity || 4), 0);
+                if (selectedTablesCapacity > 0 && selectedTablesCapacity < newGuestCount) {
+                    throw new Error(`CONFLICT:指定桌號加總人數上限 (${selectedTablesCapacity}人) 不足：不可低於用餐人數 (${newGuestCount}人)！`);
+                }
+                for (const r of overlapping) {
+                    const rTables = String(r.tableNumber || '').split(',').map(t => t.trim()).filter(Boolean);
+                    const conflictingTable = requestedTables.find(t => rTables.includes(t));
+                    if (conflictingTable) {
+                        throw new Error(`CONFLICT:預約時段衝突：【${conflictingTable} 桌】在 ${data.date} ${data.time} 前後 3 小時內已有預約 (${r.time} ${r.customerName})`);
+                    }
+                }
+                transaction.set(db.collection('reservations').doc(newReservation.id), newReservation);
+                if (newReservation.status === 'pending' && newReservation.tableNumber) {
+                    const todayStr = new Date().toISOString().split('T')[0];
+                    if (newReservation.date === todayStr) {
+                        const primaryTable = requestedTables[0];
+                        const tableDoc = allTables.find(t => String(t.id).trim() === primaryTable);
+                        if (tableDoc) {
+                            transaction.update(db.collection('tables').doc(primaryTable), {
+                                status: 'preserved',
+                                preservedFor: `${newReservation.customerName} (${newReservation.time})`
+                            });
+                        }
+                    }
+                }
+            });
             res.status(201).json(newReservation);
         }
         catch (error) {
+            if (error instanceof Error && error.message.startsWith('CONFLICT:')) {
+                return res.status(409).json({ error: error.message.replace('CONFLICT:', '') });
+            }
+            console.error('Error creating reservation in transaction:', error);
             sendErrorResponse(res, error);
         }
     });

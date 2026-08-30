@@ -599,7 +599,7 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
           tableNumber: order.tableNumber,
           createdAt: order.createdAt,
           qty: item.qty,
-          customization: item.customization,
+          customization: item.customization || { spiciness: 0, notes: '', selectedAddOns: [] },
           originalOrder: order,
         });
       });

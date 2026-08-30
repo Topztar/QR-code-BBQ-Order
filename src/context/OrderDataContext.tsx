@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useRef, useMemo,
 import { Order, OrderStatus, OrderItem, TableConfig, Reservation } from '../types';
 import { apiFetch } from '../lib/api';
 import { db, isFirebaseSyncEnabled } from '../lib/firebase';
-import { collection, onSnapshot, query, orderBy, limit, where, doc, setDoc, deleteDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query, limit, where, doc, setDoc, deleteDoc, orderBy } from 'firebase/firestore';
 import { getOfflineQueue, addRequestToQueue, removeOrderRequestsFromQueue, processOfflineQueue, QueuedRequest } from '../lib/offlineQueue';
 import { safeStorage } from '../lib/safeStorage';
 
@@ -141,8 +141,10 @@ export function OrderDataProvider({
   const [syncProgressMsg, setSyncProgressMsg] = useState<string>('');
   const [isNetworkOnline, setIsNetworkOnline] = useState<boolean>(typeof navigator !== 'undefined' ? navigator.onLine : true);
 
+  const [forceApiFallback, setForceApiFallback] = useState<boolean>(false);
   const activeOrderSubmissionsRef = useRef<Set<string>>(new Set());
   const recentStatusTransitionsRef = useRef<Map<string, RecentOrderTransition>>(new Map());
+  const deletedOrderIdsRef = useRef<Set<string>>(new Set());
 
   // 🛡️ 統一訂單異動對齊防護函式 (防止 Firestore onSnapshot 與定時輪詢覆寫樂觀狀態造成回滾/Lag)
   const reconcileOrdersWithRecentTransitions = (incomingOrders: Order[]): Order[] => {
@@ -155,7 +157,9 @@ export function OrderDataProvider({
       }
     }
 
-    return incomingOrders.map((ord: Order) => {
+    return incomingOrders
+      .filter((ord) => !deletedOrderIdsRef.current.has(ord.id))
+      .map((ord: Order) => {
       const transition = recentStatusTransitionsRef.current.get(ord.id);
       if (!transition) return ord;
 
@@ -164,6 +168,8 @@ export function OrderDataProvider({
       if (transition.status) {
         if (ord.status === transition.status) {
           reconciled.isOfflinePending = false;
+          // Clear matching transition to prevent overriding newer updates
+          recentStatusTransitionsRef.current.delete(ord.id);
         } else {
           reconciled.status = transition.status;
           reconciled.isOfflinePending = false;
@@ -209,6 +215,8 @@ export function OrderDataProvider({
   // 🚀 0 雲端成本跨分頁同步監聽 (BroadcastChannel + LocalStorage Event)
   useEffect(() => {
     if (typeof window === 'undefined') return;
+
+    try { safeStorage.removeItem('sabay_orders_sync_event'); } catch (_) {}
 
     const handleBroadcastMessage = (event: MessageEvent<OrderBroadcastPayload>) => {
       const data = event.data;
@@ -323,7 +331,16 @@ export function OrderDataProvider({
             // Replicate Firebase query sorting logic (descending by createdAt)
             data.sort((a: Order, b: Order) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
             
-            setOrders(prev => reconcileOrdersWithRecentTransitions(data));
+            // Normalize data to ensure all items have a customization object
+            const normalizedData = data.map((o: Order) => ({
+              ...o,
+              items: o.items?.map(it => ({
+                ...it,
+                customization: it.customization || { spiciness: 0, notes: '', selectedAddOns: [] }
+              })) || []
+            }));
+
+            setOrders(prev => reconcileOrdersWithRecentTransitions(normalizedData));
           }
         }
       } catch (e) {
@@ -331,7 +348,7 @@ export function OrderDataProvider({
       }
     };
 
-    if (isFirebaseSyncEnabled()) {
+    if (isFirebaseSyncEnabled() && !forceApiFallback) {
       try {
         let ordersQuery;
         if (isCustomerView && currentTable && currentTable !== '') {
@@ -339,12 +356,14 @@ export function OrderDataProvider({
           ordersQuery = query(
             collection(db, "orders"),
             where("tableNumber", "==", currentTable),
+            orderBy("createdAt", "desc"),
             limit(100)
           );
         } else {
           // 🍳 後台 (廚房 KDS / 櫃檯收銀 / 數據分析)：讀取最新待處理與即時訂單 (免強制索引，避免索引未就緒時報錯)
           ordersQuery = query(
             collection(db, "orders"),
+            orderBy("createdAt", "desc"),
             limit(300)
           );
         }
@@ -353,7 +372,17 @@ export function OrderDataProvider({
           const updatedOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
           // Client-side sort descending by createdAt
           updatedOrders.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-          setOrders(reconcileOrdersWithRecentTransitions(updatedOrders));
+          
+          // Normalize data to ensure all items have a customization object
+          const normalizedOrders = updatedOrders.map(o => ({
+            ...o,
+            items: o.items?.map(it => ({
+              ...it,
+              customization: it.customization || { spiciness: 0, notes: '', selectedAddOns: [] }
+            })) || []
+          }));
+
+          setOrders(reconcileOrdersWithRecentTransitions(normalizedOrders));
         }, (error) => {
           console.warn('[Firebase Sync] Orders listener paused or fallback triggered:', error);
           fetchOrdersFromApi();
@@ -379,7 +408,7 @@ export function OrderDataProvider({
       unsubscribeOrders();
       if (pollingInterval) clearInterval(pollingInterval);
     };
-  }, [activeTab, currentPath]);
+  }, [activeTab, currentPath, forceApiFallback]);
 
   // Real-time Table Status Auto-Sync based on Orders & Reservations
   useEffect(() => {
@@ -619,14 +648,7 @@ export function OrderDataProvider({
     const description = `更新 🥢 訂單 #${orderId.replace('offline_temp_', '離線')} 狀態至「${status}」`;
     const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
     
-    // ☁️ Firestore 即時寫入
-    if (isFirebaseSyncEnabled() && !orderId.startsWith('offline_temp_')) {
-      try {
-        await setDoc(doc(db, "orders", orderId), { status }, { merge: true });
-      } catch (fsErr) {
-        console.warn('[Firebase Sync] Update order status in Firestore warning:', fsErr);
-      }
-    }
+    // ☁️ Firestore 即時寫入 (已移除，避免觸發 Security Rules 錯誤導致監聽器死亡，改由後端 API 統一處理)
 
     // 🚀 本地跨分頁 0 成本廣播
     broadcastOrderEvent({ type: 'ORDER_UPDATED', orderId, updates: { status } });
@@ -694,14 +716,7 @@ export function OrderDataProvider({
       return o;
     }));
 
-    // ☁️ Firestore 即時寫入
-    if (isFirebaseSyncEnabled() && !orderId.startsWith('offline_temp_')) {
-      try {
-        await setDoc(doc(db, "orders", orderId), { items: nextItems, status: nextStatus }, { merge: true });
-      } catch (fsErr) {
-        console.warn('[Firebase Sync] Toggle order item in Firestore warning:', fsErr);
-      }
-    }
+    // ☁️ Firestore 即時寫入 (已移除，避免觸發 Security Rules 錯誤導致監聽器死亡，改由後端 API 統一處理)
 
     // 🚀 本地跨分頁 0 成本廣播
     broadcastOrderEvent({ type: 'ORDER_UPDATED', orderId, updates: { items: nextItems, status: nextStatus } });
@@ -746,14 +761,7 @@ export function OrderDataProvider({
     const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, tableNumber, isOfflinePending: !isOnline } : o));
     
-    // ☁️ Firestore 即時寫入
-    if (isFirebaseSyncEnabled() && !orderId.startsWith('offline_temp_')) {
-      try {
-        await setDoc(doc(db, "orders", orderId), { tableNumber }, { merge: true });
-      } catch (fsErr) {
-        console.warn('[Firebase Sync] Update tableNumber in Firestore warning:', fsErr);
-      }
-    }
+    // ☁️ Firestore 即時寫入 (已移除，避免觸發 Security Rules 錯誤導致監聽器死亡，改由後端 API 統一處理)
 
     // 🚀 本地跨分頁 0 成本廣播
     broadcastOrderEvent({ type: 'ORDER_UPDATED', orderId, updates: { tableNumber } });
@@ -793,14 +801,7 @@ export function OrderDataProvider({
     const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, quickNotes, isOfflinePending: !isOnline } : o));
 
-    // ☁️ Firestore 即時寫入
-    if (isFirebaseSyncEnabled() && !orderId.startsWith('offline_temp_')) {
-      try {
-        await setDoc(doc(db, "orders", orderId), { quickNotes }, { merge: true });
-      } catch (fsErr) {
-        console.warn('[Firebase Sync] Update quickNotes in Firestore warning:', fsErr);
-      }
-    }
+    // ☁️ Firestore 即時寫入 (已移除，避免觸發 Security Rules 錯誤導致監聽器死亡，改由後端 API 統一處理)
 
     // 🚀 本地跨分頁 0 成本廣播
     broadcastOrderEvent({ type: 'ORDER_UPDATED', orderId, updates: { quickNotes } });
@@ -840,14 +841,7 @@ export function OrderDataProvider({
     const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, isFlagged, flagReason, isOfflinePending: !isOnline } : o));
 
-    // ☁️ Firestore 即時寫入
-    if (isFirebaseSyncEnabled() && !orderId.startsWith('offline_temp_')) {
-      try {
-        await setDoc(doc(db, "orders", orderId), { isFlagged, flagReason }, { merge: true });
-      } catch (fsErr) {
-        console.warn('[Firebase Sync] Toggle flag in Firestore warning:', fsErr);
-      }
-    }
+    // ☁️ Firestore 即時寫入 (已移除，避免觸發 Security Rules 錯誤導致監聽器死亡，改由後端 API 統一處理)
 
     // 🚀 本地跨分頁 0 成本廣播
     broadcastOrderEvent({ type: 'ORDER_UPDATED', orderId, updates: { isFlagged, flagReason } });
@@ -889,14 +883,7 @@ export function OrderDataProvider({
     const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, items, subtotal: totalAmount, total: totalAmount, isOfflinePending: !isOnline } : o));
 
-    // ☁️ Firestore 即時寫入
-    if (isFirebaseSyncEnabled() && !orderId.startsWith('offline_temp_')) {
-      try {
-        await setDoc(doc(db, "orders", orderId), { items, subtotal: totalAmount, total: totalAmount, ...(refundLogs ? { refundLogs } : {}) }, { merge: true });
-      } catch (fsErr) {
-        console.warn('[Firebase Sync] Update items in Firestore warning:', fsErr);
-      }
-    }
+    // ☁️ Firestore 即時寫入 (已移除，避免觸發 Security Rules 錯誤導致監聽器死亡，改由後端 API 統一處理)
 
     // 🚀 本地跨分頁 0 成本廣播
     broadcastOrderEvent({ type: 'ORDER_UPDATED', orderId, updates: { items, subtotal: totalAmount, total: totalAmount } });
@@ -950,14 +937,7 @@ export function OrderDataProvider({
 
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, isPaid: true, status: (o.status === 'completed' || o.status === 'cancelled') ? o.status : 'paid', isOfflinePending: !isOnline } : o));
 
-    // ☁️ Firestore 即時寫入
-    if (isFirebaseSyncEnabled() && !orderId.startsWith('offline_temp_')) {
-      try {
-        await setDoc(doc(db, "orders", orderId), { isPaid: true, status: resolvedStatus, ...(checkoutData || {}) }, { merge: true });
-      } catch (fsErr) {
-        console.warn('[Firebase Sync] Pay order in Firestore warning:', fsErr);
-      }
-    }
+    // ☁️ Firestore 即時寫入 (已移除，避免觸發 Security Rules 錯誤導致監聽器死亡，改由後端 API 統一處理)
 
     // 🚀 本地跨分頁 0 成本廣播
     broadcastOrderEvent({ type: 'ORDER_UPDATED', orderId, updates: { isPaid: true, status: resolvedStatus, ...(checkoutData || {}) } });
@@ -1018,16 +998,10 @@ export function OrderDataProvider({
   const handleDeleteOrder = async (orderId: string) => {
     const description = `刪除 🥢 訂單 #${orderId.replace('offline_temp_', '離線')}`;
     const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+    deletedOrderIdsRef.current.add(orderId);
     setOrders(prev => prev.filter(o => o.id !== orderId));
 
-    // ☁️ Firestore 即時刪除
-    if (isFirebaseSyncEnabled() && !orderId.startsWith('offline_temp_')) {
-      try {
-        await deleteDoc(doc(db, "orders", orderId));
-      } catch (fsErr) {
-        console.warn('[Firebase Sync] Delete order in Firestore warning:', fsErr);
-      }
-    }
+    // ☁️ Firestore 即時刪除 (已移除，避免觸發 Security Rules 錯誤導致監聽器死亡，改由後端 API 統一處理)
 
     // 🚀 本地跨分頁 0 成本廣播
     broadcastOrderEvent({ type: 'ORDER_DELETED', orderId });

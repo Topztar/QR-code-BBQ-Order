@@ -35,7 +35,6 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerStaffRoutes = registerStaffRoutes;
 const firestore_1 = require("firebase-admin/firestore");
-const net = __importStar(require("net"));
 const crypto = __importStar(require("crypto"));
 const auth_1 = require("../auth");
 const helpers_1 = require("../helpers");
@@ -246,54 +245,5 @@ function registerStaffRoutes(app, ctx) {
             sendErrorResponse(res, error);
         }
     });
-    async function sendToNetworkPrinter(host, port = 9100, data) {
-        return new Promise((resolve) => {
-            const socket = new net.Socket();
-            let isSettled = false;
-            const cleanup = () => {
-                socket.removeAllListeners();
-                socket.destroy();
-            };
-            socket.setTimeout(1500);
-            socket.on('connect', () => {
-                socket.write(Buffer.from(data, 'utf-8'), (err) => {
-                    if (isSettled)
-                        return;
-                    isSettled = true;
-                    cleanup();
-                    if (err) {
-                        resolve({ success: false, log: `發送失敗: ${err.message}` });
-                    }
-                    else {
-                        resolve({ success: true, log: `成功發送 ${data.length} 位元組至熱感印表機 ${host}:${port}` });
-                    }
-                });
-            });
-            socket.on('timeout', () => {
-                if (isSettled)
-                    return;
-                isSettled = true;
-                cleanup();
-                resolve({ success: false, log: `網路連線逾時 (${host}:${port})` });
-            });
-            socket.on('error', (err) => {
-                if (isSettled)
-                    return;
-                isSettled = true;
-                cleanup();
-                resolve({ success: false, log: `Socket 錯誤: ${err.message}` });
-            });
-            try {
-                socket.connect(port, host);
-            }
-            catch (err) {
-                if (isSettled)
-                    return;
-                isSettled = true;
-                cleanup();
-                resolve({ success: false, log: `Socket 連線例外: ${err.message}` });
-            }
-        });
-    }
 }
 //# sourceMappingURL=staff.js.map

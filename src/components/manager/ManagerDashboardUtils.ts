@@ -28,12 +28,11 @@ export const computeOrderItemUnitPrice = (it: any, menuItemsList: any[] = []): n
   if (it.customization?.selectedAddOns && Array.isArray(it.customization.selectedAddOns)) {
     addOnsTotal = it.customization.selectedAddOns.reduce((s: number, a: any) => s + (Number(a.price) || 0), 0);
   }
-  let spicinessAdd = 0;
   let soupBaseAdd = it.customization?.soupBase === 'coconut-milk' ? 50 : 0;
 
   const dish = menuItemsList.find((m: any) => m.id === it.menuItemId);
   if (dish && baseP === dish.price) {
-    return dish.price + spicinessAdd + soupBaseAdd + addOnsTotal;
+    return dish.price + soupBaseAdd + addOnsTotal;
   }
   if (addOnsTotal > 0 && dish && baseP < dish.price + addOnsTotal) {
     return baseP + addOnsTotal;

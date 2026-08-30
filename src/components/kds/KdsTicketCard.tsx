@@ -418,14 +418,14 @@ export const KdsTicketCard: React.FC<KdsTicketCardProps> = React.memo(({
                   const specLines = order.items
                     .map((it) => {
                       const spec = [
-                        it.customization.spiciness === 1 ? t('spicy') : t('notSpicy'),
-                        it.customization.noodleType === 'rice-noodle'
+                        it.customization?.spiciness === 1 ? t('spicy') : it.customization?.spiciness === 0 ? t('notSpicy') : '',
+                        it.customization?.noodleType === 'rice-noodle'
                           ? t('riceNoodle')
-                          : it.customization.noodleType === 'vermicelli'
+                          : it.customization?.noodleType === 'vermicelli'
                             ? t('vermicelli')
                             : '',
-                        it.customization.soupBase === 'coconut-milk' ? t('coconutMilkAdd') : '',
-                        it.customization.notes ? `${t('notesLabel')}: ${it.customization.notes}` : '',
+                        it.customization?.soupBase === 'coconut-milk' ? t('coconutMilkAdd') : '',
+                        it.customization?.notes ? `${t('notesLabel')}: ${it.customization.notes}` : '',
                       ]
                         .filter(Boolean)
                         .join('/');
@@ -592,15 +592,15 @@ ${specLines}
                         <div className="flex flex-wrap gap-1 mt-1.5">
                           <span
                             className={`text-[10px] font-semibold px-1 rounded font-mono border ${
-                              it.customization.spiciness === 1
+                              it.customization?.spiciness === 1
                                 ? 'bg-[#FF4D4D]/10 text-[#FF4D4D] border-[#FF4D4D]/20'
                                 : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
                             }`}
                           >
                             {t('spicyPrefix')}:{' '}
-                            {it.customization.spiciness === 1 ? t('spicy') : t('notSpicy')}
+                            {it.customization?.spiciness === 1 ? t('spicy') : t('notSpicy')}
                           </span>
-                          {it.customization.noodleType && (
+                          {it.customization?.noodleType && (
                             <span className="bg-[#E5B453]/10 text-[#E5B453] border border-[#E5B453]/20 text-[10px] font-semibold px-1 rounded font-sans">
                               {t('noodlePrefix')}:{' '}
                               {it.customization.noodleType === 'rice-noodle'
@@ -610,12 +610,12 @@ ${specLines}
                                   : t('noNoodle')}
                             </span>
                           )}
-                          {it.customization.soupBase === 'coconut-milk' && (
+                          {it.customization?.soupBase === 'coconut-milk' && (
                             <span className="bg-amber-500/10 text-amber-500 border border-amber-500/20 text-[10px] font-semibold px-1 rounded font-mono">
                               {t('coconutMilkAdd')}
                             </span>
                           )}
-                          {it.customization.selectedAddOns?.map((addOn) => (
+                          {it.customization?.selectedAddOns?.map((addOn) => (
                             <span
                               key={addOn.id}
                               className="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-semibold px-1.5 py-0.5 rounded font-sans"
@@ -628,7 +628,7 @@ ${specLines}
                           ))}
                         </div>
 
-                        {it.customization.notes && (
+                        {it.customization?.notes && (
                           <p className="text-xs text-[#FF4D4D] bg-[#FF4D4D]/5 border border-[#FF4D4D]/15 p-2.5 rounded-xl font-sans mt-2.5">
                             📌 {t('notesLabel')}：{it.customization.notes}
                           </p>

@@ -62,6 +62,11 @@ service cloud.firestore {
     match /test/{id} {
       allow read, write: if false;
     }
+
+    // 12. 全域預設安全防護：未明確定義規則之所有路徑，一律嚴格拒絕存取
+    match /{document=**} {
+      allow read, write: if false;
+    }
   }
 }
 

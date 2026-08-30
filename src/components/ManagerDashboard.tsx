@@ -108,12 +108,11 @@ export const computeOrderItemUnitPrice = (it: any, menuItemsList: any[] = []): n
   if (it.customization?.selectedAddOns && Array.isArray(it.customization.selectedAddOns)) {
     addOnsTotal = it.customization.selectedAddOns.reduce((s: number, a: any) => s + (Number(a.price) || 0), 0);
   }
-  let spicinessAdd = 0;
   let soupBaseAdd = it.customization?.soupBase === 'coconut-milk' ? 50 : 0;
 
   const dish = menuItemsList.find((m: any) => m.id === it.menuItemId);
   if (dish && baseP === dish.price) {
-    return dish.price + spicinessAdd + soupBaseAdd + addOnsTotal;
+    return dish.price + soupBaseAdd + addOnsTotal;
   }
   if (addOnsTotal > 0 && dish && baseP < dish.price + addOnsTotal) {
     return baseP + addOnsTotal;
@@ -3988,10 +3987,10 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                       onClick={() => {
                         const specLines = selectedOrder.items.map(it => {
                           const spec = [
-                            it.customization.spiciness === 1 ? '辣味 (Spicy)' : '不辣 (Non-Spicy)',
-                            it.customization.noodleType === 'rice-noodle' ? '河粉' : (it.customization.noodleType === 'vermicelli' ? '米線' : ''),
-                            it.customization.soupBase === 'coconut-milk' ? '加椰奶(+50)' : '',
-                            it.customization.notes ? `備註: ${it.customization.notes}` : ''
+                            it.customization?.spiciness === 1 ? '辣味 (Spicy)' : '不辣 (Non-Spicy)',
+                            it.customization?.noodleType === 'rice-noodle' ? '河粉' : (it.customization?.noodleType === 'vermicelli' ? '米線' : ''),
+                            it.customization?.soupBase === 'coconut-milk' ? '加椰奶(+50)' : '',
+                            it.customization?.notes ? `備註: ${it.customization.notes}` : ''
                           ].filter(Boolean).join('/');
                           const pName = it.name ? (typeof it.name === 'object' ? ((getLocalizedText(it.name, currentLang) || '未命名')) : it.name) : '未命名';
                           return `[ ] ${pName} x ${it.qty}份\n    【 ${spec} 】`;
@@ -4389,10 +4388,10 @@ ${customerDetails}
                         onClick={() => {
                           const specLines = selectedOrder.items.map(it => {
                             const spec = [
-                              it.customization.spiciness === 1 ? '辣味 (Spicy)' : '不辣 (Non-Spicy)',
-                              it.customization.noodleType === 'rice-noodle' ? '河粉' : (it.customization.noodleType === 'vermicelli' ? '米線' : ''),
-                              it.customization.soupBase === 'coconut-milk' ? '加椰奶(+50)' : '',
-                              it.customization.notes ? `備註: ${it.customization.notes}` : ''
+                              it.customization?.spiciness === 1 ? '辣味 (Spicy)' : '不辣 (Non-Spicy)',
+                              it.customization?.noodleType === 'rice-noodle' ? '河粉' : (it.customization?.noodleType === 'vermicelli' ? '米線' : ''),
+                              it.customization?.soupBase === 'coconut-milk' ? '加椰奶(+50)' : '',
+                              it.customization?.notes ? `備註: ${it.customization.notes}` : ''
                             ].filter(Boolean).join('/');
                             const pName = it.name ? (typeof it.name === 'object' ? ((getLocalizedText(it.name, currentLang) || '未命名')) : it.name) : '未命名';
                             return `[ ] ${pName} x ${it.qty || 0}份\n    【 ${spec} 】`;
@@ -4622,10 +4621,10 @@ ${customerDetails}
                         onClick={() => {
                           const specLines = selectedOrder.items.map(it => {
                             const spec = [
-                              it.customization.spiciness === 1 ? '辣味 (Spicy)' : '不辣 (Non-Spicy)',
-                              it.customization.noodleType === 'rice-noodle' ? '河粉' : (it.customization.noodleType === 'vermicelli' ? '米線' : ''),
-                              it.customization.soupBase === 'coconut-milk' ? '加椰奶(+50)' : '',
-                              it.customization.notes ? `備註: ${it.customization.notes}` : ''
+                              it.customization?.spiciness === 1 ? '辣味 (Spicy)' : '不辣 (Non-Spicy)',
+                              it.customization?.noodleType === 'rice-noodle' ? '河粉' : (it.customization?.noodleType === 'vermicelli' ? '米線' : ''),
+                              it.customization?.soupBase === 'coconut-milk' ? '加椰奶(+50)' : '',
+                              it.customization?.notes ? `備註: ${it.customization.notes}` : ''
                             ].filter(Boolean).join('/');
                             const pName = it.name ? (typeof it.name === 'object' ? ((getLocalizedText(it.name, currentLang) || '未命名')) : it.name) : '未命名';
                             return `[ ] ${pName} x ${it.qty}份\n    【 ${spec} 】`;

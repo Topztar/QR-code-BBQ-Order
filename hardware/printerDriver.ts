@@ -58,7 +58,7 @@ export async function sendToNetworkPrinter(
   data: Buffer | string,
   options: { timeoutMs?: number; retries?: number } = {}
 ): Promise<PrinterDriverResult> {
-  const timeoutMs = options.timeoutMs ?? 1500;
+  const timeoutMs = options.timeoutMs ?? 4000;
   const maxRetries = options.retries ?? 1;
   const bufferData = Buffer.isBuffer(data) ? data : Buffer.from(data, 'utf-8');
 
@@ -76,7 +76,9 @@ export async function sendToNetworkPrinter(
 
         const cleanup = () => {
           socket.removeAllListeners();
-          socket.destroy();
+          if (!socket.destroyed) {
+            socket.destroy();
+          }
         };
 
         socket.setTimeout(timeoutMs);
@@ -109,7 +111,7 @@ export async function sendToNetworkPrinter(
           cleanup();
           resolve({
             success: false,
-            log: `${logPrefix} Connection timed out after ${timeoutMs}ms.`
+            log: `${logPrefix} Connection timed out after ${timeoutMs}ms (Socket destroyed).`
           });
         });
 
@@ -123,8 +125,22 @@ export async function sendToNetworkPrinter(
           });
         });
 
+        socket.on('close', () => {
+          cleanup();
+        });
+
         console.log(`${logPrefix} Connecting to ${host}:${port}...`);
-        socket.connect(port, host);
+        try {
+          socket.connect(port, host);
+        } catch (connErr: any) {
+          if (isSettled) return;
+          isSettled = true;
+          cleanup();
+          resolve({
+            success: false,
+            log: `${logPrefix} Connect invocation error: ${connErr?.message || connErr}`
+          });
+        }
       });
 
       if (result.success) {

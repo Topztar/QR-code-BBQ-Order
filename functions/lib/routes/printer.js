@@ -214,13 +214,14 @@ function registerPrinterRoutes(app, ctx) {
         }
         const socket = new net.Socket();
         let completed = false;
-        socket.setTimeout(1200);
+        socket.setTimeout(1500);
         const cleanUp = () => {
+            socket.removeAllListeners();
             if (!socket.destroyed) {
                 socket.destroy();
             }
         };
-        socket.connect(9100, ip, () => {
+        socket.on('connect', () => {
             if (!completed) {
                 completed = true;
                 cleanUp();
@@ -256,11 +257,31 @@ function registerPrinterRoutes(app, ctx) {
                     ip,
                     port: 9100,
                     simulated: false,
-                    error: 'Network connection timeout (ETIMEDOUT)',
+                    error: 'Network connection timeout (ETIMEDOUT) - Socket destroyed',
                     timestamp: new Date().toISOString()
                 });
             }
         });
+        socket.on('close', () => {
+            cleanUp();
+        });
+        try {
+            socket.connect(9100, ip);
+        }
+        catch (err) {
+            if (!completed) {
+                completed = true;
+                cleanUp();
+                res.json({
+                    reachable: false,
+                    ip,
+                    port: 9100,
+                    simulated: false,
+                    error: err?.message || 'Failed to initiate TCP connection',
+                    timestamp: new Date().toISOString()
+                });
+            }
+        }
     });
     get('/printer/settings', async (_req, res) => {
         try {

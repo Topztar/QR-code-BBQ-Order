@@ -270,30 +270,7 @@ post('/settings/popular-item-ids', requireStaffAuth, async (req, res) => {
   }
 });
 
-// 33. Save Printer IP (PUT / POST)
-const handleSavePrinterIp: express.RequestHandler = async (req, res) => {
-  const { ip } = req.body;
-  const targetIp = String(ip || '192.168.123.100');
-  try {
-    const systemRef = db.collection('settings').doc('system');
-    const docSnap = await systemRef.get();
-    const sysData = docSnap.data() || {};
-    let currentSettings = sysData.livePrinterSettings || {};
-    if (!currentSettings.kitchen) currentSettings.kitchen = {};
-    if (!currentSettings.bill) currentSettings.bill = {};
-    currentSettings.kitchen.ip = targetIp;
-    currentSettings.bill.ip = targetIp;
 
-    await systemRef.set({
-      livePrinterIp: targetIp,
-      livePrinterSettings: currentSettings
-    }, { merge: true });
-
-    res.json({ success: true, ip: targetIp });
-  } catch (error) {
-    sendErrorResponse(res, error);
-  }
-};
 post('/promo-combo', requireStaffAuth, async (req, res) => {
   const data = req.body;
   try {
@@ -318,24 +295,7 @@ post('/settings/members-config', requireStaffAuth, async (req, res) => {
   }
 });
 
-// 40. Printer Settings (PUT / POST)
-const handleSavePrinterSettings: express.RequestHandler = async (req, res) => {
-  const { kitchen, bill } = req.body;
-  try {
-    const systemDoc = await db.collection('settings').doc('system').get();
-    let currentSettings = systemDoc.data()?.livePrinterSettings || {};
-    if (kitchen) {
-      currentSettings.kitchen = { ...currentSettings.kitchen, ...kitchen };
-    }
-    if (bill) {
-      currentSettings.bill = { ...currentSettings.bill, ...bill };
-    }
-    await db.collection('settings').doc('system').set({ livePrinterSettings: currentSettings }, { merge: true });
-    res.json({ success: true });
-  } catch (error) {
-    sendErrorResponse(res, error);
-  }
-};
+
 post('/option-rules', requireStaffAuth, async (req, res) => {
   const { name, category, price } = req.body;
   const newRule = {
@@ -409,7 +369,7 @@ post('/admin/clear-test-data', requireStaffAuth, async (req, res) => {
     await db.collection('settings').doc('logs').set({ printLogs: [], inventoryLogs: [], promoNotifications: [] }, { merge: true });
 
     // 2. Delete all orders
-    const ordersSnapshot = await db.collection('orders').get();
+    const ordersSnapshot = await db.collection('orders').select().get();
     const batchOrders = db.batch();
     ordersSnapshot.docs.forEach((doc) => {
       batchOrders.delete(doc.ref);
@@ -417,7 +377,7 @@ post('/admin/clear-test-data', requireStaffAuth, async (req, res) => {
     await batchOrders.commit();
 
     // 3. Delete all reservations
-    const reservationsSnapshot = await db.collection('reservations').get();
+    const reservationsSnapshot = await db.collection('reservations').select().get();
     const batchReservations = db.batch();
     reservationsSnapshot.docs.forEach((doc) => {
       batchReservations.delete(doc.ref);
@@ -425,7 +385,7 @@ post('/admin/clear-test-data', requireStaffAuth, async (req, res) => {
     await batchReservations.commit();
 
     // 4. Reset tables status to available and clear preservedFor
-    const tablesSnapshot = await db.collection('tables').get();
+    const tablesSnapshot = await db.collection('tables').select().get();
     const batchTables = db.batch();
     tablesSnapshot.docs.forEach((doc) => {
       batchTables.update(doc.ref, { status: 'available', preservedFor: '' });

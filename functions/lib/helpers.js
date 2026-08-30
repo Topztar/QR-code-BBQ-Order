@@ -114,15 +114,17 @@ function isStoreOpenFromData(sysData, timestamp, isReservation = false) {
     }
     return false;
 }
-async function sendToNetworkPrinter(host, port = 9100, data) {
+async function sendToNetworkPrinter(host, port = 9100, data, timeoutMs = 4000) {
     return new Promise((resolve) => {
         const socket = new net.Socket();
         let isSettled = false;
         const cleanup = () => {
             socket.removeAllListeners();
-            socket.destroy();
+            if (!socket.destroyed) {
+                socket.destroy();
+            }
         };
-        socket.setTimeout(1500);
+        socket.setTimeout(timeoutMs);
         socket.on('connect', () => {
             socket.write(Buffer.from(data, 'utf-8'), (err) => {
                 if (isSettled)
@@ -133,6 +135,7 @@ async function sendToNetworkPrinter(host, port = 9100, data) {
                     resolve({ success: false, log: `傳送失敗: ${err.message}` });
                 }
                 else {
+                    socket.end();
                     resolve({ success: true, log: `已傳送 ${data.length} 位元組至網路印表機 ${host}:${port}` });
                 }
             });
@@ -142,7 +145,7 @@ async function sendToNetworkPrinter(host, port = 9100, data) {
                 return;
             isSettled = true;
             cleanup();
-            resolve({ success: false, log: `網路連線逾時 (${host}:${port})` });
+            resolve({ success: false, log: `網路連線逾時 (${timeoutMs}ms) (${host}:${port}) - 印表機可能已離線或網路中斷` });
         });
         socket.on('error', (err) => {
             if (isSettled)
@@ -150,6 +153,9 @@ async function sendToNetworkPrinter(host, port = 9100, data) {
             isSettled = true;
             cleanup();
             resolve({ success: false, log: `Socket 錯誤: ${err.message}` });
+        });
+        socket.on('close', () => {
+            cleanup();
         });
         try {
             socket.connect(port, host);

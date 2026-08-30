@@ -103,17 +103,19 @@ export const KdsMergedView: React.FC<KdsMergedViewProps> = React.memo(({
 
                         {/* Customization specifications */}
                         <div className="flex flex-wrap gap-1">
-                          <span
-                            className={`text-[9px] font-medium px-1 rounded border ${
-                              oi.customization.spiciness === 1
-                                ? 'bg-[#FF4D4D]/5 text-[#FF4D4D] border-[#FF4D4D]/10'
-                                : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                            }`}
-                          >
-                            {t('spicyPrefix')}:{' '}
-                            {oi.customization.spiciness === 1 ? t('spicy') : t('notSpicy')}
-                          </span>
-                          {oi.customization.noodleType && (
+                          {oi.customization?.spiciness !== undefined && (
+                            <span
+                              className={`text-[9px] font-medium px-1 rounded border ${
+                                oi.customization.spiciness === 1
+                                  ? 'bg-[#FF4D4D]/5 text-[#FF4D4D] border-[#FF4D4D]/10'
+                                  : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                              }`}
+                            >
+                              {t('spicyPrefix')}:{' '}
+                              {oi.customization.spiciness === 1 ? t('spicy') : t('notSpicy')}
+                            </span>
+                          )}
+                          {oi.customization?.noodleType && (
                             <span className="bg-[#E5B453]/5 text-[#E5B453] border border-[#E5B453]/10 text-[9px] font-medium px-1 rounded">
                               {t('noodlePrefix')}:{' '}
                               {oi.customization.noodleType === 'rice-noodle'
@@ -123,12 +125,12 @@ export const KdsMergedView: React.FC<KdsMergedViewProps> = React.memo(({
                                   : t('noNoodle')}
                             </span>
                           )}
-                          {oi.customization.soupBase === 'coconut-milk' && (
+                          {oi.customization?.soupBase === 'coconut-milk' && (
                             <span className="bg-amber-500/5 text-amber-500 border border-amber-500/10 text-[9px] font-medium px-1 rounded">
                               {t('coconutMilkAdd')}
                             </span>
                           )}
-                          {oi.customization.selectedAddOns?.map((addOn: any) => (
+                          {oi.customization?.selectedAddOns?.map((addOn: any) => (
                             <span
                               key={addOn.id}
                               className="bg-amber-500/5 text-amber-400 border border-amber-500/10 text-[9px] font-medium px-1 rounded"
@@ -141,7 +143,7 @@ export const KdsMergedView: React.FC<KdsMergedViewProps> = React.memo(({
                           ))}
                         </div>
 
-                        {oi.customization.notes && (
+                        {oi.customization?.notes && (
                           <p className="text-[10px] text-[#FF4D4D] bg-[#FF4D4D]/5 border border-[#FF4D4D]/10 px-2 py-1.5 rounded mt-1 font-sans">
                             📌 {t('notesLabel')}：{oi.customization.notes}
                           </p>

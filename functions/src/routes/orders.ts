@@ -32,7 +32,7 @@ export function registerOrdersRoutes(app: express.Application, ctx: RouteContext
 
 get('/orders', async (_req, res) => {
   try {
-    res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=5, stale-while-revalidate=10');
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     let snapshot;
     try {
       snapshot = await db.collection('orders').orderBy('createdAt', 'desc').limit(200).get();
@@ -128,6 +128,12 @@ post('/orders', requireAppCheck, orderRateLimiter, async (req, res) => {
 put('/orders/:id/status', requireStaffAuth, async (req, res) => {
   const id = req.params.id as string;
   const { status } = req.body;
+  
+  const allowedStatuses = ['pending', 'confirmed', 'preparing', 'delivering', 'completed', 'cancelled', 'paid'];
+  if (!allowedStatuses.includes(status)) {
+    return res.status(400).json({ error: '無效的訂單狀態' });
+  }
+
   try {
     await db.collection('orders').doc(id).update({ status });
     res.json({ id, status });
@@ -188,11 +194,9 @@ put('/orders/:id/items', requireStaffAuth, async (req, res) => {
   }
 });
 
-// 23. Checkout Order
-
 put('/orders/:id/checkout', requireStaffAuth, async (req, res) => {
   const id = req.params.id as string;
-  const checkoutData = req.body;
+  const { paymentMethod, cashTendered, changeAmount } = req.body;
   try {
     // Check if the order has a reservationNo
     const orderDoc = await db.collection('orders').doc(id).get();
@@ -203,7 +207,9 @@ put('/orders/:id/checkout', requireStaffAuth, async (req, res) => {
     const resolvedStatus = (currentStatus === 'completed' || currentStatus === 'cancelled') ? currentStatus : 'paid';
 
     await db.collection('orders').doc(id).update({
-      ...checkoutData,
+      paymentMethod: paymentMethod || 'cash',
+      cashTendered: cashTendered || 0,
+      changeAmount: changeAmount || 0,
       isPaid: true,
       status: resolvedStatus
     });
@@ -237,7 +243,7 @@ put('/orders/:id/checkout', requireStaffAuth, async (req, res) => {
       }
     }
 
-    res.json({ id, ...checkoutData, isPaid: true, status: resolvedStatus });
+    res.json({ id, ...req.body, isPaid: true, status: resolvedStatus });
   } catch (error) {
     res.status(500).send(error);
   }

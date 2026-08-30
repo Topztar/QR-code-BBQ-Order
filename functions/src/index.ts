@@ -22,6 +22,7 @@ admin.initializeApp();
 
 // Connect to the specific named Firestore database
 const db = getFirestore('ai-studio-sabaythaibbqtabl-84418196-9d0c-459c-bced-ddc424dfba07');
+db.settings({ ignoreUndefinedProperties: true });
 const storageBucket = getStorage().bucket('sabay-bbq-order.firebasestorage.app');
 const app = express();
 

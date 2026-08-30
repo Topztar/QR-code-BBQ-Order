@@ -1,7 +1,6 @@
 import express from 'express';
 import { Firestore, FieldValue } from 'firebase-admin/firestore';
 import { Bucket } from '@google-cloud/storage';
-import * as net from 'net';
 import * as crypto from 'crypto';
 import { hashPin, invalidateAuthCache } from '../auth';
 import { createGetCachedSettings } from '../helpers';
@@ -261,56 +260,7 @@ get('/takeout/status', async (_req, res) => {
   }
 });
 
-// --- Additional Printer Endpoints ---
 
-async function sendToNetworkPrinter(host: string, port: number = 9100, data: string): Promise<{ success: boolean; log: string }> {
-  return new Promise((resolve) => {
-    const socket = new net.Socket();
-    let isSettled = false;
-    const cleanup = () => {
-      socket.removeAllListeners();
-      socket.destroy();
-    };
-
-    socket.setTimeout(1500);
-
-    socket.on('connect', () => {
-      socket.write(Buffer.from(data, 'utf-8'), (err) => {
-        if (isSettled) return;
-        isSettled = true;
-        cleanup();
-        if (err) {
-          resolve({ success: false, log: `發送失敗: ${err.message}` });
-        } else {
-          resolve({ success: true, log: `成功發送 ${data.length} 位元組至熱感印表機 ${host}:${port}` });
-        }
-      });
-    });
-
-    socket.on('timeout', () => {
-      if (isSettled) return;
-      isSettled = true;
-      cleanup();
-      resolve({ success: false, log: `網路連線逾時 (${host}:${port})` });
-    });
-
-    socket.on('error', (err) => {
-      if (isSettled) return;
-      isSettled = true;
-      cleanup();
-      resolve({ success: false, log: `Socket 錯誤: ${err.message}` });
-    });
-
-    try {
-      socket.connect(port, host);
-    } catch (err: any) {
-      if (isSettled) return;
-      isSettled = true;
-      cleanup();
-      resolve({ success: false, log: `Socket 連線例外: ${err.message}` });
-    }
-  });
-}
 
 // Printer Test Ticket Generator
 }
