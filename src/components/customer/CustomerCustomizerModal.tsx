@@ -120,13 +120,16 @@ export const CustomerCustomizerModal: React.FC<CustomerCustomizerModalProps> = (
         >
           {selectedDetailItem.image ? (
             <>
-              <img
-                src={selectedDetailItem.image}
-                decoding="async"
-                alt={getLocalizedText(selectedDetailItem?.name, currentLang) || 'dish'}
-                className="w-full h-full object-cover opacity-90 group-hover:scale-102 transition duration-500"
-                referrerPolicy="no-referrer"
-              />
+              <picture className="w-full h-full block">
+                {selectedDetailItem.avifUrl && <source srcSet={selectedDetailItem.avifUrl} type="image/avif" />}
+                <img
+                  src={selectedDetailItem.image}
+                  decoding="async"
+                  alt={getLocalizedText(selectedDetailItem?.name, currentLang) || 'dish'}
+                  className="w-full h-full object-cover opacity-90 group-hover:scale-102 transition duration-500"
+                  referrerPolicy="no-referrer"
+                />
+              </picture>
               <div className="absolute bottom-2 right-2 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded backdrop-blur-sm opacity-0 group-hover:opacity-100 transition">
                 {TRANSLATIONS.clickToZoom?.[currentLang] || '🔍 點擊放大縮放'}
               </div>

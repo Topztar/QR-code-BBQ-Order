@@ -68,17 +68,20 @@ const DishCard = React.memo<DishCardProps>(({
         }`}
       >
         {item.image ? (
-          <img
-            src={item.image}
-            loading="lazy"
-            decoding="async"
-            alt={getLocalizedText(item.name, currentLang) || 'dish'}
-            className="w-full h-full object-cover hover:scale-105 transition duration-500"
-            referrerPolicy="no-referrer"
-            onError={(e) => {
-              (e.target as HTMLElement).style.display = 'none';
-            }}
-          />
+          <picture className="w-full h-full block">
+            {item.avifThumbnailUrl && <source srcSet={item.avifThumbnailUrl} type="image/avif" />}
+            <img
+              src={item.thumbnailUrl || item.image}
+              loading="lazy"
+              decoding="async"
+              alt={getLocalizedText(item.name, currentLang) || 'dish'}
+              className="w-full h-full object-cover hover:scale-105 transition duration-500"
+              referrerPolicy="no-referrer"
+              onError={(e) => {
+                (e.target as HTMLElement).style.display = 'none';
+              }}
+            />
+          </picture>
         ) : (
           <div className="w-full h-full bg-zinc-900 flex flex-col items-center justify-center text-zinc-500">
             <span className="text-xl sm:text-2xl">🍲</span>
@@ -225,17 +228,20 @@ const SimplifiedDishCard = React.memo<DishCardProps>(({
         }`}
       >
         {item.image ? (
-          <img
-            src={item.image}
-            loading="lazy"
-            decoding="async"
-            alt={getLocalizedText(item.name, currentLang) || 'dish'}
-            className="w-full h-full object-cover hover:scale-105 transition duration-300"
-            referrerPolicy="no-referrer"
-            onError={(e) => {
-              (e.target as HTMLElement).style.display = 'none';
-            }}
-          />
+          <picture className="w-full h-full block">
+            {item.avifThumbnailUrl && <source srcSet={item.avifThumbnailUrl} type="image/avif" />}
+            <img
+              src={item.thumbnailUrl || item.image}
+              loading="lazy"
+              decoding="async"
+              alt={getLocalizedText(item.name, currentLang) || 'dish'}
+              className="w-full h-full object-cover hover:scale-105 transition duration-300"
+              referrerPolicy="no-referrer"
+              onError={(e) => {
+                (e.target as HTMLElement).style.display = 'none';
+              }}
+            />
+          </picture>
         ) : (
           <div className="w-full h-full bg-zinc-50 flex flex-col items-center justify-center text-zinc-400">
             <span className="text-xl sm:text-2xl">🍲</span>

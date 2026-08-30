@@ -1,4 +1,5 @@
 import { onRequest } from 'firebase-functions/v2/https';
+import { onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { setGlobalOptions } from 'firebase-functions/v2';
 import * as admin from 'firebase-admin';
 import { getStorage } from 'firebase-admin/storage';
@@ -148,6 +149,7 @@ import { registerOrdersRoutes } from './routes/orders';
 import { registerSettingsRoutes } from './routes/settings';
 import { registerPrinterRoutes } from './routes/printer';
 import { registerStaffRoutes } from './routes/staff';
+import { cleanupStorageImage } from './helpers';
 
 // ============================================================
 // 統一路由 Context（傳入各模組的共用依賴）
@@ -179,3 +181,73 @@ app.use((req: any, res: any) => {
 });
 
 export const api = onRequest({ cors: true, invoker: 'public' }, app);
+
+// ============================================================
+// ⚡ Firestore Event Trigger — 孤兒圖片自動非同步清理 (Suggestion 1)
+// ============================================================
+export const onMenuItemWritten = onDocumentWritten({
+  document: 'menu/{menuId}',
+  database: 'ai-studio-sabaythaibbqtabl-84418196-9d0c-459c-bced-ddc424dfba07',
+  region: 'asia-east1'
+}, async (event) => {
+  try {
+    const beforeData = event.data?.before.exists ? event.data.before.data() : null;
+    const afterData = event.data?.after.exists ? event.data.after.data() : null;
+
+    // 情境 1: 餐點被刪除 -> 清理舊圖片、縮圖與 AVIF 版本
+    if (beforeData && !afterData) {
+      if (beforeData.image) {
+        console.log(`[Firestore Trigger] Menu deleted (${event.params.menuId}), cleaning image: ${beforeData.image}`);
+        await cleanupStorageImage(beforeData.image, storageBucket);
+      }
+      if (beforeData.thumbnailUrl) {
+        console.log(`[Firestore Trigger] Menu deleted (${event.params.menuId}), cleaning thumbnail: ${beforeData.thumbnailUrl}`);
+        await cleanupStorageImage(beforeData.thumbnailUrl, storageBucket);
+      }
+      if (beforeData.avifUrl) {
+        console.log(`[Firestore Trigger] Menu deleted (${event.params.menuId}), cleaning avif: ${beforeData.avifUrl}`);
+        await cleanupStorageImage(beforeData.avifUrl, storageBucket);
+      }
+      if (beforeData.avifThumbnailUrl) {
+        console.log(`[Firestore Trigger] Menu deleted (${event.params.menuId}), cleaning avif thumbnail: ${beforeData.avifThumbnailUrl}`);
+        await cleanupStorageImage(beforeData.avifThumbnailUrl, storageBucket);
+      }
+      return;
+    }
+
+    // 情境 2: 餐點被更新 -> 若圖片、縮圖或 AVIF 有更換，清理舊檔案
+    if (beforeData && afterData) {
+      const oldImage = beforeData.image;
+      const newImage = afterData.image;
+      if (oldImage && oldImage !== newImage) {
+        console.log(`[Firestore Trigger] Menu updated (${event.params.menuId}) with new image, cleaning old image: ${oldImage}`);
+        await cleanupStorageImage(oldImage, storageBucket);
+      }
+
+      const oldThumb = beforeData.thumbnailUrl;
+      const newThumb = afterData.thumbnailUrl;
+      if (oldThumb && oldThumb !== newThumb) {
+        console.log(`[Firestore Trigger] Menu updated (${event.params.menuId}) with new thumbnail, cleaning old thumb: ${oldThumb}`);
+        await cleanupStorageImage(oldThumb, storageBucket);
+      }
+
+      const oldAvif = beforeData.avifUrl;
+      const newAvif = afterData.avifUrl;
+      if (oldAvif && oldAvif !== newAvif) {
+        console.log(`[Firestore Trigger] Menu updated (${event.params.menuId}) with new avif, cleaning old avif: ${oldAvif}`);
+        await cleanupStorageImage(oldAvif, storageBucket);
+      }
+
+      const oldAvifThumb = beforeData.avifThumbnailUrl;
+      const newAvifThumb = afterData.avifThumbnailUrl;
+      if (oldAvifThumb && oldAvifThumb !== newAvifThumb) {
+        console.log(`[Firestore Trigger] Menu updated (${event.params.menuId}) with new avif thumb, cleaning old avif thumb: ${oldAvifThumb}`);
+        await cleanupStorageImage(oldAvifThumb, storageBucket);
+      }
+      return;
+    }
+  } catch (error: any) {
+    console.error(`[Firestore Trigger Error] onMenuItemWritten failed for menuId: ${event.params.menuId}`, error);
+  }
+});
+

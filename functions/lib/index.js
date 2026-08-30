@@ -36,9 +36,10 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.api = exports.requireAppCheck = exports.sendErrorResponse = exports.requireStaffAuth = void 0;
+exports.onMenuItemWritten = exports.api = exports.requireAppCheck = exports.sendErrorResponse = exports.requireStaffAuth = void 0;
 exports.createRateLimiter = createRateLimiter;
 const https_1 = require("firebase-functions/v2/https");
+const firestore_1 = require("firebase-functions/v2/firestore");
 const v2_1 = require("firebase-functions/v2");
 const admin = __importStar(require("firebase-admin"));
 const storage_1 = require("firebase-admin/storage");
@@ -46,7 +47,7 @@ const app_check_1 = require("firebase-admin/app-check");
 const express_1 = __importDefault(require("express"));
 (0, v2_1.setGlobalOptions)({ maxInstances: 10, minInstances: 0, memory: "256MiB", region: "asia-east1", concurrency: 80, timeoutSeconds: 30, invoker: 'public' });
 const cors_1 = __importDefault(require("cors"));
-const firestore_1 = require("firebase-admin/firestore");
+const firestore_2 = require("firebase-admin/firestore");
 process.on('unhandledRejection', (reason, promise) => {
     console.error('[Cloud Functions] Unhandled Rejection at:', promise, 'reason:', reason);
 });
@@ -54,7 +55,7 @@ process.on('uncaughtException', (err) => {
     console.error('[Cloud Functions] Uncaught Exception:', err);
 });
 admin.initializeApp();
-const db = (0, firestore_1.getFirestore)('ai-studio-sabaythaibbqtabl-84418196-9d0c-459c-bced-ddc424dfba07');
+const db = (0, firestore_2.getFirestore)('ai-studio-sabaythaibbqtabl-84418196-9d0c-459c-bced-ddc424dfba07');
 const storageBucket = (0, storage_1.getStorage)().bucket('sabay-bbq-order.firebasestorage.app');
 const app = (0, express_1.default)();
 const auth_1 = require("./auth");
@@ -147,6 +148,7 @@ const orders_1 = require("./routes/orders");
 const settings_1 = require("./routes/settings");
 const printer_1 = require("./routes/printer");
 const staff_1 = require("./routes/staff");
+const helpers_1 = require("./helpers");
 const routeCtx = {
     db,
     storageBucket,
@@ -167,4 +169,63 @@ app.use((req, res) => {
     res.status(404).json({ error: `無效的 API 請求: ${req.method} ${req.path}` });
 });
 exports.api = (0, https_1.onRequest)({ cors: true, invoker: 'public' }, app);
+exports.onMenuItemWritten = (0, firestore_1.onDocumentWritten)({
+    document: 'menu/{menuId}',
+    database: 'ai-studio-sabaythaibbqtabl-84418196-9d0c-459c-bced-ddc424dfba07',
+    region: 'asia-east1'
+}, async (event) => {
+    try {
+        const beforeData = event.data?.before.exists ? event.data.before.data() : null;
+        const afterData = event.data?.after.exists ? event.data.after.data() : null;
+        if (beforeData && !afterData) {
+            if (beforeData.image) {
+                console.log(`[Firestore Trigger] Menu deleted (${event.params.menuId}), cleaning image: ${beforeData.image}`);
+                await (0, helpers_1.cleanupStorageImage)(beforeData.image, storageBucket);
+            }
+            if (beforeData.thumbnailUrl) {
+                console.log(`[Firestore Trigger] Menu deleted (${event.params.menuId}), cleaning thumbnail: ${beforeData.thumbnailUrl}`);
+                await (0, helpers_1.cleanupStorageImage)(beforeData.thumbnailUrl, storageBucket);
+            }
+            if (beforeData.avifUrl) {
+                console.log(`[Firestore Trigger] Menu deleted (${event.params.menuId}), cleaning avif: ${beforeData.avifUrl}`);
+                await (0, helpers_1.cleanupStorageImage)(beforeData.avifUrl, storageBucket);
+            }
+            if (beforeData.avifThumbnailUrl) {
+                console.log(`[Firestore Trigger] Menu deleted (${event.params.menuId}), cleaning avif thumbnail: ${beforeData.avifThumbnailUrl}`);
+                await (0, helpers_1.cleanupStorageImage)(beforeData.avifThumbnailUrl, storageBucket);
+            }
+            return;
+        }
+        if (beforeData && afterData) {
+            const oldImage = beforeData.image;
+            const newImage = afterData.image;
+            if (oldImage && oldImage !== newImage) {
+                console.log(`[Firestore Trigger] Menu updated (${event.params.menuId}) with new image, cleaning old image: ${oldImage}`);
+                await (0, helpers_1.cleanupStorageImage)(oldImage, storageBucket);
+            }
+            const oldThumb = beforeData.thumbnailUrl;
+            const newThumb = afterData.thumbnailUrl;
+            if (oldThumb && oldThumb !== newThumb) {
+                console.log(`[Firestore Trigger] Menu updated (${event.params.menuId}) with new thumbnail, cleaning old thumb: ${oldThumb}`);
+                await (0, helpers_1.cleanupStorageImage)(oldThumb, storageBucket);
+            }
+            const oldAvif = beforeData.avifUrl;
+            const newAvif = afterData.avifUrl;
+            if (oldAvif && oldAvif !== newAvif) {
+                console.log(`[Firestore Trigger] Menu updated (${event.params.menuId}) with new avif, cleaning old avif: ${oldAvif}`);
+                await (0, helpers_1.cleanupStorageImage)(oldAvif, storageBucket);
+            }
+            const oldAvifThumb = beforeData.avifThumbnailUrl;
+            const newAvifThumb = afterData.avifThumbnailUrl;
+            if (oldAvifThumb && oldAvifThumb !== newAvifThumb) {
+                console.log(`[Firestore Trigger] Menu updated (${event.params.menuId}) with new avif thumb, cleaning old avif thumb: ${oldAvifThumb}`);
+                await (0, helpers_1.cleanupStorageImage)(oldAvifThumb, storageBucket);
+            }
+            return;
+        }
+    }
+    catch (error) {
+        console.error(`[Firestore Trigger Error] onMenuItemWritten failed for menuId: ${event.params.menuId}`, error);
+    }
+});
 //# sourceMappingURL=index.js.map

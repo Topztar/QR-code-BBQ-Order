@@ -749,14 +749,17 @@ export const CustomerOrderTracker: React.FC<CustomerOrderTrackerProps> = ({
                           className="w-16 h-16 sm:w-20 sm:h-20 flex-shrink-0 relative bg-zinc-950 border-r border-[#E5B453]/10 overflow-hidden cursor-pointer"
                         >
                           {item.image ? (
-                            <img
-                              src={item.image}
-                              loading="lazy"
-                              decoding="async"
-                              alt={getLocalizedText(item.name, currentLang) || 'dish'}
-                              className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
-                              referrerPolicy="no-referrer"
-                            />
+                            <picture className="w-full h-full block">
+                              {item.avifThumbnailUrl && <source srcSet={item.avifThumbnailUrl} type="image/avif" />}
+                              <img
+                                src={item.thumbnailUrl || item.image}
+                                loading="lazy"
+                                decoding="async"
+                                alt={getLocalizedText(item.name, currentLang) || 'dish'}
+                                className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
+                                referrerPolicy="no-referrer"
+                              />
+                            </picture>
                           ) : (
                             <div className="w-full h-full bg-zinc-900 flex flex-col items-center justify-center text-zinc-500">
                               <span className="text-xl">🍲</span>
@@ -896,14 +899,17 @@ export const CustomerOrderTracker: React.FC<CustomerOrderTrackerProps> = ({
                       className="w-full md:w-28 h-28 rounded-xl overflow-hidden relative shrink-0 cursor-pointer bg-neutral-950"
                     >
                       {item.image ? (
-                        <img
-                          src={item.image}
-                          loading="lazy"
-                          decoding="async"
-                          alt={getLocalizedText(item.name, currentLang) || 'dish'}
-                          className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
-                          referrerPolicy="no-referrer"
-                        />
+                        <picture className="w-full h-full block">
+                          {item.avifThumbnailUrl && <source srcSet={item.avifThumbnailUrl} type="image/avif" />}
+                          <img
+                            src={item.thumbnailUrl || item.image}
+                            loading="lazy"
+                            decoding="async"
+                            alt={getLocalizedText(item.name, currentLang) || 'dish'}
+                            className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                            referrerPolicy="no-referrer"
+                          />
+                        </picture>
                       ) : (
                         <div className="w-full h-full bg-zinc-900 flex flex-col items-center justify-center text-zinc-500">
                           <span className="text-3xl">🍲</span>

@@ -44,6 +44,8 @@ exports.sendToNetworkPrinter = sendToNetworkPrinter;
 exports.createHandleSavePrinterIp = createHandleSavePrinterIp;
 exports.createHandleSavePrinterSettings = createHandleSavePrinterSettings;
 exports.processMenuItemSoldOut = processMenuItemSoldOut;
+exports.extractStoragePathFromUrl = extractStoragePathFromUrl;
+exports.cleanupStorageImage = cleanupStorageImage;
 const net = __importStar(require("net"));
 exports.cachedMenu = null;
 exports.cachedCategories = null;
@@ -229,5 +231,69 @@ function processMenuItemSoldOut(item, now) {
         item.soldOutAt = null;
     }
     return item;
+}
+function extractStoragePathFromUrl(imageUrl, expectedBucketName) {
+    if (!imageUrl || typeof imageUrl !== 'string')
+        return null;
+    const fbPrefix = expectedBucketName
+        ? `https://firebasestorage.googleapis.com/v0/b/${expectedBucketName}/o/`
+        : `https://firebasestorage.googleapis.com/v0/b/`;
+    if (imageUrl.startsWith(fbPrefix)) {
+        let remainder = imageUrl.substring(fbPrefix.length);
+        if (!expectedBucketName) {
+            const slashIndex = remainder.indexOf('/o/');
+            if (slashIndex === -1)
+                return null;
+            remainder = remainder.substring(slashIndex + 3);
+        }
+        const rawPath = remainder.split('?')[0];
+        try {
+            return decodeURIComponent(rawPath);
+        }
+        catch {
+            return null;
+        }
+    }
+    const gcsPrefix = expectedBucketName
+        ? `https://storage.googleapis.com/${expectedBucketName}/`
+        : `https://storage.googleapis.com/`;
+    if (imageUrl.startsWith(gcsPrefix)) {
+        let remainder = imageUrl.substring(gcsPrefix.length);
+        if (!expectedBucketName) {
+            const slashIndex = remainder.indexOf('/');
+            if (slashIndex === -1)
+                return null;
+            remainder = remainder.substring(slashIndex + 1);
+        }
+        const rawPath = remainder.split('?')[0];
+        try {
+            return decodeURIComponent(rawPath);
+        }
+        catch {
+            return null;
+        }
+    }
+    return null;
+}
+async function cleanupStorageImage(imageUrl, storageBucket) {
+    if (!imageUrl || !storageBucket)
+        return false;
+    const targetPath = extractStoragePathFromUrl(imageUrl, storageBucket.name);
+    if (!targetPath)
+        return false;
+    if (!targetPath.startsWith('dishes/')) {
+        console.warn(`[Storage Cleanup] Ignored non-dish path: ${targetPath}`);
+        return false;
+    }
+    try {
+        const file = storageBucket.file(targetPath);
+        await file.delete({ ignoreNotFound: true });
+        console.log(`[Storage Cleanup] Successfully removed orphaned image: ${targetPath}`);
+        return true;
+    }
+    catch (err) {
+        console.warn(`[Storage Cleanup] Note: Failed to delete image (${targetPath}):`, err?.message);
+        return false;
+    }
 }
 //# sourceMappingURL=helpers.js.map

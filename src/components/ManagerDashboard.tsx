@@ -1,4 +1,4 @@
-import { apiFetch } from "../lib/api";
+import { apiFetch, getAuthHeader } from "../lib/api";
 import React, { Component, useState, useEffect, useMemo, useCallback } from 'react';
 import { Ingredient, Language, Category, TableConfig, Order, OrderStatus, Reservation } from '../types';
 import { getLocalizedText } from '../utils/i18n';
@@ -2196,6 +2196,9 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   const [itemCategory, setItemCategory] = useState('skewers');
   const [itemPrice, setItemPrice] = useState<number | ''>(100);
   const [itemImage, setItemImage] = useState('https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=400');
+  const [itemThumbnailUrl, setItemThumbnailUrl] = useState('');
+  const [itemAvifUrl, setItemAvifUrl] = useState('');
+  const [itemAvifThumbnailUrl, setItemAvifThumbnailUrl] = useState('');
   const [itemDescZh, setItemDescZh] = useState('');
   const [itemDescEn, setItemDescEn] = useState('');
   const [hasNoodles, setHasNoodles] = useState(false);
@@ -3229,6 +3232,9 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     setItemCategory(categories[0]?.id || 'skewers');
     setItemPrice(100);
     setItemImage('https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=400');
+    setItemThumbnailUrl('');
+    setItemAvifUrl('');
+    setItemAvifThumbnailUrl('');
     setItemDescZh('');
     setItemDescEn('');
     setHasNoodles(false);
@@ -3250,6 +3256,9 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     const priceNum = typeof item.price === 'number' ? item.price : (typeof item.price === 'string' ? (parseFloat(item.price) || 0) : 100);
     setItemPrice(priceNum);
     setItemImage(typeof item.image === 'string' ? item.image : '');
+    setItemThumbnailUrl(typeof item.thumbnailUrl === 'string' ? item.thumbnailUrl : '');
+    setItemAvifUrl(typeof item.avifUrl === 'string' ? item.avifUrl : '');
+    setItemAvifThumbnailUrl(typeof item.avifThumbnailUrl === 'string' ? item.avifThumbnailUrl : '');
     setItemDescZh(item.description ? getLocalizedText(item.description, 'zh') : '');
     setItemDescEn(typeof item.description === 'object' && item.description !== null ? (item.description.en || '') : '');
     setHasNoodles(!!item.hasNoodlesOption);
@@ -3269,6 +3278,9 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
       return;
     }
     const cleanImage = typeof itemImage === 'string' ? itemImage.trim() : (itemImage || '');
+    const cleanThumb = typeof itemThumbnailUrl === 'string' ? itemThumbnailUrl.trim() : (itemThumbnailUrl || '');
+    const cleanAvif = typeof itemAvifUrl === 'string' ? itemAvifUrl.trim() : (itemAvifUrl || '');
+    const cleanAvifThumb = typeof itemAvifThumbnailUrl === 'string' ? itemAvifThumbnailUrl.trim() : (itemAvifThumbnailUrl || '');
     const payload = {
       name: { 
         ...(typeof editingItem?.name === 'object' ? editingItem.name : {}), 
@@ -3277,6 +3289,9 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
       },
       price: Number(itemPrice),
       image: cleanImage,
+      thumbnailUrl: cleanThumb,
+      avifUrl: cleanAvif,
+      avifThumbnailUrl: cleanAvifThumb,
       description: { 
         ...(typeof editingItem?.description === 'object' ? editingItem.description : {}), 
         zh: itemDescZh, 
@@ -4845,7 +4860,12 @@ ${customerDetails}
                       <span className="text-[10px] text-zinc-300 font-bold font-sans">🖼️ 菜品圖片預覽 Dish Photo Preview</span>
                       <button
                         type="button"
-                        onClick={() => setItemImage('')}
+                        onClick={() => {
+                          setItemImage('');
+                          setItemThumbnailUrl('');
+                          setItemAvifUrl('');
+                          setItemAvifThumbnailUrl('');
+                        }}
                         className="bg-red-650 bg-red-600 hover:bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded cursor-pointer transition active:scale-95"
                       >
                         🗑️ 刪除照片 Delete
@@ -4908,46 +4928,55 @@ ${customerDetails}
                     onChange={async (e) => {
                       const file = e.target.files?.[0];
                       if (file) {
-                        if (file.size > 5 * 1024 * 1024) {
-                          alert('⚠️ 圖片檔案過大（上限 5MB），建議壓縮後再上傳！');
+                        if (file.size > 10 * 1024 * 1024) {
+                          alert('⚠️ 圖片檔案過大（上限 10MB），建議壓縮後再上傳！');
                           return;
                         }
-                        const reader = new FileReader();
-                        reader.onloadend = async () => {
-                          if (typeof reader.result === 'string') {
-                            const base64Data = reader.result;
-                            try {
-                              const fileExt = (file.name.includes('.') ? file.name.split('.').pop()?.toLowerCase() : '') || (file.type.split('/')[1] || 'jpg');
-                              const cleanExt = fileExt === 'jpeg' ? 'jpg' : fileExt.replace(/[^a-zA-Z0-9]/g, '') || 'jpg';
-                              const rawStem = file.name.includes('.') ? file.name.substring(0, file.name.lastIndexOf('.')) : file.name;
-                              const cleanStem = rawStem.replace(/[^a-zA-Z0-9_-]/g, '').replace(/^-+|-+$/g, '');
-                              const dishId = editingItem?.id ? String(editingItem.id).replace(/[^a-zA-Z0-9_-]/g, '') : 'dish';
-                              const cleanFilename = cleanStem
-                                ? `${dishId}-${Date.now()}-${cleanStem}.${cleanExt}`
-                                : `${dishId}-${Date.now()}.${cleanExt}`;
 
-                              const res = await fetch('/api/images/upload', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                  base64: base64Data,
-                                  filename: cleanFilename,
-                                  contentType: file.type,
-                                  folder: 'dishes'
-                                })
-                              });
-                              if (res.ok) {
-                                const data = await res.json();
-                                if (data?.url) {
-                                  setItemImage(data.url);
-                                  return;
-                                }
-                              }
-                            } catch (uploadErr) {
-                              console.warn('Storage upload fallback to base64:', uploadErr);
+                        const fileExt = (file.name.includes('.') ? file.name.split('.').pop()?.toLowerCase() : '') || (file.type.split('/')[1] || 'jpg');
+                        const cleanExt = fileExt === 'jpeg' ? 'jpg' : fileExt.replace(/[^a-zA-Z0-9]/g, '') || 'jpg';
+                        const rawStem = file.name.includes('.') ? file.name.substring(0, file.name.lastIndexOf('.')) : file.name;
+                        const cleanStem = rawStem.replace(/[^a-zA-Z0-9_-]/g, '').replace(/^-+|-+$/g, '');
+                        const dishId = editingItem?.id ? String(editingItem.id).replace(/[^a-zA-Z0-9_-]/g, '') : 'dish';
+                        const cleanFilename = cleanStem
+                          ? `${dishId}-${Date.now()}-${cleanStem}.${cleanExt}`
+                          : `${dishId}-${Date.now()}.${cleanExt}`;
+
+                        try {
+                          const formData = new FormData();
+                          formData.append('file', file);
+                          formData.append('folder', 'dishes');
+                          formData.append('filename', cleanFilename);
+
+                          const authHeaders = await getAuthHeader();
+                          const headers: Record<string, string> = { ...authHeaders };
+                          delete headers['Content-Type'];
+
+                          const res = await fetch('/api/images/upload', {
+                            method: 'POST',
+                            headers,
+                            body: formData
+                          });
+
+                          if (res.ok) {
+                            const data = await res.json();
+                            if (data?.url) {
+                              setItemImage(data.url);
+                              setItemThumbnailUrl(data.thumbnailUrl || '');
+                              setItemAvifUrl(data.avifUrl || '');
+                              setItemAvifThumbnailUrl(data.avifThumbnailUrl || '');
+                              return;
                             }
-                            // Fallback to local DataURL
-                            setItemImage(base64Data);
+                          }
+                        } catch (uploadErr) {
+                          console.warn('Multipart storage upload fallback:', uploadErr);
+                        }
+
+                        // Fallback to local DataURL preview if upload fails
+                        const reader = new FileReader();
+                        reader.onloadend = () => {
+                          if (typeof reader.result === 'string') {
+                            setItemImage(reader.result);
                           }
                         };
                         reader.readAsDataURL(file);

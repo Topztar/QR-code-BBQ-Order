@@ -77,6 +77,11 @@ export function validateOrderPayload(body: any): ValidationResult<any> {
     calculatedTotal += (price * qty);
   }
 
+  const subtotal = calculatedTotal;
+  const discount = Math.max(0, Number(body.discount) || 0);
+  const serviceCharge = Math.max(0, Number(body.serviceCharge) || 0);
+  const safeTotal = Math.max(0, subtotal + serviceCharge - discount);
+
   const sanitizedOrder = {
     ...body,
     tableNumber,
@@ -84,9 +89,11 @@ export function validateOrderPayload(body: any): ValidationResult<any> {
     customerName: sanitizeString(body.customerName || '', 50),
     customerPhone: sanitizeString(body.customerPhone || body.phone || '', 30),
     notes: sanitizeString(body.notes || '', 500),
-    totalAmount: typeof body.totalAmount === 'number' && Number.isFinite(body.totalAmount) && body.totalAmount >= 0
-      ? body.totalAmount
-      : calculatedTotal
+    subtotal,
+    discount,
+    serviceCharge,
+    total: safeTotal,
+    totalAmount: safeTotal
   };
 
   return { isValid: true, sanitizedData: sanitizedOrder };

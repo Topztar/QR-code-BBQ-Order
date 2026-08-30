@@ -85,6 +85,21 @@ describe('Security & Data Protection: Input Sanitization & Payload Validation', 
       expect(result.error).toContain('Invalid price');
     });
 
+    it('rejects or recalculates client-tampered totalAmount to prevent zero-dollar/negative payment fraud', () => {
+      const payload = {
+        tableNumber: 'Table-A1',
+        items: [
+          { name: 'Wagyu BBQ', price: 999, quantity: 2 }
+        ],
+        totalAmount: 1 // Hacker tries to submit $1 instead of $1998
+      };
+      const result = validateOrderPayload(payload);
+      expect(result.isValid).toBe(true);
+      expect(result.sanitizedData?.totalAmount).toBe(1998); // Server strictly recalculates real total
+      expect(result.sanitizedData?.subtotal).toBe(1998);
+      expect(result.sanitizedData?.total).toBe(1998);
+    });
+
     it('rejects order exceeding 200 items limit (anti-DoS)', () => {
       const items = Array.from({ length: 205 }, (_, i) => ({
         name: `Item ${i}`,
