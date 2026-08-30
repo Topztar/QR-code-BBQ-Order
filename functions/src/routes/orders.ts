@@ -1,9 +1,7 @@
 import express from 'express';
-import { Firestore, FieldValue, Timestamp } from 'firebase-admin/firestore';
+import { Firestore } from 'firebase-admin/firestore';
 import { Bucket } from '@google-cloud/storage';
-import * as crypto from 'crypto';
-import { hashPin, invalidateAuthCache } from '../auth';
-import { validateOrderPayload, sanitizeString } from '../validators';
+import { validateOrderPayload, validateRatingPayload } from '../validators';
 import { isStoreOpenFromData, createGetCachedSettings } from '../helpers';
 
 // ============================================================
@@ -16,12 +14,13 @@ export interface RouteContext {
   db: Firestore;
   storageBucket: Bucket;
   requireStaffAuth: express.RequestHandler;
+  requireAppCheck: express.RequestHandler;
   createRateLimiter: (max: number, windowMs: number, name: string) => express.RequestHandler;
   sendErrorResponse: (res: express.Response, error: any, ctx?: string) => void;
 }
 
 export function registerOrdersRoutes(app: express.Application, ctx: RouteContext) {
-  const { db, storageBucket, requireStaffAuth, createRateLimiter, sendErrorResponse } = ctx;
+  const { db, storageBucket, requireStaffAuth, requireAppCheck, createRateLimiter, sendErrorResponse } = ctx;
   const getCachedSettings = createGetCachedSettings(db);
   const orderRateLimiter = createRateLimiter(20, 60 * 1000, '訂單提交');
 
@@ -61,7 +60,7 @@ get('/print-logs', async (_req, res) => {
 
 // 16. Push Notifications
 
-post('/orders', orderRateLimiter, async (req, res) => {
+post('/orders', requireAppCheck, orderRateLimiter, async (req, res) => {
   const validation = validateOrderPayload(req.body);
   if (!validation.isValid || !validation.sanitizedData) {
     return res.status(400).json({ error: validation.error || '無效的訂單資料格式' });
@@ -70,38 +69,50 @@ post('/orders', orderRateLimiter, async (req, res) => {
   const orderId = orderData.id || `ORD-${Date.now().toString(36).toUpperCase()}`;
 
   try {
-    const systemDoc = await db.collection('settings').doc('system').get();
-    const sysData = systemDoc.data();
-    
-    // 預約專屬點餐 (reservationNo/reservationDate) 或 外帶點餐 (takeoutInfo/外帶) 豁免一般營業時間限制
-    const isTakeoutOrder = !!(orderData.takeoutInfo || String(orderData.tableNumber || '').includes('外帶') || String(orderData.tableNumber || '').toLowerCase() === 'takeout');
-    const isReservationOrder = !!(orderData.reservationNo || orderData.reservationDate);
-    if (!isReservationOrder && !isTakeoutOrder && !isStoreOpenFromData(sysData)) {
-      return res.status(403).json({ error: '目前不在營業時間內（店鋪休息中），系統不開放下單點餐！' });
-    }
-
-    const savedOrder = {
-      ...orderData,
-      id: orderId,
-      status: orderData.status || 'pending',
-      createdAt: orderData.createdAt || new Date().toISOString(),
-    };
-
-    await db.collection('orders').doc(orderId).set(savedOrder);
-
-    // Mark table as in_use and clear cleaningStartedAt
-    if (orderData.tableNumber && !String(orderData.tableNumber).includes('外帶') && String(orderData.tableNumber).toLowerCase() !== 'takeout') {
-      const tblId = String(orderData.tableNumber).trim();
-      const tableRef = db.collection('tables').doc(tblId);
-      const tableSnap = await tableRef.get();
-      if (tableSnap.exists) {
-        await tableRef.update({ status: 'in_use', cleaningStartedAt: null });
+    const savedOrder = await db.runTransaction(async (t) => {
+      // 1. Reads
+      const systemDoc = await t.get(db.collection('settings').doc('system'));
+      const sysData = systemDoc.data();
+      
+      // 預約專屬點餐 (reservationNo/reservationDate) 或 外帶點餐 (takeoutInfo/外帶) 豁免一般營業時間限制
+      const isTakeoutOrder = !!(orderData.takeoutInfo || String(orderData.tableNumber || '').includes('外帶') || String(orderData.tableNumber || '').toLowerCase() === 'takeout');
+      const isReservationOrder = !!(orderData.reservationNo || orderData.reservationDate);
+      if (!isReservationOrder && !isTakeoutOrder && !isStoreOpenFromData(sysData)) {
+        throw new Error('CLOSED:目前不在營業時間內（店鋪休息中），系統不開放下單點餐！');
       }
-    }
+
+      let tableSnap = null;
+      let tableRef = null;
+      if (orderData.tableNumber && !isTakeoutOrder) {
+        const tblId = String(orderData.tableNumber).trim();
+        tableRef = db.collection('tables').doc(tblId);
+        tableSnap = await t.get(tableRef);
+      }
+
+      // 2. Writes
+      const orderToSave = {
+        ...orderData,
+        id: orderId,
+        status: orderData.status || 'pending',
+        createdAt: orderData.createdAt || new Date().toISOString(),
+      };
+
+      t.set(db.collection('orders').doc(orderId), orderToSave);
+
+      // Mark table as in_use and clear cleaningStartedAt
+      if (tableRef && tableSnap && tableSnap.exists) {
+        t.update(tableRef, { status: 'in_use', cleaningStartedAt: null });
+      }
+
+      return orderToSave;
+    });
 
     res.status(201).json(savedOrder);
   } catch (error) {
     console.error('Error submitting order:', error);
+    if (error instanceof Error && error.message.startsWith('CLOSED:')) {
+      return res.status(403).json({ error: error.message.replace('CLOSED:', '') });
+    }
     res.status(500).send(error);
   }
 });
@@ -343,7 +354,11 @@ put('/orders/:id/pay', requireStaffAuth, async (req, res) => {
 
 put('/orders/:id/rate', async (req, res) => {
   const id = req.params.id as string;
-  const { rating, feedback } = req.body;
+  const validation = validateRatingPayload(req.body);
+  if (!validation.isValid || !validation.sanitizedData) {
+    return res.status(400).json({ error: validation.error || '無效的評價資料' });
+  }
+  const { rating, feedback } = validation.sanitizedData;
   try {
     await db.collection('orders').doc(id).update({ rating, feedback });
     res.json({ success: true });

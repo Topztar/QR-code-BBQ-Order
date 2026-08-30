@@ -1,13 +1,28 @@
-export const getAuthHeader = () => {
+import { getToken } from 'firebase/app-check';
+import { appCheck } from './firebase';
+
+export const getAuthHeader = async () => {
+  const headers: Record<string, string> = {};
   const token = localStorage.getItem('sabay_jwt_token');
-  return token ? { 'Authorization': `Bearer ${token}` } : {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  if (appCheck) {
+    try {
+      const appCheckTokenResponse = await getToken(appCheck, false);
+      headers['X-Firebase-AppCheck'] = appCheckTokenResponse.token;
+    } catch (err) {
+      console.warn('App Check Token 獲取失敗', err);
+    }
+  }
+  return headers;
 };
 
 export const apiFetch = async (url: string, options: any = {}) => {
+  const authHeaders = await getAuthHeader();
   const headers = {
     'Content-Type': 'application/json',
     ...options.headers,
-    ...getAuthHeader(),
+    ...authHeaders,
   };
 
   const controller = new AbortController();

@@ -1,11 +1,8 @@
 import express from 'express';
-import { Firestore, FieldValue, Timestamp } from 'firebase-admin/firestore';
+import { Firestore } from 'firebase-admin/firestore';
 import { Bucket } from '@google-cloud/storage';
-import * as net from 'net';
 import * as crypto from 'crypto';
-import { hashPin, invalidateAuthCache } from '../auth';
-import { validateOrderPayload, validateReservationPayload, validateImageUploadPayload, sanitizeString } from '../validators';
-import { cachedMenu, cachedCategories, cachedSettings, setCachedMenu, setCachedCategories, setCachedSettings, CACHE_TTL_MS, processMenuItemSoldOut, isStoreOpenFromData } from '../helpers';
+import { processMenuItemSoldOut, isStoreOpenFromData } from '../helpers';
 
 // ============================================================
 // BOOTSTRAP 路由模組
@@ -47,7 +44,7 @@ export function registerBootstrapRoutes(app: express.Application, ctx: RouteCont
         db.collection('tables').select('id', 'qrCodeUrl', 'status', 'cleaningStartedAt', 'maxCapacity', 'positionX', 'positionY', 'preservedFor', 'mergedWith').get(),
         db.collection('settings').doc('system').get(),
         db.collection('ingredients').select('id', 'name', 'stock', 'minThreshold', 'unit').get(),
-        db.collection('reservations').select('id', 'customerName', 'phone', 'guestCount', 'tableNumber', 'date', 'time', 'status', 'notes', 'createdAt', 'reservationNo').where('date', '>=', todayStr).limit(100).get()
+        db.collection('reservations').select('id', 'guestCount', 'tableNumber', 'date', 'time', 'status', 'reservationNo').where('date', '>=', todayStr).limit(100).get()
       ]);
 
       const now = new Date();

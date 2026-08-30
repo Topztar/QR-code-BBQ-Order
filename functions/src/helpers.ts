@@ -8,6 +8,7 @@
 import express from 'express';
 import * as net from 'net';
 import { Firestore } from 'firebase-admin/firestore';
+import { Bucket } from '@google-cloud/storage';
 
 // ============================================================
 // 🗄️ 記憶體快取 (Module-level cache，隨 Cloud Function 實例存活)
@@ -230,3 +231,79 @@ export function processMenuItemSoldOut(item: any, now: Date): any {
   }
   return item;
 }
+
+// ============================================================
+// 🔍 extractStoragePathFromUrl — 從 Firebase Storage 公開 URL 解析檔案路徑
+// ============================================================
+export function extractStoragePathFromUrl(imageUrl: string | undefined, expectedBucketName?: string): string | null {
+  if (!imageUrl || typeof imageUrl !== 'string') return null;
+
+  // 1. Firebase Storage HTTP API format: /v0/b/<bucket>/o/<encodedPath>?...
+  const fbPrefix = expectedBucketName
+    ? `https://firebasestorage.googleapis.com/v0/b/${expectedBucketName}/o/`
+    : `https://firebasestorage.googleapis.com/v0/b/`;
+
+  if (imageUrl.startsWith(fbPrefix)) {
+    let remainder = imageUrl.substring(fbPrefix.length);
+    if (!expectedBucketName) {
+      const slashIndex = remainder.indexOf('/o/');
+      if (slashIndex === -1) return null;
+      remainder = remainder.substring(slashIndex + 3);
+    }
+    const rawPath = remainder.split('?')[0];
+    try {
+      return decodeURIComponent(rawPath);
+    } catch {
+      return null;
+    }
+  }
+
+  // 2. Google Cloud Storage standard URL format: https://storage.googleapis.com/<bucket>/<path>
+  const gcsPrefix = expectedBucketName
+    ? `https://storage.googleapis.com/${expectedBucketName}/`
+    : `https://storage.googleapis.com/`;
+
+  if (imageUrl.startsWith(gcsPrefix)) {
+    let remainder = imageUrl.substring(gcsPrefix.length);
+    if (!expectedBucketName) {
+      const slashIndex = remainder.indexOf('/');
+      if (slashIndex === -1) return null;
+      remainder = remainder.substring(slashIndex + 1);
+    }
+    const rawPath = remainder.split('?')[0];
+    try {
+      return decodeURIComponent(rawPath);
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
+}
+
+// ============================================================
+// 🗑️ cleanupStorageImage — 安全非同步清理 Cloud Storage 孤兒圖片
+// ============================================================
+export async function cleanupStorageImage(imageUrl: string | undefined, storageBucket: Bucket | any): Promise<boolean> {
+  if (!imageUrl || !storageBucket) return false;
+
+  const targetPath = extractStoragePathFromUrl(imageUrl, storageBucket.name);
+  if (!targetPath) return false;
+
+  // 🛡️ 安全防護：僅允許刪除 dishes/ 目錄下的圖片，防止路徑穿越或誤刪非餐點資源
+  if (!targetPath.startsWith('dishes/')) {
+    console.warn(`[Storage Cleanup] Ignored non-dish path: ${targetPath}`);
+    return false;
+  }
+
+  try {
+    const file = storageBucket.file(targetPath);
+    await file.delete({ ignoreNotFound: true });
+    console.log(`[Storage Cleanup] Successfully removed orphaned image: ${targetPath}`);
+    return true;
+  } catch (err: any) {
+    console.warn(`[Storage Cleanup] Note: Failed to delete image (${targetPath}):`, err?.message);
+    return false;
+  }
+}
+

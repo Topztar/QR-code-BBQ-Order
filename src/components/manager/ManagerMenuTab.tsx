@@ -196,12 +196,15 @@ export const ManagerMenuTab: React.FC<ManagerMenuTabProps> = ({
                     <td className="p-2.5 border-r border-white/10 font-sans">
                       <div className="flex items-center space-x-2">
                         {item.image ? (
-                          <img
-                            src={item.image}
-                            alt={getLocalizedText(item.name, currentLang)}
-                            className="w-10 h-10 object-cover rounded-lg bg-black flex-shrink-0 border border-white/10"
-                            referrerPolicy="no-referrer"
-                          />
+                          <picture className="w-10 h-10 flex-shrink-0 block">
+                            {item.avifThumbnailUrl && <source srcSet={item.avifThumbnailUrl} type="image/avif" />}
+                            <img
+                              src={item.thumbnailUrl || item.image}
+                              alt={getLocalizedText(item.name, currentLang)}
+                              className="w-10 h-10 object-cover rounded-lg bg-black flex-shrink-0 border border-white/10"
+                              referrerPolicy="no-referrer"
+                            />
+                          </picture>
                         ) : (
                           <div className="w-10 h-10 rounded-lg bg-zinc-800 border border-white/10 flex-shrink-0 flex items-center justify-center text-base text-zinc-500" title="無圖片 No Image">
                             🥣

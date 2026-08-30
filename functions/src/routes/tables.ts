@@ -1,10 +1,7 @@
 import express from 'express';
-import { Firestore, FieldValue, Timestamp } from 'firebase-admin/firestore';
+import { Firestore } from 'firebase-admin/firestore';
 import { Bucket } from '@google-cloud/storage';
-import * as net from 'net';
-import * as crypto from 'crypto';
-import { hashPin, invalidateAuthCache } from '../auth';
-import { validateOrderPayload, validateReservationPayload, validateImageUploadPayload, sanitizeString } from '../validators';
+import { validateReservationPayload } from '../validators';
 import { createGetCachedSettings } from '../helpers';
 
 
@@ -61,10 +58,10 @@ get('/tables', async (_req, res) => {
   }
 });
 
-// 5. Get Reservations
-get('/reservations', async (_req, res) => {
+// 5. Get Reservations (Staff Protected)
+get('/reservations', requireStaffAuth, async (_req, res) => {
   try {
-    res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=10, stale-while-revalidate=30');
+    res.setHeader('Cache-Control', 'private, no-cache, no-store, must-revalidate');
     const todayStr = new Date().toISOString().split('T')[0];
     const snapshot = await db.collection('reservations').select('id', 'customerName', 'phone', 'guestCount', 'tableNumber', 'date', 'time', 'status', 'notes', 'createdAt', 'reservationNo').where('date', '>=', todayStr).limit(100).get();
     const reservations = snapshot.docs.map(doc => doc.data());

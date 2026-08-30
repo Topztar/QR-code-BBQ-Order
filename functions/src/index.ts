@@ -1,14 +1,14 @@
 import { onRequest } from 'firebase-functions/v2/https';
+import { onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { setGlobalOptions } from 'firebase-functions/v2';
 import * as admin from 'firebase-admin';
 import { getStorage } from 'firebase-admin/storage';
+import { getAppCheck } from 'firebase-admin/app-check';
 import express from 'express';
 
-setGlobalOptions({ maxInstances: 10, minInstances: 0, memory: "256MiB", region: "asia-east1", concurrency: 80, invoker: 'public' });
+setGlobalOptions({ maxInstances: 10, minInstances: 0, memory: "256MiB", region: "asia-east1", concurrency: 80, timeoutSeconds: 30, invoker: 'public' });
 import cors from 'cors';
-import * as net from 'net';
-import * as crypto from 'crypto';
-import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { getFirestore } from 'firebase-admin/firestore';
 
 process.on('unhandledRejection', (reason, promise) => {
   console.error('[Cloud Functions] Unhandled Rejection at:', promise, 'reason:', reason);
@@ -26,8 +26,7 @@ const storageBucket = getStorage().bucket('sabay-bbq-order.firebasestorage.app')
 const app = express();
 
 // 🔐 安全認證與驗證模組
-import { hashPin, createStaffAuthMiddleware, invalidateAuthCache } from './auth';
-import { validateOrderPayload, validateReservationPayload, validateImageUploadPayload, sanitizeString } from './validators';
+import { createStaffAuthMiddleware } from './auth';
 
 export const requireStaffAuth = createStaffAuthMiddleware(db);
 
@@ -117,6 +116,28 @@ export const sendErrorResponse = (res: express.Response, error: any, contextMsg:
   });
 };
 
+// =================================================================
+// 🤖 App Check 驗證 Middleware (防止機器人與未授權 API 呼叫)
+// =================================================================
+export const requireAppCheck = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (process.env.FUNCTIONS_EMULATOR === 'true' || process.env.NODE_ENV !== 'production') {
+    return next();
+  }
+  
+  const appCheckToken = req.header('X-Firebase-AppCheck');
+  if (!appCheckToken) {
+    return res.status(401).json({ error: '拒絕連線：缺少有效 App Check 安全認證' });
+  }
+
+  try {
+    await getAppCheck().verifyToken(appCheckToken);
+    return next();
+  } catch (err) {
+    console.error('App Check 驗證失敗:', err);
+    return res.status(401).json({ error: '拒絕連線：App Check 驗證失敗 (Unauthorized Bot)' });
+  }
+};
+
 // ============================================================
 // 路由模組 imports (Phase 3 拆分)
 // ============================================================
@@ -128,6 +149,7 @@ import { registerOrdersRoutes } from './routes/orders';
 import { registerSettingsRoutes } from './routes/settings';
 import { registerPrinterRoutes } from './routes/printer';
 import { registerStaffRoutes } from './routes/staff';
+import { cleanupStorageImage } from './helpers';
 
 // ============================================================
 // 統一路由 Context（傳入各模組的共用依賴）
@@ -136,6 +158,7 @@ const routeCtx = {
   db,
   storageBucket,
   requireStaffAuth,
+  requireAppCheck,
   createRateLimiter,
   sendErrorResponse,
 };
@@ -158,3 +181,73 @@ app.use((req: any, res: any) => {
 });
 
 export const api = onRequest({ cors: true, invoker: 'public' }, app);
+
+// ============================================================
+// ⚡ Firestore Event Trigger — 孤兒圖片自動非同步清理 (Suggestion 1)
+// ============================================================
+export const onMenuItemWritten = onDocumentWritten({
+  document: 'menu/{menuId}',
+  database: 'ai-studio-sabaythaibbqtabl-84418196-9d0c-459c-bced-ddc424dfba07',
+  region: 'asia-east1'
+}, async (event) => {
+  try {
+    const beforeData = event.data?.before.exists ? event.data.before.data() : null;
+    const afterData = event.data?.after.exists ? event.data.after.data() : null;
+
+    // 情境 1: 餐點被刪除 -> 清理舊圖片、縮圖與 AVIF 版本
+    if (beforeData && !afterData) {
+      if (beforeData.image) {
+        console.log(`[Firestore Trigger] Menu deleted (${event.params.menuId}), cleaning image: ${beforeData.image}`);
+        await cleanupStorageImage(beforeData.image, storageBucket);
+      }
+      if (beforeData.thumbnailUrl) {
+        console.log(`[Firestore Trigger] Menu deleted (${event.params.menuId}), cleaning thumbnail: ${beforeData.thumbnailUrl}`);
+        await cleanupStorageImage(beforeData.thumbnailUrl, storageBucket);
+      }
+      if (beforeData.avifUrl) {
+        console.log(`[Firestore Trigger] Menu deleted (${event.params.menuId}), cleaning avif: ${beforeData.avifUrl}`);
+        await cleanupStorageImage(beforeData.avifUrl, storageBucket);
+      }
+      if (beforeData.avifThumbnailUrl) {
+        console.log(`[Firestore Trigger] Menu deleted (${event.params.menuId}), cleaning avif thumbnail: ${beforeData.avifThumbnailUrl}`);
+        await cleanupStorageImage(beforeData.avifThumbnailUrl, storageBucket);
+      }
+      return;
+    }
+
+    // 情境 2: 餐點被更新 -> 若圖片、縮圖或 AVIF 有更換，清理舊檔案
+    if (beforeData && afterData) {
+      const oldImage = beforeData.image;
+      const newImage = afterData.image;
+      if (oldImage && oldImage !== newImage) {
+        console.log(`[Firestore Trigger] Menu updated (${event.params.menuId}) with new image, cleaning old image: ${oldImage}`);
+        await cleanupStorageImage(oldImage, storageBucket);
+      }
+
+      const oldThumb = beforeData.thumbnailUrl;
+      const newThumb = afterData.thumbnailUrl;
+      if (oldThumb && oldThumb !== newThumb) {
+        console.log(`[Firestore Trigger] Menu updated (${event.params.menuId}) with new thumbnail, cleaning old thumb: ${oldThumb}`);
+        await cleanupStorageImage(oldThumb, storageBucket);
+      }
+
+      const oldAvif = beforeData.avifUrl;
+      const newAvif = afterData.avifUrl;
+      if (oldAvif && oldAvif !== newAvif) {
+        console.log(`[Firestore Trigger] Menu updated (${event.params.menuId}) with new avif, cleaning old avif: ${oldAvif}`);
+        await cleanupStorageImage(oldAvif, storageBucket);
+      }
+
+      const oldAvifThumb = beforeData.avifThumbnailUrl;
+      const newAvifThumb = afterData.avifThumbnailUrl;
+      if (oldAvifThumb && oldAvifThumb !== newAvifThumb) {
+        console.log(`[Firestore Trigger] Menu updated (${event.params.menuId}) with new avif thumb, cleaning old avif thumb: ${oldAvifThumb}`);
+        await cleanupStorageImage(oldAvifThumb, storageBucket);
+      }
+      return;
+    }
+  } catch (error: any) {
+    console.error(`[Firestore Trigger Error] onMenuItemWritten failed for menuId: ${event.params.menuId}`, error);
+  }
+});
+

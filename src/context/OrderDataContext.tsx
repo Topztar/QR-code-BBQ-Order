@@ -301,7 +301,9 @@ export function OrderDataProvider({
     let pollingInterval: ReturnType<typeof setInterval>;
 
     const isCustomerView = activeTab === 'customer';
-    const currentTable = currentPath.replace('/', '');
+    const tableParam = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('table') : null;
+    const cleanPath = currentPath.replace('/', '').trim();
+    const currentTable = tableParam || (cleanPath !== '' && !['admin', 'kitchen', 'cashier'].includes(cleanPath) ? cleanPath : '');
 
     // Fallback Polling Mechanism for Express Server Backend or when offline / Firebase quota exceeded
     const fetchOrdersFromApi = async () => {
@@ -567,16 +569,6 @@ export function OrderDataProvider({
       isOfflinePending: false,
     };
 
-    // ☁️ 雲端寫入：若啟用 Firebase 則直接寫入 Firestore 集合，確保無 Express 後端時多端即時同步
-    if (isFirebaseSyncEnabled()) {
-      try {
-        await setDoc(doc(db, "orders", baseOrder.id), baseOrder);
-        console.log(`[Firebase Sync] Order #${baseOrder.id} successfully written to Firestore.`);
-      } catch (fsErr) {
-        console.warn('[Firebase Sync] Direct Firestore setDoc warning (fallback active):', fsErr);
-      }
-    }
-
     // 🚀 本地跨分頁 0 成本廣播 (同設備 KDS / 收銀立即 0ms 更新)
     broadcastOrderEvent({ type: 'ORDER_CREATED', order: baseOrder });
 
@@ -608,11 +600,6 @@ export function OrderDataProvider({
         const serverData = await res.json();
         if (serverData && serverData.id) {
           completedOrder = { ...baseOrder, ...serverData };
-          if (isFirebaseSyncEnabled() && serverData.id !== baseOrder.id) {
-            try {
-              await setDoc(doc(db, "orders", serverData.id), completedOrder);
-            } catch (_) {}
-          }
         }
       }
 

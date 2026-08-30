@@ -1,3 +1,4 @@
+/* eslint-disable no-control-regex */
 /**
  * Server-Side Input Sanitization and Validation
  * Prevents NoSQL/SQL injection, XSS vectors, prototype pollution, and malformed payloads
@@ -76,6 +77,11 @@ export function validateOrderPayload(body: any): ValidationResult<any> {
     calculatedTotal += (price * qty);
   }
 
+  const subtotal = calculatedTotal;
+  const discount = Math.max(0, Number(body.discount) || 0);
+  const serviceCharge = Math.max(0, Number(body.serviceCharge) || 0);
+  const safeTotal = Math.max(0, subtotal + serviceCharge - discount);
+
   const sanitizedOrder = {
     ...body,
     tableNumber,
@@ -83,9 +89,11 @@ export function validateOrderPayload(body: any): ValidationResult<any> {
     customerName: sanitizeString(body.customerName || '', 50),
     customerPhone: sanitizeString(body.customerPhone || body.phone || '', 30),
     notes: sanitizeString(body.notes || '', 500),
-    totalAmount: typeof body.totalAmount === 'number' && Number.isFinite(body.totalAmount) && body.totalAmount >= 0
-      ? body.totalAmount
-      : calculatedTotal
+    subtotal,
+    discount,
+    serviceCharge,
+    total: safeTotal,
+    totalAmount: safeTotal
   };
 
   return { isValid: true, sanitizedData: sanitizedOrder };
@@ -219,6 +227,33 @@ export function validateImageUploadPayload(body: any): ValidationResult<{
       cleanExt,
       targetFolder,
       targetFilename
+    }
+  };
+}
+
+/**
+ * Validates and sanitizes Order Rating payload
+ */
+export function validateRatingPayload(body: any): ValidationResult<{
+  rating: number;
+  feedback: string;
+}> {
+  if (!body || typeof body !== 'object') {
+    return { isValid: false, error: '無效的評價資料格式 (Invalid rating payload)' };
+  }
+
+  const ratingNum = Number(body.rating);
+  if (!Number.isInteger(ratingNum) || ratingNum < 1 || ratingNum > 5) {
+    return { isValid: false, error: '評分星級必須為 1 到 5 之間的整數 (Rating must be 1-5)' };
+  }
+
+  const feedback = sanitizeString(body.feedback || '', 500);
+
+  return {
+    isValid: true,
+    sanitizedData: {
+      rating: ratingNum,
+      feedback
     }
   };
 }

@@ -23,6 +23,9 @@ export interface MenuItem {
   name: { [key in Language]?: string };
   price: number;
   image: string;
+  thumbnailUrl?: string;
+  avifUrl?: string;
+  avifThumbnailUrl?: string;
   description: { [key in Language]?: string };
   available: boolean;
   isAvailable?: boolean;

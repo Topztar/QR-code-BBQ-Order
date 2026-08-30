@@ -20,13 +20,11 @@ import { CustomerCategoryTabs } from './customer/CustomerCategoryTabs';
 import { CustomerMenuGrid } from './customer/CustomerMenuGrid';
 const CustomerCustomizerModal = lazy(() => import('./customer/CustomerCustomizerModal').then(m => ({ default: m.CustomerCustomizerModal })));
 const CustomerCartDrawer = lazy(() => import('./customer/CustomerCartDrawer').then(m => ({ default: m.CustomerCartDrawer })));
-import { CustomerOrderTracker } from './customer/CustomerOrderTracker';
+const CustomerOrderTracker = lazy(() => import('./customer/CustomerOrderTracker').then(m => ({ default: m.CustomerOrderTracker })));
 const CustomerReservationModal = lazy(() => import('./customer/CustomerReservationModal').then(m => ({ default: m.CustomerReservationModal })));
-import {
-  CustomerStaffPinModal,
-  CustomerLightboxModal,
-  CustomerTakeoutModal,
-} from './customer/CustomerModals';
+const CustomerStaffPinModal = lazy(() => import('./customer/CustomerModals').then(m => ({ default: m.CustomerStaffPinModal })));
+const CustomerLightboxModal = lazy(() => import('./customer/CustomerModals').then(m => ({ default: m.CustomerLightboxModal })));
+const CustomerTakeoutModal = lazy(() => import('./customer/CustomerModals').then(m => ({ default: m.CustomerTakeoutModal })));
 
 export function isValidTableFormat(str: string | null): boolean {
   if (!str) return false;
@@ -442,7 +440,9 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
       showToast('購物車內尚無任何餐點！', 'error');
       return;
     }
-    if (isTakeoutMode && !skipTakeoutCheck) {
+    // 只有在線上點餐獨立連結 (/order) 且為外帶時才強制顯示外帶表單
+    // 針對店內掃碼外帶 (?table=takeout) 則直接送出訂單，免填表單以加速結帳流程
+    if (isTakeoutMode && isOrderRoute && !skipTakeoutCheck) {
       setIsCartOpen(false);
       setShowTakeoutFormModal(true);
       return;
@@ -614,7 +614,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
       id="customer-order-panel"
     >
       {/* Staff Pin Gate Modal */}
-      <CustomerStaffPinModal
+      <Suspense fallback={null}><CustomerStaffPinModal
         showPasscodeModal={showPasscodeModal}
         setShowPasscodeModal={setShowPasscodeModal}
         pincodeInput={pincodeInput}
@@ -622,16 +622,16 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
         pincodeError={pincodeError}
         setPincodeError={setPincodeError}
         setIsMerchantMode={setIsMerchantMode}
-      />
+      /></Suspense>
 
       {/* Lightbox Zoom Modal */}
-      <CustomerLightboxModal
+      <Suspense fallback={null}><CustomerLightboxModal
         activeLightboxImg={activeLightboxImg}
         setActiveLightboxImg={setActiveLightboxImg}
-      />
+      /></Suspense>
 
       {/* Takeout Form Modal */}
-      <CustomerTakeoutModal
+      <Suspense fallback={null}><CustomerTakeoutModal
         showTakeoutFormModal={showTakeoutFormModal}
         setShowTakeoutFormModal={setShowTakeoutFormModal}
         takeoutCustomerName={takeoutCustomerName}
@@ -647,7 +647,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
         isCheckoutSubmitting={isCheckoutSubmitting}
         handleCheckout={handleCheckout}
         setIsCartOpen={setIsCartOpen}
-      />
+      /></Suspense>
 
       {/* Reservation Modal */}
       <Suspense fallback={null}><CustomerReservationModal
@@ -1175,7 +1175,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
       /></Suspense>
 
       {/* Order Tracker and History */}
-      <CustomerOrderTracker
+      <Suspense fallback={null}><CustomerOrderTracker
         isOrderHistoryVisible={isOrderHistoryVisible}
         activeSegmentTab={activeSegmentTab}
         setActiveSegmentTab={setActiveSegmentTab}
@@ -1196,7 +1196,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
         setSelectedDetailItem={setSelectedDetailItem}
         handleQuickAddToCart={handleQuickAddToCart}
         t={t}
-      />
+      /></Suspense>
     </div>
   );
 };

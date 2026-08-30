@@ -29,7 +29,7 @@ jobs:
         run: cd functions && npm ci
 
       - name: Run Type Checking and Build
-        run: npm run lint && npm run build
+        run: npm run lint && npm run test && npm run build
 
       - name: Verify Bundle Size Limits
         run: |

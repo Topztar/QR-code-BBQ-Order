@@ -1,10 +1,9 @@
 import express from 'express';
-import { Firestore, FieldValue, Timestamp } from 'firebase-admin/firestore';
+import { Firestore, FieldValue } from 'firebase-admin/firestore';
 import { Bucket } from '@google-cloud/storage';
 import * as net from 'net';
 import * as crypto from 'crypto';
 import { hashPin, invalidateAuthCache } from '../auth';
-import { validateOrderPayload, validateReservationPayload, validateImageUploadPayload, sanitizeString } from '../validators';
 import { createGetCachedSettings } from '../helpers';
 
 
