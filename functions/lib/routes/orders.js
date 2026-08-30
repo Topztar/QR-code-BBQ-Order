@@ -14,13 +14,20 @@ function registerOrdersRoutes(app, ctx) {
     get('/orders', async (_req, res) => {
         try {
             res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=5, stale-while-revalidate=10');
-            const snapshot = await db.collection('orders').select('id', 'tableNumber', 'items', 'subtotal', 'serviceCharge', 'total', 'status', 'createdAt', 'customerName', 'customerAvatar', 'paymentMethod', 'isMember', 'isPaid', 'guestCount', 'refundLogs', 'discount', 'quickNotes', 'isFlagged', 'flagReason', 'takeoutInfo', 'rating', 'feedback', 'isOfflinePending', 'clientOrderId', 'reservationNo', 'reservationDate', 'reservationTime').orderBy('createdAt', 'desc').limit(200).get();
-            const orders = snapshot.docs.map(doc => doc.data());
+            let snapshot;
+            try {
+                snapshot = await db.collection('orders').orderBy('createdAt', 'desc').limit(200).get();
+            }
+            catch (_idxErr) {
+                snapshot = await db.collection('orders').limit(200).get();
+            }
+            const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            orders.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
             res.json(orders);
         }
         catch (error) {
             console.error('Error fetching orders:', error);
-            res.status(500).send(error);
+            res.status(500).json({ error: '無法取得訂單列表' });
         }
     });
     let cachedServicePause = null;

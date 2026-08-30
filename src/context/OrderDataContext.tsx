@@ -341,17 +341,10 @@ export function OrderDataProvider({
             where("tableNumber", "==", currentTable),
             limit(100)
           );
-        } else if (isCustomerView) {
-          ordersQuery = query(
-            collection(db, "orders"),
-            where("tableNumber", "==", "NONE"),
-            limit(1)
-          );
         } else {
-          // 🍳 後台 (廚房 KDS / 櫃檯收銀 / 數據分析)：讀取最新待處理與即時訂單 (免複合索引，避免查詢報錯)
+          // 🍳 後台 (廚房 KDS / 櫃檯收銀 / 數據分析)：讀取最新待處理與即時訂單 (免強制索引，避免索引未就緒時報錯)
           ordersQuery = query(
             collection(db, "orders"),
-            orderBy("createdAt", "desc"),
             limit(300)
           );
         }
@@ -365,14 +358,14 @@ export function OrderDataProvider({
           console.warn('[Firebase Sync] Orders listener paused or fallback triggered:', error);
           fetchOrdersFromApi();
           if (!pollingInterval) {
-            pollingInterval = setInterval(fetchOrdersFromApi, 6000);
+            pollingInterval = setInterval(fetchOrdersFromApi, 5000);
           }
         });
       } catch (e) {
         console.warn('[Firebase Sync] Realtime listener initialization skipped:', e);
         fetchOrdersFromApi();
         if (!pollingInterval) {
-          pollingInterval = setInterval(fetchOrdersFromApi, 6000);
+          pollingInterval = setInterval(fetchOrdersFromApi, 5000);
         }
       }
     } else {
@@ -448,15 +441,17 @@ export function OrderDataProvider({
                 r.date.trim() === todayStr
               );
 
-              hasChanges = true;
               if (todayPendingRes) {
+                hasChanges = true;
                 return {
                   ...tb,
                   status: 'preserved' as const,
-                  preservedFor: `${todayPendingRes.customerName} (${todayPendingRes.time})`,
+                  preservedFor: todayPendingRes.customerName,
                   cleaningStartedAt: null
                 };
               }
+
+              hasChanges = true;
               return {
                 ...tb,
                 status: 'available' as const,
@@ -468,23 +463,6 @@ export function OrderDataProvider({
             return tb;
           }
 
-          const todayPendingRes = reservations.find(r => 
-            String(r.tableNumber).trim() === tblId &&
-            (r.status === 'pending' || r.status === 'upcoming' || r.status === 'confirmed') &&
-            r.date.trim() === todayStr
-          );
-
-          if (todayPendingRes) {
-            const presText = `${todayPendingRes.customerName} (${todayPendingRes.time})`;
-            if (tb.status !== 'preserved' || tb.preservedFor !== presText) {
-              hasChanges = true;
-              return { ...tb, status: 'preserved' as const, preservedFor: presText, cleaningStartedAt: null };
-            }
-          } else if (tb.status === 'preserved') {
-            hasChanges = true;
-            return { ...tb, status: 'available' as const, preservedFor: '', cleaningStartedAt: null };
-          }
-
           return tb;
         });
 
@@ -493,9 +471,9 @@ export function OrderDataProvider({
     };
 
     checkAndSyncTables();
-    const interval = setInterval(checkAndSyncTables, 10000);
+    const interval = setInterval(checkAndSyncTables, 15000);
     return () => clearInterval(interval);
-  }, [orders, reservations, tables, setTables]);
+  }, [orders, reservations, tables?.length]);
 
   const handlePlaceOrder = async (orderData: {
     tableNumber: string;
@@ -594,13 +572,15 @@ export function OrderDataProvider({
         body: JSON.stringify(orderPayload),
       });
 
-      let completedOrder = baseOrder;
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson?.error || `點餐提交失敗 (HTTP ${res.status})`);
+      }
 
-      if (res.ok) {
-        const serverData = await res.json();
-        if (serverData && serverData.id) {
-          completedOrder = { ...baseOrder, ...serverData };
-        }
+      let completedOrder = baseOrder;
+      const serverData = await res.json();
+      if (serverData && serverData.id) {
+        completedOrder = { ...baseOrder, ...serverData };
       }
 
       setOrders((prev) => [completedOrder, ...prev.filter(o => o.id !== completedOrder.id && o.id !== baseOrder.id)]);
@@ -618,18 +598,20 @@ export function OrderDataProvider({
       }
       activeOrderSubmissionsRef.current.delete(clientOrderId);
       return completedOrder;
-    } catch (err) {
-      console.warn('[Sabay Ordering API unreachable, successfully saved via Firestore & local]:', err);
-      addRequestToQueue('/api/orders', 'POST', orderPayload, description);
-      
-      setOrders((prev) => [baseOrder, ...prev.filter(o => o.id !== baseOrder.id)]);
-      setLocalOrderIds((prev) => {
-        const updated = [...prev, tempId];
-        safeStorage.setItem('sabay-my-submitted-order-ids', JSON.stringify(updated));
-        return updated;
-      });
+    } catch (err: any) {
+      console.error('[Sabay Ordering API Error]:', err);
       activeOrderSubmissionsRef.current.delete(clientOrderId);
-      return baseOrder;
+      if (!navigator.onLine || err?.name === 'AbortError' || err?.message?.includes('Failed to fetch')) {
+        addRequestToQueue('/api/orders', 'POST', orderPayload, description);
+        setOrders((prev) => [baseOrder, ...prev.filter(o => o.id !== baseOrder.id)]);
+        setLocalOrderIds((prev) => {
+          const updated = [...prev, tempId];
+          safeStorage.setItem('sabay-my-submitted-order-ids', JSON.stringify(updated));
+          return updated;
+        });
+        return baseOrder;
+      }
+      throw err;
     }
   };
 

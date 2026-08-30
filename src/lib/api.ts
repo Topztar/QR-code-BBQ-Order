@@ -26,7 +26,7 @@ export const apiFetch = async (url: string, options: any = {}) => {
   };
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 5000);
+  const timeoutId = setTimeout(() => controller.abort(), 20000);
   const response = await fetch(url, { ...options, headers, signal: controller.signal });
   clearTimeout(timeoutId);
   if (response.status === 401 || response.status === 403) {

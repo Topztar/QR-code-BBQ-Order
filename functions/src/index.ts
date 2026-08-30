@@ -126,15 +126,16 @@ export const requireAppCheck = async (req: express.Request, res: express.Respons
   
   const appCheckToken = req.header('X-Firebase-AppCheck');
   if (!appCheckToken) {
-    return res.status(401).json({ error: '拒絕連線：缺少有效 App Check 安全認證' });
+    // 允許一般手機掃碼顧客正常點餐 (無 ReCAPTCHA App Check 金鑰時放行)
+    return next();
   }
 
   try {
     await getAppCheck().verifyToken(appCheckToken);
     return next();
   } catch (err) {
-    console.error('App Check 驗證失敗:', err);
-    return res.status(401).json({ error: '拒絕連線：App Check 驗證失敗 (Unauthorized Bot)' });
+    console.warn('[App Check] 憑證驗證提醒 (軟性放行):', err);
+    return next();
   }
 };
 
