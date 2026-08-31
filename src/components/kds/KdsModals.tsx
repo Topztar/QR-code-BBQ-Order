@@ -67,7 +67,7 @@ export const KdsQuickViewModal: React.FC<KdsQuickViewModalProps> = ({
             </span>
             <h3 className="text-lg font-bold text-white font-sans">
               {quickViewOrder.takeoutInfo ||
-              quickViewOrder.tableNumber.includes('外帶') ||
+              String(quickViewOrder.tableNumber || '').includes('外帶') ||
               quickViewOrder.tableNumber === 'takeout'
                 ? `單號: #${quickViewOrder.id}`
                 : `${quickViewOrder.tableNumber} 桌`}{' '}
@@ -134,7 +134,7 @@ export const KdsQuickViewModal: React.FC<KdsQuickViewModalProps> = ({
               <div className="col-span-2 bg-sky-500/5 border border-sky-500/15 p-3 rounded-lg text-left text-xs font-mono">
                 <p className="text-sky-400 font-bold text-[10px] uppercase tracking-wider flex items-center gap-1.5">
                   <Timer size={12} className="text-sky-450" />
-                  {quickViewOrder.tableNumber.includes('外帶')
+                  {String(quickViewOrder.tableNumber || '').includes('外帶')
                     ? '顧客滯留總時間 Guest Wait Session'
                     : '桌況佔用總時間 Table Occupancy'}
                 </p>
@@ -386,7 +386,7 @@ export const KdsQuickViewModal: React.FC<KdsQuickViewModalProps> = ({
        沙貝燒烤 (廚房工作即時交代單)
        ${
          quickViewOrder.takeoutInfo ||
-         quickViewOrder.tableNumber.includes('外帶') ||
+         String(quickViewOrder.tableNumber || '').includes('外帶') ||
          quickViewOrder.tableNumber === 'takeout'
            ? `單號/標記: #${quickViewOrder.id}`
            : `桌號/標記: ${quickViewOrder.tableNumber}`

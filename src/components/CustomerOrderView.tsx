@@ -53,7 +53,7 @@ export function getMappedTableId(inputTableId: string, availableTables: Array<{ 
   if (availableTables.some((t) => t.id === inputTableId)) {
     return inputTableId;
   }
-  if (inputTableId.includes('外帶')) {
+  if (String(inputTableId || '').includes('外帶')) {
     return inputTableId;
   }
 
@@ -328,7 +328,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
     return true;
   }, [isOpen, isTaiwanRestDay]);
 
-  const isTakeoutMode = selectedTable.includes('外帶') || selectedTable === 'takeout' || isOrderRoute;
+  const isTakeoutMode = String(selectedTable || '').includes('外帶') || selectedTable === 'takeout' || isOrderRoute;
   const effectiveIsStoreCurrentlyOpen = isStoreCurrentlyOpen || isTakeoutMode;
 
   // Hook: useCustomerCart
@@ -373,6 +373,95 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
       setSelectedCategory(visibleCategories[0].id);
     }
   }, [visibleCategories, selectedCategory]);
+
+  const isManualScrollingRef = React.useRef(false);
+  const scrollTimeoutRef = React.useRef<number | null>(null);
+
+  const handleSelectCategory = useCallback((catId: string) => {
+    setSelectedCategory(catId);
+    isManualScrollingRef.current = true;
+    if (scrollTimeoutRef.current) {
+      window.clearTimeout(scrollTimeoutRef.current);
+    }
+    const targetSec = document.getElementById(`cat-section-${catId}`);
+    if (targetSec) {
+      targetSec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    scrollTimeoutRef.current = window.setTimeout(() => {
+      isManualScrollingRef.current = false;
+    }, 800);
+  }, []);
+
+  // Scroll-spy: Sync active category tag as user scrolls up/down through dish sections
+  useEffect(() => {
+    let ticking = false;
+
+    const handleScrollSpy = () => {
+      if (isManualScrollingRef.current) return;
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          ticking = false;
+          if (isManualScrollingRef.current) return;
+
+          const sections = document.querySelectorAll<HTMLElement>('.category-section');
+          if (sections.length === 0) return;
+
+          // Reading threshold line (under sticky category tabs bar, approx 160-200px)
+          const threshold = 180;
+          let currentCatId: string | null = null;
+
+          for (let i = 0; i < sections.length; i++) {
+            const section = sections[i];
+            const rect = section.getBoundingClientRect();
+            const catId = section.getAttribute('data-category-id');
+
+            if (rect.top <= threshold && rect.bottom > threshold) {
+              currentCatId = catId;
+              break;
+            }
+          }
+
+          if (window.scrollY < 200 && sections.length > 0) {
+            const firstCatId = sections[0].getAttribute('data-category-id');
+            if (firstCatId) currentCatId = firstCatId;
+          } else if (!currentCatId) {
+            const isBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 60;
+            if (isBottom && sections.length > 0) {
+              const lastCatId = sections[sections.length - 1].getAttribute('data-category-id');
+              if (lastCatId) currentCatId = lastCatId;
+            } else {
+              let minDistance = Infinity;
+              sections.forEach((section) => {
+                const rect = section.getBoundingClientRect();
+                if (rect.top <= threshold) {
+                  const dist = Math.abs(threshold - rect.top);
+                  if (dist < minDistance) {
+                    minDistance = dist;
+                    currentCatId = section.getAttribute('data-category-id');
+                  }
+                }
+              });
+            }
+          }
+
+          if (currentCatId && currentCatId !== selectedCategory) {
+            setSelectedCategory(currentCatId);
+          }
+        });
+        ticking = true;
+      }
+    };
+
+    window.addEventListener('scroll', handleScrollSpy, { passive: true });
+    handleScrollSpy();
+
+    return () => {
+      window.removeEventListener('scroll', handleScrollSpy);
+      if (scrollTimeoutRef.current) {
+        window.clearTimeout(scrollTimeoutRef.current);
+      }
+    };
+  }, [displayedMenuItems.length, selectedCategory]);
 
   const showToast = useCallback((message: string, type: 'success' | 'error') => {
     const newToast = { id: `toast-${Date.now()}`, message, type };
@@ -732,7 +821,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
       <CustomerCategoryTabs
         categories={categories}
         selectedCategory={selectedCategory}
-        setSelectedCategory={setSelectedCategory}
+        setSelectedCategory={handleSelectCategory}
         currentLang={currentLang}
         isSimplifiedMode={isSimplifiedMode}
         isMerchantMode={isMerchantMode}

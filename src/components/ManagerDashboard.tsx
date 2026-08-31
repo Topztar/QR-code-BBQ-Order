@@ -1438,9 +1438,9 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
       case 'completed':
         return orders.filter(o => !o.isPaid && o.status === 'completed');
       case 'dinein':
-        return orders.filter(o => !o.isPaid && o.tableNumber && !o.tableNumber.includes('外帶'));
+        return orders.filter(o => !o.isPaid && o.tableNumber && !String(o.tableNumber || '').includes('外帶'));
       case 'takeout':
-        return orders.filter(o => !o.isPaid && o.tableNumber && o.tableNumber.includes('外帶'));
+        return orders.filter(o => !o.isPaid && o.tableNumber && String(o.tableNumber || '').includes('外帶'));
       case 'all':
       default:
         return orders.filter(o => !o.isPaid);
@@ -1448,7 +1448,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   }, [orders, cashierListFilter]);
 
   const activeTakeoutOrders = useMemo(() => {
-    return orders.filter(o => !o.isPaid && ((o.tableNumber && o.tableNumber.includes('外帶')) || o.takeoutInfo));
+    return orders.filter(o => !o.isPaid && ((o.tableNumber && String(o.tableNumber || '').includes('外帶')) || o.takeoutInfo));
   }, [orders]);
 
   const cashierSelectedOrder = useMemo(() => {
@@ -1528,7 +1528,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     }
     
     const curTableId = cashierSelectedOrder.tableNumber;
-    if (!curTableId || curTableId.includes('外帶')) {
+    if (!curTableId || String(curTableId || '').includes('外帶')) {
       return { 
         sameTableOrders: [cashierSelectedOrder], 
         allConnectedOrders: [cashierSelectedOrder], 
@@ -1566,7 +1566,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     if (!cashierSelectedOrder) return [];
     
     const curTableId = cashierSelectedOrder.tableNumber;
-    if (!curTableId || curTableId.includes('外帶')) {
+    if (!curTableId || String(curTableId || '').includes('外帶')) {
       return [cashierSelectedOrder];
     }
     
@@ -3907,7 +3907,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                         </div>
                       ) : (
                         <div className="flex flex-col items-start gap-1 mt-0.5">
-                          <p className="font-extrabold text-sm text-white">{selectedOrder.tableNumber} {(selectedOrder.tableNumber && selectedOrder.tableNumber.includes('外帶')) ? '' : '桌'}</p>
+                          <p className="font-extrabold text-sm text-white">{selectedOrder.tableNumber} {(selectedOrder.tableNumber && String(selectedOrder.tableNumber || '').includes('外帶')) ? '' : '桌'}</p>
                           <button
                             type="button"
                             onClick={() => {
@@ -3998,7 +3998,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                         const kitchenStr = `
 ========================================
        沙貝燒烤 (廚房工作即時交代單-重印)
-       ${selectedOrder.takeoutInfo || selectedOrder.tableNumber?.includes('外帶') || selectedOrder.tableNumber === 'takeout' ? `單號/標記: #${selectedOrder.id}` : `桌號/標記: ${selectedOrder.tableNumber}`}
+       ${selectedOrder.takeoutInfo || String(selectedOrder.tableNumber || '').includes('外帶') || selectedOrder.tableNumber === 'takeout' ? `單號/標記: #${selectedOrder.id}` : `桌號/標記: ${selectedOrder.tableNumber}`}
 ========================================
 單號 ID: ${selectedOrder.id || 'N/A'}
 出單 IP : ${printerIp} (VIRTUAL LAN_9100)
@@ -4034,7 +4034,7 @@ ${specLines}
                         const customerStr = `
 ========================================
        沙貝燒烤 (顧客結賬與消點收據-重印)
-       ${selectedOrder.takeoutInfo || selectedOrder.tableNumber?.includes('外帶') || selectedOrder.tableNumber === 'takeout' ? `單號/標記: #${selectedOrder.id}` : `桌號/標記: ${selectedOrder.tableNumber || 'N/A'}`} 桌
+       ${selectedOrder.takeoutInfo || String(selectedOrder.tableNumber || '').includes('外帶') || selectedOrder.tableNumber === 'takeout' ? `單號/標記: #${selectedOrder.id}` : `桌號/標記: ${selectedOrder.tableNumber || 'N/A'}`} 桌
 ========================================
 單號 ID: ${selectedOrder.id || 'N/A'}
 出單 IP : ${printerIp} (VIRTUAL LAN_9100)
@@ -4399,7 +4399,7 @@ ${customerDetails}
                           const kitchenStr = `
 ========================================
        沙貝燒烤 (廚房工作即時交代單-重印)
-       ${selectedOrder.takeoutInfo || selectedOrder.tableNumber?.includes('外帶') || selectedOrder.tableNumber === 'takeout' ? `單號/標記: #${selectedOrder.id}` : `桌號/標記: ${selectedOrder.tableNumber || 'N/A'}`}
+       ${selectedOrder.takeoutInfo || String(selectedOrder.tableNumber || '').includes('外帶') || selectedOrder.tableNumber === 'takeout' ? `單號/標記: #${selectedOrder.id}` : `桌號/標記: ${selectedOrder.tableNumber || 'N/A'}`}
 ========================================
 單號 ID: ${selectedOrder.id || 'N/A'}
 出單 IP : ${printerIp} (VIRTUAL LAN_9100)
@@ -4435,7 +4435,7 @@ ${specLines}
                           const customerStr = `
 ========================================
        沙貝燒烤 (顧客結賬與消點收據-重印)
-       ${selectedOrder.takeoutInfo || selectedOrder.tableNumber?.includes('外帶') || selectedOrder.tableNumber === 'takeout' ? `單號/標記: #${selectedOrder.id}` : `桌號/標記: ${selectedOrder.tableNumber || 'N/A'}`} 桌
+       ${selectedOrder.takeoutInfo || String(selectedOrder.tableNumber || '').includes('外帶') || selectedOrder.tableNumber === 'takeout' ? `單號/標記: #${selectedOrder.id}` : `桌號/標記: ${selectedOrder.tableNumber || 'N/A'}`} 桌
 ========================================
 單號 ID: ${selectedOrder.id || 'N/A'}
 出單 IP : ${printerIp} (VIRTUAL LAN_9100)
@@ -4632,7 +4632,7 @@ ${customerDetails}
                           const kitchenStr = `
 ========================================
        沙貝燒烤 (廚房工作即時交代單-重印)
-       ${selectedOrder.takeoutInfo || selectedOrder.tableNumber?.includes('外帶') || selectedOrder.tableNumber === 'takeout' ? `單號/標記: #${selectedOrder.id}` : `桌號/標記: ${selectedOrder.tableNumber}`}
+       ${selectedOrder.takeoutInfo || String(selectedOrder.tableNumber || '').includes('外帶') || selectedOrder.tableNumber === 'takeout' ? `單號/標記: #${selectedOrder.id}` : `桌號/標記: ${selectedOrder.tableNumber}`}
 ========================================
 單號 ID: ${selectedOrder.id || 'N/A'}
 出單 IP : ${printerIp} (VIRTUAL LAN_9100)
@@ -4668,7 +4668,7 @@ ${specLines}
                           const customerStr = `
 ========================================
        沙貝燒烤 (顧客結賬與消點收據-重印)
-       ${selectedOrder.takeoutInfo || selectedOrder.tableNumber?.includes('外帶') || selectedOrder.tableNumber === 'takeout' ? `單號/標記: #${selectedOrder.id}` : `桌號/標記: ${selectedOrder.tableNumber}`} 桌
+       ${selectedOrder.takeoutInfo || String(selectedOrder.tableNumber || '').includes('外帶') || selectedOrder.tableNumber === 'takeout' ? `單號/標記: #${selectedOrder.id}` : `桌號/標記: ${selectedOrder.tableNumber}`} 桌
 ========================================
 單號 ID: ${selectedOrder.id}
 出單 IP : ${printerIp} (VIRTUAL LAN_9100)

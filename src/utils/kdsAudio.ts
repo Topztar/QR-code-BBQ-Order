@@ -317,14 +317,14 @@ export function formatOrderAnnouncementText(orders: Order[]): string {
 
   const orderDescriptions = orders.map(order => {
     const isTakeout = Boolean(
-      (order.tableNumber && (order.tableNumber.includes('外帶') || order.tableNumber.toLowerCase() === 'takeout')) ||
+      (order.tableNumber && (String(order.tableNumber || '').includes('外帶') || order.tableNumber.toLowerCase() === 'takeout')) ||
       order.takeoutInfo
     );
 
     if (isTakeout) {
       // Extract short takeout sequence or order ID number
       let shortNum = '';
-      if (order.tableNumber && order.tableNumber.includes('外帶')) {
+      if (order.tableNumber && String(order.tableNumber || '').includes('外帶')) {
         shortNum = order.tableNumber.replace('外帶', '').replace('-', '').trim();
       }
       if (!shortNum && order.id) {

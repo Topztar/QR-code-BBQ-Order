@@ -83,6 +83,27 @@ export const ManagerOrdersTab: React.FC<ManagerOrdersTabProps> = ({
               <Download size={13} />
               <span>匯出查詢結果 (EXCEL格式報表)</span>
             </button>
+            <button
+              type="button"
+              onClick={async () => {
+                if(window.confirm('確定要清除「所有舊的測試訂單」與「暫存快取」嗎？\n這將刪除所有訂單資料且無法復原。')) {
+                  try {
+                    await fetch('/api/orders', { method: 'DELETE' });
+                    localStorage.removeItem('sabay_orders_sync_event');
+                    localStorage.removeItem('sabay-my-submitted-order-ids');
+                    localStorage.removeItem('sabay_offline_queue');
+                    alert('清理完成！系統將重新載入。');
+                    window.location.reload();
+                  } catch(e) {
+                    alert('清理失敗: ' + e);
+                  }
+                }
+              }}
+              className="flex items-center justify-center space-x-1.5 bg-rose-500/10 hover:bg-rose-500 text-rose-400 hover:text-white px-4 py-2 rounded-lg font-black text-xs active:scale-95 transition whitespace-nowrap cursor-pointer shadow-md border border-rose-500/25"
+            >
+              <Trash2 size={13} />
+              <span>一鍵清除所有測試訂單與快取</span>
+            </button>
           </div>
         </div>
 
@@ -221,7 +242,7 @@ export const ManagerOrdersTab: React.FC<ManagerOrdersTabProps> = ({
                   <tr key={o.id} className="hover:bg-white/[2%] transition duration-150">
                     <td className="py-3 px-4 font-mono font-bold text-white text-sm">{o.id || ''}</td>
                     <td className="py-3 px-4 text-zinc-500">{o.createdAt ? new Date(o.createdAt).toLocaleString() : 'N/A'}</td>
-                    <td className="py-3 px-4 text-center font-bold text-white">{o.takeoutInfo || o.tableNumber?.includes('外帶') || o.tableNumber === 'takeout' ? `單號: #${o.id}` : `${o.tableNumber || 'N/A'} 桌`}</td>
+                    <td className="py-3 px-4 text-center font-bold text-white">{o.takeoutInfo || String(o.tableNumber || '').includes('外帶') || o.tableNumber === 'takeout' ? `單號: #${o.id}` : `${o.tableNumber || 'N/A'} 桌`}</td>
                     <td className="py-3 px-4 flex items-center space-x-2.5">
                       <img src={o.customerAvatar || 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=150'} defaultValue="" alt="avatar" className="w-6 h-6 rounded-full object-cover border border-white/10" referrerPolicy="no-referrer" />
                       <span className="font-bold text-white truncate max-w-[120px] block">{o.customerName || 'N/A'}</span>

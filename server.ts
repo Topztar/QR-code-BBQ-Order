@@ -3330,6 +3330,13 @@ ${customerDetails}
   res.json(order);
 });
 
+// Clear All Orders (Testing/Reset)
+app.delete('/api/orders', (req, res) => {
+  liveOrders = [];
+  saveStateToDisk();
+  res.json({ success: true, message: 'All orders cleared successfully' });
+});
+
 // Delete Order by ID
 app.delete('/api/orders/:id', (req, res) => {
   const { id } = req.params;

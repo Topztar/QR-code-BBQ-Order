@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useEffect, useMemo } from 'react';
 import { Category, Language } from '../../types';
 import { getLocalizedText } from '../../utils/i18n';
 import { TRANSLATIONS } from '../../data';
@@ -24,9 +24,25 @@ const CustomerCategoryTabsBase: React.FC<CustomerCategoryTabsProps> = ({
   setIsMerchantMode,
   setShowPasscodeModal,
 }) => {
-  const visibleCategories = React.useMemo(() => {
+  const visibleCategories = useMemo(() => {
     return categories.filter((cat) => cat.showOnCustomerPage !== false);
   }, [categories]);
+
+  const carouselRef = useRef<HTMLDivElement>(null);
+
+  // Smoothly scroll the active category tab chip into view within the horizontal carousel
+  useEffect(() => {
+    if (!carouselRef.current || !selectedCategory) return;
+    const activeTab = carouselRef.current.querySelector<HTMLElement>(`#cat-tab-${selectedCategory}`);
+    if (activeTab) {
+      const container = carouselRef.current;
+      const scrollLeft = activeTab.offsetLeft - container.offsetWidth / 2 + activeTab.offsetWidth / 2;
+      container.scrollTo({
+        left: Math.max(0, scrollLeft),
+        behavior: 'smooth',
+      });
+    }
+  }, [selectedCategory]);
 
   return (
     <div
@@ -71,7 +87,11 @@ const CustomerCategoryTabsBase: React.FC<CustomerCategoryTabsProps> = ({
         </div>
       </div>
 
-      <div className="flex overflow-x-auto py-1.5 gap-2 scrollbar-none scroll-smooth" id="categories-tabs-carousel">
+      <div
+        ref={carouselRef}
+        className="flex overflow-x-auto py-1.5 gap-2 scrollbar-none scroll-smooth"
+        id="categories-tabs-carousel"
+      >
         {visibleCategories.map((cat) => {
           const isSelected = selectedCategory === cat.id;
           return (

@@ -637,7 +637,7 @@ export const CustomerCartDrawer: React.FC<CustomerCartDrawerProps> = ({
                     ? TRANSLATIONS.kitchenPaused?.[currentLang] ||
                       '⚠️ 廚房暫停接單中，暫時停用下單 (Kitchen Paused)'
                     : currentLang === 'zh'
-                      ? `確認 ${selectedTable.includes('外帶') ? selectedTable : `${selectedTable} 桌`} 並下單 (請至櫃台結帳)`
+                      ? `確認 ${String(selectedTable || '').includes('外帶') ? selectedTable : `${selectedTable} 桌`} 並下單 (請至櫃台結帳)`
                       : currentLang === 'en'
                         ? `Confirm Table ${selectedTable} & Order (Pay at Counter)`
                         : currentLang === 'th'

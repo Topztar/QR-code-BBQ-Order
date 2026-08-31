@@ -355,7 +355,7 @@ export const KdsTicketCard: React.FC<KdsTicketCardProps> = React.memo(({
                 <div className="flex items-center space-x-1.5">
                   <span className="font-bold text-base text-white font-serif">
                     {order.takeoutInfo ||
-                    order.tableNumber.includes('外帶') ||
+                    String(order.tableNumber || '').includes('外帶') ||
                     order.tableNumber === 'takeout'
                       ? `單號: #${order.id}`
                       : currentLang === 'en'
@@ -438,7 +438,7 @@ export const KdsTicketCard: React.FC<KdsTicketCardProps> = React.memo(({
        沙貝燒烤 (廚房工作即時交代單)
        ${
          order.takeoutInfo ||
-         order.tableNumber.includes('外帶') ||
+         String(order.tableNumber || '').includes('外帶') ||
          order.tableNumber === 'takeout'
            ? `單號/標記: #${order.id}`
            : `桌號/標記: ${order.tableNumber}`
@@ -503,7 +503,7 @@ ${specLines}
                   className="text-[9px] text-white/35 font-bold tracking-wider block font-sans uppercase"
                   title="該桌自首筆點單起算之累計時間"
                 >
-                  {order.tableNumber.includes('外帶') ? '顧客滯留 Live' : '桌況佔用 Seated'}
+                  {String(order.tableNumber || '').includes('外帶') ? '顧客滯留 Live' : '桌況佔用 Seated'}
                 </span>
                 <span
                   className={`inline-flex items-center gap-1 text-[11px] font-black font-mono px-1.5 py-0.5 rounded border mt-0.5 ${occ.style}`}

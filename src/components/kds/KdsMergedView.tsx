@@ -83,7 +83,7 @@ export const KdsMergedView: React.FC<KdsMergedViewProps> = React.memo(({
                       <div className="space-y-1.5 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="bg-[#E5B453] text-black font-extrabold px-1.5 py-0.5 rounded text-[10px]">
-                            {oi.tableNumber} {oi.tableNumber.includes('外帶') ? '' : '桌'}
+                            {oi.tableNumber} {String(oi.tableNumber || '').includes('外帶') ? '' : '桌'}
                           </span>
                           <span className="text-[10px] text-white/40 font-mono">
                             單號: {oi.orderId}

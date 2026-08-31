@@ -175,7 +175,7 @@ export const CustomerOrderTracker: React.FC<CustomerOrderTrackerProps> = ({
                                 <span className="text-xs text-white/40 pl-2">
                                   {new Date(order.createdAt).toLocaleTimeString()} ·{' '}
                                   {order.takeoutInfo ||
-                                  order.tableNumber?.includes('外帶') ||
+                                  String(order.tableNumber || '').includes('外帶') ||
                                   order.tableNumber === 'takeout'
                                     ? `單號: #${order.id}`
                                     : `${
@@ -587,7 +587,7 @@ export const CustomerOrderTracker: React.FC<CustomerOrderTrackerProps> = ({
                                   : pastOrder.createdAt}{' '}
                                 •{' '}
                                 {pastOrder.takeoutInfo ||
-                                pastOrder.tableNumber?.includes('外帶') ||
+                                String(pastOrder.tableNumber || '').includes('外帶') ||
                                 pastOrder.tableNumber === 'takeout'
                                   ? `單號: #${pastOrder.id}`
                                   : `${currentLang === 'vi' ? 'Bàn' : '桌號'}: ${pastOrder.tableNumber} ${

@@ -94,24 +94,46 @@ app.use((req, res, next) => {
 });
 const rateLimitStore = new Map();
 function createRateLimiter(maxRequests, windowMs = 60 * 1000, actionName = '操作') {
-    return (req, res, next) => {
+    return async (req, res, next) => {
         const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || '127.0.0.1';
         const key = `${actionName}:${ip}`;
         const now = Date.now();
         let bucket = rateLimitStore.get(key);
         if (!bucket || now > bucket.resetAt) {
-            bucket = { count: 1, resetAt: now + windowMs };
+            bucket = { count: 0, resetAt: now + windowMs };
             rateLimitStore.set(key, bucket);
-            return next();
         }
         if (bucket.count >= maxRequests) {
             const waitSec = Math.ceil((bucket.resetAt - now) / 1000);
             return res.status(429).json({
-                error: `請求頻率過高：${actionName} 頻率已達上限，請於 ${waitSec} 秒後再試 (Too Many Requests)`
+                error: `請求頻率過高：${actionName} 頻率已達上限，請於 ${waitSec} 秒後再試 (Too Many Requests - L1)`
             });
         }
         bucket.count++;
-        return next();
+        const cleanIp = ip.replace(/[^a-zA-Z0-9_.]/g, '_');
+        const timeWindowId = Math.floor(now / windowMs);
+        const fsDocId = `${actionName}_${cleanIp}_${timeWindowId}`;
+        const fsDocRef = db.collection('_ratelimits').doc(fsDocId);
+        try {
+            const docSnap = await fsDocRef.get();
+            const currentGlobalCount = docSnap.exists ? (docSnap.data()?.count || 0) : 0;
+            if (currentGlobalCount >= maxRequests) {
+                bucket.count = maxRequests;
+                const waitSec = Math.ceil((bucket.resetAt - now) / 1000);
+                return res.status(429).json({
+                    error: `請求頻率過高：${actionName} 頻率已達上限，請於 ${waitSec} 秒後再試 (Too Many Requests - L2)`
+                });
+            }
+            fsDocRef.set({
+                count: firestore_2.FieldValue.increment(1),
+                expireAt: new Date(now + windowMs * 2)
+            }, { merge: true }).catch(err => console.error('[RateLimiter L2] Async update failed:', err));
+            return next();
+        }
+        catch (err) {
+            console.warn('[RateLimiter L2] Check failed, falling back to L1:', err);
+            return next();
+        }
     };
 }
 const sendErrorResponse = (res, error, contextMsg = '伺服器內部錯誤') => {

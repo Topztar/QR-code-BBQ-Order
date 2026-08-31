@@ -294,7 +294,7 @@ const CustomerHeaderBase: React.FC<CustomerHeaderProps> = ({
       <div className="bg-thai-charcoal border border-thai-gold/20 text-white rounded-3xl p-3 sm:p-4 flex flex-row items-center justify-between gap-2.5 sm:gap-4 shadow-xl select-none">
         <div className="flex items-center space-x-2.5 sm:space-x-3.5 flex-1 min-w-0">
           <div className="w-10 h-10 sm:w-12 sm:h-12 bg-thai-gold/10 border border-thai-gold rounded-2xl flex flex-col items-center justify-center animate-pulse text-center shrink-0">
-            {selectedTable.includes('外帶') ? (
+            {String(selectedTable || '').includes('外帶') ? (
               <div className="flex flex-col items-center justify-center leading-none text-center">
                 <span className="text-[9px] sm:text-[11px] font-bold text-thai-gold font-sans leading-tight">
                   外帶
@@ -339,11 +339,11 @@ const CustomerHeaderBase: React.FC<CustomerHeaderProps> = ({
               <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-[#00C300] animate-pulse"></span>
               <span className="flex flex-col items-end leading-none">
                 <span className="text-xs sm:text-sm font-black">
-                  {selectedTable.includes('外帶') ? selectedTable : `${selectedTable} 桌`}
+                  {String(selectedTable || '').includes('外帶') ? selectedTable : `${selectedTable} 桌`}
                 </span>
                 {tables &&
                   !tables.some((t) => t.id === selectedTable) &&
-                  !selectedTable.includes('外帶') && (
+                  !String(selectedTable || '').includes('外帶') && (
                     <span className="text-[9px] text-slate-300 font-normal mt-0.5">
                       對應 {getMappedTableId(selectedTable, tables)} 桌
                     </span>
@@ -368,7 +368,7 @@ const CustomerHeaderBase: React.FC<CustomerHeaderProps> = ({
                 ))}
                 {!tables.some((t) => t.id === selectedTable) && (
                   <option value={selectedTable}>
-                    {selectedTable.includes('外帶')
+                    {String(selectedTable || '').includes('外帶')
                       ? `${selectedTable} (Takeout)`
                       : `${selectedTable} 號 (Custom)`}
                   </option>
@@ -487,7 +487,7 @@ const CustomerHeaderBase: React.FC<CustomerHeaderProps> = ({
         );
       })()}
 
-      {!selectedTable.includes('外帶') && (
+      {!String(selectedTable || '').includes('外帶') && (
         <div className="bg-thai-charcoal border border-white/5 text-white rounded-3xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-lg select-none">
           <div className="flex items-center space-x-3 text-left">
             <div className="w-10 h-10 bg-thai-gold/10 border border-thai-gold/30 rounded-2xl flex items-center justify-center text-[#E5B453]">
