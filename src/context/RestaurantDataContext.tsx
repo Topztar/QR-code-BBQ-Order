@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useMemo, ReactNode } from 'react';
 import { MenuItem, Ingredient, Category, TableConfig, OperatingHourSlot, Reservation, Language } from '../types';
 import { apiFetch } from '../lib/api';
-import { db, isFirebaseSyncEnabled } from '../lib/firebase';
+import { db, isFirebaseSyncEnabled, startFirebaseSync, stopFirebaseSync } from '../lib/firebase';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { INITIAL_MENU, INITIAL_CATEGORIES, loadData } from '../data';
 import { addRequestToQueue } from '../lib/offlineQueue';
@@ -141,6 +141,20 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
   const [memberPointsRatio, setMemberPointsRatio] = useState<number>(20);
   const [memberRewards, setMemberRewards] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [syncActive, setSyncActive] = useState<boolean>(() => isFirebaseSyncEnabled());
+
+  useEffect(() => {
+    const handleSyncChanged = (e: Event) => {
+      const customEvent = e as CustomEvent<{ syncEnabled: boolean }>;
+      if (customEvent.detail && typeof customEvent.detail.syncEnabled === 'boolean') {
+        setSyncActive(customEvent.detail.syncEnabled);
+      } else {
+        setSyncActive(isFirebaseSyncEnabled());
+      }
+    };
+    window.addEventListener('firebase_sync_changed', handleSyncChanged);
+    return () => window.removeEventListener('firebase_sync_changed', handleSyncChanged);
+  }, []);
 
   const lastCategoryReorderTimeRef = useRef<number>(0);
   const lastMenuReorderTimeRef = useRef<number>(0);
@@ -211,6 +225,13 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
         setAnalytics(fallbackAnalytics);
 
         if (bootstrapData) {
+          if (bootstrapData.isFirebaseSyncEnabled !== undefined) {
+            if (bootstrapData.isFirebaseSyncEnabled) {
+              startFirebaseSync();
+            } else {
+              stopFirebaseSync();
+            }
+          }
           if (bootstrapData.ingredients) setIngredients(bootstrapData.ingredients);
           if (bootstrapData.tables) setTables(bootstrapData.tables);
           if (bootstrapData.reservations) setReservations(bootstrapData.reservations);
@@ -287,7 +308,7 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
   useEffect(() => {
     let unsubscribeIngredients = () => {};
 
-    if (isFirebaseSyncEnabled() && activeTab !== 'customer') {
+    if (syncActive && isFirebaseSyncEnabled() && activeTab !== 'customer') {
       try {
         unsubscribeIngredients = onSnapshot(collection(db, "ingredients"), (snapshot) => {
           const updatedIngredients = snapshot.docs.map(doc => doc.data() as Ingredient);
@@ -303,7 +324,7 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
     return () => {
       unsubscribeIngredients();
     };
-  }, [activeTab]);
+  }, [activeTab, syncActive]);
 
   // Reservation auto-check mechanism: Automatically mark pending reservations within 1 hour as "upcoming"
   useEffect(() => {

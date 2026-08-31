@@ -125,7 +125,8 @@ export function registerBootstrapRoutes(app: express.Application, ctx: RouteCont
         servicePaused: { servicePaused: sysData.liveServicePaused || false },
         printerConfig: { ip: sysData.livePrinterIp || '192.168.123.100' },
         ingredients: ingredientsSnap.docs.map(doc => doc.data()),
-        reservations: reservationsSnap.docs.map(doc => doc.data())
+        reservations: reservationsSnap.docs.map(doc => doc.data()),
+        isFirebaseSyncEnabled: true
       };
 
       // 🚀 ETag 快取協商 (304 Not Modified): 減少重複序列化與頻寬消耗

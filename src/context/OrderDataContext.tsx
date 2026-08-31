@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useMemo, ReactNode } from 'react';
 import { Order, OrderStatus, OrderItem, TableConfig, Reservation } from '../types';
 import { apiFetch } from '../lib/api';
-import { db, isFirebaseSyncEnabled } from '../lib/firebase';
+import { db, isFirebaseSyncEnabled, startFirebaseSync, stopFirebaseSync } from '../lib/firebase';
 import { collection, onSnapshot, query, limit, where, doc, setDoc, deleteDoc, orderBy } from 'firebase/firestore';
 import { getOfflineQueue, addRequestToQueue, removeOrderRequestsFromQueue, processOfflineQueue, QueuedRequest } from '../lib/offlineQueue';
 import { safeStorage } from '../lib/safeStorage';
@@ -140,6 +140,20 @@ export function OrderDataProvider({
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [syncProgressMsg, setSyncProgressMsg] = useState<string>('');
   const [isNetworkOnline, setIsNetworkOnline] = useState<boolean>(typeof navigator !== 'undefined' ? navigator.onLine : true);
+  const [syncActive, setSyncActive] = useState<boolean>(() => isFirebaseSyncEnabled());
+
+  useEffect(() => {
+    const handleSyncChanged = (e: Event) => {
+      const customEvent = e as CustomEvent<{ syncEnabled: boolean }>;
+      if (customEvent.detail && typeof customEvent.detail.syncEnabled === 'boolean') {
+        setSyncActive(customEvent.detail.syncEnabled);
+      } else {
+        setSyncActive(isFirebaseSyncEnabled());
+      }
+    };
+    window.addEventListener('firebase_sync_changed', handleSyncChanged);
+    return () => window.removeEventListener('firebase_sync_changed', handleSyncChanged);
+  }, []);
 
   const [forceApiFallback, setForceApiFallback] = useState<boolean>(false);
   const activeOrderSubmissionsRef = useRef<Set<string>>(new Set());
@@ -348,7 +362,7 @@ export function OrderDataProvider({
       }
     };
 
-    if (isFirebaseSyncEnabled() && !forceApiFallback) {
+    if (syncActive && isFirebaseSyncEnabled() && !forceApiFallback) {
       try {
         let ordersQuery;
         if (isCustomerView && currentTable && currentTable !== '') {
@@ -408,7 +422,7 @@ export function OrderDataProvider({
       unsubscribeOrders();
       if (pollingInterval) clearInterval(pollingInterval);
     };
-  }, [activeTab, currentPath, forceApiFallback]);
+  }, [activeTab, currentPath, forceApiFallback, syncActive]);
 
   // Real-time Table Status Auto-Sync based on Orders & Reservations
   useEffect(() => {
@@ -618,6 +632,11 @@ export function OrderDataProvider({
         safeStorage.setItem('sabay-my-submitted-order-ids', JSON.stringify(updated));
         return updated;
       });
+
+      // 🧹 若伺服器指派了新的正式單號 (例如 LM-1001)，先廣播刪除臨時單以防止其他分頁 (KDS / 收銀) 重複顯示
+      if (completedOrder.id !== baseOrder.id) {
+        broadcastOrderEvent({ type: 'ORDER_DELETED', orderId: baseOrder.id });
+      }
 
       // 再次廣播確認後的訂單物件
       broadcastOrderEvent({ type: 'ORDER_CREATED', order: completedOrder });

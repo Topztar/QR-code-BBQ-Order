@@ -127,7 +127,8 @@ function registerBootstrapRoutes(app, ctx) {
                 servicePaused: { servicePaused: sysData.liveServicePaused || false },
                 printerConfig: { ip: sysData.livePrinterIp || '192.168.123.100' },
                 ingredients: ingredientsSnap.docs.map(doc => doc.data()),
-                reservations: reservationsSnap.docs.map(doc => doc.data())
+                reservations: reservationsSnap.docs.map(doc => doc.data()),
+                isFirebaseSyncEnabled: true
             };
             const rawString = JSON.stringify(responsePayload);
             const etag = `W/"${crypto.createHash('md5').update(rawString).digest('hex').substring(0, 16)}"`;

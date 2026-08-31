@@ -43,13 +43,16 @@ try {
 export const db = firestoreInstance;
 export const auth = getAuth();
 
-// Default state: Firebase sync is now re-enabled for performance and cost reduction
-let syncEnabled = true;
+// Default state: Default to false (local Express server first), dynamically activated if bootstrap indicates backend enables Firebase sync
+let syncEnabled = false;
 
 export const isFirebaseSyncEnabled = () => syncEnabled;
 
 export const stopFirebaseSync = async () => {
   syncEnabled = false;
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('firebase_sync_changed', { detail: { syncEnabled: false } }));
+  }
   try {
     await disableNetwork(db);
     console.log('[Firebase Sync] Firebase network synchronization is STOPPED.');
@@ -60,6 +63,9 @@ export const stopFirebaseSync = async () => {
 
 export const startFirebaseSync = async () => {
   syncEnabled = true;
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('firebase_sync_changed', { detail: { syncEnabled: true } }));
+  }
   try {
     await enableNetwork(db);
     console.log('[Firebase Sync] Firebase network synchronization is ENABLED.');
@@ -67,8 +73,6 @@ export const startFirebaseSync = async () => {
     console.warn('[Firebase Sync] Error enabling network:', err);
   }
 };
-
-// Firebase network sync is enabled by default
 
 import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
 

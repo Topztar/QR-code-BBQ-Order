@@ -1894,6 +1894,7 @@ app.get('/api/bootstrap', (_req, res) => {
   syncTableStatusesWithTodayReservations();
   res.setHeader('Cache-Control', 'public, max-age=15, s-maxage=60, stale-while-revalidate=300');
   res.json({
+    isFirebaseSyncEnabled: !DISABLE_FIREBASE_SYNC,
     menu: liveMenu.map(m => ({ id: m.id, category: m.category, name: m.name, price: m.price, image: m.image, description: m.description, available: m.available, isSetMeal: m.isSetMeal, requiredSaucesOption: m.requiredSaucesOption, hasNoodlesOption: m.hasNoodlesOption, hasCoconutsMilkOption: m.hasCoconutsMilkOption, containsBeef: m.containsBeef, containsPork: m.containsPork, containsSeafood: m.containsSeafood, isNotSpicy: m.isNotSpicy, customAddOns: m.customAddOns, orderIndex: m.orderIndex, isTakeoutAvailable: m.isTakeoutAvailable, soldOutAt: m.soldOutAt })),
     categories: liveCategories,
     tables: liveTables,
