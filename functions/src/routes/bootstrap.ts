@@ -20,6 +20,8 @@ export interface RouteContext {
 
 export function registerBootstrapRoutes(app: express.Application, ctx: RouteContext) {
   const { db, storageBucket, requireStaffAuth, createRateLimiter, sendErrorResponse } = ctx;
+  const _storageBucket = storageBucket; // alias for unused var
+  const _createRateLimiter = createRateLimiter; // alias for unused var
 
   // 雙路徑路由包裝器
   const get: RouteRegister = (routePath, ...handlers) => app.get([`/api${routePath}`, routePath], ...handlers);

@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useMemo, ReactNode } from 'react';
 import { Order, OrderStatus, OrderItem, TableConfig, Reservation } from '../types';
 import { apiFetch } from '../lib/api';
-import { db, isFirebaseSyncEnabled, startFirebaseSync, stopFirebaseSync } from '../lib/firebase';
-import { collection, onSnapshot, query, limit, where, doc, setDoc, deleteDoc, orderBy } from 'firebase/firestore';
+import { db, isFirebaseSyncEnabled } from '../lib/firebase';
+import { collection, onSnapshot, query, limit, where, orderBy } from 'firebase/firestore';
 import { getOfflineQueue, addRequestToQueue, removeOrderRequestsFromQueue, processOfflineQueue, QueuedRequest } from '../lib/offlineQueue';
 import { safeStorage } from '../lib/safeStorage';
 

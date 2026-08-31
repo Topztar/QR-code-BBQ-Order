@@ -8,3 +8,5 @@ persisted_state.json
 .git.corrupt/
 dist/
 LPT1
+*-report.json
+*-eslint.json

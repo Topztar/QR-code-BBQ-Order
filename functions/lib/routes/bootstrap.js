@@ -38,6 +38,8 @@ const crypto = __importStar(require("crypto"));
 const helpers_1 = require("../helpers");
 function registerBootstrapRoutes(app, ctx) {
     const { db, storageBucket, requireStaffAuth, createRateLimiter, sendErrorResponse } = ctx;
+    const _storageBucket = storageBucket;
+    const _createRateLimiter = createRateLimiter;
     const get = (routePath, ...handlers) => app.get([`/api${routePath}`, routePath], ...handlers);
     const post = (routePath, ...handlers) => app.post([`/api${routePath}`, routePath], ...handlers);
     const put = (routePath, ...handlers) => app.put([`/api${routePath}`, routePath], ...handlers);

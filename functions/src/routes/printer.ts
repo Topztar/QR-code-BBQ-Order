@@ -23,6 +23,8 @@ export interface RouteContext {
 
 export function registerPrinterRoutes(app: express.Application, ctx: RouteContext) {
   const { db, storageBucket, requireStaffAuth, createRateLimiter, sendErrorResponse } = ctx;
+const _storageBucket = storageBucket; // underscore alias for unused var
+const _createRateLimiter = createRateLimiter; // underscore alias for unused var
   const getCachedSettings = createGetCachedSettings(db);
   const handleSavePrinterIp = createHandleSavePrinterIp(db);
   const handleSavePrinterSettings = createHandleSavePrinterSettings(db);

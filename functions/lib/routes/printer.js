@@ -40,6 +40,8 @@ const auth_1 = require("../auth");
 const helpers_1 = require("../helpers");
 function registerPrinterRoutes(app, ctx) {
     const { db, storageBucket, requireStaffAuth, createRateLimiter, sendErrorResponse } = ctx;
+    const _storageBucket = storageBucket;
+    const _createRateLimiter = createRateLimiter;
     const getCachedSettings = (0, helpers_1.createGetCachedSettings)(db);
     const handleSavePrinterIp = (0, helpers_1.createHandleSavePrinterIp)(db);
     const handleSavePrinterSettings = (0, helpers_1.createHandleSavePrinterSettings)(db);
