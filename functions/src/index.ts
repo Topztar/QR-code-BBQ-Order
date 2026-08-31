@@ -8,7 +8,7 @@ import express from 'express';
 
 setGlobalOptions({ maxInstances: 10, minInstances: 0, memory: "256MiB", region: "asia-east1", concurrency: 80, timeoutSeconds: 30, invoker: 'public' });
 import cors from 'cors';
-import { getFirestore } from 'firebase-admin/firestore';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 
 process.on('unhandledRejection', (reason, promise) => {
   console.error('[Cloud Functions] Unhandled Rejection at:', promise, 'reason:', reason);
@@ -80,27 +80,57 @@ interface RateLimitBucket {
 const rateLimitStore = new Map<string, RateLimitBucket>();
 
 export function createRateLimiter(maxRequests: number, windowMs: number = 60 * 1000, actionName: string = '操作') {
-  return (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  return async (req: express.Request, res: express.Response, next: express.NextFunction) => {
     const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip || '127.0.0.1';
     const key = `${actionName}:${ip}`;
     const now = Date.now();
 
+    // 1. L1 Memory Check (擋掉 99% 的短時間巨量狂暴攻擊)
     let bucket = rateLimitStore.get(key);
     if (!bucket || now > bucket.resetAt) {
-      bucket = { count: 1, resetAt: now + windowMs };
+      bucket = { count: 0, resetAt: now + windowMs };
       rateLimitStore.set(key, bucket);
-      return next();
     }
 
     if (bucket.count >= maxRequests) {
       const waitSec = Math.ceil((bucket.resetAt - now) / 1000);
       return res.status(429).json({
-        error: `請求頻率過高：${actionName} 頻率已達上限，請於 ${waitSec} 秒後再試 (Too Many Requests)`
+        error: `請求頻率過高：${actionName} 頻率已達上限，請於 ${waitSec} 秒後再試 (Too Many Requests - L1)`
       });
     }
-
     bucket.count++;
-    return next();
+
+    // 2. L2 Firestore Distributed Check (確保跨 10 個實例的全局限制)
+    const cleanIp = ip.replace(/[^a-zA-Z0-9_.]/g, '_');
+    const timeWindowId = Math.floor(now / windowMs);
+    const fsDocId = `${actionName}_${cleanIp}_${timeWindowId}`;
+    const fsDocRef = db.collection('_ratelimits').doc(fsDocId);
+
+    try {
+      const docSnap = await fsDocRef.get();
+      const currentGlobalCount = docSnap.exists ? (docSnap.data()?.count || 0) : 0;
+
+      if (currentGlobalCount >= maxRequests) {
+        // 同步填滿 L1 Bucket，讓後續同實例請求提早擋下，節省 Firestore 讀取帳單
+        bucket.count = maxRequests;
+        const waitSec = Math.ceil((bucket.resetAt - now) / 1000);
+        return res.status(429).json({
+          error: `請求頻率過高：${actionName} 頻率已達上限，請於 ${waitSec} 秒後再試 (Too Many Requests - L2)`
+        });
+      }
+
+      // 非同步增加全局計數與 TTL，不阻塞主執行緒 (Fire and forget)
+      fsDocRef.set({
+        count: FieldValue.increment(1),
+        expireAt: new Date(now + windowMs * 2)
+      }, { merge: true }).catch(err => console.error('[RateLimiter L2] Async update failed:', err));
+
+      return next();
+    } catch (err) {
+      // 降級放行 (Fail-open): 若 Firestore 異常，不阻斷正常顧客點餐，依賴 L1 防護即可
+      console.warn('[RateLimiter L2] Check failed, falling back to L1:', err);
+      return next();
+    }
   };
 }
 
