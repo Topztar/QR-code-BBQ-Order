@@ -2,6 +2,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import viteCompression from 'vite-plugin-compression';
+import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
   plugins: [
@@ -11,6 +12,34 @@ export default defineConfig({
     viteCompression({ algorithm: 'gzip', threshold: 1024 }),
     // brotli 預壓縮（現代瀏覽器優先使用，壓縮比更佳）
     viteCompression({ algorithm: 'brotliCompress', threshold: 1024 }),
+    VitePWA({
+      registerType: 'autoUpdate',
+      injectRegister: 'auto',
+      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
+      manifest: {
+        name: 'SABAY BBQ Order System',
+        short_name: 'SABAY BBQ',
+        description: 'SABAY Thai BBQ Order & POS System',
+        theme_color: '#ffffff',
+        icons: [
+          {
+            src: 'pwa-192x192.png',
+            sizes: '192x192',
+            type: 'image/png'
+          },
+          {
+            src: 'pwa-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'any maskable'
+          }
+        ]
+      },
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2,json}'],
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024 // 5MB limits for firebase SDK chunks
+      }
+    }),
   ],
   server: {
     port: 3000,
