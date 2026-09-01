@@ -213,9 +213,11 @@ let liveCategories: Category[] = [...INITIAL_CATEGORIES];
 
 const defaultCategories = [...liveCategories];
 
-let liveStaffPin = "952788";
+import 'dotenv/config';
 
-let livePrinterIp = '192.168.123.100';
+let liveStaffPin = process.env.DEFAULT_STAFF_PIN || '000000';
+
+let livePrinterIp = process.env.PRINTER_IP || '127.0.0.1';
 
 let liveTables: TableConfig[] = [
   {
