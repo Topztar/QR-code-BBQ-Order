@@ -1,4 +1,13 @@
-import React from 'react';
+import React from "react";
+import { useState, useMemo, useEffect } from 'react';
+import { useCashierState } from '../../hooks/useCashierState';
+import { doc, setDoc } from 'firebase/firestore';
+import { db } from '../../lib/firebase';
+import { isFirebaseSyncEnabled } from '../../lib/firebase';
+import { openCashDrawerViaBridge } from '../../lib/posBridgeClient';
+import { apiFetch } from '../../lib/api';
+import { computeOrderItemsSubtotal } from '../ManagerDashboard';
+
 import {
   Calendar, Check, Clock, Coins, Copy, Edit, FileText,
   Lock, Maximize2, Minus, Phone, Plus, QrCode, ShoppingBag,
@@ -31,9 +40,6 @@ export interface ManagerCashierTabProps {
 
   // --- 操作 Handler ---
   handleManualOpenDrawer: () => void;
-  handleCashierAddMenuItem: (menuItemId: string) => void;
-  handleCombinedQtyChange: (orderId: string, itemId: string, delta: number) => void;
-  handleCombinedRemoveItem: (orderId: string, itemId: string) => void;
   handleTableMouseDown: (e: React.MouseEvent, tableId: string) => void;
   handleTableTouchStart: (e: React.TouchEvent, tableId: string) => void;
   handleFineTunePosition: (dx: number, dy: number) => Promise<void>;
@@ -46,152 +52,727 @@ export interface ManagerCashierTabProps {
   onEditReservation?: (id: string, updates: Partial<Reservation>) => Promise<{ success: boolean; error?: string }>;
   onDeleteReservation?: (id: string) => Promise<{ success: boolean; error?: string }>;
   onDeleteTable: (id: string) => Promise<{ success: boolean; error?: string }>;
+  onUpdateOrderItems?: (orderId: string, items: any[]) => Promise<void>;
+  onPayOrder?: (orderId: string, paymentData: any, skipRefresh?: boolean) => Promise<void>;
 
   // --- Computed / Derived ---
-  filteredCashierOrders: Order[];
-  activeTakeoutOrders: Order[];
-  cashierSelectedOrder: Order | null;
-  cashierCandidateOrders: any;
-  cashierMergedOrders: Order[];
-  cashierCalculatedTotals: any;
   getPanelWidthClass: (w?: number) => string;
   localTablePositions: Record<string, { x: number; y: number }>;
-
-  // --- Cashier 專屬 State (讀取) ---
-  selectedCashierOrderId: string | null;
-  cashierListFilter: 'all' | 'completed' | 'dinein' | 'takeout';
-  cashierCheckoutScope: string;
-  cashierDiscountType: string;
-  cashierDiscountFlat: number;
-  cashierDiscountRate: number;
-  cashierSurchargeType: string;
-  cashierSurchargeFlat: number;
-  cashierSurchargeRate: number;
-  cashierPaymentMethod: string;
-  cashierCashReceived: number;
-  cashierCashChannel: string;
-  cashierSelectedMergeOrderIds: string[];
-  cashierPanelWidth: number;
-  isCashierWidthAuto: boolean;
-  isAdjustingDiscount: boolean;
-  isAdjustingSurcharge: boolean;
-  cashierNewItemInput: string;
-  takeoutDetailModalOrder: Order | null;
-  simulatedElapsedOrders: string[];
-  copiedTakeoutPhone: boolean;
-  copiedGoogleLinkNotice: string | null;
-  batchSuccessMessage: string | null;
-  isBatchProcessing: boolean;
-  selectedResIds: string[];
-  selectedCalendarStatusFilter: string;
-  selectedFineTuneTableId: string | null;
-  showCheckoutConfirm: boolean;
-  tableLayoutMode: string;
-  gridSize: number;
-  snapToGrid: boolean;
-  isTableLayoutLocked: boolean;
-  isTableFormOpen: boolean;
-  editingTableObj: TableConfig | null;
-  tableIdInput: string;
-  tableQrUrlInput: string;
-  tableMaxCapacityInput: string;
-  tableError: string | null;
-  tableSuccess: string | null;
-  tableToDeleteId: string | null;
-  reservationToDeleteId: string | null;
-  editingOrderTableId: string | null;
-  editingOrderTableValue: string;
-
-  // --- Cashier 專屬 Setter ---
-  setSelectedCashierOrderId: (id: string | null) => void;
-  setCashierListFilter: (f: any) => void;
-  setCashierCheckoutScope: (s: any) => void;
-  setCashierDiscountType: (t: any) => void;
-  setCashierDiscountFlat: (v: any) => void;
-  setCashierDiscountRate: (v: any) => void;
-  setCashierSurchargeType: (t: any) => void;
-  setCashierSurchargeFlat: (v: any) => void;
-  setCashierSurchargeRate: (v: any) => void;
-  setCashierPaymentMethod: (m: any) => void;
-  setCashierCashReceived: (v: any) => void;
-  setCashierCashChannel: (c: any) => void;
-  setCashierSelectedMergeOrderIds: (ids: any) => void;
-  setCashierPanelWidth: (w: any) => void;
-  setIsCashierWidthAuto: (v: boolean) => void;
-  setIsAdjustingDiscount: (v: boolean) => void;
-  setIsAdjustingSurcharge: (v: boolean) => void;
-  setTakeoutDetailModalOrder: (o: Order | null) => void;
-  setSimulatedElapsedOrders: (ids: any) => void;
-  setCopiedTakeoutPhone: (v: any) => void;
-  setCopiedGoogleLinkNotice: (v: string | null) => void;
-  setBatchSuccessMessage: (m: string | null) => void;
-  setIsBatchProcessing: (v: boolean) => void;
-  setSelectedResIds: (ids: any) => void;
-  setSelectedCalendarStatusFilter: (f: string) => void;
-  setConfirmActionModal: (m: any) => void;
-  setSelectedFineTuneTableId: (id: string | null) => void;
-  setShowCheckoutConfirm: (v: boolean) => void;
-  setTableLayoutMode: (m: any) => void;
-  setGridSize: (s: any) => void;
-  setSnapToGrid: (v: boolean) => void;
-  setIsTableLayoutLocked: (v: boolean) => void;
-  setIsTableFormOpen: (v: boolean) => void;
-  setEditingTableObj: (t: TableConfig | null) => void;
-  setTableIdInput: (v: string) => void;
-  setTableQrUrlInput: (v: string) => void;
-  setTableMaxCapacityInput: (v: string) => void;
-  setTableError: (e: string | null) => void;
-  setTableSuccess: (s: string | null) => void;
-  setTableToDeleteId: (id: string | null) => void;
-  setReservationToDeleteId: (id: string | null) => void;
-  setEditingOrderTableId: (id: string | null) => void;
-  setEditingOrderTableValue: (v: string) => void;
-  confirmActionModal: any;
-  selectedPendingRes: any;
-  setSelectedPendingRes: (res: any) => void;
+  setCheckoutSuccessData?: (data: any) => void;
+  staffPin?: string;
+  selectedPendingRes?: Reservation | null;
+  setSelectedPendingRes?: (res: Reservation | null) => void;
+  confirmActionModal?: any;
+  setConfirmActionModal?: (modal: any) => void;
 }
 
 export const ManagerCashierTab: React.FC<ManagerCashierTabProps> = (props) => {
   const {
     currentLang, orders, menuItems, tables, categories, reservations,
-    minSpend, isOpen, handleManualOpenDrawer, handleCashierAddMenuItem,
-    handleCombinedQtyChange, handleCombinedRemoveItem, handleTableMouseDown,
+    minSpend, isOpen, handleManualOpenDrawer,  handleTableMouseDown,
     handleTableTouchStart, handleFineTunePosition, triggerEditTableMode,
     triggerAddReservationMode, triggerEditReservationMode,
     onUpdateTableNumber, onDeleteOrder, onUpdateTableStatus,
     onEditReservation, onDeleteReservation, onDeleteTable,
-    filteredCashierOrders, activeTakeoutOrders, cashierSelectedOrder,
-    cashierCandidateOrders, cashierMergedOrders, cashierCalculatedTotals,
+    onUpdateOrderItems, onPayOrder,
     getPanelWidthClass, localTablePositions,
-    confirmActionModal, selectedPendingRes, setSelectedPendingRes,
-    selectedCashierOrderId, cashierListFilter, cashierCheckoutScope,
-    cashierDiscountType, cashierDiscountFlat, cashierDiscountRate,
-    cashierSurchargeType, cashierSurchargeFlat, cashierSurchargeRate,
-    cashierPaymentMethod, cashierCashReceived, cashierCashChannel,
-    cashierSelectedMergeOrderIds, cashierPanelWidth, isCashierWidthAuto,
-    isAdjustingDiscount, isAdjustingSurcharge, cashierNewItemInput,
-    takeoutDetailModalOrder, simulatedElapsedOrders, copiedTakeoutPhone,
-    copiedGoogleLinkNotice, batchSuccessMessage, isBatchProcessing,
-    selectedResIds, selectedCalendarStatusFilter, selectedFineTuneTableId,
-    showCheckoutConfirm, tableLayoutMode, gridSize, snapToGrid,
-    isTableLayoutLocked, isTableFormOpen, editingTableObj, tableIdInput,
+    selectedPendingRes, setSelectedPendingRes,
+    setCheckoutSuccessData, staffPin,
+    confirmActionModal, setConfirmActionModal
+  } = props;
+
+  
+  const cashierState = useCashierState();
+  const { 
+    selectedCashierOrderId, setSelectedCashierOrderId, 
+    cashierListFilter, setCashierListFilter,
+    cashierCheckoutScope, setCashierCheckoutScope,
+    cashierDiscountType, setCashierDiscountType,
+    cashierDiscountFlat, setCashierDiscountFlat,
+    cashierDiscountRate, setCashierDiscountRate,
+    cashierSurchargeType, setCashierSurchargeType,
+    cashierSurchargeFlat, setCashierSurchargeFlat,
+    cashierSurchargeRate, setCashierSurchargeRate,
+    cashierPaymentMethod, setCashierPaymentMethod,
+    cashierCashReceived, setCashierCashReceived,
+    cashierSelectedMergeOrderIds, setCashierSelectedMergeOrderIds,
+    isAdjustingDiscount, setIsAdjustingDiscount,
+    isAdjustingSurcharge, setIsAdjustingSurcharge,
+    takeoutDetailModalOrder, setTakeoutDetailModalOrder,
+    showCheckoutConfirm, setShowCheckoutConfirm,
+    isCashierWidthAuto,
+    
+     isTableFormOpen, editingTableObj, tableIdInput,
     tableQrUrlInput, tableMaxCapacityInput, tableError, tableSuccess,
     tableToDeleteId, reservationToDeleteId, editingOrderTableId, editingOrderTableValue,
-    setSelectedCashierOrderId, setCashierListFilter, setCashierCheckoutScope,
-    setCashierDiscountType, setCashierDiscountFlat, setCashierDiscountRate,
-    setCashierSurchargeType, setCashierSurchargeFlat, setCashierSurchargeRate,
-    setCashierPaymentMethod, setCashierCashReceived, setCashierCashChannel,
-    setCashierSelectedMergeOrderIds, setCashierPanelWidth, setIsCashierWidthAuto,
-    setIsAdjustingDiscount, setIsAdjustingSurcharge, setTakeoutDetailModalOrder,
-    setSimulatedElapsedOrders, setCopiedTakeoutPhone, setCopiedGoogleLinkNotice,
+    setIsCashierWidthAuto, setSimulatedElapsedOrders, setCopiedTakeoutPhone, setCopiedGoogleLinkNotice,
     setBatchSuccessMessage, setIsBatchProcessing, setSelectedResIds,
-    setSelectedCalendarStatusFilter, setConfirmActionModal, setSelectedFineTuneTableId,
-    setShowCheckoutConfirm, setTableLayoutMode, setGridSize, setSnapToGrid,
-    setIsTableLayoutLocked, setIsTableFormOpen, setEditingTableObj, setTableIdInput,
+    setSelectedCalendarStatusFilter, setSelectedFineTuneTableId,
+    
+     setIsTableFormOpen, setEditingTableObj, setTableIdInput,
     setTableQrUrlInput, setTableMaxCapacityInput, setTableError, setTableSuccess,
     setTableToDeleteId, setReservationToDeleteId, setEditingOrderTableId,
     setEditingOrderTableValue,
-  } = props;
+    cashierCashChannel, setCashierCashChannel,
+    simulatedElapsedOrders, copiedTakeoutPhone, copiedGoogleLinkNotice,
+    batchSuccessMessage, isBatchProcessing, selectedResIds,
+    selectedCalendarStatusFilter, selectedFineTuneTableId
+  } = cashierState;
+
+  const [isCheckoutSubmitting, setIsCheckoutSubmitting] = useState(false);
+  const posBridgeUrl = "http://127.0.0.1:8060";
+  
+  const [tableLayoutMode, setTableLayoutMode] = useState<'grid' | 'floormap'>('floormap');
+  const [gridSize, setGridSize] = useState(5);
+  const [snapToGrid, setSnapToGrid] = useState(true);
+  const [isTableLayoutLocked, setIsTableLayoutLocked] = useState(true);
+  const [cashierPanelWidth, setCashierPanelWidth] = useState(450);
+
+  const billPrinter: any = { cashDrawerEnabled: false, usbPort: "" };
+
+    const filteredCashierOrders = useMemo(() => {
+    switch (cashierListFilter) {
+      case 'completed':
+        return orders.filter(o => !o.isPaid && o.status === 'completed');
+      case 'dinein':
+        return orders.filter(o => !o.isPaid && o.tableNumber && !String(o.tableNumber || '').includes('外帶'));
+      case 'takeout':
+        return orders.filter(o => !o.isPaid && o.tableNumber && String(o.tableNumber || '').includes('外帶'));
+      case 'all':
+      default:
+        return orders.filter(o => !o.isPaid);
+    }
+  }, [orders, cashierListFilter]);
+
+  const activeTakeoutOrders = useMemo(() => {
+    return orders.filter(o => !o.isPaid && ((o.tableNumber && String(o.tableNumber || '').includes('外帶')) || o.takeoutInfo));
+  }, [orders]);
+
+  const cashierSelectedOrder = useMemo(() => {
+    if (!selectedCashierOrderId) return null;
+    return orders.find(o => o.id === selectedCashierOrderId) || null;
+  }, [orders, selectedCashierOrderId]);
+
+  // Cashier item addition dropdown state
+  const [cashierNewItemInput, setCashierNewItemInput] = useState<string>('');
+
+
+
+  const handleCashierAddMenuItem = async (menuItemId: string) => {
+    if (!cashierSelectedOrder || !onUpdateOrderItems) return;
+    const dish = menuItems.find((m: any) => m.id === menuItemId);
+    if (!dish) return;
+
+    const existing = cashierSelectedOrder.items.find((it: any) => it.menuItemId === menuItemId);
+    let updatedItems;
+    if (existing) {
+      updatedItems = cashierSelectedOrder.items.map((it: any) => {
+        if (it.menuItemId === menuItemId) {
+          return { ...it, qty: it.qty + 1 };
+        }
+        return it;
+      });
+    } else {
+      const newItem = {
+        id: `oi-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+        menuItemId: dish.id,
+        name: dish.name,
+        price: dish.price,
+        qty: 1,
+        customization: {
+          spiciness: 1,
+          notes: '櫃檯收銀加點',
+        }
+      };
+      updatedItems = [...cashierSelectedOrder.items, newItem];
+    }
+
+    await onUpdateOrderItems(cashierSelectedOrder.id, updatedItems);
+    setCashierNewItemInput('');
+  };
+
+  useEffect(() => {
+    if (cashierSelectedOrder) {
+      setCashierDiscountRate(0);
+      setCashierDiscountFlat(0);
+      setCashierDiscountType('percent');
+      setIsAdjustingDiscount(false);
+      setIsAdjustingSurcharge(false);
+      setCashierCheckoutScope('single');
+      setCashierSelectedMergeOrderIds([cashierSelectedOrder.id]);
+      
+      const method = cashierSelectedOrder.paymentMethod === 'credit' ? 'credit' : 
+                     cashierSelectedOrder.paymentMethod === 'member' ? 'member' :
+                     cashierSelectedOrder.paymentMethod === 'twqr' ? 'twqr' : 'cash';
+      setCashierPaymentMethod(method);
+
+      if (method === 'credit' || method === 'twqr') {
+        setCashierSurchargeRate(10);
+        setCashierSurchargeFlat(0);
+        setCashierSurchargeType('percent');
+      } else {
+        setCashierSurchargeRate(0);
+        setCashierSurchargeFlat(0);
+        setCashierSurchargeType('percent');
+      }
+    }
+  }, [selectedCashierOrderId]);
+
+  // All candidate orders for the current table or merged tables
+  const cashierCandidateOrders = useMemo(() => {
+    if (!cashierSelectedOrder) {
+      return { sameTableOrders: [] as Order[], allConnectedOrders: [] as Order[], hasMergedTables: false };
+    }
+    
+    const curTableId = cashierSelectedOrder.tableNumber;
+    if (!curTableId || String(curTableId || '').includes('外帶')) {
+      return { 
+        sameTableOrders: [cashierSelectedOrder], 
+        allConnectedOrders: [cashierSelectedOrder], 
+        hasMergedTables: false 
+      };
+    }
+    
+    // Unpaid orders on the same table
+    const sameTable = orders.filter(
+      o => !o.isPaid && o.status !== 'cancelled' && String(o.tableNumber).trim() === String(curTableId).trim()
+    );
+
+    // Connected tables (mergedWith)
+    const curTableObj = tables.find(t => String(t.id).trim() === String(curTableId).trim());
+    const leadTableId = curTableObj?.mergedWith || curTableId;
+    
+    const mergedTableIds = tables
+      .filter(t => String(t.id).trim() === String(leadTableId).trim() || (t.mergedWith && String(t.mergedWith).trim() === String(leadTableId).trim()))
+      .map(t => String(t.id).trim());
+      
+    const allConnected = orders.filter(
+      o => !o.isPaid && o.status !== 'cancelled' && o.tableNumber && mergedTableIds.includes(String(o.tableNumber).trim())
+    );
+
+    const hasMerged = mergedTableIds.length > 1 || (curTableObj?.mergedWith !== undefined && curTableObj.mergedWith !== '');
+
+    return {
+      sameTableOrders: sameTable.length > 0 ? sameTable : [cashierSelectedOrder],
+      allConnectedOrders: allConnected.length > 0 ? allConnected : [cashierSelectedOrder],
+      hasMergedTables: hasMerged
+    };
+  }, [cashierSelectedOrder, orders, tables]);
+
+  const cashierMergedOrders = useMemo(() => {
+    if (!cashierSelectedOrder) return [];
+    
+    const curTableId = cashierSelectedOrder.tableNumber;
+    if (!curTableId || String(curTableId || '').includes('外帶')) {
+      return [cashierSelectedOrder];
+    }
+    
+    if (cashierCheckoutScope === 'single') {
+      return [cashierSelectedOrder];
+    }
+    
+    if (cashierCheckoutScope === 'same_table') {
+      return cashierCandidateOrders.sameTableOrders;
+    }
+    
+    if (cashierCheckoutScope === 'all_merged') {
+      return cashierCandidateOrders.allConnectedOrders;
+    }
+    
+    if (cashierCheckoutScope === 'custom') {
+      const selectedSet = new Set(cashierSelectedMergeOrderIds);
+      if (!selectedSet.has(cashierSelectedOrder.id)) {
+        selectedSet.add(cashierSelectedOrder.id);
+      }
+      const customList = cashierCandidateOrders.allConnectedOrders.filter(o => selectedSet.has(o.id));
+      return customList.length > 0 ? customList : [cashierSelectedOrder];
+    }
+    
+    return [cashierSelectedOrder];
+  }, [cashierSelectedOrder, cashierCheckoutScope, cashierSelectedMergeOrderIds, cashierCandidateOrders]);
+
+  const handleCombinedQtyChange = async (orderId: string, itemId: string, delta: number) => {
+    if (!onUpdateOrderItems) return;
+    const ordObj = orders.find(o => o.id === orderId);
+    if (!ordObj) return;
+    const updatedItems = ordObj.items.map((it: any) => {
+      if (it.id === itemId) {
+        return { ...it, qty: it.qty + delta };
+      }
+      return it;
+    }).filter((it: any) => it.qty > 0);
+
+    if (updatedItems.length === 0) {
+      setConfirmActionModal({
+        isOpen: true,
+        title: '⚠️ 訂單已無菜品',
+        message: `訂單 [${orderId}] 的菜品已被清空。是否直接刪除此訂單？`,
+        actionLabel: '確定刪除 Delete',
+        onConfirm: async () => {
+          if (onDeleteOrder) {
+            await onDeleteOrder(orderId);
+          }
+          if (selectedCashierOrderId === orderId) {
+            setSelectedCashierOrderId(null);
+          }
+        }
+      });
+      return;
+    }
+
+    await onUpdateOrderItems(orderId, updatedItems);
+  };
+
+  const handleCombinedRemoveItem = async (orderId: string, itemId: string) => {
+    if (!onUpdateOrderItems) return;
+    const ordObj = orders.find(o => o.id === orderId);
+    if (!ordObj) return;
+    const updatedItems = ordObj.items.filter((it: any) => it.id !== itemId);
+
+    if (updatedItems.length === 0) {
+      setConfirmActionModal({
+        isOpen: true,
+        title: '⚠️ 訂單已無菜品',
+        message: `移除此品項後，訂單 [${orderId}] 將無任何菜品。是否直接刪除此訂單？`,
+        actionLabel: '確定刪除 Delete',
+        onConfirm: async () => {
+          if (onDeleteOrder) {
+            await onDeleteOrder(orderId);
+          }
+          if (selectedCashierOrderId === orderId) {
+            setSelectedCashierOrderId(null);
+          }
+        }
+      });
+      return;
+    }
+
+    await onUpdateOrderItems(orderId, updatedItems);
+  };
+
+  const cashierCalculatedTotals = useMemo(() => {
+    if (!cashierSelectedOrder) return { subtotal: 0, discount: 0, surcharge: 0, total: 0 };
+    
+    const sub = cashierMergedOrders.reduce((sum, o) => {
+      const itemsSub = computeOrderItemsSubtotal(o.items || [], menuItems);
+      return sum + (itemsSub > 0 ? itemsSub : (o.subtotal || 0));
+    }, 0);
+    
+    // Both Surcharge and Discount are calculated using the original Subtotal (sub) as the reference base
+    let manualDiscount = 0;
+    if (cashierDiscountType === 'percent') {
+      manualDiscount = Math.round(sub * (cashierDiscountRate / 100));
+    } else {
+      manualDiscount = Math.round(cashierDiscountFlat);
+    }
+    
+    let surcharge = 0;
+    const isCreditOrTwqr = cashierPaymentMethod === 'credit' || cashierPaymentMethod === 'twqr';
+    if (cashierSurchargeType === 'percent') {
+      const effectiveRate = isCreditOrTwqr && cashierSurchargeRate === 0 && cashierSurchargeFlat === 0
+        ? 10
+        : cashierSurchargeRate;
+      surcharge = Math.round(sub * (effectiveRate / 100));
+    } else {
+      surcharge = Math.round(cashierSurchargeFlat);
+    }
+    if (surcharge < 0) surcharge = 0;
+    
+    // Auto-combo promo and other pre-existing discounts linked to the orders (優惠規則)
+    const autoDiscount = cashierMergedOrders.reduce((sum, o) => sum + (o.discount || 0), 0);
+    
+    let totalDiscount = manualDiscount + autoDiscount;
+    if (totalDiscount > sub) totalDiscount = sub;
+    if (totalDiscount < 0) totalDiscount = 0;
+    
+    const finalTotal = Math.max(0, sub - totalDiscount + surcharge);
+    
+    return {
+      subtotal: sub,
+      discount: totalDiscount,
+      surcharge,
+      total: finalTotal
+    };
+  }, [
+    cashierSelectedOrder, 
+    cashierMergedOrders, 
+    cashierDiscountType, 
+    cashierDiscountRate, 
+    cashierDiscountFlat, 
+    cashierSurchargeType, 
+    cashierSurchargeRate, 
+    cashierSurchargeFlat,
+    cashierPaymentMethod,
+    menuItems
+  ]);
+
+  useEffect(() => {
+    if (cashierCalculatedTotals) {
+      setCashierCashReceived(cashierCalculatedTotals.total);
+    }
+  }, [cashierCalculatedTotals.total]);
+
+  const handleCashierCheckoutSubmit = async () => {
+    if (!cashierSelectedOrder || !onPayOrder) return;
+    if (isCheckoutSubmitting) return;
+    
+    if (cashierPaymentMethod === 'cash' && cashierCashReceived < cashierCalculatedTotals.total) {
+      alert(`⚠️ 實收現金金額不足！實收 (NT$ ${cashierCashReceived}) 需大於或等於應收總額 (NT$ ${cashierCalculatedTotals.total})。`);
+      return;
+    }
+
+    if (cashierPaymentMethod === 'member') {
+      let vipEmail = '';
+      const dbStr = localStorage.getItem('google-members-database');
+      if (dbStr) {
+        try {
+          const db = JSON.parse(dbStr);
+          if (cashierSelectedOrder?.customerName) {
+            const matched = db.find((m: any) => m.name === cashierSelectedOrder.customerName);
+            if (matched) vipEmail = matched.email;
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      }
+
+      if (!vipEmail) {
+        alert('⚠️ 找不到匹配此結帳單的會員帳戶，無法使用會員餘額付款！');
+        return;
+      }
+
+      try {
+        const deductRes = await fetch(`/api/members/${encodeURIComponent(vipEmail)}/deduct`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ amount: cashierCalculatedTotals.total }),
+        });
+
+        const deductData = await deductRes.json();
+        if (!deductRes.ok || !deductData.member) {
+          alert(`⚠️ 會員餘額扣抵失敗：${deductData.error || '餘額不足或系統異常'}！`);
+          return;
+        }
+
+        // Sync back to localStorage cache
+        if (dbStr) {
+          try {
+            const db = JSON.parse(dbStr);
+            const userIndex = db.findIndex((m: any) => m.email === vipEmail);
+            if (userIndex >= 0) {
+              db[userIndex].balance = deductData.member.balance;
+              db[userIndex].points = deductData.member.points;
+              localStorage.setItem('google-members-database', JSON.stringify(db));
+            }
+          } catch (_ignore) {}
+        }
+        window.dispatchEvent(new Event('local-points-updated'));
+      } catch (err) {
+        alert(`⚠️ 連線伺服器失敗，無法完成會員餘額扣抵：${err}`);
+        return;
+      }
+    }
+    
+    setIsCheckoutSubmitting(true);
+    try {
+      const change = cashierPaymentMethod === 'cash' ? (cashierCashReceived - cashierCalculatedTotals.total) : 0;
+      
+      const mergedTableIds = cashierMergedOrders.map(o => o.tableNumber);
+      const mergedOrderIds = cashierMergedOrders.map(o => o.id);
+
+      const checkoutRecord = {
+        id: `TX-${Date.now()}`,
+        orderId: cashierSelectedOrder.id,
+        tableNumber: cashierSelectedOrder.tableNumber,
+        mergedTableNumbers: mergedTableIds,
+        mergedOrderIds: mergedOrderIds,
+        subtotal: cashierCalculatedTotals.subtotal,
+        discount: cashierCalculatedTotals.discount,
+        serviceCharge: cashierCalculatedTotals.surcharge,
+        total: cashierCalculatedTotals.total,
+        amountPaid: cashierPaymentMethod === 'cash' ? cashierCashReceived : cashierCalculatedTotals.total,
+        changeProvided: change,
+        paymentMethod: cashierPaymentMethod,
+        staffPin: staffPin || '070718',
+        checkoutTime: new Date().toISOString()
+      };
+
+      // Create a filtered record for Cloud Firestore to comply with rigid security rules/schemas
+      const dbPostRecord = {
+        id: checkoutRecord.id,
+        orderId: checkoutRecord.orderId,
+        tableNumber: checkoutRecord.tableNumber,
+        subtotal: checkoutRecord.subtotal,
+        discount: checkoutRecord.discount,
+        serviceCharge: checkoutRecord.serviceCharge,
+        total: checkoutRecord.total,
+        amountPaid: checkoutRecord.amountPaid,
+        changeProvided: checkoutRecord.changeProvided,
+        paymentMethod: checkoutRecord.paymentMethod,
+        staffPin: checkoutRecord.staffPin,
+        checkoutTime: checkoutRecord.checkoutTime
+      };
+
+      try {
+        if (isFirebaseSyncEnabled()) {
+          await setDoc(doc(db, 'checkouts', dbPostRecord.id), dbPostRecord);
+          console.log('✓ Successfully uploaded cashier checkout record to Cloud Firestore. Doc ID:', dbPostRecord.id);
+        }
+      } catch (err: any) {
+        console.warn('⚠️ Firestore upload failed or sync disabled, continuing with local POS checkout flow gracefully:', err);
+      }
+      
+      // Make a static copy of the merged orders array to prevent recalculated useMemo states mid-loop
+      const staticMergedOrders = [...cashierMergedOrders];
+
+      // Update all merged orders as paid!
+      for (let i = 0; i < staticMergedOrders.length; i++) {
+        const ord = staticMergedOrders[i];
+        // We only trigger fetchData() (re-rendering) on the very last order in the loop
+        const skipRefresh = i < staticMergedOrders.length - 1;
+
+        if (ord.id === cashierSelectedOrder.id) {
+          await onPayOrder(cashierSelectedOrder.id, {
+            paymentMethod: cashierPaymentMethod,
+            subtotal: cashierCalculatedTotals.subtotal,
+            serviceCharge: cashierCalculatedTotals.surcharge,
+            discount: cashierCalculatedTotals.discount,
+            total: cashierCalculatedTotals.total,
+            isPaid: true
+          }, skipRefresh);
+        } else {
+          await onPayOrder(ord.id, {
+            paymentMethod: cashierPaymentMethod,
+            subtotal: 0,
+            serviceCharge: 0,
+            discount: 0,
+            total: 0,
+            isPaid: true
+          }, skipRefresh);
+        }
+      }
+
+      // Smart Table Status Release: Only release table to 'cleaning' if NO other unpaid non-cancelled orders remain for that table
+      if (onUpdateTableStatus) {
+        const uniqueTableIds: string[] = Array.from(new Set<string>(mergedTableIds));
+        for (const tid of uniqueTableIds) {
+          if (tid && !tid.includes('外帶')) {
+            const remainingUnpaidForTable = orders.filter(
+              o => String(o.tableNumber).trim() === String(tid).trim() &&
+              !staticMergedOrders.some(m => m.id === o.id) &&
+              !o.isPaid &&
+              o.status !== 'cancelled'
+            );
+            if (remainingUnpaidForTable.length === 0) {
+              await onUpdateTableStatus(tid, {
+                status: 'cleaning',
+                preservedFor: '',
+                mergedWith: '',
+                cleaningStartedAt: new Date().toISOString()
+              });
+            }
+          }
+        }
+      }
+      
+      setSelectedCashierOrderId(null);
+      
+      const distinctTableDisplay = Array.from(new Set(staticMergedOrders.map(o => o.tableNumber))).join(' + ');
+      
+      setCheckoutSuccessData({
+        id: cashierSelectedOrder.id,
+        tableNumber: distinctTableDisplay || cashierSelectedOrder.tableNumber,
+        subtotal: checkoutRecord.subtotal,
+        discount: checkoutRecord.discount,
+        serviceCharge: checkoutRecord.serviceCharge,
+        total: checkoutRecord.total,
+        amountPaid: checkoutRecord.amountPaid,
+        changeProvided: checkoutRecord.changeProvided,
+        paymentMethod: checkoutRecord.paymentMethod,
+        isCashier: true,
+        mergedCount: staticMergedOrders.length,
+        checkoutScope: cashierCheckoutScope
+      });
+
+      // Cash drawer interlock linkage via LOCAL-PRINTER-POS-BRIDGE & Server API
+      if (billPrinter.cashDrawerEnabled) {
+        // Direct local bridge dispatch (works on localhost, LAN, and Windows POS Bridge)
+        const targetPort = billPrinter.usbPort?.includes(':') ? billPrinter.usbPort.toUpperCase() : `${billPrinter.usbPort?.toUpperCase() || 'LPT1'}:`;
+        openCashDrawerViaBridge(targetPort, posBridgeUrl)
+          .then(bRes => {
+            if (bRes.success) {
+              console.log('[Cash Drawer Bridge Success]', bRes.message);
+            }
+          })
+          .catch(e => console.warn('[Cash Drawer Bridge Warning]', e));
+
+        // Server API logging and execution
+        apiFetch('/api/printer/open-drawer', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ settings: billPrinter })
+        })
+          .then(res => res.json())
+          .then(data => {
+            console.log('[Cash Drawer Server Log]', data.log);
+          })
+          .catch(e => console.error('[Cash Drawer Server Error]', e));
+      }
+
+    } catch (err: any) {
+      console.error('[Cashier Checkout processing error]', err);
+      alert(`❌ 收銀失敗: ${err?.message || String(err)}`);
+    } finally {
+      setIsCheckoutSubmitting(false);
+    }
+  };
+
+
+
+      {showCheckoutConfirm && cashierSelectedOrder && (
+        <div id="checkout-confirm-modal" className="fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 text-xs font-sans animate-fadeIn">
+          <div className="bg-[#121212] border border-white/10 rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl text-left transition-all duration-300">
+            <div className="p-5 pb-3 border-b border-white/5 flex items-center justify-between">
+              <h3 className="font-bold text-sm text-[#E5B453] flex items-center gap-1.5">
+                <Coins size={15} />
+                <span>櫃檯收銀二次確認 Checkout Confirm</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowCheckoutConfirm(false)}
+                className="text-white/40 hover:text-white/80 transition text-sm font-mono cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div className="bg-black/35 border border-white/5 p-4 rounded-xl space-y-3">
+                <div className="flex justify-between items-center text-zinc-400">
+                  <span>結帳桌號 Table(s)</span>
+                  <span className="text-white font-mono font-bold bg-slate-800 border border-slate-700 px-2 py-0.5 rounded-md">
+                    {Array.from(new Set(cashierMergedOrders.map(o => o.tableNumber))).join(' + ')} 桌
+                  </span>
+                </div>
+
+                <div className="flex justify-between items-center text-zinc-400">
+                  <span>結帳單數 Orders</span>
+                  <span className="text-amber-300 font-mono font-bold">
+                    {cashierMergedOrders.length} 筆訂單
+                    {cashierCheckoutScope === 'single' && ' (單一獨立)'}
+                    {cashierCheckoutScope === 'same_table' && ' (同桌合併)'}
+                    {cashierCheckoutScope === 'all_merged' && ' (跨桌全併)'}
+                    {cashierCheckoutScope === 'custom' && ' (自選合併)'}
+                  </span>
+                </div>
+
+                <div className="flex justify-between items-center text-zinc-400">
+                  <span>主單編號 Order ID</span>
+                  <span className="text-white font-mono font-semibold">{cashierSelectedOrder.id.substring(0, 8)}...</span>
+                </div>
+
+                <div className="flex justify-between items-center text-zinc-400">
+                  <span>付款方式 Payment</span>
+                  <span className="text-amber-300 font-bold bg-amber-500/10 px-2 py-0.5 rounded-md text-xs">
+                    {cashierPaymentMethod === 'cash' && '💵 現金支付 Cash'}
+                    {cashierPaymentMethod === 'credit' && '💳 信用卡 Credit Card (+10%)'}
+                    {cashierPaymentMethod === 'twqr' && '📱 TWQR行動支付 (+10%)'}
+                    {cashierPaymentMethod === 'member' && '👤 會員餘額扣款 VIP Member'}
+                  </span>
+                </div>
+
+                <div className="flex justify-between items-center text-zinc-400 pt-1 border-t border-white/5">
+                  <span>餐點小計 Subtotal</span>
+                  <span className="text-white font-mono font-bold">NT$ {cashierCalculatedTotals?.subtotal.toLocaleString()}</span>
+                </div>
+
+                {cashierCalculatedTotals && cashierCalculatedTotals.discount > 0 && (
+                  <div className="flex justify-between items-center text-rose-400">
+                    <span>折扣折抵 Discount ({cashierDiscountType === 'percent' ? `${cashierDiscountRate}% OFF` : '固定折抵'})</span>
+                    <span className="font-mono font-bold">- NT$ {cashierCalculatedTotals.discount.toLocaleString()}</span>
+                  </div>
+                )}
+
+                {cashierCalculatedTotals && cashierCalculatedTotals.surcharge > 0 && (
+                  <div className="flex justify-between items-center text-blue-400">
+                    <span>服務費/加成 Surcharge ({cashierSurchargeType === 'percent' ? `${cashierSurchargeRate}%` : '固定加成'})</span>
+                    <span className="font-mono font-bold">+ NT$ {cashierCalculatedTotals.surcharge.toLocaleString()}</span>
+                  </div>
+                )}
+
+                {cashierPaymentMethod === 'cash' && (
+                  <>
+                    <div className="flex justify-between items-center text-zinc-400">
+                      <span>實收現金 Cash Received</span>
+                      <span className="text-white font-mono font-bold text-sm">NT$ {cashierCashReceived}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-zinc-400">
+                      <span>應找零錢 Change Provided</span>
+                      <span className="text-emerald-400 font-mono font-bold text-sm">NT$ {Math.max(0, cashierCashReceived - (cashierCalculatedTotals?.total || 0))}</span>
+                    </div>
+                  </>
+                )}
+
+                <div className="border-t border-white/10 pt-3 flex justify-between items-center text-zinc-300">
+                  <span className="font-bold text-xs">應付總額 Final Total</span>
+                  <span className="text-[#E5B453] font-mono text-xl font-black">
+                    NT$ {cashierCalculatedTotals?.total.toLocaleString()}
+                  </span>
+                </div>
+              </div>
+
+              <p className="text-[10px] text-zinc-400 text-center leading-relaxed">
+                {cashierCheckoutScope === 'single'
+                  ? 'ℹ️ 目前為【獨立單一訂單結帳】，僅結算此筆點單。同桌其他訂單不受影響，該桌席在所有訂單結清前將持續保留。'
+                  : cashierMergedOrders.length > 1
+                  ? `ℹ️ 目前為【合併結帳模式】，將一併結清已選取的 ${cashierMergedOrders.length} 筆訂單，確認無誤後請點擊下方結清。`
+                  : 'ℹ️ 請確認款項點收無誤。點選下方「確認結清」後，系統將會儲存收銀紀錄並標記為已結清。'}
+              </p>
+            </div>
+
+            <div className="p-4 bg-white/5 border-t border-white/5 flex items-center justify-end space-x-3.5">
+              <button
+                type="button"
+                disabled={isCheckoutSubmitting}
+                onClick={() => setShowCheckoutConfirm(false)}
+                className={`px-4 py-2 border border-white/10 rounded-lg font-bold transition text-white text-xs ${
+                  isCheckoutSubmitting ? 'opacity-40 cursor-not-allowed' : 'hover:bg-white/5 active:scale-95 cursor-pointer'
+                }`}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                disabled={isCheckoutSubmitting}
+                onClick={async () => {
+                  try {
+                    await handleCashierCheckoutSubmit();
+                    setShowCheckoutConfirm(false);
+                  } catch (e) {
+                    console.error(e);
+                  }
+                }}
+                className={`flex-1 py-2 bg-[#E5B453] text-slate-900 font-extrabold rounded-lg transition text-xs text-center font-bold flex items-center justify-center space-x-1.5 ${
+                  isCheckoutSubmitting ? 'opacity-50 cursor-not-allowed' : 'hover:bg-amber-400 active:scale-95 cursor-pointer shadow-md'
+                }`}
+              >
+                {isCheckoutSubmitting && (
+                  <span className="w-3 h-3 border-2 border-slate-900 border-t-transparent rounded-full animate-spin"></span>
+                )}
+                <span>
+                  {isCheckoutSubmitting
+                    ? '處理中...'
+                    : cashierCheckoutScope === 'single'
+                    ? '🎯 確認此單獨立結清 (不影響同桌他單)'
+                    : `🎯 確認結清已選 ${cashierMergedOrders.length} 筆訂單`}
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+
 
   // ─── Tier B: Google Identity Protection ───────────────────────────────────
   const [cashierMemberData, setCashierMemberData] = React.useState<any>(null);

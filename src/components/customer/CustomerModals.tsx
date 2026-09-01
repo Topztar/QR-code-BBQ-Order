@@ -1,5 +1,6 @@
 import React from 'react';
 import { safeStorage } from '../../lib/safeStorage';
+import { sanitizePhoneDigits, isValidTaiwanPhone, TAIWAN_PHONE_ERROR_MSG } from '../../utils/phoneValidator';
 
 const localStorage = safeStorage;
 
@@ -204,6 +205,13 @@ export const CustomerTakeoutModal: React.FC<CustomerTakeoutModalProps> = ({
             if (!takeoutCustomerName || !takeoutPhone || !takeoutPickupTime) {
               return;
             }
+
+            const cleanPhone = sanitizePhoneDigits(takeoutPhone, 10);
+            if (!isValidTaiwanPhone(cleanPhone)) {
+              setTakeoutTimeError(TAIWAN_PHONE_ERROR_MSG);
+              return;
+            }
+
             // Validate takeout pickup time to align with active general operating hours
             const [h, m] = takeoutPickupTime.split(':').map(Number);
             const pickupMinutes = h * 60 + m;
@@ -284,11 +292,21 @@ export const CustomerTakeoutModal: React.FC<CustomerTakeoutModalProps> = ({
               <input
                 type="tel"
                 required
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={10}
                 value={takeoutPhone}
-                onChange={(e) => setTakeoutPhone(e.target.value)}
-                placeholder="例如: 0912345678"
+                onChange={(e) => {
+                  const clean = sanitizePhoneDigits(e.target.value, 10);
+                  setTakeoutPhone(clean);
+                  setTakeoutTimeError(null);
+                }}
+                placeholder="例如: 0912345678 或 0223456789"
                 className="w-full bg-black/40 border border-blue-500/20 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/50 transition-colors font-mono"
               />
+              <p className="text-[10px] text-zinc-400">
+                僅限輸入阿拉伯數字：手機需 10 碼 (09開頭) / 市話需 9~10 碼 (02~08開頭)
+              </p>
             </div>
 
             {/* 預計取餐時間 */}

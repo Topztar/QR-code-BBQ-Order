@@ -58,6 +58,24 @@ export interface OrderItem {
 
 export type OrderStatus = 'pending' | 'preparing' | 'paid' | 'completed' | 'cancelled';
 
+export type PaymentMethod = 'cash' | 'credit' | 'member' | 'twqr' | string;
+
+export interface RefundLog {
+  id?: string;
+  timestamp: string;
+  amount?: number;
+  type?: string;
+  itemName?: string;
+  pricePerUnit?: number;
+  qtyChange?: number;
+  totalDiff?: number;
+  reason?: string;
+  notes?: string;
+  authorizedByPin?: string;
+  items?: { id: string; name: string; qty: number; price: number }[];
+  refundedBy?: string;
+}
+
 export interface Order {
   id: string;
   tableNumber: string;
@@ -70,11 +88,11 @@ export interface Order {
   customerName?: string;
   customerPhone?: string;
   customerAvatar: string;
-  paymentMethod: 'cash' | 'credit' | 'member' | 'twqr' | string;
+  paymentMethod: PaymentMethod;
   isMember: boolean;
   isPaid?: boolean;
   guestCount?: number;
-  refundLogs?: any[];
+  refundLogs?: RefundLog[];
   discount?: number;
   quickNotes?: string;
   isFlagged?: boolean;
@@ -108,7 +126,6 @@ export interface IngredientCost {
   amount: number;
 }
 
-
 export interface Category {
   id: string;
   name: { [key in Language]?: string };
@@ -116,10 +133,12 @@ export interface Category {
   orderIndex?: number;
 }
 
+export type TableStatus = 'available' | 'preserved' | 'reserved' | 'in_use' | 'pending_checkout' | 'cleaning';
+
 export interface TableConfig {
   id: string;
   qrCodeUrl: string;
-  status?: 'available' | 'preserved' | 'reserved' | 'in_use' | 'pending_checkout' | 'cleaning';
+  status?: TableStatus;
   preservedFor?: string;
   mergedWith?: string;
   positionX?: number;
@@ -129,6 +148,8 @@ export interface TableConfig {
   cleaningStartedAt?: string | null;
 }
 
+export type ReservationStatus = 'pending' | 'confirmed' | 'seated' | 'cancelled' | 'completed' | 'checked_out' | 'upcoming';
+
 export interface Reservation {
   id: string;
   customerName: string;
@@ -137,7 +158,7 @@ export interface Reservation {
   tableNumber: string;
   date: string;
   time: string;
-  status: 'pending' | 'confirmed' | 'seated' | 'cancelled' | 'completed' | 'checked_out' | 'upcoming';
+  status: ReservationStatus;
   notes?: string;
   createdAt: string;
   reservationNo?: string;

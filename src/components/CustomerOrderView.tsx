@@ -14,6 +14,7 @@ import {
 import { TRANSLATIONS } from '../data';
 import { ShoppingCart, ChevronRight, ArrowUp, Sparkles } from 'lucide-react';
 import { getLocalizedText } from '../utils/i18n';
+import { isValidTaiwanPhone, TAIWAN_PHONE_ERROR_MSG, sanitizePhoneDigits } from '../utils/phoneValidator';
 import { useCustomerCart } from '../hooks/useCustomerCart';
 import { CustomerHeader } from './customer/CustomerHeader';
 import { CustomerCategoryTabs } from './customer/CustomerCategoryTabs';
@@ -241,6 +242,12 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
       setIsTableFixed(true);
     }
   }, [isOrderRoute]);
+
+  useEffect(() => {
+    if (autoOpenReservationModal) {
+      setShowReservationModal(true);
+    }
+  }, [autoOpenReservationModal]);
 
   const [selectedCategory, setSelectedCategory] = useState('tomyum');
   const [selectedDetailItem, setSelectedDetailItem] = useState<MenuItem | null>(null);
@@ -665,11 +672,23 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
       setResFeedback({ type: 'error', msg: '預約功能未就緒，請洽櫃檯人員。' });
       return;
     }
+
+    const cleanPhone = sanitizePhoneDigits(resPhone, 10);
+    if (!isValidTaiwanPhone(cleanPhone)) {
+      setResPhoneError(true);
+      setResFeedback({
+        type: 'error',
+        msg: `⚠️ ${TAIWAN_PHONE_ERROR_MSG}`,
+      });
+      return;
+    }
+    setResPhoneError(false);
+
     setResSubmitting(true);
     try {
       const res = await onAddReservation({
         customerName: resCustomerName,
-        phone: resPhone,
+        phone: cleanPhone,
         date: resDate,
         time: resTime,
         guestCount: resGuests,

@@ -48,7 +48,6 @@ function registerPrinterRoutes(app, ctx) {
     const get = (routePath, ...handlers) => app.get([`/api${routePath}`, routePath], ...handlers);
     const post = (routePath, ...handlers) => app.post([`/api${routePath}`, routePath], ...handlers);
     const put = (routePath, ...handlers) => app.put([`/api${routePath}`, routePath], ...handlers);
-    const del = (routePath, ...handlers) => app.delete([`/api${routePath}`, routePath], ...handlers);
     get('/printer/config', async (_req, res) => {
         try {
             res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=600, stale-while-revalidate=1800');

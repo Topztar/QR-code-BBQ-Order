@@ -82,9 +82,11 @@ function validateReservationPayload(body) {
         return { isValid: false, error: '請輸入有效的預約聯絡人姓名 (Missing customerName)' };
     }
     const phone = sanitizeString(body.phone, 30);
-    const phoneDigits = phone.replace(/\D/g, '');
-    if (!phone || phoneDigits.length < 7 || phoneDigits.length > 15) {
-        return { isValid: false, error: '請輸入有效的電話號碼 (7-15 digits phone number required)' };
+    const phoneDigits = phone.replace(/\D/g, '').slice(0, 10);
+    const isMobile = /^09\d{8}$/.test(phoneDigits);
+    const isLandline = /^0[2-8]\d{7,8}$/.test(phoneDigits);
+    if (!phone || (!isMobile && !isLandline)) {
+        return { isValid: false, error: '請輸入有效的台灣電話號碼：手機需為10位數（09開頭），市話需為9至10位數（02~08開頭）' };
     }
     const guestCount = Number(body.guestCount);
     if (!Number.isFinite(guestCount) || guestCount < 1 || guestCount > 100 || !Number.isInteger(guestCount)) {

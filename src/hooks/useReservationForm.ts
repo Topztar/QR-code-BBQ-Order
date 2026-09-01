@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Reservation, TableConfig } from '../types';
 import { generateReservationNo } from '../components/manager/ManagerDashboardUtils';
+import { sanitizePhoneDigits, isValidTaiwanPhone, TAIWAN_PHONE_ERROR_MSG } from '../utils/phoneValidator';
 
 interface UseReservationFormProps {
   tables: TableConfig[];
@@ -203,12 +204,10 @@ export function useReservationForm({
       setResPhoneError(true);
       return;
     }
-    const cleanDigits = rawPhone.replace(/\D/g, '');
-    const isMobile = /^09\d{8}$/.test(cleanDigits);
-    const isLandline = /^0[2-8]\d{7,8}$/.test(cleanDigits);
-    if (!isMobile && !isLandline) {
+    const cleanDigits = sanitizePhoneDigits(rawPhone, 10);
+    if (!isValidTaiwanPhone(cleanDigits)) {
       setResPhoneError(true);
-      const errMsg = '聯絡電話格式不正確！手機號碼需為10位數（以09開頭），市話需為9至10位數（以02~08開頭），例如：0912-345-678 或 02-2345-6789，請確認並重新輸入。';
+      const errMsg = `聯絡電話格式不正確！${TAIWAN_PHONE_ERROR_MSG}例如：0912345678 或 0223456789。`;
       setResError(errMsg);
       window.alert(`⚠️ 格式錯誤 / Invalid Format\n\n${errMsg}`);
       return;

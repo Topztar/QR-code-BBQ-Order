@@ -2,6 +2,7 @@ import { apiFetch, getAuthHeader } from "../lib/api";
 import React, { Component, useState, useEffect, useMemo, useCallback } from 'react';
 import { Ingredient, Language, Category, TableConfig, Order, OrderStatus, Reservation } from '../types';
 import { getLocalizedText } from '../utils/i18n';
+import { sanitizePhoneDigits, isValidTaiwanPhone, TAIWAN_PHONE_ERROR_MSG } from '../utils/phoneValidator';
 import { AlertTriangle, Sparkles, Coins, Trash2, Plus, Download, Check, Minus, Printer } from 'lucide-react';
 import { db, isFirebaseSyncEnabled } from '../lib/firebase';
 import { safeStorage } from '../lib/safeStorage';
@@ -3202,12 +3203,10 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
       setResPhoneError(true);
       return;
     }
-    const cleanDigits = rawPhone.replace(/\D/g, '');
-    const isMobile = /^09\d{8}$/.test(cleanDigits);
-    const isLandline = /^0[2-8]\d{7,8}$/.test(cleanDigits);
-    if (!isMobile && !isLandline) {
+    const cleanDigits = sanitizePhoneDigits(rawPhone, 10);
+    if (!isValidTaiwanPhone(cleanDigits)) {
       setResPhoneError(true);
-      const errMsg = '聯絡電話格式不正確！手機號碼需為10位數（以09開頭），市話需為9至10位數（以02~08開頭），例如：0912-345-678 或 02-2345-6789，請確認並重新輸入。';
+      const errMsg = `聯絡電話格式不正確！${TAIWAN_PHONE_ERROR_MSG}例如：0912345678 或 0223456789。`;
       setResError(errMsg);
       window.alert(`⚠️ 格式錯誤 / Invalid Format\n\n${errMsg}`);
       return;
@@ -3456,118 +3455,27 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
           minSpend={minSpend}
           isOpen={isOpen}
           handleManualOpenDrawer={handleManualOpenDrawer}
-          handleCashierAddMenuItem={handleCashierAddMenuItem}
-          handleCombinedQtyChange={handleCombinedQtyChange}
-          handleCombinedRemoveItem={handleCombinedRemoveItem}
           handleTableMouseDown={handleTableMouseDown}
           handleTableTouchStart={handleTableTouchStart}
           handleFineTunePosition={handleFineTunePosition}
           triggerEditTableMode={triggerEditTableMode}
           triggerAddReservationMode={triggerAddReservationMode}
           triggerEditReservationMode={triggerEditReservationMode}
-          filteredCashierOrders={filteredCashierOrders}
-          activeTakeoutOrders={activeTakeoutOrders}
-          cashierSelectedOrder={cashierSelectedOrder}
-          cashierCandidateOrders={cashierCandidateOrders}
-          cashierMergedOrders={cashierMergedOrders}
-          cashierCalculatedTotals={cashierCalculatedTotals}
-          getPanelWidthClass={getPanelWidthClass}
-          localTablePositions={localTablePositions}
-          selectedCashierOrderId={selectedCashierOrderId}
-          cashierListFilter={cashierListFilter}
-          cashierCheckoutScope={cashierCheckoutScope}
-          cashierDiscountType={cashierDiscountType}
-          cashierDiscountFlat={cashierDiscountFlat}
-          cashierDiscountRate={cashierDiscountRate}
-          cashierSurchargeType={cashierSurchargeType}
-          cashierSurchargeFlat={cashierSurchargeFlat}
-          cashierSurchargeRate={cashierSurchargeRate}
-          cashierPaymentMethod={cashierPaymentMethod}
-          cashierCashReceived={cashierCashReceived}
-          cashierCashChannel={cashierCashChannel}
-          cashierSelectedMergeOrderIds={cashierSelectedMergeOrderIds}
-          cashierPanelWidth={cashierPanelWidth}
-          isCashierWidthAuto={isCashierWidthAuto}
-          isAdjustingDiscount={isAdjustingDiscount}
-          isAdjustingSurcharge={isAdjustingSurcharge}
-          cashierNewItemInput={cashierNewItemInput}
-          takeoutDetailModalOrder={takeoutDetailModalOrder}
-          simulatedElapsedOrders={simulatedElapsedOrders}
-          copiedTakeoutPhone={copiedTakeoutPhone}
-          copiedGoogleLinkNotice={copiedGoogleLinkNotice}
-          batchSuccessMessage={batchSuccessMessage}
-          isBatchProcessing={isBatchProcessing}
-          selectedResIds={selectedResIds}
-          selectedCalendarStatusFilter={selectedCalendarStatusFilter}
-          selectedFineTuneTableId={selectedFineTuneTableId}
-          showCheckoutConfirm={showCheckoutConfirm}
-          tableLayoutMode={tableLayoutMode}
-          gridSize={gridSize}
-          snapToGrid={snapToGrid}
-          isTableLayoutLocked={isTableLayoutLocked}
-          isTableFormOpen={isTableFormOpen}
-          editingTableObj={editingTableObj}
-          tableIdInput={tableIdInput}
-          tableQrUrlInput={tableQrUrlInput}
-          tableMaxCapacityInput={tableMaxCapacityInput}
-          tableError={tableError}
-          tableSuccess={tableSuccess}
-          tableToDeleteId={tableToDeleteId}
-          reservationToDeleteId={reservationToDeleteId}
-          editingOrderTableId={editingOrderTableId}
-          editingOrderTableValue={editingOrderTableValue}
-          setSelectedCashierOrderId={setSelectedCashierOrderId}
-          setCashierListFilter={setCashierListFilter}
-          setCashierCheckoutScope={setCashierCheckoutScope}
-          setCashierDiscountType={setCashierDiscountType}
-          setCashierDiscountFlat={setCashierDiscountFlat}
-          setCashierDiscountRate={setCashierDiscountRate}
-          setCashierSurchargeType={setCashierSurchargeType}
-          setCashierSurchargeFlat={setCashierSurchargeFlat}
-          setCashierSurchargeRate={setCashierSurchargeRate}
-          setCashierPaymentMethod={setCashierPaymentMethod}
-          setCashierCashReceived={setCashierCashReceived}
-          setCashierCashChannel={setCashierCashChannel}
-          setCashierSelectedMergeOrderIds={setCashierSelectedMergeOrderIds}
-          setCashierPanelWidth={setCashierPanelWidth}
-          setIsCashierWidthAuto={setIsCashierWidthAuto}
-          setIsAdjustingDiscount={setIsAdjustingDiscount}
-          setIsAdjustingSurcharge={setIsAdjustingSurcharge}
-          setTakeoutDetailModalOrder={setTakeoutDetailModalOrder}
-          setSimulatedElapsedOrders={setSimulatedElapsedOrders}
-          setCopiedTakeoutPhone={setCopiedTakeoutPhone}
-          setCopiedGoogleLinkNotice={setCopiedGoogleLinkNotice}
-          setBatchSuccessMessage={setBatchSuccessMessage}
-          setIsBatchProcessing={setIsBatchProcessing}
-          setSelectedResIds={setSelectedResIds}
-          setSelectedCalendarStatusFilter={setSelectedCalendarStatusFilter}
-          setConfirmActionModal={setConfirmActionModal}
-          setSelectedFineTuneTableId={setSelectedFineTuneTableId}
-          setShowCheckoutConfirm={setShowCheckoutConfirm}
-          setTableLayoutMode={setTableLayoutMode}
-          setGridSize={setGridSize}
-          setSnapToGrid={setSnapToGrid}
-          setIsTableLayoutLocked={setIsTableLayoutLocked}
-          setIsTableFormOpen={setIsTableFormOpen}
-          setEditingTableObj={setEditingTableObj}
-          setTableIdInput={setTableIdInput}
-          setTableQrUrlInput={setTableQrUrlInput}
-          setTableMaxCapacityInput={setTableMaxCapacityInput}
-          setTableError={setTableError}
-          setTableSuccess={setTableSuccess}
-          setTableToDeleteId={setTableToDeleteId}
-          setReservationToDeleteId={setReservationToDeleteId}
-          setEditingOrderTableId={setEditingOrderTableId}
-          setEditingOrderTableValue={setEditingOrderTableValue}
           onUpdateTableNumber={onUpdateTableNumber}
           onDeleteOrder={onDeleteOrder}
           onUpdateTableStatus={onUpdateTableStatus}
           onEditReservation={onEditReservation}
           onDeleteReservation={onDeleteReservation}
           onDeleteTable={onDeleteTable}
-          confirmActionModal={confirmActionModal}
+          onUpdateOrderItems={onUpdateOrderItems}
+          onPayOrder={onPayOrder}
+          getPanelWidthClass={getPanelWidthClass}
+          localTablePositions={localTablePositions}
+          staffPin={staffPin}
           selectedPendingRes={null}
           setSelectedPendingRes={() => {}}
+          confirmActionModal={confirmActionModal}
+          setConfirmActionModal={setConfirmActionModal}
         />
       )}
 
@@ -5462,21 +5370,25 @@ ${customerDetails}
                     <input type="text" required value={resNameInput} onChange={(e) => setResNameInput(e.target.value)} placeholder="例如：林大明 先生" className="w-full bg-[#1e1e1e] border border-white/10 rounded px-2.5 py-1.5 text-white" />
                   </div>
                   <div className="space-y-1">
-                    <span className="text-zinc-500 font-sans block text-[10px]">連絡電話 Phone *</span>
+                    <span className="text-zinc-500 font-sans block text-[10px]">連絡電話 Phone * (僅限阿拉伯數字)</span>
                     <input
                       type="tel"
                       required
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      maxLength={10}
                       value={resPhoneInput}
                       onChange={(e) => {
-                        setResPhoneInput(e.target.value);
+                        const clean = sanitizePhoneDigits(e.target.value, 10);
+                        setResPhoneInput(clean);
                         setResPhoneError(false);
                       }}
-                      placeholder="例如：0912-345-678 或 02-2345-6789"
+                      placeholder="例如：0912345678 或 0223456789"
                       className={`w-full bg-[#1e1e1e] border ${
                         resPhoneError
                           ? 'border-red-500 focus:border-red-500 ring-2 ring-red-500/20'
                           : 'border-white/10 focus:border-[#E5B453]'
-                      } rounded px-2.5 py-1.5 text-white outline-none transition-all`}
+                      } rounded px-2.5 py-1.5 text-white outline-none transition-all font-mono`}
                     />
                   </div>
                 </div>

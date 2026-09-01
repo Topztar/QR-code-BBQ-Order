@@ -336,7 +336,6 @@ export function OrderDataProvider({
     }, PROBE_INTERVAL_MS);
 
     return () => clearInterval(probeTimer);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [offlineQueue.length, isSyncing]);
 
   // Firestore Realtime Orders listener & Fallback API Polling

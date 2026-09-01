@@ -1,6 +1,7 @@
 import React from 'react';
 import { TableConfig } from '../../types';
 import { Calendar, Check, AlertTriangle, Loader2 } from 'lucide-react';
+import { sanitizePhoneDigits } from '../../utils/phoneValidator';
 
 export interface CustomerReservationModalProps {
   showReservationModal: boolean;
@@ -163,18 +164,22 @@ export const CustomerReservationModal: React.FC<CustomerReservationModalProps> =
                   <label className="text-zinc-300 font-bold text-xs flex items-center justify-between">
                     <span>📞 連絡電話 Phone *</span>
                     {resPhoneError && (
-                      <span className="text-[10px] text-rose-400 font-bold">格式不符合長度或規則</span>
+                      <span className="text-[10px] text-rose-400 font-bold">需為台灣手機(09開頭10碼)或市話(9~10碼)</span>
                     )}
                   </label>
                   <input
                     type="tel"
                     required
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={10}
                     value={resPhone}
                     onChange={(e) => {
-                      setResPhone(e.target.value);
+                      const clean = sanitizePhoneDigits(e.target.value, 10);
+                      setResPhone(clean);
                       if (resPhoneError) setResPhoneError(false);
                     }}
-                    placeholder="例如：0912-345-678 或 02-2345-6789"
+                    placeholder="例如：0912345678 或 0223456789"
                     className={`w-full bg-[#1c1c1c] border ${
                       resPhoneError
                         ? 'border-rose-500 focus:border-rose-400'
@@ -182,7 +187,7 @@ export const CustomerReservationModal: React.FC<CustomerReservationModalProps> =
                     } rounded-xl px-3 py-2 text-white outline-none font-medium transition font-mono`}
                   />
                   <span className="text-[10px] text-zinc-400 block leading-tight">
-                    手機需 10 位 (09xx) / 市話需 9~10 位 (02~08)
+                    僅限輸入阿拉伯數字：手機需 10 位 (09開頭) / 市話需 9~10 位 (02~08開頭)
                   </span>
                 </div>
               </div>

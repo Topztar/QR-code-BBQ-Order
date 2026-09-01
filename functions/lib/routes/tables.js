@@ -2,10 +2,8 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerTablesRoutes = registerTablesRoutes;
 const validators_1 = require("../validators");
-const helpers_1 = require("../helpers");
 function registerTablesRoutes(app, ctx) {
-    const { db, storageBucket, requireStaffAuth, createRateLimiter, sendErrorResponse } = ctx;
-    const getCachedSettings = (0, helpers_1.createGetCachedSettings)(db);
+    const { db, requireStaffAuth, createRateLimiter, sendErrorResponse } = ctx;
     const reservationRateLimiter = createRateLimiter(15, 60 * 1000, '預約提交');
     const get = (routePath, ...handlers) => app.get([`/api${routePath}`, routePath], ...handlers);
     const post = (routePath, ...handlers) => app.post([`/api${routePath}`, routePath], ...handlers);

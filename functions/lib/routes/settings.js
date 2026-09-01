@@ -5,7 +5,7 @@ const firestore_1 = require("firebase-admin/firestore");
 const auth_1 = require("../auth");
 const helpers_1 = require("../helpers");
 function registerSettingsRoutes(app, ctx) {
-    const { db, storageBucket, requireStaffAuth, createRateLimiter, sendErrorResponse } = ctx;
+    const { db, requireStaffAuth, sendErrorResponse } = ctx;
     const getCachedSettings = (0, helpers_1.createGetCachedSettings)(db);
     const get = (routePath, ...handlers) => app.get([`/api${routePath}`, routePath], ...handlers);
     const post = (routePath, ...handlers) => app.post([`/api${routePath}`, routePath], ...handlers);

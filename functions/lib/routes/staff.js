@@ -37,14 +37,11 @@ exports.registerStaffRoutes = registerStaffRoutes;
 const firestore_1 = require("firebase-admin/firestore");
 const crypto = __importStar(require("crypto"));
 const auth_1 = require("../auth");
-const helpers_1 = require("../helpers");
 function registerStaffRoutes(app, ctx) {
-    const { db, storageBucket, requireStaffAuth, createRateLimiter, sendErrorResponse } = ctx;
-    const getCachedSettings = (0, helpers_1.createGetCachedSettings)(db);
+    const { db, requireStaffAuth, sendErrorResponse } = ctx;
     const get = (routePath, ...handlers) => app.get([`/api${routePath}`, routePath], ...handlers);
     const post = (routePath, ...handlers) => app.post([`/api${routePath}`, routePath], ...handlers);
     const put = (routePath, ...handlers) => app.put([`/api${routePath}`, routePath], ...handlers);
-    const del = (routePath, ...handlers) => app.delete([`/api${routePath}`, routePath], ...handlers);
     get('/push-notifications', async (_req, res) => {
         try {
             res.setHeader('Cache-Control', 'private, no-cache, no-store, must-revalidate');
