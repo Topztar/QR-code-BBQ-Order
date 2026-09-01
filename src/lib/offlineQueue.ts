@@ -8,10 +8,22 @@ export interface QueuedRequest {
   body: string;        // Stringified request payload
   description: string; // User-facing descriptive title (e.g. "送出 3 桌 5 份餐點" or "變更 2 號訂單為製作中")
   timestamp: number;   // Creation time
-  retryCount?: number; // Attempt tracker for retry limits
+  retryCount?: number; // Attempt tracker for retry limits — persisted across page reloads
 }
 
 const STORAGE_KEY = 'sabay_offline_sync_queue_v1';
+
+// ─── Phase A: Exponential Backoff Helper ─────────────────────────────────────
+// Delays retry attempts using capped exponential backoff to prevent
+// Thundering Herd when the server or network is temporarily unavailable.
+// Formula: min(1000ms × 2^(retryCount-1), MAX_BACKOFF_MS)
+// retryCount=1 → 1s | 2 → 2s | 3 → 4s | 4 → 8s | 5+ → capped at 30s
+const MAX_BACKOFF_MS = 30_000;
+const sleep = (ms: number): Promise<void> =>
+  new Promise(resolve => setTimeout(resolve, ms));
+const calcBackoffMs = (retryCount: number): number =>
+  Math.min(1000 * 2 ** (retryCount - 1), MAX_BACKOFF_MS);
+// ─────────────────────────────────────────────────────────────────────────────
 
 // Get current request queue from safeStorage
 export function getOfflineQueue(): QueuedRequest[] {
@@ -130,6 +142,8 @@ async function executeRequest(item: QueuedRequest): Promise<Response> {
 }
 
 // Process all outstanding items in the queue in chronological order (FIFO)
+// Phase A: Implements exponential backoff so a 5xx or network failure no longer
+// halts the entire batch — subsequent items continue after a back-off delay.
 export async function processOfflineQueue(onProgress?: (msg: string) => void): Promise<{ successCount: number; failureCount: number }> {
   const queue = getOfflineQueue();
   if (queue.length === 0) {
@@ -153,13 +167,17 @@ export async function processOfflineQueue(onProgress?: (msg: string) => void): P
     const item = queue[i];
 
     if (processedIds.includes(item.id)) {
-       const idx = remaining.findIndex(r => r.id === item.id);
-       if (idx > -1) remaining.splice(idx, 1);
-       saveOfflineQueue([...remaining]);
-       continue;
+      const idx = remaining.findIndex(r => r.id === item.id);
+      if (idx > -1) remaining.splice(idx, 1);
+      saveOfflineQueue([...remaining]);
+      continue;
     }
 
+    // Increment and PERSIST retryCount so it survives page reloads (fixes G-5)
     item.retryCount = (item.retryCount || 0) + 1;
+    const remIdx = remaining.findIndex(r => r.id === item.id);
+    if (remIdx > -1) remaining[remIdx] = { ...remaining[remIdx], retryCount: item.retryCount };
+    saveOfflineQueue([...remaining]);
 
     if (onProgress) {
       onProgress(`正在同步 [${i + 1}/${queue.length}]: ${item.description}...`);
@@ -167,9 +185,10 @@ export async function processOfflineQueue(onProgress?: (msg: string) => void): P
 
     try {
       const response = await executeRequest(item);
+
       if (response.ok) {
         successCount++;
-        
+
         processedIds.push(item.id);
         if (processedIds.length > 500) processedIds = processedIds.slice(-500);
         try { safeStorage.setItem(PROCESSED_QUEUE_KEY, JSON.stringify(processedIds)); } catch(e) {}
@@ -179,8 +198,8 @@ export async function processOfflineQueue(onProgress?: (msg: string) => void): P
         if (idx > -1) remaining.splice(idx, 1);
         saveOfflineQueue([...remaining]);
         window.dispatchEvent(new CustomEvent('offline_queue_changed', { detail: [...remaining] }));
-        
-        // If this was an order submission, check if we should add it to local order ID tracker
+
+        // If this was an order submission, inject the server-assigned order ID into local tracker
         if (item.url === '/api/orders' && item.method === 'POST') {
           try {
             const completedOrder = await response.json();
@@ -196,31 +215,61 @@ export async function processOfflineQueue(onProgress?: (msg: string) => void): P
             console.warn('[OfflineQueue] Failed to parse offline order response ID injection:', err);
           }
         }
+
       } else {
-        // Server rejected or had internal error (e.g. 400 Bad Request, 500)
+        // Server rejected the request (4xx client error or 5xx server error)
         console.error(`[OfflineQueue] Server rejected request for ${item.url}:`, response.status);
         failureCount++;
 
-        // If it is a terminal client error (400-499) or retry limit exceeded (>= 3), discard request to prevent queue deadlock
         if ((response.status >= 400 && response.status < 500) || item.retryCount >= 3) {
+          // Terminal client error (400–499) or retry cap reached — discard to prevent deadlock
           console.warn(`[OfflineQueue] Discarding request (${item.id}) status: ${response.status}, retries: ${item.retryCount}`);
           const idx = remaining.findIndex(r => r.id === item.id);
           if (idx > -1) remaining.splice(idx, 1);
           saveOfflineQueue([...remaining]);
           window.dispatchEvent(new CustomEvent('offline_queue_changed', { detail: [...remaining] }));
-          continue; // Proceed with the next item in the queue
+          continue; // Proceed to next item
         }
 
-        // Save updated retry counts
-        saveOfflineQueue([...remaining]);
-        break; // Stop processing further items for 5xx server errors to maintain sequence integrity
+        // Phase A — 5xx server error: apply exponential back-off then CONTINUE
+        // (previously was `break` which stopped the entire batch)
+        const backoffMs = calcBackoffMs(item.retryCount);
+        console.warn(
+          `[OfflineQueue] 5xx error on "${item.description}". ` +
+          `Retry ${item.retryCount}/3 — backing off ${backoffMs}ms before continuing batch.`
+        );
+        if (onProgress) onProgress(`⏳ 伺服器暫時錯誤，退避 ${backoffMs / 1000}s 後繼續...`);
+        await sleep(backoffMs);
+        // continue to the next item — do NOT break the whole batch
+        continue;
       }
+
     } catch (error) {
-      // Network loss / CORS issue / offline timeout
-      console.warn(`[OfflineQueue] Network request failed for ${item.description}:`, error);
+      // Network loss / CORS / AbortError — apply backoff then CONTINUE
+      // (previously was `break` which stopped the entire batch)
+      console.warn(`[OfflineQueue] Network request failed for "${item.description}":`, error);
       failureCount++;
+
+      if (item.retryCount >= 3) {
+        // Retry cap reached — discard this item
+        console.warn(`[OfflineQueue] Discarding request (${item.id}) after ${item.retryCount} network failures.`);
+        const idx = remaining.findIndex(r => r.id === item.id);
+        if (idx > -1) remaining.splice(idx, 1);
+        saveOfflineQueue([...remaining]);
+        window.dispatchEvent(new CustomEvent('offline_queue_changed', { detail: [...remaining] }));
+        continue;
+      }
+
+      const backoffMs = calcBackoffMs(item.retryCount);
+      console.warn(
+        `[OfflineQueue] Network failure on "${item.description}". ` +
+        `Retry ${item.retryCount}/3 — backing off ${backoffMs}ms before continuing batch.`
+      );
+      if (onProgress) onProgress(`📡 網路中斷，退避 ${backoffMs / 1000}s 後繼續...`);
       saveOfflineQueue([...remaining]);
-      break; // Stop synchronization batch immediately upon network failure
+      await sleep(backoffMs);
+      // continue to the next item — do NOT break the whole batch
+      continue;
     }
   }
 

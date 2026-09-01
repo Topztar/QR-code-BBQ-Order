@@ -1725,35 +1725,54 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     }
 
     if (cashierPaymentMethod === 'member') {
+      let vipEmail = '';
       const dbStr = localStorage.getItem('google-members-database');
       if (dbStr) {
         try {
           const db = JSON.parse(dbStr);
-          let vipEmail = '';
           if (cashierSelectedOrder?.customerName) {
             const matched = db.find((m: any) => m.name === cashierSelectedOrder.customerName);
-            if (matched) {
-              vipEmail = matched.email;
-            }
-          }
-          const userIndex = vipEmail ? db.findIndex((m: any) => m.email === vipEmail) : -1;
-          if (userIndex >= 0) {
-            const currentBal = db[userIndex].balance || 0;
-            if (currentBal < cashierCalculatedTotals.total) {
-              alert(`⚠️ 會員餘額不足 (剩餘: NT$ ${currentBal})！無法進行扣底結帳，請先在右側點選【儲值增額】。`);
-              return;
-            }
-            // Deduct
-            db[userIndex].balance = currentBal - cashierCalculatedTotals.total;
-            localStorage.setItem('google-members-database', JSON.stringify(db));
-            window.dispatchEvent(new Event('local-points-updated'));
-          } else {
-            alert(`⚠️ 找不到匹配此結帳單的會員，無法使用會員餘額付款！`);
-            return;
+            if (matched) vipEmail = matched.email;
           }
         } catch (e) {
           console.error(e);
         }
+      }
+
+      if (!vipEmail) {
+        alert('⚠️ 找不到匹配此結帳單的會員帳戶，無法使用會員餘額付款！');
+        return;
+      }
+
+      try {
+        const deductRes = await fetch(`/api/members/${encodeURIComponent(vipEmail)}/deduct`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ amount: cashierCalculatedTotals.total }),
+        });
+
+        const deductData = await deductRes.json();
+        if (!deductRes.ok || !deductData.member) {
+          alert(`⚠️ 會員餘額扣抵失敗：${deductData.error || '餘額不足或系統異常'}！`);
+          return;
+        }
+
+        // Sync back to localStorage cache
+        if (dbStr) {
+          try {
+            const db = JSON.parse(dbStr);
+            const userIndex = db.findIndex((m: any) => m.email === vipEmail);
+            if (userIndex >= 0) {
+              db[userIndex].balance = deductData.member.balance;
+              db[userIndex].points = deductData.member.points;
+              localStorage.setItem('google-members-database', JSON.stringify(db));
+            }
+          } catch (_ignore) {}
+        }
+        window.dispatchEvent(new Event('local-points-updated'));
+      } catch (err) {
+        alert(`⚠️ 連線伺服器失敗，無法完成會員餘額扣抵：${err}`);
+        return;
       }
     }
     

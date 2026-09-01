@@ -111,6 +111,7 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
     announceOrderNotification,
     playOrderChimeSound,
     playStatusBeepSound,
+    playOvertimeBeepSound,
     formatOrderAnnouncementText,
     stopSpeech,
   } = useKdsAudio();
@@ -259,6 +260,30 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
       }
     });
   }, [orders, ttsEnabled, autoScrollEnabled, playOrderChimeSound, formatOrderAnnouncementText, announceOrderNotification]);
+
+  // Track Severely Overtime Orders (> 30 mins)
+  const [overtimeCount, setOvertimeCount] = useState(0);
+  const lastOvertimeBeepRef = useRef<number>(0);
+
+  useEffect(() => {
+    // Only check active orders
+    const lateCount = orders.filter((o) => {
+      if (o.status !== 'pending' && o.status !== 'preparing') return false;
+      const waitMins = (Date.now() - new Date(o.createdAt).getTime()) / 60000;
+      return waitMins >= 30; // 30 mins threshold
+    }).length;
+
+    setOvertimeCount(lateCount);
+
+    if (lateCount > 0) {
+      const now = Date.now();
+      // Cooldown: 60 seconds
+      if (now - lastOvertimeBeepRef.current > 60000) {
+        lastOvertimeBeepRef.current = now;
+        playOvertimeBeepSound();
+      }
+    }
+  }, [orders, playOvertimeBeepSound]);
 
   // Printer Ping Status
   const [pingState, setPingState] = useState<{
@@ -473,12 +498,12 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
     const orderTime = new Date(dateStr).getTime();
     const diffMins = Math.floor((Date.now() - orderTime) / 60000);
 
-    if (diffMins < 5) {
+    if (diffMins < 20) {
       return { text: '剛下單 (New)', style: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' };
-    } else if (diffMins < 15) {
+    } else if (diffMins < 30) {
       return { text: '備餐中 (Cooking)', style: 'bg-amber-500/10 text-[#E5B453] border-amber-500/20' };
     } else {
-      return { text: '催促！(Rush)', style: 'bg-red-500/15 text-red-400 border-red-500/30 animate-pulse' };
+      return { text: '嚴重超時！(Overtime)', style: 'bg-red-500/15 text-red-400 border-red-500/30 animate-pulse' };
     }
   }, []);
 
@@ -489,9 +514,9 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
     const secs = diffSecs % 60;
 
     let style = 'bg-white/5 text-zinc-300 border-white/10';
-    if (mins >= 20) {
+    if (mins >= 30) {
       style = 'bg-red-500/20 text-red-400 border-red-500/40 animate-pulse font-extrabold';
-    } else if (mins >= 10) {
+    } else if (mins >= 20) {
       style = 'bg-amber-500/15 text-amber-300 border-amber-500/30 font-bold';
     }
 
@@ -532,12 +557,10 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
 
   const isOrderLateForPrepTime = (order: Order) => {
     const currentWaitMins = (Date.now() - new Date(order.createdAt).getTime()) / 60000;
-    const avgPrepMins = 12;
-    const limitMins = avgPrepMins * 1.5;
+    const limitMins = 30; // updated to 30 mins fixed threshold
     return {
       isLate: currentWaitMins > limitMins && order.status !== 'completed' && order.status !== 'cancelled',
       currentWaitMins,
-      avgPrepMins,
       limitMins,
     };
   };
@@ -679,6 +702,24 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
 
       {/* Main Culinary Tickets Workspace */}
       <div className="xl:col-span-3 space-y-5" ref={kdsHeaderRef}>
+        
+        {/* Global Overtime Alert Banner */}
+        {overtimeCount > 0 && (
+          <div className="bg-red-950/80 border-2 border-red-500 rounded-xl p-3 flex items-center justify-between shadow-[0_0_20px_rgba(239,68,68,0.4)] animate-red-breathing-glow">
+            <div className="flex items-center gap-3">
+              <span className="text-3xl animate-bounce">🚨</span>
+              <div>
+                <h3 className="text-red-400 font-black text-lg uppercase tracking-widest text-shadow-sm">
+                  警告：發生嚴重超時出餐 (Overtime Alert)
+                </h3>
+                <p className="text-red-200 text-sm font-bold font-sans">
+                  目前有 <span className="text-white text-base bg-red-600 px-2 py-0.5 rounded-full mx-1">{overtimeCount}</span> 筆訂單等待超過 30 分鐘，請全體廚房人員優先集中處理！
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Header Controls & Filter */}
         <KdsHeader
           searchQuery={searchQuery}

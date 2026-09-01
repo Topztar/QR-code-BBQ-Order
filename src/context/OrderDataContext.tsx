@@ -311,11 +311,33 @@ export function OrderDataProvider({
     }
   };
 
+  // Trigger sync immediately when network comes back online with pending items
   useEffect(() => {
     if (isNetworkOnline && offlineQueue.length > 0) {
       handleForceSync();
     }
   }, [isNetworkOnline, offlineQueue.length]);
+
+  // Phase B ─ Background Probe Timer (解決 G-1 / G-4)
+  // When the offline queue is non-empty, poll every 30s to attempt sync even if
+  // the 'online' event never re-fires (e.g. captive portals, weak Wi-Fi signal).
+  // The timer auto-clears when the queue is drained or a sync is already running.
+  const PROBE_INTERVAL_MS = 30_000;
+  useEffect(() => {
+    if (offlineQueue.length === 0) return; // No work — skip starting the timer
+
+    const probeTimer = setInterval(() => {
+      // Re-read directly from storage to get the freshest count (avoids stale closure)
+      const currentQueue = getOfflineQueue();
+      if (currentQueue.length > 0 && !isSyncing) {
+        console.log(`[OfflineQueue] Background probe: ${currentQueue.length} items pending — triggering auto-sync.`);
+        handleForceSync();
+      }
+    }, PROBE_INTERVAL_MS);
+
+    return () => clearInterval(probeTimer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [offlineQueue.length, isSyncing]);
 
   // Firestore Realtime Orders listener & Fallback API Polling
   useEffect(() => {

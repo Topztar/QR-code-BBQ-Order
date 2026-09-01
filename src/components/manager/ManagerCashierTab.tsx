@@ -193,6 +193,55 @@ export const ManagerCashierTab: React.FC<ManagerCashierTabProps> = (props) => {
     setEditingOrderTableValue,
   } = props;
 
+  // ─── Tier B: Google Identity Protection ───────────────────────────────────
+  const [cashierMemberData, setCashierMemberData] = React.useState<any>(null);
+  const [cashierMemberLoading, setCashierMemberLoading] = React.useState(false);
+
+  const fetchMemberData = React.useCallback(async (customerName: string) => {
+    try {
+      const dbStr = localStorage.getItem('google-members-database');
+      if (dbStr) {
+        const db = JSON.parse(dbStr);
+        const cached = db.find((m: any) => m.name === customerName);
+        if (cached?.email) {
+          setCashierMemberLoading(true);
+          try {
+            const res = await fetch(`/api/members/${encodeURIComponent(cached.email)}`);
+            if (res.ok) {
+              const data = await res.json();
+              setCashierMemberData(data);
+              const idx = db.findIndex((m: any) => m.email === cached.email);
+              if (idx >= 0) { db[idx].balance = data.balance; db[idx].points = data.points; }
+              localStorage.setItem('google-members-database', JSON.stringify(db));
+              return;
+            }
+          } finally {
+            setCashierMemberLoading(false);
+          }
+          setCashierMemberData(cached);
+          await fetch('/api/members', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: cached.email, name: cached.name, avatar: cached.avatar,
+              balance: cached.balance || 0, points: cached.points || 0 }),
+          });
+          return;
+        }
+      }
+    } catch (e) { console.error('[Members] fetchMemberData error:', e); }
+    setCashierMemberData(null);
+  }, []);
+
+  React.useEffect(() => {
+    if (cashierPaymentMethod === 'member' && cashierSelectedOrder?.customerName) {
+      fetchMemberData(cashierSelectedOrder.customerName);
+    } else {
+      setCashierMemberData(null);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cashierPaymentMethod, cashierSelectedOrder?.id]);
+  // ─────────────────────────────────────────────────────────────────────────
+
   return (
         <div className="space-y-6 animate-fadeIn" id="subtab-section-cashier">
           {/* Top Banner Alert */}
@@ -1940,108 +1989,137 @@ export const ManagerCashierTab: React.FC<ManagerCashierTabProps> = (props) => {
                             </div>
                           </div>
 
+                          {/* Member Data Panel — Tier B: balance verified from backend */}
                           {(() => {
-                            const dbStr = localStorage.getItem('google-members-database');
-                            let matchedMember = null;
-                            let db: any[] = [];
-                            if (dbStr) {
+                            let matchedMember: any = cashierMemberData;
+                            if (!matchedMember && cashierSelectedOrder?.customerName) {
                               try {
-                                db = JSON.parse(dbStr);
-                                if (cashierSelectedOrder?.customerName) {
-                                  matchedMember = db.find((m: any) => m.name === cashierSelectedOrder.customerName);
+                                const lsStr = localStorage.getItem('google-members-database');
+                                if (lsStr) {
+                                  const lsDb = JSON.parse(lsStr);
+                                  matchedMember = lsDb.find((m: any) => m.name === cashierSelectedOrder.customerName) || null;
                                 }
-                              } catch (e) {
-                                console.error(e);
-                              }
+                              } catch (_e) { /* ignore */ }
                             }
 
-                            if (matchedMember) {
-                              const member = matchedMember;
-                              const hasEnough = member.balance >= cashierCalculatedTotals.total;
+                            if (cashierMemberLoading) {
                               return (
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                  {/* Left part: Member Balance Deduction Details */}
-                                  <div className="bg-black/40 border border-white/5 p-3 rounded-xl space-y-2.5">
-                                    <span className="text-[10px] text-blue-400 font-extrabold block uppercase tracking-wider">💳 餘額扣抵狀態</span>
-                                    <div className="space-y-2.5">
-                                      <div className="flex items-center space-x-2.5 bg-white/5 p-2 rounded-lg border border-white/5">
-                                        <img referrerPolicy="no-referrer" src={member.avatar || 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=150'} className="w-8 h-8 rounded-full object-cover border border-white/10" alt="" />
-                                        <div>
-                                          <p className="text-xs font-black text-white">{member.name}</p>
-                                          <p className="text-[9px] text-zinc-500 font-mono leading-none mt-0.5">{getMaskedEmail(member.email)}</p>
-                                        </div>
-                                      </div>
-                                      
-                                      <div className="grid grid-cols-2 gap-1.5 text-center">
-                                        <div className="bg-zinc-900 px-1.5 py-1 rounded border border-white/5">
-                                          <span className="text-[8px] text-zinc-500 block leading-none">當前帳存餘額</span>
-                                          <span className="text-xs font-mono font-bold text-emerald-400">NT$ {member.balance || 0}</span>
-                                        </div>
-                                        <div className="bg-zinc-900 px-1.5 py-1 rounded border border-white/5">
-                                          <span className="text-[8px] text-zinc-500 block leading-none">本次扣除金額</span>
-                                          <span className="text-xs font-mono font-bold text-rose-400">NT$ {cashierCalculatedTotals.total}</span>
-                                        </div>
-                                      </div>
-
-                                      <div className="flex items-center justify-between text-[11px] pt-1">
-                                        <span className="text-zinc-400">扣抵後剩餘：</span>
-                                        <span className="font-mono font-bold text-zinc-200">
-                                          NT$ {Math.max(0, (member.balance || 0) - cashierCalculatedTotals.total)}
-                                        </span>
-                                      </div>
-
-                                      {!hasEnough && (
-                                        <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-2 rounded text-[9px] font-bold">
-                                          ⚠️ 顧客儲值餘額不足！請先點擊右側進行【快捷現金增值】以補足差額扣抵。
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-
-                                  {/* Right part: Top up management */}
-                                  <div className="bg-black/40 border border-white/5 p-3 rounded-xl space-y-2.5">
-                                    <span className="text-[10px] text-zinc-300 font-extrabold block uppercase tracking-wider">💸 收銀台即時儲值 (Top-Up Engine)</span>
-                                    <p className="text-[9px] text-zinc-400 leading-normal">
-                                      顧客提供現場代收現金時，收銀員在此一鍵寫入儲值額：
-                                    </p>
-
-                                    <div className="grid grid-cols-2 gap-1.5">
-                                      {[
-                                        { amt: 500, lbl: '＋儲值 $500' },
-                                        { amt: 1000, lbl: '＋儲值 $1000' },
-                                        { amt: 2000, lbl: '＋儲值 $2000' },
-                                        { amt: 3000, lbl: '＋儲值 $3000' }
-                                      ].map((choice) => (
-                                        <button
-                                          key={`cashier-top-${choice.amt}`}
-                                          type="button"
-                                          onClick={() => {
-                                            const userIndex = db.findIndex((m: any) => m.email === member.email);
-                                            if (userIndex >= 0) {
-                                              db[userIndex].balance = (db[userIndex].balance || 0) + choice.amt;
-                                              localStorage.setItem('google-members-database', JSON.stringify(db));
-                                              window.dispatchEvent(new Event('local-points-updated'));
-                                              // Force state refresh
-                                              setCashierCashReceived(prev => prev + 1);
-                                              setTimeout(() => setCashierCashReceived(prev => prev - 1), 50);
-                                            }
-                                          }}
-                                          className="py-1.5 text-[10px] font-sans font-black border border-[#E5B453]/20 hover:border-[#E5B453] hover:bg-[#E5B453]/10 bg-zinc-900 text-white rounded-lg transition active:scale-95 cursor-pointer text-center"
-                                        >
-                                          {choice.lbl}
-                                        </button>
-                                      ))}
-                                    </div>
-                                  </div>
+                                <div className="bg-zinc-900/60 p-4 rounded-xl border border-white/5 text-center text-zinc-500 text-xs py-6 animate-pulse">
+                                  🔄 正在從後端驗證會員餘額...
                                 </div>
                               );
-                            } else {
+                            }
+
+                            if (!matchedMember) {
                               return (
                                 <div className="bg-zinc-900/60 p-4 rounded-xl border border-white/5 text-center text-zinc-500 text-xs py-6">
                                   ⚠️ 本點餐單尚未與任何 Google 會員帳戶綁定，無法使用儲值卡餘額付款。
                                 </div>
                               );
                             }
+
+                            const member = matchedMember;
+                            const hasEnough = member.balance >= cashierCalculatedTotals.total;
+                            return (
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                {/* Left: Balance Details */}
+                                <div className="bg-black/40 border border-white/5 p-3 rounded-xl space-y-2.5">
+                                  <span className="text-[10px] text-blue-400 font-extrabold block uppercase tracking-wider">💳 餘額扣抵狀態</span>
+                                  <div className="space-y-2.5">
+                                    <div className="flex items-center space-x-2.5 bg-white/5 p-2 rounded-lg border border-white/5">
+                                      <img referrerPolicy="no-referrer" src={member.avatar || 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=150'} className="w-8 h-8 rounded-full object-cover border border-white/10" alt="" />
+                                      <div>
+                                        <p className="text-xs font-black text-white">{member.name}</p>
+                                        <p className="text-[9px] text-zinc-500 font-mono leading-none mt-0.5">{getMaskedEmail(member.email)}</p>
+                                      </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-1.5 text-center">
+                                      <div className="bg-zinc-900 px-1.5 py-1 rounded border border-white/5">
+                                        <span className="text-[8px] text-zinc-500 block leading-none">當前帳存餘額</span>
+                                        <span className="text-xs font-mono font-bold text-emerald-400">NT$ {member.balance || 0}</span>
+                                      </div>
+                                      <div className="bg-zinc-900 px-1.5 py-1 rounded border border-white/5">
+                                        <span className="text-[8px] text-zinc-500 block leading-none">本次扣除金額</span>
+                                        <span className="text-xs font-mono font-bold text-rose-400">NT$ {cashierCalculatedTotals.total}</span>
+                                      </div>
+                                    </div>
+
+                                    <div className="flex items-center justify-between text-[11px] pt-1">
+                                      <span className="text-zinc-400">扣抵後剩餘：</span>
+                                      <span className="font-mono font-bold text-zinc-200">
+                                        NT$ {Math.max(0, (member.balance || 0) - cashierCalculatedTotals.total)}
+                                      </span>
+                                    </div>
+
+                                    {!hasEnough && (
+                                      <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-2 rounded text-[9px] font-bold">
+                                        ⚠️ 顧客儲值餘額不足！請先點擊右側進行【快捷現金增值】以補足差額扣抵。
+                                      </div>
+                                    )}
+                                    {/* Tier B: server-verified badge */}
+                                    {cashierMemberData && (
+                                      <div className="flex items-center gap-1.5 bg-emerald-500/5 border border-emerald-500/20 text-emerald-400 p-1.5 rounded text-[9px] font-bold">
+                                        🔒 後端已驗證餘額 (Server-Verified)
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Right: Top-up — calls backend API (Tier B) */}
+                                <div className="bg-black/40 border border-white/5 p-3 rounded-xl space-y-2.5">
+                                  <span className="text-[10px] text-zinc-300 font-extrabold block uppercase tracking-wider">💸 收銀台即時儲值 (Top-Up Engine)</span>
+                                  <p className="text-[9px] text-zinc-400 leading-normal">
+                                    顧客提供現場代收現金時，收銀員在此一鍵寫入儲值額：
+                                  </p>
+                                  <div className="grid grid-cols-2 gap-1.5">
+                                    {[
+                                      { amt: 500, lbl: '＋儲值 $500' },
+                                      { amt: 1000, lbl: '＋儲值 $1000' },
+                                      { amt: 2000, lbl: '＋儲值 $2000' },
+                                      { amt: 3000, lbl: '＋儲值 $3000' },
+                                    ].map((choice) => (
+                                      <button
+                                        key={`cashier-top-${choice.amt}`}
+                                        type="button"
+                                        onClick={async () => {
+                                          if (!member.email) { alert('⚠️ 找不到會員 Email，無法儲值。'); return; }
+                                          try {
+                                            const r = await fetch(`/api/members/${encodeURIComponent(member.email)}/topup`, {
+                                              method: 'POST',
+                                              headers: { 'Content-Type': 'application/json' },
+                                              body: JSON.stringify({ amount: choice.amt }),
+                                            });
+                                            const result = await r.json();
+                                            if (r.ok && result.member) {
+                                              setCashierMemberData(result.member);
+                                              try {
+                                                const cStr = localStorage.getItem('google-members-database');
+                                                if (cStr) {
+                                                  const cDb = JSON.parse(cStr);
+                                                  const ci = cDb.findIndex((mx: any) => mx.email === member.email);
+                                                  if (ci >= 0) { cDb[ci].balance = result.member.balance; localStorage.setItem('google-members-database', JSON.stringify(cDb)); }
+                                                }
+                                              } catch (_ce) { /* ignore */ }
+                                              window.dispatchEvent(new Event('local-points-updated'));
+                                              setCashierCashReceived(prev => prev + 1);
+                                              setTimeout(() => setCashierCashReceived(prev => prev - 1), 50);
+                                            } else {
+                                              alert(`⚠️ 儲值失敗：${result.error || '未知錯誤'}`);
+                                            }
+                                          } catch (err) {
+                                            alert(`⚠️ 網路錯誤，儲值未完成：${err}`);
+                                          }
+                                        }}
+                                        className="py-1.5 text-[10px] font-sans font-black border border-[#E5B453]/20 hover:border-[#E5B453] hover:bg-[#E5B453]/10 bg-zinc-900 text-white rounded-lg transition active:scale-95 cursor-pointer text-center"
+                                      >
+                                        {choice.lbl}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+                            );
                           })()}
                         </div>
                       )}
@@ -2355,7 +2433,7 @@ export const ManagerCashierTab: React.FC<ManagerCashierTabProps> = (props) => {
                         <button
                           type="button"
                           id="cashier-submit-checkout-btn"
-                          onClick={() => {
+                          onClick={async () => {
                             if (!cashierSelectedOrder) return;
                             
                             // Perform validations before showing confirmation dialog
@@ -2365,28 +2443,27 @@ export const ManagerCashierTab: React.FC<ManagerCashierTabProps> = (props) => {
                             }
                             
                             if (cashierPaymentMethod === 'member') {
-                              const dbStr = localStorage.getItem('google-members-database');
-                              if (dbStr) {
-                                try {
-                                  const db = JSON.parse(dbStr);
-                                  let vipEmail = '';
-                                  if (cashierSelectedOrder?.customerName) {
-                                    const matched = db.find((m: any) => m.name === cashierSelectedOrder.customerName);
-                                    if (matched) {
-                                      vipEmail = matched.email;
-                                    }
-                                  }
-                                  const userIndex = db.findIndex((m: any) => m.email === vipEmail);
-                                  if (userIndex >= 0) {
-                                    const currentBal = db[userIndex].balance || 0;
-                                    if (currentBal < cashierCalculatedTotals.total) {
-                                      alert(`⚠️ 會員餘額不足 (剩餘: NT$ ${currentBal})！無法進行扣底結帳，請先在右側點選【儲值增額】。`);
-                                      return;
-                                    }
-                                  }
-                                } catch (e) {
-                                  console.error(e);
+                              // Tier B: real-time backend balance validation
+                              const memberToValidate = cashierMemberData;
+                              if (!memberToValidate?.email) {
+                                alert('⚠️ 找不到會員帳號資料，無法使用儲值卡付款。請確認訂單綁定了 Google 會員。');
+                                return;
+                              }
+                              try {
+                                const vRes = await fetch(`/api/members/${encodeURIComponent(memberToValidate.email)}`);
+                                if (!vRes.ok) {
+                                  alert('⚠️ 無法從後端驗證會員餘額，請稍後再試。');
+                                  return;
                                 }
+                                const freshMember = await vRes.json();
+                                setCashierMemberData(freshMember);
+                                if (freshMember.balance < cashierCalculatedTotals.total) {
+                                  alert(`⚠️ 【後端驗證】會員餘額不足！\n後端核實餘額：NT$ ${freshMember.balance}\n應收總額：NT$ ${cashierCalculatedTotals.total}\n\n請先進行現場儲值增額再結帳。`);
+                                  return;
+                                }
+                              } catch (err) {
+                                alert(`⚠️ 後端驗證連線失敗，請確認伺服器正常運作後再試。\n${err}`);
+                                return;
                               }
                             }
 

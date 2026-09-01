@@ -172,6 +172,53 @@ export function playStatusBeepSound(): Promise<void> {
 }
 
 /**
+ * Play urgent, loud overtime warning beep
+ */
+export function playOvertimeBeepSound(): Promise<void> {
+  return new Promise((resolve) => {
+    try {
+      const ctx = getAudioContext();
+      if (!ctx) {
+        resolve();
+        return;
+      }
+      if (ctx.state === 'suspended') {
+        ctx.resume().catch(() => {});
+      }
+      const now = ctx.currentTime;
+      
+      // Urgent loud double-beep
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'square'; // harsher sound for urgent alert
+      osc.frequency.setValueAtTime(800, now);
+      osc.frequency.setValueAtTime(1000, now + 0.2); // pitch jump
+      
+      gain.gain.setValueAtTime(0, now);
+      gain.gain.linearRampToValueAtTime(0.5, now + 0.05); // loud
+      gain.gain.setValueAtTime(0.5, now + 0.15);
+      gain.gain.linearRampToValueAtTime(0, now + 0.18);
+      
+      gain.gain.setValueAtTime(0, now + 0.2);
+      gain.gain.linearRampToValueAtTime(0.5, now + 0.25);
+      gain.gain.setValueAtTime(0.5, now + 0.35);
+      gain.gain.linearRampToValueAtTime(0, now + 0.4);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.45);
+
+      setTimeout(() => resolve(), 500);
+    } catch (err) {
+      console.warn('[Web Audio Overtime Beep Error]', err);
+      resolve();
+    }
+  });
+}
+
+
+/**
  * Stop any active speech synthesis and clear heartbeats
  */
 export function stopSpeech(): void {

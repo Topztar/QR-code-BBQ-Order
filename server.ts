@@ -732,6 +732,23 @@ let liveMemberRewards = [
           }
         ];
 
+// ─── Google Identity Protection: Server-side Member Registry ─────────────────
+// Members are now the authoritative source of truth on the backend.
+// The frontend localStorage 'google-members-database' is treated as a
+// read-through cache only — all balance mutations go through these APIs.
+interface MemberRecord {
+  id: string;        // Stable ID = base64(email)
+  email: string;
+  name: string;
+  avatar?: string;
+  balance: number;   // Stored-value balance (NT$)
+  points: number;    // Loyalty points
+  createdAt: number;
+  updatedAt: number;
+}
+let liveMembers: MemberRecord[] = [];
+// ─────────────────────────────────────────────────────────────────────────────
+
 // --- Firestore Cloud Persistence Integration ---
 let DISABLE_FIREBASE_SYNC = process.env.DISABLE_FIREBASE_SYNC !== 'false'; // Set to true per user request: "停止與Firebase同步"
 let firestoreDb: any = null;
@@ -1176,6 +1193,7 @@ function saveStateToDisk() {
       livePopularItemIds,
       liveMemberPointsRatio,
       liveMemberRewards,
+      liveMembers,
     };
     fs.writeFileSync(PERSISTENCE_FILE_PATH, JSON.stringify(dataToSave, null, 2), "utf-8");
     console.log("✓ System State fully saved to codebase disk:", PERSISTENCE_FILE_PATH);
@@ -1326,6 +1344,10 @@ function loadStateFromDisk() {
         }
         if (Array.isArray(parsed.liveMemberRewards)) {
           liveMemberRewards = parsed.liveMemberRewards;
+        }
+        if (Array.isArray(parsed.liveMembers)) {
+          liveMembers = parsed.liveMembers.filter((m: any) => m && m.email);
+          console.log(`[Members] Loaded ${liveMembers.length} member records from disk.`);
         }
         console.log('✓ System State fully loaded from codebase disk:', PERSISTENCE_FILE_PATH);
         refreshIngredientRecipeMap();
@@ -2299,6 +2321,109 @@ app.post('/api/settings/members-config', (req, res) => {
   saveStateToDisk();
   res.json({ success: true, pointsRatio: liveMemberPointsRatio, rewards: liveMemberRewards });
 });
+
+// ─── Google Identity Protection: Member Registry API ─────────────────────────
+// All balance and points mutations require a valid request to these endpoints.
+// The frontend MUST NOT write to localStorage directly for financial fields.
+
+// Helper: derive a stable ID from an email address
+function memberId(email: string): string {
+  return Buffer.from(email.trim().toLowerCase()).toString('base64').replace(/=/g, '');
+}
+
+// GET /api/members — list all members (staff-only view)
+app.get('/api/members', (_req, res) => {
+  res.json(liveMembers);
+});
+
+// GET /api/members/:email — fetch a single member by email
+app.get('/api/members/:email', (req, res) => {
+  const email = decodeURIComponent(req.params.email).trim().toLowerCase();
+  const member = liveMembers.find(m => m.email.toLowerCase() === email);
+  if (!member) return res.status(404).json({ error: '會員帳號不存在 / Member not found' });
+  res.json(member);
+});
+
+// POST /api/members — upsert a member (create or update name/avatar/points from Google sign-in)
+app.post('/api/members', (req, res) => {
+  const { email, name, avatar, balance, points } = req.body;
+  if (!email || !name) return res.status(400).json({ error: '缺少必要欄位 email / name' });
+  const normalEmail = String(email).trim().toLowerCase();
+  const existingIdx = liveMembers.findIndex(m => m.email.toLowerCase() === normalEmail);
+  if (existingIdx >= 0) {
+    // Update non-financial fields (name / avatar); financial fields only via /topup & /deduct
+    liveMembers[existingIdx].name = String(name).trim();
+    if (avatar) liveMembers[existingIdx].avatar = String(avatar);
+    liveMembers[existingIdx].updatedAt = Date.now();
+    // Allow explicit balance/points seed ONLY when creating from migration (balance == undefined means skip)
+    if (balance !== undefined && existingIdx === -1) {
+      liveMembers[existingIdx].balance = Math.max(0, Number(balance) || 0);
+    }
+    saveStateToDisk();
+    return res.json({ success: true, member: liveMembers[existingIdx] });
+  }
+  // New member
+  const newMember: MemberRecord = {
+    id: memberId(normalEmail),
+    email: normalEmail,
+    name: String(name).trim(),
+    avatar: avatar ? String(avatar) : undefined,
+    balance: Math.max(0, Number(balance) || 0),
+    points: Math.max(0, Number(points) || 0),
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  };
+  liveMembers.push(newMember);
+  saveStateToDisk();
+  return res.json({ success: true, member: newMember });
+});
+
+// POST /api/members/:email/topup — add stored-value balance (staff cashier top-up)
+app.post('/api/members/:email/topup', (req, res) => {
+  const email = decodeURIComponent(req.params.email).trim().toLowerCase();
+  const { amount } = req.body;
+  const amtNum = Number(amount);
+  if (!amount || isNaN(amtNum) || amtNum <= 0) {
+    return res.status(400).json({ error: '儲值金額必須為正整數 / Amount must be a positive number' });
+  }
+  const memberIdx = liveMembers.findIndex(m => m.email.toLowerCase() === email);
+  if (memberIdx < 0) return res.status(404).json({ error: '會員帳號不存在 / Member not found' });
+  liveMembers[memberIdx].balance = (liveMembers[memberIdx].balance || 0) + amtNum;
+  liveMembers[memberIdx].updatedAt = Date.now();
+  saveStateToDisk();
+  console.log(`[Members] Top-up NT$${amtNum} for ${email}. New balance: NT$${liveMembers[memberIdx].balance}`);
+  return res.json({ success: true, member: liveMembers[memberIdx] });
+});
+
+// POST /api/members/:email/deduct — deduct balance at checkout (server-side validation)
+app.post('/api/members/:email/deduct', (req, res) => {
+  const email = decodeURIComponent(req.params.email).trim().toLowerCase();
+  const { amount, orderId } = req.body;
+  const amtNum = Number(amount);
+  if (!amount || isNaN(amtNum) || amtNum <= 0) {
+    return res.status(400).json({ error: '扣款金額必須為正整數 / Amount must be a positive number' });
+  }
+  const memberIdx = liveMembers.findIndex(m => m.email.toLowerCase() === email);
+  if (memberIdx < 0) return res.status(404).json({ error: '會員帳號不存在 / Member not found' });
+  const currentBalance = liveMembers[memberIdx].balance || 0;
+  if (currentBalance < amtNum) {
+    return res.status(400).json({
+      error: `儲值餘額不足！目前餘額 NT$${currentBalance}，需扣 NT$${amtNum}`,
+      currentBalance,
+      required: amtNum
+    });
+  }
+  liveMembers[memberIdx].balance = currentBalance - amtNum;
+  // Award loyalty points: ratio = NT$liveMemberPointsRatio per 1 point
+  const earnedPoints = Math.floor(amtNum / liveMemberPointsRatio);
+  liveMembers[memberIdx].points = (liveMembers[memberIdx].points || 0) + earnedPoints;
+  liveMembers[memberIdx].updatedAt = Date.now();
+  saveStateToDisk();
+  console.log(`[Members] Deducted NT$${amtNum} (order: ${orderId || 'N/A'}) for ${email}. ` +
+    `Remaining: NT$${liveMembers[memberIdx].balance}. Points earned: +${earnedPoints}`);
+  return res.json({ success: true, member: liveMembers[memberIdx], earnedPoints });
+});
+// ─────────────────────────────────────────────────────────────────────────────
 
 // Option Rules Endpoints
 app.get('/api/option-rules', (_req, res) => {

@@ -8,6 +8,7 @@ import {
   formatOrderAnnouncementText,
   stopSpeech,
   speakUtterance,
+  playOvertimeBeepSound,
 } from '../utils/kdsAudio';
 import { safeStorage } from '../lib/safeStorage';
 
@@ -135,6 +136,7 @@ export function useKdsAudio() {
     announceOrderNotification,
     playOrderChimeSound,
     playStatusBeepSound,
+    playOvertimeBeepSound,
     formatOrderAnnouncementText: formatAnnouncement,
     stopSpeech,
     speakUtterance,

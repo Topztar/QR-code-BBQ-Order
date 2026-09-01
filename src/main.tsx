@@ -16,10 +16,31 @@ if (typeof window !== 'undefined') {
   });
 }
 
+import {registerSW} from 'virtual:pwa-register';
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />
   </StrictMode>,
 );
+
+// 延遲註冊 Service Worker，確保不影響首屏載入速度
+if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    registerSW({
+      immediate: true,
+      onNeedRefresh() {
+        console.log('[PWA] New content available, please refresh.');
+      },
+      onOfflineReady() {
+        console.log('[PWA] App is ready to work offline (Service Worker activated).');
+      },
+      onRegisterError(err) {
+        console.error('[PWA] Service Worker registration failed:', err);
+      }
+    });
+  });
+}
+
 
 

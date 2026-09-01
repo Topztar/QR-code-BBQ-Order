@@ -384,7 +384,7 @@ export const KdsTicketCard: React.FC<KdsTicketCardProps> = React.memo(({
               {lateCheck.isLate && (
                 <span
                   className="inline-flex items-center gap-1 bg-red-500/15 text-red-400 border border-red-500/35 text-[9px] font-black px-1.5 py-0.5 rounded shadow-[0_0_8px_rgba(239,68,68,0.2)] animate-pulse"
-                  title={`等待已有 ${Math.floor(lateCheck.currentWaitMins)}分鐘，大於該單餐點平均客製工時 1.5 倍`}
+                  title={`等待已有 ${Math.floor(lateCheck.currentWaitMins)}分鐘，已大於系統設定之超時門檻 30 分鐘`}
                 >
                   <Timer size={10} />
                   <span>
@@ -487,12 +487,12 @@ ${specLines}
               <span
                 className={`inline-flex items-center gap-1 text-[11px] font-black font-mono px-1.5 py-0.5 rounded border mt-0.5 ${elapsed.style}`}
               >
-                <Clock size={10} className={elapsed.mins > 15 ? 'animate-pulse' : ''} />
+                <Clock size={10} className={elapsed.mins > 30 ? 'animate-pulse' : ''} />
                 <span>{elapsed.text}</span>
               </span>
-              {order.status === 'pending' && elapsed.mins > 15 && (
+              {order.status === 'pending' && elapsed.mins > 30 && (
                 <div className="text-[8px] text-red-500 font-extrabold mt-0.5 animate-pulse uppercase tracking-tight">
-                  ⚠️ 待辦超時 Overdue
+                  ⚠️ 嚴重超時 Overdue
                 </div>
               )}
             </div>
@@ -723,7 +723,7 @@ ${specLines}
 
                       <input
                         type="text"
-                        value={flagReasonInput}
+                        value={flagReasonInput || ''}
                         onChange={(e) => setFlagReasonInput(e.target.value)}
                         placeholder="請輸入關注原因（例如：餐點特製少鹽、急催出餐、湯少...）"
                         className="w-full bg-black/60 border border-red-500/20 text-xs text-white px-2 py-1.5 rounded focus:outline-none focus:border-red-500 font-sans"

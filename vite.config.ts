@@ -14,7 +14,7 @@ export default defineConfig({
     viteCompression({ algorithm: 'brotliCompress', threshold: 1024 }),
     VitePWA({
       registerType: 'autoUpdate',
-      injectRegister: 'auto',
+      injectRegister: false,
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
       manifest: {
         name: 'SABAY BBQ Order System',
@@ -37,7 +37,33 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2,json}'],
-        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024 // 5MB limits for firebase SDK chunks
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5MB limits for firebase SDK chunks
+        runtimeCaching: [
+          {
+            urlPattern: /\/api\/orders/, // 攔截訂單 API
+            handler: 'NetworkOnly',
+            method: 'POST',
+            options: {
+              backgroundSync: {
+                name: 'order-queue', // 背景佇列名稱
+                options: {
+                  maxRetentionTime: 24 * 60 // 保留 24 小時重試
+                }
+              }
+            }
+          },
+          {
+            urlPattern: /\.(?:png|jpg|jpeg|svg|gif)$/,
+            handler: 'StaleWhileRevalidate',
+            options: {
+              cacheName: 'image-cache',
+              expiration: {
+                maxEntries: 50,
+                maxAgeSeconds: 30 * 24 * 60 * 60, // 30 Days
+              }
+            }
+          }
+        ]
       }
     }),
   ],
