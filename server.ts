@@ -694,6 +694,10 @@ let promoNotifications: { id: string; timestamp: string; title: string; message:
 let livePopularItemIds: string[] = [];
 
 let liveMemberPointsRatio = 20; // default points ratio: 每20元新增1點
+let liveMemberVipThreshold = 1000; // VIP 升級門檻 (滿 1000 點升級 VIP)
+let liveMemberVipDiscountRate = 0.9; // VIP 專屬全單折扣 (9折)
+let liveMemberEnablePointsDiscount = true; // 是否啟用結帳點數折抵現金
+let liveMemberPointsRedeemRate = 1; // 每 1 點折抵 NT$ 1 元現金
 let liveMemberRewards = [
           {
             "menuItemId": "sk-02",
@@ -910,6 +914,10 @@ async function saveStateToFirestore() {
       livePromoCombos,
       livePopularItemIds,
       liveMemberPointsRatio,
+      liveMemberVipThreshold,
+      liveMemberVipDiscountRate,
+      liveMemberEnablePointsDiscount,
+      liveMemberPointsRedeemRate,
       liveMemberRewards
     }));
 
@@ -1127,6 +1135,10 @@ async function loadStateFromFirestore(): Promise<boolean> {
       if (sys.livePromoCombos !== undefined) livePromoCombos = sys.livePromoCombos;
       if (sys.livePopularItemIds !== undefined) livePopularItemIds = sys.livePopularItemIds;
       if (sys.liveMemberPointsRatio !== undefined) liveMemberPointsRatio = Number(sys.liveMemberPointsRatio);
+      if (sys.liveMemberVipThreshold !== undefined) liveMemberVipThreshold = Number(sys.liveMemberVipThreshold);
+      if (sys.liveMemberVipDiscountRate !== undefined) liveMemberVipDiscountRate = Number(sys.liveMemberVipDiscountRate);
+      if (sys.liveMemberEnablePointsDiscount !== undefined) liveMemberEnablePointsDiscount = !!sys.liveMemberEnablePointsDiscount;
+      if (sys.liveMemberPointsRedeemRate !== undefined) liveMemberPointsRedeemRate = Number(sys.liveMemberPointsRedeemRate);
       if (sys.liveMemberRewards !== undefined) liveMemberRewards = sys.liveMemberRewards;
       console.log('[Sabay Firebase] Loaded system settings.');
     }
@@ -1192,6 +1204,10 @@ function saveStateToDisk() {
       livePromoCombos,
       livePopularItemIds,
       liveMemberPointsRatio,
+      liveMemberVipThreshold,
+      liveMemberVipDiscountRate,
+      liveMemberEnablePointsDiscount,
+      liveMemberPointsRedeemRate,
       liveMemberRewards,
       liveMembers,
     };
@@ -1341,6 +1357,18 @@ function loadStateFromDisk() {
         }
         if (parsed.liveMemberPointsRatio !== undefined) {
           liveMemberPointsRatio = Number(parsed.liveMemberPointsRatio);
+        }
+        if (parsed.liveMemberVipThreshold !== undefined) {
+          liveMemberVipThreshold = Number(parsed.liveMemberVipThreshold);
+        }
+        if (parsed.liveMemberVipDiscountRate !== undefined) {
+          liveMemberVipDiscountRate = Number(parsed.liveMemberVipDiscountRate);
+        }
+        if (parsed.liveMemberEnablePointsDiscount !== undefined) {
+          liveMemberEnablePointsDiscount = !!parsed.liveMemberEnablePointsDiscount;
+        }
+        if (parsed.liveMemberPointsRedeemRate !== undefined) {
+          liveMemberPointsRedeemRate = Number(parsed.liveMemberPointsRedeemRate);
         }
         if (Array.isArray(parsed.liveMemberRewards)) {
           liveMemberRewards = parsed.liveMemberRewards;
@@ -1848,12 +1876,10 @@ app.post('/api/images/upload', async (req, res) => {
       return res.status(400).json({ error: 'Missing image data (base64) / 缺少圖片資料' });
     }
 
-    let mime = contentType || 'image/jpeg';
+
     let base64Clean = rawData;
     if (rawData.includes(';base64,')) {
       const parts = rawData.split(';base64,');
-      const mimeMatch = parts[0].match(/data:(.*?)$/);
-      if (mimeMatch) mime = mimeMatch[1];
       base64Clean = parts[1];
     }
 
@@ -1932,6 +1958,10 @@ app.get('/api/bootstrap', (_req, res) => {
     minSpend: { minSpend: liveMinSpendPerPerson },
     membersConfig: {
       pointsRatio: liveMemberPointsRatio,
+      vipThreshold: liveMemberVipThreshold,
+      vipDiscountRate: liveMemberVipDiscountRate,
+      enablePointsDiscount: liveMemberEnablePointsDiscount,
+      pointsRedeemRate: liveMemberPointsRedeemRate,
       rewards: liveMemberRewards
     },
     servicePaused: { servicePaused: liveServicePaused },
@@ -2300,14 +2330,30 @@ app.post('/api/settings/popular-item-ids', (req, res) => {
 app.get('/api/settings/members-config', (_req, res) => {
   res.json({
     pointsRatio: liveMemberPointsRatio,
+    vipThreshold: liveMemberVipThreshold,
+    vipDiscountRate: liveMemberVipDiscountRate,
+    enablePointsDiscount: liveMemberEnablePointsDiscount,
+    pointsRedeemRate: liveMemberPointsRedeemRate,
     rewards: liveMemberRewards
   });
 });
 
 app.post('/api/settings/members-config', (req, res) => {
-  const { pointsRatio, rewards } = req.body;
+  const { pointsRatio, vipThreshold, vipDiscountRate, enablePointsDiscount, pointsRedeemRate, rewards } = req.body;
   if (pointsRatio !== undefined && !isNaN(parseInt(pointsRatio, 10))) {
     liveMemberPointsRatio = Math.max(1, parseInt(pointsRatio, 10));
+  }
+  if (vipThreshold !== undefined && !isNaN(parseInt(vipThreshold, 10))) {
+    liveMemberVipThreshold = Math.max(1, parseInt(vipThreshold, 10));
+  }
+  if (vipDiscountRate !== undefined && !isNaN(parseFloat(vipDiscountRate))) {
+    liveMemberVipDiscountRate = Math.min(1, Math.max(0.1, parseFloat(vipDiscountRate)));
+  }
+  if (enablePointsDiscount !== undefined) {
+    liveMemberEnablePointsDiscount = !!enablePointsDiscount;
+  }
+  if (pointsRedeemRate !== undefined && !isNaN(parseFloat(pointsRedeemRate))) {
+    liveMemberPointsRedeemRate = Math.max(0.01, parseFloat(pointsRedeemRate));
   }
   if (rewards && Array.isArray(rewards)) {
     liveMemberRewards = rewards.map((r: any) => ({
@@ -2319,7 +2365,15 @@ app.post('/api/settings/members-config', (req, res) => {
     }));
   }
   saveStateToDisk();
-  res.json({ success: true, pointsRatio: liveMemberPointsRatio, rewards: liveMemberRewards });
+  res.json({
+    success: true,
+    pointsRatio: liveMemberPointsRatio,
+    vipThreshold: liveMemberVipThreshold,
+    vipDiscountRate: liveMemberVipDiscountRate,
+    enablePointsDiscount: liveMemberEnablePointsDiscount,
+    pointsRedeemRate: liveMemberPointsRedeemRate,
+    rewards: liveMemberRewards
+  });
 });
 
 // ─── Google Identity Protection: Member Registry API ─────────────────────────

@@ -100,7 +100,13 @@ export function createRateLimiter(maxRequests: number, windowMs: number = 60 * 1
     }
     bucket.count++;
 
-    // 2. L2 Firestore Distributed Check (確保跨 10 個實例的全局限制)
+    // 🚀 智慧水位節流 (Threshold Buffering): 若 L1 仍在安全水位 (< 70%)，直接放行，0 Firestore 讀寫消耗
+    const threshold = Math.floor(maxRequests * 0.7);
+    if (bucket.count < threshold) {
+      return next();
+    }
+
+    // 2. L2 Firestore Distributed Check (僅在達到高水位時觸發)
     const cleanIp = ip.replace(/[^a-zA-Z0-9_.]/g, '_');
     const timeWindowId = Math.floor(now / windowMs);
     const fsDocId = `${actionName}_${cleanIp}_${timeWindowId}`;
@@ -124,6 +130,20 @@ export function createRateLimiter(maxRequests: number, windowMs: number = 60 * 1
         count: FieldValue.increment(1),
         expireAt: new Date(now + windowMs * 2)
       }, { merge: true }).catch(err => console.error('[RateLimiter L2] Async update failed:', err));
+
+      // P2-3: 🗑️ 輕量級隨機清理過期 _ratelimits (機率 2%)
+      if (Math.random() < 0.02) {
+        db.collection('_ratelimits').where('expireAt', '<', new Date()).limit(50).get()
+          .then(expiredSnap => {
+            if (!expiredSnap.empty) {
+              const batch = db.batch();
+              expiredSnap.docs.forEach(d => batch.delete(d.ref));
+              return batch.commit();
+            }
+            return null;
+          })
+          .catch(err => console.error('[RateLimiter Cleanup] Failed:', err));
+      }
 
       return next();
     } catch (err) {

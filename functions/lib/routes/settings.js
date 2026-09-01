@@ -37,59 +37,12 @@ function registerSettingsRoutes(app, ctx) {
             sendErrorResponse(res, error);
         }
     });
-    function isStoreOpenFromData(sysData, timestamp, isReservation = false) {
-        if (!sysData)
-            return true;
-        if (sysData.liveServicePaused)
-            return false;
-        const restDays = sysData.liveRestDays || [];
-        const operatingHours = sysData.liveOperatingHours || [];
-        const date = timestamp ? new Date(timestamp) : new Date();
-        const utc = date.getTime() + (date.getTimezoneOffset() * 60000);
-        const localDate = new Date(utc + (3600000 * 8));
-        const year = localDate.getFullYear();
-        const month = String(localDate.getMonth() + 1).padStart(2, '0');
-        const dayOfMonth = String(localDate.getDate()).padStart(2, '0');
-        const taiwanDateString = `${year}-${month}-${dayOfMonth}`;
-        if (restDays.includes(taiwanDateString)) {
-            return false;
-        }
-        const activeSlots = operatingHours.filter((s) => s && s.isActive);
-        if (activeSlots.length === 0) {
-            return true;
-        }
-        const day = localDate.getDay();
-        const hour = localDate.getHours();
-        const minute = localDate.getMinutes();
-        const currentTotalMinutes = hour * 60 + minute;
-        for (const slot of activeSlots) {
-            if (slot.days && Array.isArray(slot.days) && !slot.days.includes(day))
-                continue;
-            if (slot.isReservableOnly && !isReservation)
-                continue;
-            const [startH, startM] = (slot.start || '00:00').split(':').map(Number);
-            const [endH, endM] = (slot.end || '23:59').split(':').map(Number);
-            const startTotal = (startH || 0) * 60 + (startM || 0);
-            const endTotal = (endH || 0) * 60 + (endM || 0);
-            if (startTotal <= endTotal) {
-                if (currentTotalMinutes >= startTotal && currentTotalMinutes <= endTotal) {
-                    return true;
-                }
-            }
-            else {
-                if (currentTotalMinutes >= startTotal || currentTotalMinutes <= endTotal) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
     get('/settings/operating-hours', async (_req, res) => {
         try {
             res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=600, stale-while-revalidate=1800');
             const sysData = await getCachedSettings();
             const data = sysData || {};
-            const isOpen = isStoreOpenFromData(data);
+            const isOpen = (0, helpers_1.isStoreOpenFromData)(data);
             res.json({
                 slots: data.liveOperatingHours || [],
                 restDays: data.liveRestDays || [],
@@ -127,6 +80,10 @@ function registerSettingsRoutes(app, ctx) {
             const data = sysData;
             res.json({
                 pointsRatio: data?.liveMemberPointsRatio ?? 20,
+                vipThreshold: data?.liveMemberVipThreshold ?? 1000,
+                vipDiscountRate: data?.liveMemberVipDiscountRate ?? 0.9,
+                enablePointsDiscount: data?.liveMemberEnablePointsDiscount ?? true,
+                pointsRedeemRate: data?.liveMemberPointsRedeemRate ?? 1,
                 rewards: data?.liveMemberRewards || []
             });
         }
@@ -241,11 +198,15 @@ function registerSettingsRoutes(app, ctx) {
         }
     });
     post('/settings/members-config', requireStaffAuth, async (req, res) => {
-        const { pointsRatio, rewards } = req.body;
+        const { pointsRatio, vipThreshold, vipDiscountRate, enablePointsDiscount, pointsRedeemRate, rewards } = req.body;
         try {
             await db.collection('settings').doc('system').set({
-                liveMemberPointsRatio: pointsRatio,
-                liveMemberRewards: rewards
+                liveMemberPointsRatio: pointsRatio !== undefined ? Number(pointsRatio) : 20,
+                liveMemberVipThreshold: vipThreshold !== undefined ? Number(vipThreshold) : 1000,
+                liveMemberVipDiscountRate: vipDiscountRate !== undefined ? Number(vipDiscountRate) : 0.9,
+                liveMemberEnablePointsDiscount: enablePointsDiscount !== undefined ? !!enablePointsDiscount : true,
+                liveMemberPointsRedeemRate: pointsRedeemRate !== undefined ? Number(pointsRedeemRate) : 1,
+                liveMemberRewards: rewards || []
             }, { merge: true });
             res.json({ success: true });
         }

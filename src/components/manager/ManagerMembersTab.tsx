@@ -33,6 +33,14 @@ interface ManagerMembersTabProps {
   memberConfigSaveSuccess: string | null;
   tempPointsRatio: number;
   setTempPointsRatio: (ratio: number) => void;
+  tempVipThreshold: number;
+  setTempVipThreshold: (val: number) => void;
+  tempVipDiscountRate: number;
+  setTempVipDiscountRate: (val: number) => void;
+  tempEnablePointsDiscount: boolean;
+  setTempEnablePointsDiscount: (val: boolean) => void;
+  tempPointsRedeemRate: number;
+  setTempPointsRedeemRate: (val: number) => void;
   tempRewards: any[];
   setTempRewards: React.Dispatch<React.SetStateAction<any[]>>;
   menuItems: any[];
@@ -96,6 +104,14 @@ export const ManagerMembersTab: React.FC<ManagerMembersTabProps> = ({
   memberConfigSaveSuccess,
   tempPointsRatio,
   setTempPointsRatio,
+  tempVipThreshold,
+  setTempVipThreshold,
+  tempVipDiscountRate,
+  setTempVipDiscountRate,
+  tempEnablePointsDiscount,
+  setTempEnablePointsDiscount,
+  tempPointsRedeemRate,
+  setTempPointsRedeemRate,
   tempRewards,
   setTempRewards,
   menuItems,
@@ -158,23 +174,29 @@ export const ManagerMembersTab: React.FC<ManagerMembersTabProps> = ({
           </button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
           <div className="bg-black/30 border border-white/5 rounded-xl p-4">
-            <span className="text-[10px] text-zinc-500 font-bold tracking-widest uppercase block mb-1">已核定 Google 會員</span>
+            <span className="text-[10px] text-zinc-500 font-bold tracking-widest uppercase block mb-1">已核定會員</span>
             <p className="text-2xl font-black text-white font-mono leading-none">
               {membersList.length} <span className="text-xs font-semibold text-zinc-400 font-sans">位</span>
             </p>
           </div>
-          <div className="bg-black/30 border border-white/5 rounded-xl p-4">
-            <span className="text-[10px] text-zinc-500 font-bold tracking-widest uppercase block mb-1">累存總流通點數</span>
+          <div className="bg-black/30 border border-amber-500/20 bg-amber-500/5 rounded-xl p-4">
+            <span className="text-[10px] text-[#E5B453] font-bold tracking-widest uppercase block mb-1">👑 VIP 貴賓人數</span>
             <p className="text-2xl font-black text-[#E5B453] font-mono leading-none">
+              {membersList.filter(m => (m.points || 0) >= tempVipThreshold).length} <span className="text-xs font-semibold text-amber-300 font-sans">位 (滿 {tempVipThreshold} 點)</span>
+            </p>
+          </div>
+          <div className="bg-black/30 border border-white/5 rounded-xl p-4">
+            <span className="text-[10px] text-zinc-500 font-bold tracking-widest uppercase block mb-1">累存流通點數</span>
+            <p className="text-2xl font-black text-amber-400 font-mono leading-none">
               {membersList.reduce((acc, cur) => acc + (cur.points || 0), 0).toLocaleString()} <span className="text-xs font-semibold text-zinc-400 font-sans">點</span>
             </p>
           </div>
           <div className="bg-black/30 border border-white/5 rounded-xl p-4">
-            <span className="text-[10px] text-zinc-500 font-bold tracking-widest uppercase block mb-1">消點累計兑消匯率</span>
+            <span className="text-[10px] text-zinc-500 font-bold tracking-widest uppercase block mb-1">點數折抵現金匯率</span>
             <p className="text-2xl font-black text-blue-400 font-mono leading-none">
-              100 <span className="text-xs font-semibold text-zinc-400 font-sans">點抵 NT$10 元</span>
+              {tempEnablePointsDiscount ? `每 ${tempPointsRedeemRate || 1} 點` : '未開啟'} <span className="text-xs font-semibold text-zinc-400 font-sans">{tempEnablePointsDiscount ? '折抵 NT$ 1 元' : ''}</span>
             </p>
           </div>
         </div>
@@ -196,7 +218,20 @@ export const ManagerMembersTab: React.FC<ManagerMembersTabProps> = ({
                 <tr key={m.email} className="hover:bg-white/[2%]">
                   <td className="py-3.5 px-4 flex items-center space-x-3 text-white font-bold">
                     <img src={m.avatar} alt="member-avatar" className="w-8 h-8 rounded-full border border-blue-500/20 object-cover" referrerPolicy="no-referrer" />
-                    <span>{m.name}</span>
+                    <div className="flex flex-col text-left">
+                      <div className="flex items-center gap-1.5">
+                        <span>{m.name}</span>
+                        {(m.points || 0) >= tempVipThreshold ? (
+                          <span className="bg-amber-500/20 text-[#E5B453] border border-amber-500/40 text-[9px] font-black px-1.5 py-0.2 rounded-full">
+                            👑 VIP 貴賓 ({Math.round(tempVipDiscountRate * 100)}% 結帳)
+                          </span>
+                        ) : (
+                          <span className="bg-zinc-800 text-zinc-400 text-[9px] font-normal px-1.5 py-0.2 rounded-full">
+                            一般會員
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </td>
                   <td className="py-3.5 px-4 font-mono text-zinc-400">{getMaskedEmail(m.email)}</td>
                   <td className="py-3.5 px-4 text-center font-mono text-zinc-500">{m.joinedAt || '2026-06-01'}</td>
@@ -331,9 +366,9 @@ export const ManagerMembersTab: React.FC<ManagerMembersTabProps> = ({
             {memberConfigSaveError && <div className="p-2 bg-rose-500/10 text-rose-400 text-[11px] font-bold rounded-lg border border-rose-500/20">⚠️ {memberConfigSaveError}</div>}
             {memberConfigSaveSuccess && <div className="p-2 bg-emerald-500/10 text-emerald-400 text-[11px] font-bold rounded-lg border border-emerald-500/20">🎯 {memberConfigSaveSuccess}</div>}
 
-            {/* Points ratio configuration */}
+            {/* 1. Points ratio configuration */}
             <div className="space-y-1.5">
-              <label className="text-zinc-400 block font-semibold">積點比例：每 消費多少元 贈送 1 點會員積分？</label>
+              <label className="text-zinc-400 block font-semibold">📈 消費積點比例：每消費多少元贈送 1 點會員積分？</label>
               <div className="flex items-center space-x-2">
                 <span className="text-zinc-500 text-xs">每消費</span>
                 <input
@@ -348,6 +383,87 @@ export const ManagerMembersTab: React.FC<ManagerMembersTabProps> = ({
                 <span className="text-zinc-400 text-xs">元，獲得 1 點</span>
               </div>
               <p className="text-[10px] text-zinc-500 italic">預設為 20 元 1 點，可自由調整為 10 元、50 元等任意大於 1 的正整數值。</p>
+            </div>
+
+            {/* 2. VIP Tier and Perks configuration */}
+            <div className="space-y-3 pt-3 border-t border-white/5">
+              <label className="text-amber-400 block font-semibold text-xs uppercase tracking-wider flex items-center gap-1.5">
+                <span>👑 VIP 貴賓自動升級門檻與專屬折扣 (VIP Auto-Upgrade & Perks)</span>
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-black/40 border border-amber-500/20 rounded-lg p-3">
+                <div className="space-y-1">
+                  <span className="text-zinc-400 text-[11px] block font-semibold">VIP 升級門檻 (累積點數達到)</span>
+                  <div className="flex items-center space-x-1.5">
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      value={tempVipThreshold}
+                      onChange={(e) => setTempVipThreshold(Math.max(1, parseInt(e.target.value.replace(/\D/g, ''), 10) || 1))}
+                      className="w-28 bg-black border border-amber-500/30 rounded-lg px-2 py-1 font-mono text-center text-[#E5B453] font-bold text-xs"
+                      placeholder="1000"
+                    />
+                    <span className="text-zinc-400 text-xs">點</span>
+                  </div>
+                  <p className="text-[10px] text-zinc-500">會員點數 ≥ 此門檻自動升級 VIP</p>
+                </div>
+                <div className="space-y-1">
+                  <span className="text-zinc-400 text-[11px] block font-semibold">VIP 專屬結帳折扣率</span>
+                  <div className="flex items-center space-x-1.5">
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      value={Math.round(tempVipDiscountRate * 100)}
+                      onChange={(e) => {
+                        const val = Math.min(100, Math.max(10, parseInt(e.target.value.replace(/\D/g, ''), 10) || 90));
+                        setTempVipDiscountRate(val / 100);
+                      }}
+                      className="w-24 bg-black border border-amber-500/30 rounded-lg px-2 py-1 font-mono text-center text-[#E5B453] font-bold text-xs"
+                      placeholder="90"
+                    />
+                    <span className="text-zinc-400 text-xs">% (等於 {Math.round(tempVipDiscountRate * 100) % 10 === 0 ? `${Math.round(tempVipDiscountRate * 100) / 10} 折` : `${Math.round(tempVipDiscountRate * 100)} 折`})</span>
+                  </div>
+                  <p className="text-[10px] text-zinc-500">例: 90% 即結帳打 9 折 (享 10% OFF)</p>
+                </div>
+              </div>
+            </div>
+
+            {/* 3. Points-to-Cash Discount configuration */}
+            <div className="space-y-3 pt-3 border-t border-white/5">
+              <div className="flex items-center justify-between">
+                <label className="text-blue-400 block font-semibold text-xs uppercase tracking-wider flex items-center gap-1.5">
+                  <span>🪙 結帳點數折抵現金設定 (Points-to-Cash Redemption)</span>
+                </label>
+                <label className="flex items-center space-x-1.5 cursor-pointer text-zinc-400 hover:text-white select-none">
+                  <input
+                    type="checkbox"
+                    checked={tempEnablePointsDiscount}
+                    onChange={(e) => setTempEnablePointsDiscount(e.target.checked)}
+                    className="rounded text-blue-500 bg-zinc-950 border-zinc-700 focus:ring-0 focus:ring-offset-0"
+                  />
+                  <span className="text-[11px] font-bold text-white">啟用點數折抵現金功能</span>
+                </label>
+              </div>
+
+              {tempEnablePointsDiscount && (
+                <div className="bg-black/40 border border-blue-500/20 rounded-lg p-3 space-y-1.5">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-zinc-400 text-xs">每</span>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      value={tempPointsRedeemRate}
+                      onChange={(e) => setTempPointsRedeemRate(Math.max(1, parseInt(e.target.value.replace(/\D/g, ''), 10) || 1))}
+                      className="w-20 bg-black border border-blue-500/30 rounded-lg px-2 py-1 font-mono text-center text-blue-400 font-bold text-xs"
+                      placeholder="1"
+                    />
+                    <span className="text-zinc-400 text-xs">點積分，可直接折抵消費金額 NT$ 1 元</span>
+                  </div>
+                  <p className="text-[10px] text-zinc-500">預設為 1 點折抵 NT$ 1 元。顧客/櫃檯結帳時可使用點數抵扣訂單金額。</p>
+                </div>
+              )}
             </div>
 
             {/* Gift reward items selection */}

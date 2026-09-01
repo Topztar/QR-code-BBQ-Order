@@ -21,8 +21,7 @@ export interface RouteContext {
 }
 
 export function registerTablesRoutes(app: express.Application, ctx: RouteContext) {
-  const { db, storageBucket, requireStaffAuth, createRateLimiter, sendErrorResponse } = ctx;
-  const getCachedSettings = createGetCachedSettings(db);
+  const { db, requireStaffAuth, createRateLimiter, sendErrorResponse } = ctx;
   const reservationRateLimiter = createRateLimiter(15, 60 * 1000, '預約提交');
 
   // 雙路徑路由包裝器

@@ -244,6 +244,10 @@ interface ManagerDashboardProps {
   servicePaused?: boolean;
   onToggleServicePause?: (paused: boolean) => Promise<void>;
   memberPointsRatio?: number;
+  memberVipThreshold?: number;
+  memberVipDiscountRate?: number;
+  memberEnablePointsDiscount?: boolean;
+  memberPointsRedeemRate?: number;
   onPlaceOrder?: (orderData: any) => Promise<any>;
   memberRewards?: any[];
   onUpdateMemberConfig?: () => Promise<void>;
@@ -302,6 +306,10 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   onPrintTestPage,
   onAddIngredient,
   memberPointsRatio = 20,
+  memberVipThreshold = 1000,
+  memberVipDiscountRate = 0.9,
+  memberEnablePointsDiscount = true,
+  memberPointsRedeemRate = 1,
   memberRewards = [],
   onUpdateMemberConfig,
 }) => {
@@ -347,6 +355,22 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
       prevMemberPointsRatioRef.current = memberPointsRatio;
     }
   }, [memberPointsRatio]);
+
+  useEffect(() => {
+    setTempVipThreshold(memberVipThreshold);
+  }, [memberVipThreshold]);
+
+  useEffect(() => {
+    setTempVipDiscountRate(memberVipDiscountRate);
+  }, [memberVipDiscountRate]);
+
+  useEffect(() => {
+    setTempEnablePointsDiscount(memberEnablePointsDiscount);
+  }, [memberEnablePointsDiscount]);
+
+  useEffect(() => {
+    setTempPointsRedeemRate(memberPointsRedeemRate);
+  }, [memberPointsRedeemRate]);
 
   useEffect(() => {
     const rewardsStr = JSON.stringify(memberRewards);
@@ -777,6 +801,10 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
 
   // Member system state variables
   const [tempPointsRatio, setTempPointsRatio] = useState<number>(memberPointsRatio);
+  const [tempVipThreshold, setTempVipThreshold] = useState<number>(memberVipThreshold);
+  const [tempVipDiscountRate, setTempVipDiscountRate] = useState<number>(memberVipDiscountRate);
+  const [tempEnablePointsDiscount, setTempEnablePointsDiscount] = useState<boolean>(memberEnablePointsDiscount);
+  const [tempPointsRedeemRate, setTempPointsRedeemRate] = useState<number>(memberPointsRedeemRate);
   const [tempRewards, setTempRewards] = useState<any[]>(() => {
     return (memberRewards && memberRewards.length > 0) ? memberRewards : [
       { id: 'rew-01', menuItemId: 'sk-02', cost: 900, enabled: true },
@@ -1117,6 +1145,10 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           pointsRatio: tempPointsRatio,
+          vipThreshold: tempVipThreshold,
+          vipDiscountRate: tempVipDiscountRate,
+          enablePointsDiscount: tempEnablePointsDiscount,
+          pointsRedeemRate: tempPointsRedeemRate,
           rewards: tempRewards,
         }),
       });
@@ -3663,6 +3695,14 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
           memberConfigSaveSuccess={memberConfigSaveSuccess}
           tempPointsRatio={tempPointsRatio}
           setTempPointsRatio={setTempPointsRatio}
+          tempVipThreshold={tempVipThreshold}
+          setTempVipThreshold={setTempVipThreshold}
+          tempVipDiscountRate={tempVipDiscountRate}
+          setTempVipDiscountRate={setTempVipDiscountRate}
+          tempEnablePointsDiscount={tempEnablePointsDiscount}
+          setTempEnablePointsDiscount={setTempEnablePointsDiscount}
+          tempPointsRedeemRate={tempPointsRedeemRate}
+          setTempPointsRedeemRate={setTempPointsRedeemRate}
           tempRewards={tempRewards}
           setTempRewards={setTempRewards}
           menuItems={menuItems}

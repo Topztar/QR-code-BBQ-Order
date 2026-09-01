@@ -147,6 +147,10 @@ interface CustomerOrderViewProps {
   popularItemIds?: string[];
   servicePaused?: boolean;
   memberPointsRatio?: number;
+  memberVipThreshold?: number;
+  memberVipDiscountRate?: number;
+  memberEnablePointsDiscount?: boolean;
+  memberPointsRedeemRate?: number;
   memberRewards?: any[];
   autoOpenReservationModal?: boolean;
   isOrderRoute?: boolean;
@@ -178,6 +182,10 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
   popularItemIds = ['ty-01', 'nd-01', 'sk-02', 'sk-01'],
   servicePaused = false,
   memberPointsRatio = 20,
+  memberVipThreshold = 1000,
+  memberVipDiscountRate = 0.9,
+  memberEnablePointsDiscount = true,
+  memberPointsRedeemRate = 1,
   memberRewards = [],
 }) => {
   const t = useCallback(
@@ -810,6 +818,11 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
         lineProfile={lineProfile}
         userPoints={userPoints}
         userBalance={userBalance}
+        memberPointsRatio={memberPointsRatio}
+        vipThreshold={memberVipThreshold}
+        vipDiscountRate={memberVipDiscountRate}
+        enablePointsDiscount={memberEnablePointsDiscount}
+        pointsRedeemRate={memberPointsRedeemRate}
         redeemMessage={redeemMessage}
         REWARD_ITEMS={REWARD_ITEMS}
         handleRedeemReward={handleRedeemReward}

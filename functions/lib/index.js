@@ -110,6 +110,10 @@ function createRateLimiter(maxRequests, windowMs = 60 * 1000, actionName = 'Êìç‰
             });
         }
         bucket.count++;
+        const threshold = Math.floor(maxRequests * 0.7);
+        if (bucket.count < threshold) {
+            return next();
+        }
         const cleanIp = ip.replace(/[^a-zA-Z0-9_.]/g, '_');
         const timeWindowId = Math.floor(now / windowMs);
         const fsDocId = `${actionName}_${cleanIp}_${timeWindowId}`;
@@ -128,6 +132,18 @@ function createRateLimiter(maxRequests, windowMs = 60 * 1000, actionName = 'Êìç‰
                 count: firestore_2.FieldValue.increment(1),
                 expireAt: new Date(now + windowMs * 2)
             }, { merge: true }).catch(err => console.error('[RateLimiter L2] Async update failed:', err));
+            if (Math.random() < 0.02) {
+                db.collection('_ratelimits').where('expireAt', '<', new Date()).limit(50).get()
+                    .then(expiredSnap => {
+                    if (!expiredSnap.empty) {
+                        const batch = db.batch();
+                        expiredSnap.docs.forEach(d => batch.delete(d.ref));
+                        return batch.commit();
+                    }
+                    return null;
+                })
+                    .catch(err => console.error('[RateLimiter Cleanup] Failed:', err));
+            }
             return next();
         }
         catch (err) {

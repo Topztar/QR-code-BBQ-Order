@@ -164,4 +164,22 @@ export interface OrderHistoryBillStatus {
   tableNumber?: string;
 }
 
+export interface MemberRewardItem {
+  id: string;
+  menuItemId: string;
+  cost: number;
+  fallbackPrice: number;
+  enabled: boolean;
+  fallbackName?: { [key in Language]?: string } | string;
+}
+
+export interface MembersConfig {
+  pointsRatio: number; // 消費多少元獲得 1 點
+  vipThreshold: number; // 升級 VIP 門檻點數
+  vipDiscountRate: number; // VIP 折扣比例 (例如 0.9 = 9折)
+  enablePointsDiscount: boolean; // 是否啟用點數折抵現金
+  pointsRedeemRate: number; // 每 1 點折抵多少元現金
+  rewards: MemberRewardItem[];
+}
+
 

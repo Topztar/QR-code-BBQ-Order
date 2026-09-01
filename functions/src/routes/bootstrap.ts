@@ -29,10 +29,12 @@ export function registerBootstrapRoutes(app: express.Application, ctx: RouteCont
   const put: RouteRegister = (routePath, ...handlers) => app.put([`/api${routePath}`, routePath], ...handlers);
   const del: RouteRegister = (routePath, ...handlers) => app.delete([`/api${routePath}`, routePath], ...handlers);
 
-  get('/bootstrap', async (_req, res) => {
+  get('/bootstrap', async (req, res) => {
     try {
       res.setHeader('Cache-Control', 'public, max-age=15, s-maxage=180, stale-while-revalidate=600');
       const todayStr = new Date().toISOString().split('T')[0];
+      const isStaffRequest = req.query.role === 'staff' || !!req.headers.authorization;
+      
       const [
         categoriesSnap,
         menuSnap,
@@ -45,8 +47,12 @@ export function registerBootstrapRoutes(app: express.Application, ctx: RouteCont
         db.collection('menu').select('id', 'category', 'name', 'price', 'image', 'description', 'available', 'isAvailable', 'isSetMeal', 'requiredSaucesOption', 'hasNoodlesOption', 'hasCoconutsMilkOption', 'containsBeef', 'containsPork', 'containsSeafood', 'isNotSpicy', 'customAddOns', 'recipe', 'orderIndex', 'isTakeoutAvailable', 'soldOutAt').orderBy('orderIndex').get(),
         db.collection('tables').select('id', 'qrCodeUrl', 'status', 'cleaningStartedAt', 'maxCapacity', 'positionX', 'positionY', 'preservedFor', 'mergedWith').get(),
         db.collection('settings').doc('system').get(),
-        db.collection('ingredients').select('id', 'name', 'stock', 'minThreshold', 'unit').get(),
-        db.collection('reservations').select('id', 'guestCount', 'tableNumber', 'date', 'time', 'status', 'reservationNo').where('date', '>=', todayStr).limit(100).get()
+        isStaffRequest 
+          ? db.collection('ingredients').select('id', 'name', 'stock', 'minThreshold', 'unit').get()
+          : Promise.resolve({ docs: [] }),
+        isStaffRequest
+          ? db.collection('reservations').select('id', 'guestCount', 'tableNumber', 'date', 'time', 'status', 'reservationNo').where('date', '>=', todayStr).limit(100).get()
+          : Promise.resolve({ docs: [] })
       ]);
 
       const now = new Date();
@@ -122,6 +128,10 @@ export function registerBootstrapRoutes(app: express.Application, ctx: RouteCont
         minSpend: { minSpend: sysData.liveMinSpendPerPerson ?? 200 },
         membersConfig: {
           pointsRatio: sysData.liveMemberPointsRatio ?? 20,
+          vipThreshold: sysData.liveMemberVipThreshold ?? 1000,
+          vipDiscountRate: sysData.liveMemberVipDiscountRate ?? 0.9,
+          enablePointsDiscount: sysData.liveMemberEnablePointsDiscount ?? true,
+          pointsRedeemRate: sysData.liveMemberPointsRedeemRate ?? 1,
           rewards: sysData.liveMemberRewards || []
         },
         servicePaused: { servicePaused: sysData.liveServicePaused || false },
@@ -138,7 +148,7 @@ export function registerBootstrapRoutes(app: express.Application, ctx: RouteCont
       res.setHeader('ETag', etag);
       res.setHeader('Cache-Control', 'public, max-age=30, s-maxage=300, stale-while-revalidate=600');
 
-      if (_req.headers['if-none-match'] === etag) {
+      if (req.headers['if-none-match'] === etag) {
         return res.status(304).end();
       }
 

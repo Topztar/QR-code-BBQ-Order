@@ -2,7 +2,7 @@ import express from 'express';
 import { Firestore, FieldValue } from 'firebase-admin/firestore';
 import { Bucket } from '@google-cloud/storage';
 import { hashPin, invalidateAuthCache } from '../auth';
-import { cachedServicePause, setCachedServicePause, CACHE_TTL_MS, createGetCachedSettings } from '../helpers';
+import { cachedServicePause, setCachedServicePause, CACHE_TTL_MS, createGetCachedSettings, isStoreOpenFromData } from '../helpers';
 
 
 // ============================================================
@@ -21,14 +21,12 @@ export interface RouteContext {
 }
 
 export function registerSettingsRoutes(app: express.Application, ctx: RouteContext) {
-  const { db, storageBucket, requireStaffAuth, createRateLimiter, sendErrorResponse } = ctx;
+  const { db, requireStaffAuth, sendErrorResponse } = ctx;
   const getCachedSettings = createGetCachedSettings(db);
 
   // 雙路徑路由包裝器
   const get: RouteRegister = (routePath, ...handlers) => app.get([`/api${routePath}`, routePath], ...handlers);
   const post: RouteRegister = (routePath, ...handlers) => app.post([`/api${routePath}`, routePath], ...handlers);
-  const put: RouteRegister = (routePath, ...handlers) => app.put([`/api${routePath}`, routePath], ...handlers);
-  const del: RouteRegister = (routePath, ...handlers) => app.delete([`/api${routePath}`, routePath], ...handlers);
 
 get('/settings/service-pause', async (_req, res) => {
   try {
@@ -59,59 +57,7 @@ get('/settings/min-spend', async (_req, res) => {
   }
 });
 
-function isStoreOpenFromData(sysData: any, timestamp?: number, isReservation: boolean = false): boolean {
-  if (!sysData) return true;
-  if (sysData.liveServicePaused) return false;
 
-  const restDays: string[] = sysData.liveRestDays || [];
-  const operatingHours: any[] = sysData.liveOperatingHours || [];
-
-  const date = timestamp ? new Date(timestamp) : new Date();
-  const utc = date.getTime() + (date.getTimezoneOffset() * 60000);
-  const localDate = new Date(utc + (3600000 * 8)); // Taiwan Time (UTC+8)
-
-  const year = localDate.getFullYear();
-  const month = String(localDate.getMonth() + 1).padStart(2, '0');
-  const dayOfMonth = String(localDate.getDate()).padStart(2, '0');
-  const taiwanDateString = `${year}-${month}-${dayOfMonth}`;
-
-  if (restDays.includes(taiwanDateString)) {
-    return false;
-  }
-
-  const activeSlots = operatingHours.filter((s: any) => s && s.isActive);
-  if (activeSlots.length === 0) {
-    return true;
-  }
-
-  const day = localDate.getDay(); // 0 is Sunday, ..., 6 is Saturday
-  const hour = localDate.getHours();
-  const minute = localDate.getMinutes();
-  const currentTotalMinutes = hour * 60 + minute;
-
-  for (const slot of activeSlots) {
-    if (slot.days && Array.isArray(slot.days) && !slot.days.includes(day)) continue;
-    if (slot.isReservableOnly && !isReservation) continue;
-
-    const [startH, startM] = (slot.start || '00:00').split(':').map(Number);
-    const [endH, endM] = (slot.end || '23:59').split(':').map(Number);
-
-    const startTotal = (startH || 0) * 60 + (startM || 0);
-    const endTotal = (endH || 0) * 60 + (endM || 0);
-
-    if (startTotal <= endTotal) {
-      if (currentTotalMinutes >= startTotal && currentTotalMinutes <= endTotal) {
-        return true;
-      }
-    } else {
-      if (currentTotalMinutes >= startTotal || currentTotalMinutes <= endTotal) {
-        return true;
-      }
-    }
-  }
-
-  return false;
-}
 
 // 9. Operating Hours Settings
 get('/settings/operating-hours', async (_req, res) => {
@@ -160,6 +106,10 @@ get('/settings/members-config', async (_req, res) => {
     const data = sysData;
     res.json({
       pointsRatio: data?.liveMemberPointsRatio ?? 20,
+      vipThreshold: data?.liveMemberVipThreshold ?? 1000,
+      vipDiscountRate: data?.liveMemberVipDiscountRate ?? 0.9,
+      enablePointsDiscount: data?.liveMemberEnablePointsDiscount ?? true,
+      pointsRedeemRate: data?.liveMemberPointsRedeemRate ?? 1,
       rewards: data?.liveMemberRewards || []
     });
   } catch (error) {
@@ -281,13 +231,16 @@ post('/promo-combo', requireStaffAuth, async (req, res) => {
   }
 });
 
-// 39. Save Members Config
 post('/settings/members-config', requireStaffAuth, async (req, res) => {
-  const { pointsRatio, rewards } = req.body;
+  const { pointsRatio, vipThreshold, vipDiscountRate, enablePointsDiscount, pointsRedeemRate, rewards } = req.body;
   try {
     await db.collection('settings').doc('system').set({
-      liveMemberPointsRatio: pointsRatio,
-      liveMemberRewards: rewards
+      liveMemberPointsRatio: pointsRatio !== undefined ? Number(pointsRatio) : 20,
+      liveMemberVipThreshold: vipThreshold !== undefined ? Number(vipThreshold) : 1000,
+      liveMemberVipDiscountRate: vipDiscountRate !== undefined ? Number(vipDiscountRate) : 0.9,
+      liveMemberEnablePointsDiscount: enablePointsDiscount !== undefined ? !!enablePointsDiscount : true,
+      liveMemberPointsRedeemRate: pointsRedeemRate !== undefined ? Number(pointsRedeemRate) : 1,
+      liveMemberRewards: rewards || []
     }, { merge: true });
     res.json({ success: true });
   } catch (error) {

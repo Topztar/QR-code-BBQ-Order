@@ -127,6 +127,10 @@ function AppContent({
     servicePaused,
     popularItemIds,
     memberPointsRatio,
+    memberVipThreshold,
+    memberVipDiscountRate,
+    memberEnablePointsDiscount,
+    memberPointsRedeemRate,
     memberRewards,
     analytics,
     loading,
@@ -685,6 +689,10 @@ function AppContent({
                       servicePaused={servicePaused}
                       onToggleServicePause={handleToggleServicePause}
                       memberPointsRatio={memberPointsRatio}
+                      memberVipThreshold={memberVipThreshold}
+                      memberVipDiscountRate={memberVipDiscountRate}
+                      memberEnablePointsDiscount={memberEnablePointsDiscount}
+                      memberPointsRedeemRate={memberPointsRedeemRate}
                       memberRewards={memberRewards}
                       onUpdateMemberConfig={fetchData}
                     />
@@ -721,6 +729,10 @@ function AppContent({
                   popularItemIds={popularItemIds}
                   servicePaused={servicePaused}
                   memberPointsRatio={memberPointsRatio}
+                  memberVipThreshold={memberVipThreshold}
+                  memberVipDiscountRate={memberVipDiscountRate}
+                  memberEnablePointsDiscount={memberEnablePointsDiscount}
+                  memberPointsRedeemRate={memberPointsRedeemRate}
                   memberRewards={memberRewards}
                   autoOpenReservationModal={isReserveRoute}
                   isOrderRoute={isOrderRoute}

@@ -35,9 +35,13 @@ get('/orders', async (_req, res) => {
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     let snapshot;
     try {
-      snapshot = await db.collection('orders').orderBy('createdAt', 'desc').limit(200).get();
+      snapshot = await db.collection('orders')
+        .select('id', 'tableNumber', 'items', 'subtotal', 'serviceCharge', 'total', 'status', 'createdAt', 'customerName', 'customerPhone', 'customerAvatar', 'paymentMethod', 'isMember', 'isPaid', 'guestCount', 'discount', 'quickNotes', 'isFlagged', 'flagReason', 'takeoutInfo', 'pickupTime')
+        .orderBy('createdAt', 'desc').limit(200).get();
     } catch (_idxErr) {
-      snapshot = await db.collection('orders').limit(200).get();
+      snapshot = await db.collection('orders')
+        .select('id', 'tableNumber', 'items', 'subtotal', 'serviceCharge', 'total', 'status', 'createdAt', 'customerName', 'customerPhone', 'customerAvatar', 'paymentMethod', 'isMember', 'isPaid', 'guestCount', 'discount', 'quickNotes', 'isFlagged', 'flagReason', 'takeoutInfo', 'pickupTime')
+        .limit(200).get();
     }
     const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     orders.sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());

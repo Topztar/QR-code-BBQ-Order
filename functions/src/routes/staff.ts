@@ -22,14 +22,12 @@ export interface RouteContext {
 }
 
 export function registerStaffRoutes(app: express.Application, ctx: RouteContext) {
-  const { db, storageBucket, requireStaffAuth, createRateLimiter, sendErrorResponse } = ctx;
-  const getCachedSettings = createGetCachedSettings(db);
+  const { db, requireStaffAuth, sendErrorResponse } = ctx;
 
   // 雙路徑路由包裝器
   const get: RouteRegister = (routePath, ...handlers) => app.get([`/api${routePath}`, routePath], ...handlers);
   const post: RouteRegister = (routePath, ...handlers) => app.post([`/api${routePath}`, routePath], ...handlers);
   const put: RouteRegister = (routePath, ...handlers) => app.put([`/api${routePath}`, routePath], ...handlers);
-  const del: RouteRegister = (routePath, ...handlers) => app.delete([`/api${routePath}`, routePath], ...handlers);
 
 get('/push-notifications', async (_req, res) => {
   try {

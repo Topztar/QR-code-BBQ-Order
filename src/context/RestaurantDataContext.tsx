@@ -35,6 +35,10 @@ export interface RestaurantDataContextType {
   servicePaused: boolean;
   popularItemIds: string[];
   memberPointsRatio: number;
+  memberVipThreshold: number;
+  memberVipDiscountRate: number;
+  memberEnablePointsDiscount: boolean;
+  memberPointsRedeemRate: number;
   memberRewards: any[];
   analytics: AnalyticsData;
   loading: boolean;
@@ -139,6 +143,10 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
   const [servicePaused, setServicePaused] = useState<boolean>(false);
   const [popularItemIds, setPopularItemIds] = useState<string[]>(['ty-01', 'nd-01', 'sk-02', 'sk-01']);
   const [memberPointsRatio, setMemberPointsRatio] = useState<number>(20);
+  const [memberVipThreshold, setMemberVipThreshold] = useState<number>(1000);
+  const [memberVipDiscountRate, setMemberVipDiscountRate] = useState<number>(0.9);
+  const [memberEnablePointsDiscount, setMemberEnablePointsDiscount] = useState<boolean>(true);
+  const [memberPointsRedeemRate, setMemberPointsRedeemRate] = useState<number>(1);
   const [memberRewards, setMemberRewards] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncActive, setSyncActive] = useState<boolean>(() => isFirebaseSyncEnabled());
@@ -183,7 +191,7 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
 
       const safeFetch = async (url: string, fallbackVal: any) => {
         try {
-          const res = await fetch(url);
+          const res = await apiFetch(url);
           return res;
         } catch (err) {
           console.warn(`[Sabay Sync] Failed network fetch for ${url}:`, err);
@@ -245,6 +253,10 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
           if (Array.isArray(bootstrapData.popularItemIds)) setPopularItemIds(bootstrapData.popularItemIds);
           if (bootstrapData.membersConfig) {
             if (bootstrapData.membersConfig.pointsRatio !== undefined) setMemberPointsRatio(bootstrapData.membersConfig.pointsRatio);
+            if (bootstrapData.membersConfig.vipThreshold !== undefined) setMemberVipThreshold(bootstrapData.membersConfig.vipThreshold);
+            if (bootstrapData.membersConfig.vipDiscountRate !== undefined) setMemberVipDiscountRate(bootstrapData.membersConfig.vipDiscountRate);
+            if (bootstrapData.membersConfig.enablePointsDiscount !== undefined) setMemberEnablePointsDiscount(bootstrapData.membersConfig.enablePointsDiscount);
+            if (bootstrapData.membersConfig.pointsRedeemRate !== undefined) setMemberPointsRedeemRate(bootstrapData.membersConfig.pointsRedeemRate);
             if (bootstrapData.membersConfig.rewards) setMemberRewards(bootstrapData.membersConfig.rewards);
           }
           if (bootstrapData.promoCombo) setPromoCombo(bootstrapData.promoCombo);
@@ -971,6 +983,10 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
     servicePaused,
     popularItemIds,
     memberPointsRatio,
+    memberVipThreshold,
+    memberVipDiscountRate,
+    memberEnablePointsDiscount,
+    memberPointsRedeemRate,
     memberRewards,
     analytics,
     loading,
@@ -1003,7 +1019,7 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
   }), [
     menuItems, categories, tables, ingredients, reservations, minSpend, promoCombo,
     operatingHours, isOpen, restDays, customerNotice, servicePaused, popularItemIds,
-    memberPointsRatio, memberRewards, analytics, loading
+    memberPointsRatio, memberVipThreshold, memberVipDiscountRate, memberEnablePointsDiscount, memberPointsRedeemRate, memberRewards, analytics, loading
   ]);
 
   return (

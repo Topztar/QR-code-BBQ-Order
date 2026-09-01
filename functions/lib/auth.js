@@ -40,8 +40,10 @@ exports.invalidateAuthCache = invalidateAuthCache;
 exports.createStaffAuthMiddleware = createStaffAuthMiddleware;
 const crypto = __importStar(require("crypto"));
 exports.PIN_SALT = process.env.PIN_SALT || 'sabay-bbq-secure-salt-2026';
-if (!process.env.PIN_SALT && process.env.NODE_ENV === 'production') {
-    console.warn('[Security Warning] PIN_SALT is not explicitly defined in environment variables! Using configured fallback salt.');
+if (!process.env.PIN_SALT && process.env.FUNCTIONS_EMULATOR !== 'true' && process.env.NODE_ENV === 'production') {
+    console.warn('\n[SECURITY WARNING] 🚨 PIN_SALT environment variable is NOT explicitly defined!');
+    console.warn('[SECURITY WARNING] 🚨 Falling back to default salt. This is highly discouraged in production.');
+    console.warn('[SECURITY WARNING] 🚨 Please configure PIN_SALT via Firebase Secrets or Env Vars.\n');
 }
 function hashPin(pin, salt = exports.PIN_SALT) {
     return crypto.createHash('sha256').update(`${String(pin).trim()}:${salt}`).digest('hex');

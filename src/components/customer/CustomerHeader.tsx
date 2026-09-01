@@ -51,6 +51,11 @@ export interface CustomerHeaderProps {
   lineProfile?: any;
   userPoints?: number;
   userBalance?: number;
+  memberPointsRatio?: number;
+  vipThreshold?: number;
+  vipDiscountRate?: number;
+  enablePointsDiscount?: boolean;
+  pointsRedeemRate?: number;
   redeemMessage?: string | null;
   REWARD_ITEMS: any[];
   handleRedeemReward: (reward: any) => void;
@@ -94,6 +99,11 @@ const CustomerHeaderBase: React.FC<CustomerHeaderProps> = ({
   lineProfile,
   userPoints = 0,
   userBalance = 0,
+  memberPointsRatio = 20,
+  vipThreshold = 1000,
+  vipDiscountRate = 0.9,
+  enablePointsDiscount = true,
+  pointsRedeemRate = 1,
   redeemMessage,
   REWARD_ITEMS,
   handleRedeemReward,
@@ -859,13 +869,24 @@ const CustomerHeaderBase: React.FC<CustomerHeaderProps> = ({
                 <div className="space-y-1">
                   <h4 className="text-white font-extrabold text-sm sm:text-base tracking-wide flex items-center gap-2">
                     <span>Google 會員專屬累點好禮中心</span>
-                    <span className="bg-blue-500/20 text-blue-400 text-[10px] font-black px-2.5 py-0.5 rounded-full border border-blue-400/20">
-                      尊榮會員 VIP
-                    </span>
+                    {(userPoints || 0) >= vipThreshold ? (
+                      <span className="bg-gradient-to-r from-amber-500/30 to-yellow-500/20 text-[#E5B453] border border-amber-500/50 text-[10px] font-black px-2.5 py-0.5 rounded-full shadow-sm">
+                        👑 VIP 尊榮貴賓 ({Math.round(vipDiscountRate * 100)}% 專屬結帳)
+                      </span>
+                    ) : (
+                      <span className="bg-zinc-800 text-zinc-300 text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-white/10">
+                        一般會員
+                      </span>
+                    )}
                   </h4>
                   <p className="text-slate-400 text-xs">
                     歡迎回來，<strong className="text-white font-black">{lineProfile.displayName}</strong>
-                    ！每 20 元消費皆可累積 1 點，點數即可兌換免費泰式人氣熱銷美食串燒！
+                    ！每 {memberPointsRatio} 元消費可累積 1 點{enablePointsDiscount ? `，點數可按 ${pointsRedeemRate} 點抵 NT$1 折現` : ''}或兌換熱銷串燒好禮！
+                    {(userPoints || 0) < vipThreshold && (
+                      <span className="block text-amber-400/90 text-[11px] font-medium mt-0.5">
+                        ✨ 距離升級 👑 VIP 尊榮貴賓（享全單 {Math.round(vipDiscountRate * 100)}% 折扣）還差 <strong className="font-bold">{vipThreshold - (userPoints || 0)} 點</strong>！
+                      </span>
+                    )}
                   </p>
                 </div>
               </div>
