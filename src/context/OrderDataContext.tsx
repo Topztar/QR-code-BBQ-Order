@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useRef, useMemo, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useMemo, useCallback, ReactNode } from 'react';
 import { Order, OrderStatus, OrderItem, TableConfig, Reservation } from '../types';
 import { apiFetch } from '../lib/api';
 import { db, isFirebaseSyncEnabled } from '../lib/firebase';
@@ -153,6 +153,16 @@ export function OrderDataProvider({
 
   const [offlineQueue, setOfflineQueue] = useState<QueuedRequest[]>(getOfflineQueue());
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  const isSyncingRef = useRef<boolean>(false);
+  useEffect(() => {
+    isSyncingRef.current = isSyncing;
+  }, [isSyncing]);
+
+  const onRefreshDataRef = useRef(onRefreshData);
+  useEffect(() => {
+    onRefreshDataRef.current = onRefreshData;
+  }, [onRefreshData]);
+
   const [syncProgressMsg, setSyncProgressMsg] = useState<string>('');
   const [isNetworkOnline, setIsNetworkOnline] = useState<boolean>(typeof navigator !== 'undefined' ? navigator.onLine : true);
   const [syncActive, setSyncActive] = useState<boolean>(() => isFirebaseSyncEnabled());
@@ -170,7 +180,7 @@ export function OrderDataProvider({
     return () => window.removeEventListener('firebase_sync_changed', handleSyncChanged);
   }, []);
 
-  const [forceApiFallback, setForceApiFallback] = useState<boolean>(false);
+  const [forceApiFallback] = useState<boolean>(false);
   const activeOrderSubmissionsRef = useRef<Set<string>>(new Set());
   const recentStatusTransitionsRef = useRef<Map<string, RecentOrderTransition>>(new Map());
   const deletedOrderIdsRef = useRef<Set<string>>(new Set());
@@ -306,32 +316,34 @@ export function OrderDataProvider({
     };
   }, []);
 
-  const handleForceSync = async () => {
-    if (isSyncing) return;
+  const handleForceSync = useCallback(async () => {
+    if (isSyncingRef.current) return;
+    isSyncingRef.current = true;
     setIsSyncing(true);
     setSyncProgressMsg('正在準備批次重發...');
     try {
       const result = await processOfflineQueue((progress) => setSyncProgressMsg(progress));
       if (result.successCount > 0) {
         console.log(`[Offline Sync] Successfully synced ${result.successCount} requests!`);
-        if (onRefreshData) {
-          await onRefreshData();
+        if (onRefreshDataRef.current) {
+          await onRefreshDataRef.current();
         }
       }
     } catch (e) {
       console.error('[Offline Sync Error]', e);
     } finally {
+      isSyncingRef.current = false;
       setIsSyncing(false);
       setSyncProgressMsg('');
     }
-  };
+  }, []);
 
   // Trigger sync immediately when network comes back online with pending items
   useEffect(() => {
     if (isNetworkOnline && offlineQueue.length > 0) {
       handleForceSync();
     }
-  }, [isNetworkOnline, offlineQueue.length]);
+  }, [isNetworkOnline, offlineQueue.length, handleForceSync]);
 
   // Phase B ─ Background Probe Timer (解決 G-1 / G-4)
   // When the offline queue is non-empty, poll every 30s to attempt sync even if
@@ -351,7 +363,7 @@ export function OrderDataProvider({
     }, PROBE_INTERVAL_MS);
 
     return () => clearInterval(probeTimer);
-  }, [offlineQueue.length, isSyncing]);
+  }, [offlineQueue.length, isSyncing, handleForceSync]);
 
   // Firestore Realtime Orders listener & Fallback API Polling
   useEffect(() => {
@@ -390,10 +402,10 @@ export function OrderDataProvider({
               })) || []
             }));
 
-            setOrders(prev => reconcileOrdersWithRecentTransitions(normalizedData));
+            setOrders(() => reconcileOrdersWithRecentTransitions(normalizedData));
           }
         }
-      } catch (e) {
+      } catch (_e) {
         // Silent fallback when running on static Firebase hosting without Express server
       }
     };
