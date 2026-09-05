@@ -12,7 +12,7 @@ import { apiFetch } from '../../lib/api';
 import { computeOrderItemsSubtotal } from '../ManagerDashboard';
 
 import {
-  Calendar, Check, Clock, Coins, Copy, Edit, FileText,
+  Calendar, Check, Clock, Coins, Copy, Edit,
   Lock, Maximize2, Minus, Phone, Plus, QrCode, ShoppingBag,
   Trash2, Unlock, User
 } from 'lucide-react';
@@ -86,7 +86,7 @@ export interface ManagerCashierTabProps {
 
 export const ManagerCashierTab: React.FC<ManagerCashierTabProps> = (props) => {
   const {
-    currentLang, orders, menuItems, tables, categories, reservations,
+    currentLang, orders, menuItems, tables, categories: _categories, reservations,
     minSpend, isOpen, handleManualOpenDrawer,  handleTableMouseDown,
     handleTableTouchStart, handleFineTunePosition, triggerEditTableMode,
     triggerAddReservationMode, triggerEditReservationMode,
@@ -94,9 +94,9 @@ export const ManagerCashierTab: React.FC<ManagerCashierTabProps> = (props) => {
     onEditReservation, onDeleteReservation, onDeleteTable,
     onUpdateOrderItems, onPayOrder, onBulkPayOrders,
     getPanelWidthClass, localTablePositions,
-    selectedPendingRes, setSelectedPendingRes,
+    selectedPendingRes: _selectedPendingRes, setSelectedPendingRes: _setSelectedPendingRes,
     setCheckoutSuccessData, staffPin,
-    confirmActionModal, setConfirmActionModal
+    confirmActionModal: _confirmActionModal, setConfirmActionModal
   } = props;
 
   
@@ -120,17 +120,15 @@ export const ManagerCashierTab: React.FC<ManagerCashierTabProps> = (props) => {
     showCheckoutConfirm, setShowCheckoutConfirm,
     isCashierWidthAuto,
     
-     isTableFormOpen, editingTableObj, tableIdInput,
-    tableQrUrlInput, tableMaxCapacityInput, tableError, tableSuccess,
-    tableToDeleteId, reservationToDeleteId, editingOrderTableId, editingOrderTableValue,
     setIsCashierWidthAuto, setSimulatedElapsedOrders, setCopiedTakeoutPhone, setCopiedGoogleLinkNotice,
     setBatchSuccessMessage, setIsBatchProcessing, setSelectedResIds,
     setSelectedCalendarStatusFilter, setSelectedFineTuneTableId,
     
-     setIsTableFormOpen, setEditingTableObj, setTableIdInput,
+    setIsTableFormOpen, setEditingTableObj, setTableIdInput,
     setTableQrUrlInput, setTableMaxCapacityInput, setTableError, setTableSuccess,
-    setTableToDeleteId, setReservationToDeleteId, setEditingOrderTableId,
-    setEditingOrderTableValue,
+    tableToDeleteId, setTableToDeleteId, reservationToDeleteId, setReservationToDeleteId,
+    editingOrderTableId, setEditingOrderTableId,
+    editingOrderTableValue, setEditingOrderTableValue,
     cashierCashChannel, setCashierCashChannel,
     simulatedElapsedOrders, copiedTakeoutPhone, copiedGoogleLinkNotice,
     batchSuccessMessage, isBatchProcessing, selectedResIds,
@@ -724,13 +722,16 @@ export const ManagerCashierTab: React.FC<ManagerCashierTabProps> = (props) => {
     setCashierMemberData(null);
   }, []);
 
+  const selectedOrderId = cashierSelectedOrder?.id;
+  const selectedCustomerName = cashierSelectedOrder?.customerName;
+
   React.useEffect(() => {
-    if (cashierPaymentMethod === 'member' && cashierSelectedOrder?.customerName) {
-      fetchMemberData(cashierSelectedOrder.customerName);
+    if (cashierPaymentMethod === 'member' && selectedCustomerName) {
+      fetchMemberData(selectedCustomerName);
     } else {
       setCashierMemberData(null);
     }
-  }, [cashierPaymentMethod, cashierSelectedOrder?.id, cashierSelectedOrder?.customerName, fetchMemberData]);
+  }, [cashierPaymentMethod, selectedOrderId, selectedCustomerName, fetchMemberData]);
   // ─────────────────────────────────────────────────────────────────────────
 
   return (
