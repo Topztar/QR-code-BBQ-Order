@@ -629,149 +629,6 @@ export const ManagerCashierTab: React.FC<ManagerCashierTabProps> = (props) => {
 
 
 
-      {showCheckoutConfirm && cashierSelectedOrder && (
-        <div id="checkout-confirm-modal" className="fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 text-xs font-sans animate-fadeIn">
-          <div className="bg-[#121212] border border-white/10 rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl text-left transition-all duration-300">
-            <div className="p-5 pb-3 border-b border-white/5 flex items-center justify-between">
-              <h3 className="font-bold text-sm text-[#E5B453] flex items-center gap-1.5">
-                <Coins size={15} />
-                <span>櫃檯收銀二次確認 Checkout Confirm</span>
-              </h3>
-              <button
-                type="button"
-                onClick={() => setShowCheckoutConfirm(false)}
-                className="text-white/40 hover:text-white/80 transition text-sm font-mono cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="p-5 space-y-4">
-              <div className="bg-black/35 border border-white/5 p-4 rounded-xl space-y-3">
-                <div className="flex justify-between items-center text-zinc-400">
-                  <span>結帳桌號 Table(s)</span>
-                  <span className="text-white font-mono font-bold bg-slate-800 border border-slate-700 px-2 py-0.5 rounded-md">
-                    {Array.from(new Set(cashierMergedOrders.map(o => o.tableNumber))).join(' + ')} 桌
-                  </span>
-                </div>
-
-                <div className="flex justify-between items-center text-zinc-400">
-                  <span>結帳單數 Orders</span>
-                  <span className="text-amber-300 font-mono font-bold">
-                    {cashierMergedOrders.length} 筆訂單
-                    {cashierCheckoutScope === 'single' && ' (單一獨立)'}
-                    {cashierCheckoutScope === 'same_table' && ' (同桌合併)'}
-                    {cashierCheckoutScope === 'all_merged' && ' (跨桌全併)'}
-                    {cashierCheckoutScope === 'custom' && ' (自選合併)'}
-                  </span>
-                </div>
-
-                <div className="flex justify-between items-center text-zinc-400">
-                  <span>主單編號 Order ID</span>
-                  <span className="text-white font-mono font-semibold">{cashierSelectedOrder.id.substring(0, 8)}...</span>
-                </div>
-
-                <div className="flex justify-between items-center text-zinc-400">
-                  <span>付款方式 Payment</span>
-                  <span className="text-amber-300 font-bold bg-amber-500/10 px-2 py-0.5 rounded-md text-xs">
-                    {cashierPaymentMethod === 'cash' && '💵 現金支付 Cash'}
-                    {cashierPaymentMethod === 'credit' && '💳 信用卡 Credit Card (+10%)'}
-                    {cashierPaymentMethod === 'twqr' && '📱 TWQR行動支付 (+10%)'}
-                    {cashierPaymentMethod === 'member' && '👤 會員餘額扣款 VIP Member'}
-                  </span>
-                </div>
-
-                <div className="flex justify-between items-center text-zinc-400 pt-1 border-t border-white/5">
-                  <span>餐點小計 Subtotal</span>
-                  <span className="text-white font-mono font-bold">NT$ {cashierCalculatedTotals?.subtotal.toLocaleString()}</span>
-                </div>
-
-                {cashierCalculatedTotals && cashierCalculatedTotals.discount > 0 && (
-                  <div className="flex justify-between items-center text-rose-400">
-                    <span>折扣折抵 Discount ({cashierDiscountType === 'percent' ? `${cashierDiscountRate}% OFF` : '固定折抵'})</span>
-                    <span className="font-mono font-bold">- NT$ {cashierCalculatedTotals.discount.toLocaleString()}</span>
-                  </div>
-                )}
-
-                {cashierCalculatedTotals && cashierCalculatedTotals.surcharge > 0 && (
-                  <div className="flex justify-between items-center text-blue-400">
-                    <span>服務費/加成 Surcharge ({cashierSurchargeType === 'percent' ? `${cashierSurchargeRate}%` : '固定加成'})</span>
-                    <span className="font-mono font-bold">+ NT$ {cashierCalculatedTotals.surcharge.toLocaleString()}</span>
-                  </div>
-                )}
-
-                {cashierPaymentMethod === 'cash' && (
-                  <>
-                    <div className="flex justify-between items-center text-zinc-400">
-                      <span>實收現金 Cash Received</span>
-                      <span className="text-white font-mono font-bold text-sm">NT$ {cashierCashReceived}</span>
-                    </div>
-                    <div className="flex justify-between items-center text-zinc-400">
-                      <span>應找零錢 Change Provided</span>
-                      <span className="text-emerald-400 font-mono font-bold text-sm">NT$ {Math.max(0, cashierCashReceived - (cashierCalculatedTotals?.total || 0))}</span>
-                    </div>
-                  </>
-                )}
-
-                <div className="border-t border-white/10 pt-3 flex justify-between items-center text-zinc-300">
-                  <span className="font-bold text-xs">應付總額 Final Total</span>
-                  <span className="text-[#E5B453] font-mono text-xl font-black">
-                    NT$ {cashierCalculatedTotals?.total.toLocaleString()}
-                  </span>
-                </div>
-              </div>
-
-              <p className="text-[10px] text-zinc-400 text-center leading-relaxed">
-                {cashierCheckoutScope === 'single'
-                  ? 'ℹ️ 目前為【獨立單一訂單結帳】，僅結算此筆點單。同桌其他訂單不受影響，該桌席在所有訂單結清前將持續保留。'
-                  : cashierMergedOrders.length > 1
-                  ? `ℹ️ 目前為【合併結帳模式】，將一併結清已選取的 ${cashierMergedOrders.length} 筆訂單，確認無誤後請點擊下方結清。`
-                  : 'ℹ️ 請確認款項點收無誤。點選下方「確認結清」後，系統將會儲存收銀紀錄並標記為已結清。'}
-              </p>
-            </div>
-
-            <div className="p-4 bg-white/5 border-t border-white/5 flex items-center justify-end space-x-3.5">
-              <button
-                type="button"
-                disabled={isCheckoutSubmitting}
-                onClick={() => setShowCheckoutConfirm(false)}
-                className={`px-4 py-2 border border-white/10 rounded-lg font-bold transition text-white text-xs ${
-                  isCheckoutSubmitting ? 'opacity-40 cursor-not-allowed' : 'hover:bg-white/5 active:scale-95 cursor-pointer'
-                }`}
-              >
-                取消
-              </button>
-              <button
-                type="button"
-                disabled={isCheckoutSubmitting}
-                onClick={async () => {
-                  try {
-                    await handleCashierCheckoutSubmit();
-                    setShowCheckoutConfirm(false);
-                  } catch (e) {
-                    console.error(e);
-                  }
-                }}
-                className={`flex-1 py-2 bg-[#E5B453] text-slate-900 font-extrabold rounded-lg transition text-xs text-center font-bold flex items-center justify-center space-x-1.5 ${
-                  isCheckoutSubmitting ? 'opacity-50 cursor-not-allowed' : 'hover:bg-amber-400 active:scale-95 cursor-pointer shadow-md'
-                }`}
-              >
-                {isCheckoutSubmitting && (
-                  <span className="w-3 h-3 border-2 border-slate-900 border-t-transparent rounded-full animate-spin"></span>
-                )}
-                <span>
-                  {isCheckoutSubmitting
-                    ? '處理中...'
-                    : cashierCheckoutScope === 'single'
-                    ? '🎯 確認此單獨立結清 (不影響同桌他單)'
-                    : `🎯 確認結清已選 ${cashierMergedOrders.length} 筆訂單`}
-                </span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
 
 
   // ─── Tier B: Google Identity Protection ───────────────────────────────────
@@ -819,8 +676,7 @@ export const ManagerCashierTab: React.FC<ManagerCashierTabProps> = (props) => {
     } else {
       setCashierMemberData(null);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cashierPaymentMethod, cashierSelectedOrder?.id]);
+  }, [cashierPaymentMethod, cashierSelectedOrder?.id, cashierSelectedOrder?.customerName, fetchMemberData]);
   // ─────────────────────────────────────────────────────────────────────────
 
   return (
@@ -3299,7 +3155,7 @@ export const ManagerCashierTab: React.FC<ManagerCashierTabProps> = (props) => {
                                   </>
                                 ) : (
                                   <>
-                                    <span>⚡ 批次確認 (改為已就座) Batch Confirm</span>
+                                    <span>⚡ 批次確認預約 (改為已確認) Batch Confirm</span>
                                   </>
                                 )}
                               </button>
@@ -3449,9 +3305,9 @@ export const ManagerCashierTab: React.FC<ManagerCashierTabProps> = (props) => {
                                                       await onEditReservation(res.id, { status: 'confirmed' });
                                                     }
                                                   }}
-                                                  className="px-2 py-1 bg-amber-600 hover:bg-amber-500 text-white font-extrabold rounded transition active:scale-90 cursor-pointer"
+                                                  className="px-2.5 py-1 bg-[#E5B453] hover:bg-amber-400 text-slate-950 font-black shadow-md font-extrabold rounded transition active:scale-90 cursor-pointer"
                                                 >
-                                                  ✔ 預約確認
+                                                  ✔ 確認預約
                                                 </button>
                                               )}
                                               {(() => {
@@ -4348,6 +4204,149 @@ export const ManagerCashierTab: React.FC<ManagerCashierTabProps> = (props) => {
               </div>
             </div>
           )}
+      {showCheckoutConfirm && cashierSelectedOrder && (
+        <div id="checkout-confirm-modal" className="fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 text-xs font-sans animate-fadeIn">
+          <div className="bg-[#121212] border border-white/10 rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl text-left transition-all duration-300">
+            <div className="p-5 pb-3 border-b border-white/5 flex items-center justify-between">
+              <h3 className="font-bold text-sm text-[#E5B453] flex items-center gap-1.5">
+                <Coins size={15} />
+                <span>櫃檯收銀二次確認 Checkout Confirm</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowCheckoutConfirm(false)}
+                className="text-white/40 hover:text-white/80 transition text-sm font-mono cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div className="bg-black/35 border border-white/5 p-4 rounded-xl space-y-3">
+                <div className="flex justify-between items-center text-zinc-400">
+                  <span>結帳桌號 Table(s)</span>
+                  <span className="text-white font-mono font-bold bg-slate-800 border border-slate-700 px-2 py-0.5 rounded-md">
+                    {Array.from(new Set(cashierMergedOrders.map(o => o.tableNumber))).join(' + ')} 桌
+                  </span>
+                </div>
+
+                <div className="flex justify-between items-center text-zinc-400">
+                  <span>結帳單數 Orders</span>
+                  <span className="text-amber-300 font-mono font-bold">
+                    {cashierMergedOrders.length} 筆訂單
+                    {cashierCheckoutScope === 'single' && ' (單一獨立)'}
+                    {cashierCheckoutScope === 'same_table' && ' (同桌合併)'}
+                    {cashierCheckoutScope === 'all_merged' && ' (跨桌全併)'}
+                    {cashierCheckoutScope === 'custom' && ' (自選合併)'}
+                  </span>
+                </div>
+
+                <div className="flex justify-between items-center text-zinc-400">
+                  <span>主單編號 Order ID</span>
+                  <span className="text-white font-mono font-semibold">{cashierSelectedOrder.id.substring(0, 8)}...</span>
+                </div>
+
+                <div className="flex justify-between items-center text-zinc-400">
+                  <span>付款方式 Payment</span>
+                  <span className="text-amber-300 font-bold bg-amber-500/10 px-2 py-0.5 rounded-md text-xs">
+                    {cashierPaymentMethod === 'cash' && '💵 現金支付 Cash'}
+                    {cashierPaymentMethod === 'credit' && '💳 信用卡 Credit Card (+10%)'}
+                    {cashierPaymentMethod === 'twqr' && '📱 TWQR行動支付 (+10%)'}
+                    {cashierPaymentMethod === 'member' && '👤 會員餘額扣款 VIP Member'}
+                  </span>
+                </div>
+
+                <div className="flex justify-between items-center text-zinc-400 pt-1 border-t border-white/5">
+                  <span>餐點小計 Subtotal</span>
+                  <span className="text-white font-mono font-bold">NT$ {cashierCalculatedTotals?.subtotal.toLocaleString()}</span>
+                </div>
+
+                {cashierCalculatedTotals && cashierCalculatedTotals.discount > 0 && (
+                  <div className="flex justify-between items-center text-rose-400">
+                    <span>折扣折抵 Discount ({cashierDiscountType === 'percent' ? `${cashierDiscountRate}% OFF` : '固定折抵'})</span>
+                    <span className="font-mono font-bold">- NT$ {cashierCalculatedTotals.discount.toLocaleString()}</span>
+                  </div>
+                )}
+
+                {cashierCalculatedTotals && cashierCalculatedTotals.surcharge > 0 && (
+                  <div className="flex justify-between items-center text-blue-400">
+                    <span>服務費/加成 Surcharge ({cashierSurchargeType === 'percent' ? `${cashierSurchargeRate}%` : '固定加成'})</span>
+                    <span className="font-mono font-bold">+ NT$ {cashierCalculatedTotals.surcharge.toLocaleString()}</span>
+                  </div>
+                )}
+
+                {cashierPaymentMethod === 'cash' && (
+                  <>
+                    <div className="flex justify-between items-center text-zinc-400">
+                      <span>實收現金 Cash Received</span>
+                      <span className="text-white font-mono font-bold text-sm">NT$ {cashierCashReceived}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-zinc-400">
+                      <span>應找零錢 Change Provided</span>
+                      <span className="text-emerald-400 font-mono font-bold text-sm">NT$ {Math.max(0, cashierCashReceived - (cashierCalculatedTotals?.total || 0))}</span>
+                    </div>
+                  </>
+                )}
+
+                <div className="border-t border-white/10 pt-3 flex justify-between items-center text-zinc-300">
+                  <span className="font-bold text-xs">應付總額 Final Total</span>
+                  <span className="text-[#E5B453] font-mono text-xl font-black">
+                    NT$ {cashierCalculatedTotals?.total.toLocaleString()}
+                  </span>
+                </div>
+              </div>
+
+              <p className="text-[10px] text-zinc-400 text-center leading-relaxed">
+                {cashierCheckoutScope === 'single'
+                  ? 'ℹ️ 目前為【獨立單一訂單結帳】，僅結算此筆點單。同桌其他訂單不受影響，該桌席在所有訂單結清前將持續保留。'
+                  : cashierMergedOrders.length > 1
+                  ? `ℹ️ 目前為【合併結帳模式】，將一併結清已選取的 ${cashierMergedOrders.length} 筆訂單，確認無誤後請點擊下方結清。`
+                  : 'ℹ️ 請確認款項點收無誤。點選下方「確認結清」後，系統將會儲存收銀紀錄並標記為已結清。'}
+              </p>
+            </div>
+
+            <div className="p-4 bg-white/5 border-t border-white/5 flex items-center justify-end space-x-3.5">
+              <button
+                type="button"
+                disabled={isCheckoutSubmitting}
+                onClick={() => setShowCheckoutConfirm(false)}
+                className={`px-4 py-2 border border-white/10 rounded-lg font-bold transition text-white text-xs ${
+                  isCheckoutSubmitting ? 'opacity-40 cursor-not-allowed' : 'hover:bg-white/5 active:scale-95 cursor-pointer'
+                }`}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                disabled={isCheckoutSubmitting}
+                onClick={async () => {
+                  try {
+                    await handleCashierCheckoutSubmit();
+                    setShowCheckoutConfirm(false);
+                  } catch (e) {
+                    console.error(e);
+                  }
+                }}
+                className={`flex-1 py-2 bg-[#E5B453] text-slate-900 font-extrabold rounded-lg transition text-xs text-center font-bold flex items-center justify-center space-x-1.5 ${
+                  isCheckoutSubmitting ? 'opacity-50 cursor-not-allowed' : 'hover:bg-amber-400 active:scale-95 cursor-pointer shadow-md'
+                }`}
+              >
+                {isCheckoutSubmitting && (
+                  <span className="w-3 h-3 border-2 border-slate-900 border-t-transparent rounded-full animate-spin"></span>
+                )}
+                <span>
+                  {isCheckoutSubmitting
+                    ? '處理中...'
+                    : cashierCheckoutScope === 'single'
+                    ? '🎯 確認此單獨立結清 (不影響同桌他單)'
+                    : `🎯 確認結清已選 ${cashierMergedOrders.length} 筆訂單`}
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
         </div>
   );
 };

@@ -338,20 +338,20 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
     };
   }, [activeTab, syncActive]);
 
-  // Reservation auto-check mechanism: Automatically mark pending reservations within 1 hour as "upcoming"
+  // Reservation auto-check mechanism: Automatically mark confirmed reservations within 1 hour as "upcoming"
   useEffect(() => {
     if (!reservations || reservations.length === 0) return;
     const checkUpcomingInterval = setInterval(() => {
       const now = new Date();
       reservations.forEach(res => {
-        if (res.status === 'pending') {
+        if (res.status === 'confirmed') {
           const [year, month, day] = res.date.split('-').map(Number);
           const [hour, minute] = res.time.split(':').map(Number);
           if (!isNaN(year) && !isNaN(month) && !isNaN(day) && !isNaN(hour) && !isNaN(minute)) {
             const resDateTime = new Date(year, month - 1, day, hour, minute);
             const diffMinutes = (resDateTime.getTime() - now.getTime()) / (1000 * 60);
             if (diffMinutes > -120 && diffMinutes <= 60) {
-              console.log(`[Client Auto-Check] Reservation ${res.id} (${res.customerName}) is within 1 hour, marking as upcoming.`);
+              console.log(`[Client Auto-Check] Confirmed reservation ${res.id} (${res.customerName}) is within 1 hour, marking as upcoming.`);
               handleUpdateReservation(res.id, { status: 'upcoming' });
             }
           }
@@ -722,6 +722,20 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
 
     const targetMins = parseMins(reservation.time);
     const targetDateStr = String(reservation.date).trim();
+
+    // 4-Hour advance reservation rule for same-day bookings to prevent table conflicts with walk-in guests
+    const now = new Date();
+    const todayDateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    if (targetDateStr === todayDateStr && !(reservation as any).isStaffOverride) {
+      const currentMins = now.getHours() * 60 + now.getMinutes();
+      if (targetMins < currentMins + 240) {
+        return {
+          success: false,
+          error: '預約時間必須為現在時間 4 小時之後，避免與現場顧客發生桌席衝突！',
+        };
+      }
+    }
+
     const requestedTables = String(reservation.tableNumber).split(',').map(t => t.trim()).filter(Boolean);
     const selectedTablesCapacity = (tables || [])
       .filter(t => requestedTables.includes(t.id))

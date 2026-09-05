@@ -16,6 +16,7 @@ import {
   printKitchenTicket,
   printCustomerReceipt
 } from './hardware/printerDriver';
+import { sendReservationNotifications, sendTestNotification } from './functions/src/services/notification';
 
 import { initFirebaseStorage, gcsBucket, getGeminiClient, app, PORT } from './src/server/init';
 import { setupMiddleware, createRateLimiter } from './src/server/middleware';
@@ -440,6 +441,7 @@ let livePrinterSettings = {
     "printTimeEnabled": true
   }
 };
+let liveNotificationSettings: any = {};
 
 export function calculatePromoDiscount(items: any[]): number {
   let promoDiscount = 0;
@@ -507,10 +509,10 @@ function syncTableStatusesWithTodayReservations() {
   const todayStr = getTaiwanDateString();
   if (!liveTables || liveTables.length === 0) return;
 
-  // Run the upcoming status check inline to ensure live updates on sync calls
+  // Run the upcoming status check inline to ensure live updates on sync calls for CONFIRMED reservations
   const now = new Date();
   liveReservations.forEach(res => {
-    if (res.status === 'pending') {
+    if (res.status === 'confirmed') {
       const [year, month, day] = res.date.split('-').map(Number);
       const [hour, minute] = res.time.split(':').map(Number);
       if (!isNaN(year) && !isNaN(month) && !isNaN(day) && !isNaN(hour) && !isNaN(minute)) {
@@ -518,7 +520,7 @@ function syncTableStatusesWithTodayReservations() {
         const diffMinutes = (resDateTime.getTime() - now.getTime()) / (1000 * 60);
         if (diffMinutes > -120 && diffMinutes <= 60) {
           res.status = 'upcoming';
-          console.log(`[Sync Auto-Check] Automatically marked reservation ${res.id} (${res.customerName}) as upcoming.`);
+          console.log(`[Sync Auto-Check] Automatically marked confirmed reservation ${res.id} (${res.customerName}) as upcoming.`);
         }
       }
     }
@@ -1212,6 +1214,7 @@ function saveStateToDisk() {
       liveMemberPointsRedeemRate,
       liveMemberRewards,
       liveMembers,
+      liveNotificationSettings,
     };
     fs.writeFileSync(PERSISTENCE_FILE_PATH, JSON.stringify(dataToSave, null, 2), "utf-8");
     console.log("✓ System State fully saved to codebase disk:", PERSISTENCE_FILE_PATH);
@@ -1301,6 +1304,9 @@ function loadStateFromDisk() {
         }
         if (parsed.liveServicePaused !== undefined) {
           liveServicePaused = !!parsed.liveServicePaused;
+        }
+        if (parsed.liveNotificationSettings) {
+          liveNotificationSettings = parsed.liveNotificationSettings;
         }
         if (Array.isArray(parsed.liveOrders)) {
           const nowMs = Date.now();
@@ -2378,6 +2384,74 @@ app.post('/api/settings/members-config', (req, res) => {
   });
 });
 
+// Notification Settings Endpoints
+app.get('/api/settings/notifications', (_req, res) => {
+  const lineToken = liveNotificationSettings.lineToken || process.env.LINE_CHANNEL_ACCESS_TOKEN || '';
+  const lineAdminId = liveNotificationSettings.lineAdminId || process.env.LINE_ADMIN_USER_ID || '';
+  const gmailUser = liveNotificationSettings.gmailUser || process.env.GMAIL_USER || '';
+  const gmailAppPass = liveNotificationSettings.gmailAppPass || process.env.GMAIL_APP_PASS || '';
+
+  res.json({
+    lineEnabled: liveNotificationSettings.lineEnabled !== false,
+    isLineConfigured: Boolean(lineToken && lineAdminId),
+    lineAdminId,
+    hasLineToken: Boolean(lineToken),
+    gmailEnabled: liveNotificationSettings.gmailEnabled !== false,
+    isGmailConfigured: Boolean(gmailUser && gmailAppPass),
+    gmailUser,
+    hasGmailAppPass: Boolean(gmailAppPass),
+    source: {
+      line: liveNotificationSettings.lineToken ? 'database' : (process.env.LINE_CHANNEL_ACCESS_TOKEN ? 'env' : 'none'),
+      gmail: liveNotificationSettings.gmailAppPass ? 'database' : (process.env.GMAIL_APP_PASS ? 'env' : 'none')
+    }
+  });
+});
+
+app.post('/api/settings/notifications', (req, res) => {
+  const { lineEnabled, lineToken, lineAdminId, gmailEnabled, gmailUser, gmailAppPass } = req.body;
+
+  if (lineEnabled !== undefined) liveNotificationSettings.lineEnabled = Boolean(lineEnabled);
+  if (lineAdminId !== undefined) liveNotificationSettings.lineAdminId = String(lineAdminId).trim();
+  if (typeof lineToken === 'string' && lineToken.trim()) {
+    liveNotificationSettings.lineToken = lineToken.trim();
+  }
+
+  if (gmailEnabled !== undefined) liveNotificationSettings.gmailEnabled = Boolean(gmailEnabled);
+  if (gmailUser !== undefined) liveNotificationSettings.gmailUser = String(gmailUser).trim();
+  if (typeof gmailAppPass === 'string' && gmailAppPass.trim()) {
+    liveNotificationSettings.gmailAppPass = gmailAppPass.replace(/\s+/g, '').trim();
+  }
+
+  saveStateToDisk();
+  return res.json({ success: true, message: '通知設定已成功更新！' });
+});
+
+app.post('/api/settings/notifications/test', async (req, res) => {
+  const { channel, config } = req.body;
+  if (channel !== 'LINE' && channel !== 'Gmail') {
+    return res.status(400).json({ success: false, error: '未知的通知管道 (僅支援 LINE 或 Gmail)' });
+  }
+
+  const effectiveConfig = {
+    lineEnabled: config?.lineEnabled ?? liveNotificationSettings.lineEnabled ?? true,
+    lineToken: (config?.lineToken && config.lineToken.trim()) ? config.lineToken.trim() : (liveNotificationSettings.lineToken || process.env.LINE_CHANNEL_ACCESS_TOKEN),
+    lineAdminId: (config?.lineAdminId !== undefined && config.lineAdminId.trim()) ? config.lineAdminId.trim() : (liveNotificationSettings.lineAdminId || process.env.LINE_ADMIN_USER_ID),
+    gmailEnabled: config?.gmailEnabled ?? liveNotificationSettings.gmailEnabled ?? true,
+    gmailUser: (config?.gmailUser !== undefined && config.gmailUser.trim()) ? config.gmailUser.trim() : (liveNotificationSettings.gmailUser || process.env.GMAIL_USER),
+    gmailAppPass: (config?.gmailAppPass && config.gmailAppPass.trim()) ? config.gmailAppPass.replace(/\s+/g, '').trim() : (liveNotificationSettings.gmailAppPass || process.env.GMAIL_APP_PASS)
+  };
+
+  const result = await sendTestNotification(channel, effectiveConfig);
+  if (result.success) {
+    res.json({ success: true, message: `${channel} 連線測試成功！已發送測試訊息。` });
+  } else {
+    res.json({
+      success: false,
+      error: result.error || (result.reason === 'unconfigured' ? '尚未設定必要的 Token 或帳號密碼' : (result.reason === 'disabled' ? '該通知管道目前已設為關閉停用' : '發送失敗'))
+    });
+  }
+});
+
 // ─── Google Identity Protection: Member Registry API ─────────────────────────
 // All balance and points mutations require a valid request to these endpoints.
 // The frontend MUST NOT write to localStorage directly for financial fields.
@@ -2704,6 +2778,16 @@ app.post('/api/reservations', reservationRateLimiter, (req, res) => {
     return (h || 0) * 60 + (m || 0);
   };
   const targetMins = parseMins(time);
+
+  // 4-Hour advance rule for same-day reservations to prevent table conflicts with walk-in customers
+  const todayNow = new Date();
+  const todayDateStr = `${todayNow.getFullYear()}-${String(todayNow.getMonth() + 1).padStart(2, '0')}-${String(todayNow.getDate()).padStart(2, '0')}`;
+  if (date && date.trim() === todayDateStr && !req.body.isStaffOverride) {
+    const currentMins = todayNow.getHours() * 60 + todayNow.getMinutes();
+    if (targetMins < currentMins + 240) {
+      return res.status(400).json({ error: '預約時間必須為現在時間 4 小時之後，避免與現場顧客發生桌席衝突！' });
+    }
+  }
   
   const overlapping = liveReservations.filter(r => {
     if (r.status === 'cancelled' || (r as any).status === 'rejected') return false;
@@ -2773,6 +2857,12 @@ app.post('/api/reservations', reservationRateLimiter, (req, res) => {
   }
 
   saveStateToDisk();
+
+  // 🔔 Real-time Admin Notifications (LINE & Gmail) - non-blocking background dispatch
+  sendReservationNotifications(newReservation, { notificationConfig: liveNotificationSettings }).catch((err) => {
+    console.error('[Notification] Background dispatch error:', err);
+  });
+
   res.status(201).json(newReservation);
 });
 
@@ -3831,7 +3921,22 @@ app.put('/api/orders/:id/items', (req, res) => {
   // Recompute subtotal, service charge, and total
   let subtotal = 0;
   order.items.forEach(it => {
-    subtotal += it.price * it.qty;
+    const origP = (it as any).originalPrice !== undefined ? Number((it as any).originalPrice) : null;
+    let basePrice = origP !== null ? origP : (Number(it.price) || 0);
+    
+    let addOnsTotal = 0;
+    if (it.customization?.selectedAddOns && Array.isArray(it.customization.selectedAddOns)) {
+      addOnsTotal = it.customization.selectedAddOns.reduce((s: number, a: any) => s + (Number(a.price) || 0), 0);
+    }
+    const soupBaseAdd = it.customization?.soupBase === 'coconut-milk' ? 50 : 0;
+    const spicyAdd = it.customization?.spiciness === 3 ? 10 : 0;
+    
+    // Always calculate unit price from base price + customizations
+    const unitP = basePrice + addOnsTotal + soupBaseAdd + spicyAdd;
+    it.price = unitP; // update price so it reflects total unit cost
+    (it as any).originalPrice = basePrice; // Ensure originalPrice is stored for future updates
+
+    subtotal += unitP * (Number(it.qty) || 1);
   });
 
   const promoDiscount = calculatePromoDiscount(order.items);
@@ -4375,9 +4480,17 @@ async function main() {
           if (res.status === 'confirmed') {
             const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
             if (res.date.trim() === todayStr) {
-              res.status = 'upcoming';
-              changed = true;
-              console.log(`[Reservation Auto-Check] Automatically marked confirmed reservation ${res.id} (${res.customerName}) at ${res.date} ${res.time} as upcoming (same day).`);
+              const [year, month, day] = res.date.split('-').map(Number);
+              const [hour, minute] = res.time.split(':').map(Number);
+              if (!isNaN(year) && !isNaN(month) && !isNaN(day) && !isNaN(hour) && !isNaN(minute)) {
+                const resDateTime = new Date(year, month - 1, day, hour, minute);
+                const diffMinutes = (resDateTime.getTime() - now.getTime()) / (1000 * 60);
+                if (diffMinutes > -120 && diffMinutes <= 60) {
+                  res.status = 'upcoming';
+                  changed = true;
+                  console.log(`[Reservation Auto-Check] Automatically marked confirmed reservation ${res.id} (${res.customerName}) at ${res.date} ${res.time} as upcoming (same day).`);
+                }
+              }
             }
           }
         });

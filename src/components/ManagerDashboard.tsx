@@ -23,6 +23,7 @@ import { ManagerOptionRulesTab } from './manager/ManagerOptionRulesTab';
 import { ManagerEodTab } from './manager/ManagerEodTab';
 import { ManagerTerminalTab } from './manager/ManagerTerminalTab';
 import { ManagerCashierTab } from './manager/ManagerCashierTab';
+import { ManagerNotificationsTab } from './manager/ManagerNotificationsTab';
 
 const localStorage = safeStorage;
 
@@ -102,55 +103,15 @@ export const getMaskedEmail = (email: string | null | undefined): string => {
   return `VIP-USR (${user.slice(0, 3)}****@${domain})`;
 };
 
-export const computeOrderItemUnitPrice = (it: any, menuItemsList: any[] = []): number => {
-  if (!it) return 0;
-  let baseP = Number(it.price) || 0;
-  let addOnsTotal = 0;
-  if (it.customization?.selectedAddOns && Array.isArray(it.customization.selectedAddOns)) {
-    addOnsTotal = it.customization.selectedAddOns.reduce((s: number, a: any) => s + (Number(a.price) || 0), 0);
-  }
-  let soupBaseAdd = it.customization?.soupBase === 'coconut-milk' ? 50 : 0;
+import {
+  computeOrderItemUnitPrice as _computeOrderItemUnitPrice,
+  computeOrderItemsSubtotal as _computeOrderItemsSubtotal,
+  calculateOrderTotalWithPayment as _calculateOrderTotalWithPayment
+} from './manager/ManagerDashboardUtils';
 
-  const dish = menuItemsList.find((m: any) => m.id === it.menuItemId);
-  if (dish && baseP === dish.price) {
-    return dish.price + soupBaseAdd + addOnsTotal;
-  }
-  if (addOnsTotal > 0 && dish && baseP < dish.price + addOnsTotal) {
-    return baseP + addOnsTotal;
-  }
-  if (addOnsTotal > 0 && !dish && baseP <= (it.originalPrice || baseP)) {
-    return baseP + addOnsTotal;
-  }
-  return baseP;
-};
-
-export const computeOrderItemsSubtotal = (items: any[], menuItemsList: any[] = []): number => {
-  if (!items || !Array.isArray(items)) return 0;
-  return items.reduce((sum: number, it: any) => {
-    return sum + computeOrderItemUnitPrice(it, menuItemsList) * (Number(it.qty) || 1);
-  }, 0);
-};
-
-export const calculateOrderTotalWithPayment = (order: Partial<Order> | null | undefined, menuItemsList: any[] = []): { subtotal: number; serviceCharge: number; discount: number; total: number } => {
-  if (!order) return { subtotal: 0, serviceCharge: 0, discount: 0, total: 0 };
-  const itemsSub = computeOrderItemsSubtotal(order.items || [], menuItemsList);
-  const subtotal = (order.subtotal !== undefined && order.subtotal !== null && order.subtotal > 0) ? order.subtotal : itemsSub;
-  const pm = order.paymentMethod;
-  const isCreditOrTwqr = pm === 'credit' || pm === 'twqr';
-  const defaultSvc = isCreditOrTwqr ? Math.round(subtotal * 0.1) : 0;
-  const serviceCharge = (typeof order.serviceCharge === 'number' && order.serviceCharge > 0) ? order.serviceCharge : defaultSvc;
-  const discount = order.discount || 0;
-  
-  let total = Math.max(0, subtotal + serviceCharge - discount);
-  if (typeof order.total === 'number' && !isNaN(order.total) && order.total > 0) {
-    if (isCreditOrTwqr && (order.serviceCharge === 0 || order.serviceCharge === undefined) && order.total === subtotal) {
-      total = order.total + defaultSvc;
-    } else {
-      total = order.total;
-    }
-  }
-  return { subtotal, serviceCharge, discount, total };
-};
+export const computeOrderItemUnitPrice = _computeOrderItemUnitPrice;
+export const computeOrderItemsSubtotal = _computeOrderItemsSubtotal;
+export const calculateOrderTotalWithPayment = _calculateOrderTotalWithPayment;
 
 export const getLocalDateString = (d: Date = new Date()): string => {
   const year = d.getFullYear();
@@ -212,8 +173,8 @@ interface ManagerDashboardProps {
     },
     skipRefresh?: boolean
   ) => Promise<void>;
-  defaultSubTab?: 'stats' | 'orders' | 'inventory' | 'menu' | 'members' | 'cashier' | 'printer' | 'options' | 'eod' | 'terminal';
-  onSubTabChange?: (subTab: 'stats' | 'orders' | 'inventory' | 'menu' | 'members' | 'cashier' | 'printer' | 'options' | 'eod' | 'terminal') => void;
+  defaultSubTab?: 'stats' | 'orders' | 'inventory' | 'menu' | 'members' | 'cashier' | 'printer' | 'options' | 'notifications' | 'eod' | 'terminal';
+  onSubTabChange?: (subTab: 'stats' | 'orders' | 'inventory' | 'menu' | 'members' | 'cashier' | 'printer' | 'options' | 'notifications' | 'eod' | 'terminal') => void;
   minSpend?: number;
   onUpdateMinSpend?: (newVal: number) => Promise<{ success: boolean; error?: string }>;
   operatingHours?: any[];
@@ -315,7 +276,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   onUpdateMemberConfig,
 }) => {
   // Navigation Tabs
-  const [activeSubTab, setActiveSubTab] = useState<'stats' | 'orders' | 'inventory' | 'menu' | 'members' | 'cashier' | 'printer' | 'options' | 'eod' | 'terminal'>(defaultSubTab || 'stats');
+  const [activeSubTab, setActiveSubTab] = useState<'stats' | 'orders' | 'inventory' | 'menu' | 'members' | 'cashier' | 'printer' | 'options' | 'notifications' | 'eod' | 'terminal'>(defaultSubTab || 'stats');
   const [eodSelectedDate, setEodSelectedDate] = useState<string>(() => getLocalDateString());
 
   const prevMemberPointsRatioRef = React.useRef<number>(memberPointsRatio);
@@ -3391,7 +3352,8 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
             { id: 'menu', label: '🍜 菜品與類別編輯', desc: '菜單單品與可售狀態、客製選項、全店類別更新' },
             { id: 'members', label: '⚙️ 會員、桌席與系統', desc: 'Google 會員統計、桌席二維碼、員工PIN變更' },
             { id: 'printer', label: '🖨️ 印表機與硬體', desc: '分離雙機：廚房印表機、帳單印表機寬度與連線' },
-            { id: 'options', label: '🧩 客製選項管理器', desc: '設定全店客製選項規則 (例如：加河粉、熟度、辣度)' }
+            { id: 'options', label: '🧩 客製選項管理器', desc: '設定全店客製選項規則 (例如：加河粉、熟度、辣度)' },
+            { id: 'notifications', label: '🔔 預約通知設定', desc: '設定新預約即時推播：LINE 官方訊息與 Gmail SMTP' }
           ].map((tab) => (
             <button
               key={tab.id}
@@ -3472,6 +3434,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
           getPanelWidthClass={getPanelWidthClass}
           localTablePositions={localTablePositions}
           staffPin={staffPin}
+          setCheckoutSuccessData={setCheckoutSuccessData}
           selectedPendingRes={null}
           setSelectedPendingRes={() => {}}
           confirmActionModal={confirmActionModal}
@@ -3707,6 +3670,11 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
           promoCombo={promoCombo}
           handleSavePromoCombo={handleSavePromoCombo}
         />
+      )}
+
+      {/* ==================== SCREEN SUBTAB: NOTIFICATIONS MANAGER ==================== */}
+      {activeSubTab === 'notifications' && (
+        <ManagerNotificationsTab />
       )}
 
       {/* ==================== SCREEN SUBTAB: EOD DAILY CHECKOUT ==================== */}
@@ -5746,7 +5714,7 @@ ${customerDetails}
 
       {/* 🧾 櫃檯收銀二次確認彈出視窗 Cashier Checkout Confirmation Dialog */}
       {showCheckoutConfirm && cashierSelectedOrder && (
-        <div id="checkout-confirm-modal" className="fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 text-xs font-sans animate-fadeIn">
+        <div id="checkout-confirm-modal" className="fixed inset-0 bg-black/85 backdrop-blur-xs z-[100] flex items-center justify-center p-4 text-xs font-sans animate-fadeIn">
           <div className="bg-[#121212] border border-white/10 rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl text-left transition-all duration-300">
             <div className="p-5 pb-3 border-b border-white/5 flex items-center justify-between">
               <h3 className="font-bold text-sm text-[#E5B453] flex items-center gap-1.5">

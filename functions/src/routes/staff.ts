@@ -3,7 +3,6 @@ import { Firestore, FieldValue } from 'firebase-admin/firestore';
 import { Bucket } from '@google-cloud/storage';
 import * as crypto from 'crypto';
 import { hashPin, invalidateAuthCache } from '../auth';
-import { createGetCachedSettings } from '../helpers';
 
 
 // ============================================================

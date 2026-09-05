@@ -192,6 +192,19 @@ export const CustomerReservationModal: React.FC<CustomerReservationModalProps> =
                 </div>
               </div>
 
+              {/* 4-Hour Rule Advance Notice Banner */}
+              <div className="p-3 bg-amber-500/10 border border-amber-500/25 rounded-2xl flex items-start gap-2.5 text-amber-300">
+                <span className="text-base leading-none select-none">💡</span>
+                <div className="space-y-0.5 text-left">
+                  <p className="font-bold text-amber-400 text-xs flex items-center gap-1">
+                    <span>預約規則：預約時間需為【現在時間 + 4 小時】之後</span>
+                  </p>
+                  <p className="text-zinc-400 text-[11px] leading-relaxed">
+                    為避免線上預約與現場顧客發生桌席衝突，當日預約時段需提前 4 小時。若今日時段已滿，歡迎預約明日以後的席位。
+                  </p>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 {/* Date */}
                 <div className="space-y-1">
@@ -221,7 +234,9 @@ export const CustomerReservationModal: React.FC<CustomerReservationModalProps> =
                   <label className="text-zinc-300 font-bold text-xs flex items-center justify-between">
                     <span className="flex items-center gap-1">⏰ 預訂時間 Time *</span>
                     {!isResTimeValid && (
-                      <span className="text-[10px] text-rose-500 font-bold">無有效時段 / 公休日</span>
+                      <span className="text-[10px] text-rose-500 font-bold">
+                        {resDate === todayDateStr ? '今日需提前4小時 / 已無可用時段' : '無有效時段 / 公休日'}
+                      </span>
                     )}
                   </label>
                   <select
@@ -237,6 +252,12 @@ export const CustomerReservationModal: React.FC<CustomerReservationModalProps> =
                   >
                     {!resDate || (restDays && restDays.includes(resDate)) ? (
                       <option value="">-- 請先選擇有效的預定日期 --</option>
+                    ) : generateCandidateSlots(resDate).length === 0 ? (
+                      <option value="">
+                        {resDate === todayDateStr
+                          ? '-- 今日已無 4 小時後之可預約時段，請選擇其他日期 --'
+                          : '-- 此日期目前無開放預約時段 / 公休日 --'}
+                      </option>
                     ) : (
                       generateCandidateSlots(resDate).map((slot) => (
                         <option key={slot} value={slot}>
@@ -521,8 +542,8 @@ export const CustomerReservationModal: React.FC<CustomerReservationModalProps> =
             </button>
             <button
               type="submit"
-              disabled={resSubmitting}
-              className="px-6 py-2.5 bg-gradient-to-r from-[#E5B453] to-amber-500 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black rounded-xl transition cursor-pointer shadow-lg shadow-amber-500/20 active:scale-95 flex items-center gap-2 disabled:opacity-50"
+              disabled={resSubmitting || !isResTimeValid}
+              className="px-6 py-2.5 bg-gradient-to-r from-[#E5B453] to-amber-500 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black rounded-xl transition cursor-pointer shadow-lg shadow-amber-500/20 active:scale-95 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {resSubmitting ? (
                 <>

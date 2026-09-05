@@ -15,6 +15,11 @@ import { TRANSLATIONS } from '../data';
 import { ShoppingCart, ChevronRight, ArrowUp, Sparkles } from 'lucide-react';
 import { getLocalizedText } from '../utils/i18n';
 import { isValidTaiwanPhone, TAIWAN_PHONE_ERROR_MSG, sanitizePhoneDigits } from '../utils/phoneValidator';
+import {
+  getAvailableReservationSlots,
+  getEarliestReservableOption,
+  isReservationTimeAllowed,
+} from '../utils/reservationValidator';
 import { useCustomerCart } from '../hooks/useCustomerCart';
 import { CustomerHeader } from './customer/CustomerHeader';
 import { CustomerCategoryTabs } from './customer/CustomerCategoryTabs';
@@ -275,19 +280,31 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
   const [resPhone, setResPhone] = useState('');
   const [resPhoneError, setResPhoneError] = useState(false);
   const [resDate, setResDate] = useState(() => {
-    const d = new Date();
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    const earliest = getEarliestReservableOption(operatingHours, restDays);
+    return earliest.date;
   });
-  const [resTime, setResTime] = useState('18:00');
+  const [resTime, setResTime] = useState(() => {
+    const earliest = getEarliestReservableOption(operatingHours, restDays);
+    return earliest.time;
+  });
   const [resGuests, setResGuests] = useState(2);
   const [resTableNumbers, setResTableNumbers] = useState<string[]>(['1']);
   const [isManualTableSelection, setIsManualTableSelection] = useState(false);
   const [resNotes, setResNotes] = useState('');
   const [resSubmitting, setResSubmitting] = useState(false);
   const [resFeedback, setResFeedback] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
+
+  // Synchronize reservation date & time to earliest valid slot when modal opens
+  useEffect(() => {
+    if (showReservationModal) {
+      const validSlots = getAvailableReservationSlots(resDate, operatingHours, restDays);
+      if (validSlots.length === 0 || !validSlots.includes(resTime)) {
+        const earliest = getEarliestReservableOption(operatingHours, restDays);
+        if (earliest.date) setResDate(earliest.date);
+        if (earliest.time) setResTime(earliest.time);
+      }
+    }
+  }, [showReservationModal, operatingHours, restDays]);
 
   // Takeout Form Modal
   const [showTakeoutFormModal, setShowTakeoutFormModal] = useState(false);
@@ -637,9 +654,12 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
     ).padStart(2, '0')}`;
   }, []);
 
-  const generateCandidateSlots = useCallback((_date: string) => {
-    return ['11:30', '12:00', '12:30', '13:00', '17:30', '18:00', '18:30', '19:00', '19:30', '20:00'];
-  }, []);
+  const generateCandidateSlots = useCallback(
+    (targetDate: string) => {
+      return getAvailableReservationSlots(targetDate, operatingHours, restDays);
+    },
+    [operatingHours, restDays]
+  );
 
   const reservationAvailabilityInfo = useMemo(() => {
     return {
@@ -663,8 +683,22 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
   }, [tables, resTableNumbers]);
 
   const handleResDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setResDate(e.target.value);
+    const newDate = e.target.value;
+    setResDate(newDate);
+    const slots = getAvailableReservationSlots(newDate, operatingHours, restDays);
+    if (!slots.includes(resTime)) {
+      setResTime(slots[0] || '');
+    }
   };
+
+  const isResTimeValid = useMemo(() => {
+    if (!resDate || !resTime) return false;
+    if (restDays && restDays.includes(resDate)) return false;
+    const timeAllowed = isReservationTimeAllowed(resDate, resTime);
+    if (!timeAllowed.allowed) return false;
+    const slots = generateCandidateSlots(resDate);
+    return slots.includes(resTime);
+  }, [resDate, resTime, restDays, generateCandidateSlots]);
 
   const handleReservationSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -684,6 +718,24 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
     }
     setResPhoneError(false);
 
+    // Enforce 4-hour advance reservation rule
+    const timeValidation = isReservationTimeAllowed(resDate, resTime);
+    if (!timeValidation.allowed) {
+      setResFeedback({
+        type: 'error',
+        msg: `⚠️ ${timeValidation.reason || '預約時間必須為現在時間 4 小時之後，避免與現場顧客發生桌席衝突！'}`,
+      });
+      return;
+    }
+
+    if (!isResTimeValid) {
+      setResFeedback({
+        type: 'error',
+        msg: '⚠️ 所選預約時間不在可用營業時段內，請重新選擇！',
+      });
+      return;
+    }
+
     setResSubmitting(true);
     try {
       const res = await onAddReservation({
@@ -694,7 +746,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
         guestCount: resGuests,
         tableNumber: resTableNumbers.join(', '),
         notes: resNotes,
-        status: 'confirmed',
+        status: 'pending',
       });
       if (res.success) {
         setResFeedback({ type: 'success', msg: '🎉 預約成功！已為您保留座席。' });
@@ -782,7 +834,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
         maxNinetyDaysDateStr={maxNinetyDaysDateStr}
         resTime={resTime}
         setResTime={setResTime}
-        isResTimeValid={true}
+        isResTimeValid={isResTimeValid}
         restDays={restDays}
         generateCandidateSlots={generateCandidateSlots}
         resGuests={resGuests}

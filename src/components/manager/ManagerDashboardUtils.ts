@@ -23,23 +23,41 @@ export const getMaskedEmail = (email: string | null | undefined): string => {
 
 export const computeOrderItemUnitPrice = (it: any, menuItemsList: any[] = []): number => {
   if (!it) return 0;
-  let baseP = Number(it.price) || 0;
+  const baseP = Number(it.price) || 0;
   let addOnsTotal = 0;
   if (it.customization?.selectedAddOns && Array.isArray(it.customization.selectedAddOns)) {
     addOnsTotal = it.customization.selectedAddOns.reduce((s: number, a: any) => s + (Number(a.price) || 0), 0);
   }
-  let soupBaseAdd = it.customization?.soupBase === 'coconut-milk' ? 50 : 0;
+  const soupBaseAdd = it.customization?.soupBase === 'coconut-milk' ? 50 : 0;
+  const spicyAdd = it.customization?.spiciness === 3 ? 10 : 0;
 
   const dish = menuItemsList.find((m: any) => m.id === it.menuItemId);
-  if (dish && baseP === dish.price) {
-    return dish.price + soupBaseAdd + addOnsTotal;
+  const dishBasePrice = dish ? dish.price : (it.originalPrice || 0);
+
+  // If we know the dish's base menu price, determine whether baseP already has extras included
+  if (dishBasePrice > 0) {
+    if (baseP <= dishBasePrice) {
+      // baseP is the raw base price without customization fees
+      return dishBasePrice + soupBaseAdd + spicyAdd + addOnsTotal;
+    }
+    // If baseP is larger than base dish price, check if add-ons are already embedded
+    const expectedWithAddons = dishBasePrice + soupBaseAdd + spicyAdd + addOnsTotal;
+    if (baseP < expectedWithAddons) {
+      // baseP only included part of extras or only base price
+      return expectedWithAddons;
+    }
+    return baseP;
   }
-  if (addOnsTotal > 0 && dish && baseP < dish.price + addOnsTotal) {
-    return baseP + addOnsTotal;
+
+  // If dish definition isn't found in menuItemsList, use it.price as base and add add-ons if missing
+  if (addOnsTotal > 0 || soupBaseAdd > 0 || spicyAdd > 0) {
+    if (it.originalPrice && baseP <= it.originalPrice) {
+      return it.originalPrice + soupBaseAdd + spicyAdd + addOnsTotal;
+    }
+    // Check if baseP is equal to raw dish originalPrice or if addOns are not yet factored in
+    return baseP + soupBaseAdd + spicyAdd + addOnsTotal;
   }
-  if (addOnsTotal > 0 && !dish && baseP <= (it.originalPrice || baseP)) {
-    return baseP + addOnsTotal;
-  }
+
   return baseP;
 };
 
@@ -56,7 +74,13 @@ export const calculateOrderTotalWithPayment = (
 ): { subtotal: number; serviceCharge: number; discount: number; total: number } => {
   if (!order) return { subtotal: 0, serviceCharge: 0, discount: 0, total: 0 };
   const itemsSub = computeOrderItemsSubtotal(order.items || [], menuItemsList);
-  const subtotal = (order.subtotal !== undefined && order.subtotal !== null && order.subtotal > 0) ? order.subtotal : itemsSub;
+  
+  // For unpaid orders or orders with live items, always ensure subtotal accurately factors in items with add-ons
+  const isPaid = order.isPaid === true || order.status === 'paid' || order.status === 'completed';
+  const subtotal = (isPaid && order.subtotal !== undefined && order.subtotal !== null && order.subtotal > 0)
+    ? Math.max(order.subtotal, itemsSub)
+    : (itemsSub > 0 ? itemsSub : (order.subtotal || 0));
+
   const pm = order.paymentMethod;
   const isCreditOrTwqr = pm === 'credit' || pm === 'twqr';
   const defaultSvc = isCreditOrTwqr ? Math.round(subtotal * 0.1) : 0;
@@ -64,7 +88,7 @@ export const calculateOrderTotalWithPayment = (
   const discount = order.discount || 0;
   
   let total = Math.max(0, subtotal + serviceCharge - discount);
-  if (typeof order.total === 'number' && !isNaN(order.total) && order.total > 0) {
+  if (isPaid && typeof order.total === 'number' && !isNaN(order.total) && order.total > 0) {
     if (isCreditOrTwqr && (order.serviceCharge === 0 || order.serviceCharge === undefined) && order.total === subtotal) {
       total = order.total + defaultSvc;
     } else {

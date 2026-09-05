@@ -33,12 +33,14 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.CACHE_TTL_MS = exports.cachedServicePause = exports.cachedSettings = exports.cachedCategories = exports.cachedMenu = void 0;
+exports.CACHE_TTL_MS = exports.cachedNotificationSettings = exports.cachedServicePause = exports.cachedSettings = exports.cachedCategories = exports.cachedMenu = void 0;
 exports.setCachedMenu = setCachedMenu;
 exports.setCachedCategories = setCachedCategories;
 exports.setCachedSettings = setCachedSettings;
 exports.setCachedServicePause = setCachedServicePause;
+exports.setCachedNotificationSettings = setCachedNotificationSettings;
 exports.createGetCachedSettings = createGetCachedSettings;
+exports.createGetCachedNotificationSettings = createGetCachedNotificationSettings;
 exports.isStoreOpenFromData = isStoreOpenFromData;
 exports.sendToNetworkPrinter = sendToNetworkPrinter;
 exports.createHandleSavePrinterIp = createHandleSavePrinterIp;
@@ -51,11 +53,13 @@ exports.cachedMenu = null;
 exports.cachedCategories = null;
 exports.cachedSettings = null;
 exports.cachedServicePause = null;
+exports.cachedNotificationSettings = null;
 exports.CACHE_TTL_MS = 60 * 1000;
 function setCachedMenu(val) { exports.cachedMenu = val; }
 function setCachedCategories(val) { exports.cachedCategories = val; }
 function setCachedSettings(val) { exports.cachedSettings = val; }
 function setCachedServicePause(val) { exports.cachedServicePause = val; }
+function setCachedNotificationSettings(val) { exports.cachedNotificationSettings = val; }
 function createGetCachedSettings(db) {
     return async function getCachedSettings() {
         const nowMs = Date.now();
@@ -65,6 +69,17 @@ function createGetCachedSettings(db) {
         const doc = await db.collection('settings').doc('system').get();
         exports.cachedSettings = { data: doc.data() || {}, timestamp: nowMs };
         return exports.cachedSettings.data;
+    };
+}
+function createGetCachedNotificationSettings(db) {
+    return async function getCachedNotificationSettings() {
+        const nowMs = Date.now();
+        if (exports.cachedNotificationSettings && (nowMs - exports.cachedNotificationSettings.timestamp < exports.CACHE_TTL_MS)) {
+            return exports.cachedNotificationSettings.data;
+        }
+        const doc = await db.collection('secrets').doc('notifications').get();
+        exports.cachedNotificationSettings = { data: doc.data() || {}, timestamp: nowMs };
+        return exports.cachedNotificationSettings.data;
     };
 }
 function isStoreOpenFromData(sysData, timestamp, isReservation = false) {

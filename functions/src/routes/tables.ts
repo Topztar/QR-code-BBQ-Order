@@ -2,7 +2,8 @@ import express from 'express';
 import { Firestore } from 'firebase-admin/firestore';
 import { Bucket } from '@google-cloud/storage';
 import { validateReservationPayload } from '../validators';
-import { createGetCachedSettings } from '../helpers';
+import { createGetCachedSettings, createGetCachedNotificationSettings } from '../helpers';
+import { sendReservationNotifications } from '../services/notification';
 
 
 // ============================================================
@@ -22,6 +23,8 @@ export interface RouteContext {
 
 export function registerTablesRoutes(app: express.Application, ctx: RouteContext) {
   const { db, requireStaffAuth, createRateLimiter, sendErrorResponse } = ctx;
+  const getCachedSettings = createGetCachedSettings(db);
+  const getCachedNotificationSettings = createGetCachedNotificationSettings(db);
   const reservationRateLimiter = createRateLimiter(15, 60 * 1000, '預約提交');
 
   // 雙路徑路由包裝器
@@ -131,6 +134,17 @@ post('/reservations', reservationRateLimiter, async (req, res) => {
     return res.status(400).json({ error: `預約日期最多只能提前 3 個月 (最晚至 ${maxDateStr})！` });
   }
 
+  // 4-Hour advance rule for same-day reservations
+  const todayNow = new Date();
+  const todayDateStr = `${todayNow.getFullYear()}-${String(todayNow.getMonth() + 1).padStart(2, '0')}-${String(todayNow.getDate()).padStart(2, '0')}`;
+  if (data.date && data.date.trim() === todayDateStr && !(req.body as any).isStaffOverride) {
+    const targetMins = parseTimeToMinutes(data.time);
+    const currentMins = todayNow.getHours() * 60 + todayNow.getMinutes();
+    if (targetMins < currentMins + 240) {
+      return res.status(400).json({ error: '預約時間必須為現在時間 4 小時之後，避免與現場顧客發生桌席衝突！' });
+    }
+  }
+
   const newReservation = {
     id: data.id || ('res-' + Math.random().toString(36).substring(2, 11)),
     ...data,
@@ -214,6 +228,16 @@ post('/reservations', reservationRateLimiter, async (req, res) => {
         }
       }
     });
+
+    // 🔔 Real-time Admin Notifications (LINE & Gmail) - non-blocking background dispatch
+    (async () => {
+      try {
+        const notifConfig = await getCachedNotificationSettings();
+        await sendReservationNotifications(newReservation, { notificationConfig: notifConfig });
+      } catch (err) {
+        console.error('[Notification] Background dispatch error:', err);
+      }
+    })();
 
     res.status(201).json(newReservation);
   } catch (error: any) {

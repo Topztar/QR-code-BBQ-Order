@@ -17,12 +17,14 @@ export let cachedMenu: { data: any; timestamp: number } | null = null;
 export let cachedCategories: { data: any; timestamp: number } | null = null;
 export let cachedSettings: { data: any; timestamp: number } | null = null;
 export let cachedServicePause: { data: any; timestamp: number } | null = null;
+export let cachedNotificationSettings: { data: any; timestamp: number } | null = null;
 export const CACHE_TTL_MS = 60 * 1000; // 60 秒
 
 export function setCachedMenu(val: { data: any; timestamp: number } | null) { cachedMenu = val; }
 export function setCachedCategories(val: { data: any; timestamp: number } | null) { cachedCategories = val; }
 export function setCachedSettings(val: { data: any; timestamp: number } | null) { cachedSettings = val; }
 export function setCachedServicePause(val: { data: any; timestamp: number } | null) { cachedServicePause = val; }
+export function setCachedNotificationSettings(val: { data: any; timestamp: number } | null) { cachedNotificationSettings = val; }
 
 // ============================================================
 // 🔧 getCachedSettings — 60 秒 TTL 快取系統設定
@@ -36,6 +38,21 @@ export function createGetCachedSettings(db: Firestore) {
     const doc = await db.collection('settings').doc('system').get();
     cachedSettings = { data: doc.data() || {}, timestamp: nowMs };
     return cachedSettings.data;
+  };
+}
+
+// ============================================================
+// 🔔 getCachedNotificationSettings — 60 秒 TTL 快取通知設定 (儲存於 secrets/notifications)
+// ============================================================
+export function createGetCachedNotificationSettings(db: Firestore) {
+  return async function getCachedNotificationSettings() {
+    const nowMs = Date.now();
+    if (cachedNotificationSettings && (nowMs - cachedNotificationSettings.timestamp < CACHE_TTL_MS)) {
+      return cachedNotificationSettings.data;
+    }
+    const doc = await db.collection('secrets').doc('notifications').get();
+    cachedNotificationSettings = { data: doc.data() || {}, timestamp: nowMs };
+    return cachedNotificationSettings.data;
   };
 }
 

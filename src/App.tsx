@@ -49,7 +49,7 @@ function AppContent({
     safeStorage.setItem('sabay-language', newLang);
   };
 
-  const [adminSubTab, setAdminSubTab] = useState<'stats' | 'orders' | 'inventory' | 'menu' | 'members' | 'cashier' | 'printer' | 'options' | 'eod' | 'terminal' | undefined>(undefined);
+  const [adminSubTab, setAdminSubTab] = useState<'stats' | 'orders' | 'inventory' | 'menu' | 'members' | 'cashier' | 'printer' | 'options' | 'notifications' | 'eod' | 'terminal' | undefined>(undefined);
   const [isStaff, setIsStaff] = useState<boolean>(false);
   const [staffPin] = useState<string>('');
   const [showContactDetails, setShowContactDetails] = useState<boolean>(false);
@@ -99,6 +99,7 @@ function AppContent({
           setAdminSubTab('stats');
         } else if (e.key === '4') {
           e.preventDefault();
+          setActiveTab('customer');
           navigateTo('/');
         } else if (e.key === '5') {
           e.preventDefault();
@@ -275,7 +276,10 @@ function AppContent({
 
                     <button
                       id="tab-btn-customer-from-staff"
-                      onClick={() => navigateTo('/')}
+                      onClick={() => {
+                        setActiveTab('customer');
+                        navigateTo('/');
+                      }}
                       className="flex items-center space-x-1.5 px-4 py-2 text-white/50 hover:text-white hover:bg-white/5 rounded-xl cursor-pointer transition text-xs font-black whitespace-nowrap"
                     >
                       <Smartphone size={14} />
@@ -469,7 +473,11 @@ function AppContent({
           </button>
 
           <button
-            onClick={() => navigateTo('/')}
+            id="m-tab-btn-customer"
+            onClick={() => {
+              setActiveTab('customer');
+              navigateTo('/');
+            }}
             className="flex-1 py-1.5 text-center text-[10px] text-white/65 font-bold flex flex-col items-center gap-1 cursor-pointer"
           >
             <Smartphone size={15} />
@@ -599,6 +607,7 @@ function AppContent({
                       setActiveTab('admin');
                     }}
                     onCancel={() => {
+                      setActiveTab('customer');
                       navigateTo('/');
                     }}
                   />
@@ -763,7 +772,10 @@ function AppContent({
             <button
               type="button"
               id="footer-customer-portal-link"
-              onClick={() => navigateTo('/')}
+              onClick={() => {
+                setActiveTab('customer');
+                navigateTo('/');
+              }}
               className="text-[#E5B453]/30 hover:text-[#E5B453] text-[9px] font-mono tracking-widest uppercase cursor-pointer transition py-0.5 px-1 rounded flex items-center space-x-1"
             >
               <Smartphone size={11} />
@@ -849,13 +861,25 @@ function OrderDataConsumerWrapper({
   );
 }
 
+const getTabFromPath = (path: string): 'customer' | 'kitchen' | 'admin' | 'cashier' => {
+  const lower = path.toLowerCase();
+  if (lower.startsWith('/kitchen')) return 'kitchen';
+  if (lower.startsWith('/admin')) return 'admin';
+  if (lower.startsWith('/cashier')) return 'cashier';
+  return 'customer';
+};
+
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'customer' | 'kitchen' | 'admin' | 'cashier'>('customer');
+  const [activeTab, setActiveTab] = useState<'customer' | 'kitchen' | 'admin' | 'cashier'>(() => {
+    return typeof window !== 'undefined' ? getTabFromPath(window.location.pathname) : 'customer';
+  });
   const [currentPath, setCurrentPath] = useState<string>(typeof window !== 'undefined' ? window.location.pathname : '/');
 
   useEffect(() => {
     const handlePopState = () => {
-      setCurrentPath(window.location.pathname);
+      const path = window.location.pathname;
+      setCurrentPath(path);
+      setActiveTab(getTabFromPath(path));
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
@@ -864,6 +888,7 @@ export default function App() {
   const navigateTo = (path: string) => {
     window.history.pushState({}, '', path);
     setCurrentPath(path);
+    setActiveTab(getTabFromPath(path));
   };
 
   return (
