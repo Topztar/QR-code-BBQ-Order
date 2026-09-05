@@ -179,6 +179,12 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
 
   const fetchData = async (forceFull: boolean = true, bypassReorderLock: boolean = false) => {
     const fetchStartTime = Date.now();
+    
+    // Safety timeout to ensure loading screen never hangs indefinitely (e.g. if bootstrap takes > 8s)
+    const loadingTimeoutId = setTimeout(() => {
+      setLoading(false);
+    }, 8000);
+
     try {
       const fallbackAnalytics: AnalyticsData = {
         totalRevenue: 0,
@@ -291,6 +297,7 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
         await loadData();
       } catch (_e) {}
     } finally {
+      clearTimeout(loadingTimeoutId);
       setLoading(false);
     }
   };

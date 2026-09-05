@@ -94,6 +94,21 @@ export interface OrderDataContextType {
     },
     skipRefresh?: boolean
   ) => Promise<void>;
+  handleBulkPayOrders: (
+    orderIds: string[],
+    checkoutData: {
+      paymentMethod?: string;
+      subtotal?: number;
+      serviceCharge?: number;
+      total?: number;
+      discount?: number;
+      cashTendered?: number;
+      changeAmount?: number;
+      tableNumbers?: string[];
+      checkoutRecord?: any;
+    },
+    skipRefresh?: boolean
+  ) => Promise<{ success: boolean }>;
   handleDeleteOrder: (orderId: string) => Promise<{ success: boolean }>;
   handleForceSync: () => Promise<void>;
   handleSendPromoPush: (notif: { title: string; message: string; badge: string }) => Promise<void>;
@@ -1035,6 +1050,136 @@ export function OrderDataProvider({
     }
   };
 
+  const handleBulkPayOrders = async (
+    orderIds: string[],
+    checkoutData: {
+      paymentMethod?: string;
+      subtotal?: number;
+      serviceCharge?: number;
+      total?: number;
+      discount?: number;
+      cashTendered?: number;
+      changeAmount?: number;
+      tableNumbers?: string[];
+      checkoutRecord?: any;
+    },
+    skipRefresh?: boolean
+  ): Promise<{ success: boolean }> => {
+    if (!orderIds || orderIds.length === 0) return { success: false };
+    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+    const description = `批次結帳 🥢 ${orderIds.length} 筆訂單`;
+
+    // 1. Local Optimistic Update
+    setOrders(prev => prev.map(o => {
+      if (orderIds.includes(o.id)) {
+        const resolvedStatus: OrderStatus = (o.status === 'completed' || o.status === 'cancelled') ? o.status : 'paid';
+        return {
+          ...o,
+          isPaid: true,
+          status: resolvedStatus,
+          isOfflinePending: !isOnline
+        };
+      }
+      return o;
+    }));
+
+    // 2. Broadcast updates & Record status transitions
+    orderIds.forEach(orderId => {
+      const targetOrder = orders.find(o => o.id === orderId);
+      const resolvedStatus: OrderStatus = (targetOrder?.status === 'completed' || targetOrder?.status === 'cancelled') ? targetOrder.status : 'paid';
+
+      broadcastOrderEvent({
+        type: 'ORDER_UPDATED',
+        orderId,
+        updates: { isPaid: true, status: resolvedStatus }
+      });
+
+      recentStatusTransitionsRef.current.set(orderId, {
+        ...recentStatusTransitionsRef.current.get(orderId),
+        isPaid: true,
+        status: resolvedStatus,
+        timestamp: Date.now()
+      });
+      removeOrderRequestsFromQueue(orderId);
+    });
+
+    // 3. Smart table status release locally
+    const candidateTableNumbers = new Set<string>();
+    if (checkoutData.tableNumbers) {
+      checkoutData.tableNumbers.forEach(t => candidateTableNumbers.add(t));
+    }
+    orderIds.forEach(id => {
+      const ord = orders.find(o => o.id === id);
+      if (ord?.tableNumber) candidateTableNumbers.add(ord.tableNumber);
+    });
+
+    candidateTableNumbers.forEach(tblId => {
+      if (tblId && !tblId.includes('外帶') && tblId.toLowerCase() !== 'takeout') {
+        const remainingUnpaid = orders.filter(
+          o => o.tableNumber === tblId && !orderIds.includes(o.id) && !o.isPaid && o.status !== 'cancelled'
+        );
+        if (remainingUnpaid.length === 0) {
+          handleUpdateTableStatus(tblId, {
+            status: 'cleaning',
+            preservedFor: '',
+            mergedWith: '',
+            cleaningStartedAt: new Date().toISOString()
+          });
+        }
+      }
+    });
+
+    // 4. Reservation cleanup locally
+    orderIds.forEach(id => {
+      const ord = orders.find(o => o.id === id);
+      if (ord) {
+        const resNo = ord.reservationNo;
+        const matchingRes = (reservations || []).find(r =>
+          (resNo && (r.id === resNo || (r as any).reservationNo === resNo)) ||
+          (r.tableNumber === ord.tableNumber && r.date === ord.reservationDate)
+        );
+        if (matchingRes) {
+          handleDeleteReservation(matchingRes.id);
+        }
+      }
+    });
+
+    const payload = {
+      orderIds,
+      tableNumbers: Array.from(candidateTableNumbers),
+      paymentMethod: checkoutData.paymentMethod || 'cash',
+      cashTendered: checkoutData.cashTendered || 0,
+      changeAmount: checkoutData.changeAmount || 0,
+      checkoutRecord: checkoutData.checkoutRecord
+    };
+
+    if (!isOnline) {
+      addRequestToQueue('/api/orders/bulk-checkout', 'POST', payload, description);
+      return { success: true };
+    }
+
+    try {
+      const res = await apiFetch('/api/orders/bulk-checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        if (!skipRefresh && onRefreshData) {
+          await onRefreshData();
+        }
+        return { success: true };
+      } else {
+        addRequestToQueue('/api/orders/bulk-checkout', 'POST', payload, description);
+        return { success: false };
+      }
+    } catch (err) {
+      console.warn('[Offline Fallback] Bulk pay orders failed, queued:', err);
+      addRequestToQueue('/api/orders/bulk-checkout', 'POST', payload, description);
+      return { success: false };
+    }
+  };
+
   const handleDeleteOrder = async (orderId: string) => {
     const description = `刪除 🥢 訂單 #${orderId.replace('offline_temp_', '離線')}`;
     const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
@@ -1107,6 +1252,7 @@ export function OrderDataProvider({
     handleToggleOrderFlag,
     handleUpdateOrderItems,
     handlePayOrder,
+    handleBulkPayOrders,
     handleDeleteOrder,
     handleForceSync,
     handleSendPromoPush,

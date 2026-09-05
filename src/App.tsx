@@ -10,10 +10,33 @@ import { RestaurantDataProvider, useRestaurantData } from './context/RestaurantD
 import { OrderDataProvider, useOrderData } from './context/OrderDataContext';
 import { PrinterDataProvider, usePrinterData } from './context/PrinterDataContext';
 
-const CustomerOrderView = lazy(() => import('./components/CustomerOrderView').then(m => ({ default: m.CustomerOrderView })));
-const KitchenDisplaySystem = lazy(() => import('./components/KitchenDisplaySystem').then(m => ({ default: m.KitchenDisplaySystem })));
-const ManagerDashboard = lazy(() => import('./components/ManagerDashboard').then(m => ({ default: m.ManagerDashboard })));
-const StaffLoginGate = lazy(() => import('./components/StaffLoginGate').then(m => ({ default: m.StaffLoginGate })));
+// Wrapper for lazy loading with retry to prevent chunk load errors causing black screens
+const lazyWithRetry = <T extends React.ComponentType<any>>(
+  componentImport: () => Promise<{ default: T }>
+) =>
+  lazy(async () => {
+    const pageHasAlreadyBeenForceRefreshed = JSON.parse(
+      window.sessionStorage.getItem('page-has-been-force-refreshed') || 'false'
+    );
+    try {
+      const component = await componentImport();
+      window.sessionStorage.setItem('page-has-been-force-refreshed', 'false');
+      return component;
+    } catch (error) {
+      if (!pageHasAlreadyBeenForceRefreshed) {
+        window.sessionStorage.setItem('page-has-been-force-refreshed', 'true');
+        window.location.reload();
+        // Return a promise that never resolves, so Suspense keeps showing fallback while reloading
+        return new Promise<{ default: T }>(() => {}); 
+      }
+      throw error;
+    }
+  });
+
+const CustomerOrderView = lazyWithRetry(() => import('./components/CustomerOrderView').then(m => ({ default: m.CustomerOrderView })));
+const KitchenDisplaySystem = lazyWithRetry(() => import('./components/KitchenDisplaySystem').then(m => ({ default: m.KitchenDisplaySystem })));
+const ManagerDashboard = lazyWithRetry(() => import('./components/ManagerDashboard').then(m => ({ default: m.ManagerDashboard })));
+const StaffLoginGate = lazyWithRetry(() => import('./components/StaffLoginGate').then(m => ({ default: m.StaffLoginGate })));
 
 const ViewLoadingFallback = () => (
   <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
@@ -50,7 +73,13 @@ function AppContent({
   };
 
   const [adminSubTab, setAdminSubTab] = useState<'stats' | 'orders' | 'inventory' | 'menu' | 'members' | 'cashier' | 'printer' | 'options' | 'notifications' | 'eod' | 'terminal' | undefined>(undefined);
-  const [isStaff, setIsStaff] = useState<boolean>(false);
+  const [isStaff, setIsStaff] = useState<boolean>(() => {
+    try {
+      return safeStorage.getItem('sabay-staff-auth') === 'true';
+    } catch {
+      return false;
+    }
+  });
   const [staffPin] = useState<string>('');
   const [showContactDetails, setShowContactDetails] = useState<boolean>(false);
 
@@ -178,6 +207,7 @@ function AppContent({
     handleToggleOrderFlag,
     handleUpdateOrderItems,
     handlePayOrder,
+    handleBulkPayOrders,
     handleDeleteOrder,
     handleForceSync,
     handleSendPromoPush,
@@ -322,6 +352,7 @@ function AppContent({
                       id="tab-btn-logout-staff"
                       onClick={() => {
                         setIsStaff(false);
+                        safeStorage.removeItem('sabay-staff-auth');
                         navigateTo('/');
                       }}
                       className="flex items-center space-x-1 px-3.5 py-2 text-rose-400 hover:text-rose-300 font-bold text-xs hover:bg-white/5 rounded-xl cursor-pointer transition ml-1 whitespace-nowrap"
@@ -487,6 +518,7 @@ function AppContent({
           <button
             onClick={() => {
               setIsStaff(false);
+              safeStorage.removeItem('sabay-staff-auth');
               navigateTo('/');
             }}
             className="flex-1 py-1.5 text-center text-[10px] text-rose-400 font-bold flex flex-col items-center gap-1 cursor-pointer"
@@ -599,12 +631,13 @@ function AppContent({
                   本頁面為管理階層專屬之獨立防護選單。已與顧客共用選單安全防禦硬化，防止任何未授權之側錄、入侵或探測。
                 </p>
               </div>
-              <ErrorBoundary>
+              <ErrorBoundary fallbackTitle="員工登入門戶載入異常" fallbackMessage="安全驗證門戶載入遇到問題，請點擊下方按鈕重試。">
                 <Suspense fallback={<ViewLoadingFallback />}>
                   <StaffLoginGate
                     onLoginSuccess={() => {
                       setIsStaff(true);
-                      setActiveTab('admin');
+                      safeStorage.setItem('sabay-staff-auth', 'true');
+                      setActiveTab(prev => (prev === 'customer' ? 'admin' : prev));
                     }}
                     onCancel={() => {
                       setActiveTab('customer');
@@ -616,7 +649,7 @@ function AppContent({
             </div>
           ) : (
             <div>
-              <ErrorBoundary>
+              <ErrorBoundary fallbackTitle="管理系統載入異常" fallbackMessage="後台系統視圖遇到短暫渲染問題，請點擊下方按鈕重新整理或修復快取。">
                 <Suspense fallback={<ViewLoadingFallback />}>
                   {activeTab === 'kitchen' ? (
                     <KitchenDisplaySystem
@@ -673,6 +706,7 @@ function AppContent({
                       onEditReservation={handleUpdateReservation}
                       onDeleteReservation={handleDeleteReservation}
                       onPayOrder={handlePayOrder}
+                      onBulkPayOrders={handleBulkPayOrders}
                       onPlaceOrder={handlePlaceOrder}
                       onDeleteOrder={handleDeleteOrder}
                       onUpdateTableNumber={handleUpdateTableNumber}

@@ -196,6 +196,101 @@ function registerOrdersRoutes(app, ctx) {
             res.status(500).send(error);
         }
     });
+    post('/orders/bulk-checkout', requireStaffAuth, async (req, res) => {
+        const { orderIds, tableNumbers, paymentMethod, cashTendered, changeAmount, checkoutRecord } = req.body;
+        if (!Array.isArray(orderIds) || orderIds.length === 0) {
+            return res.status(400).json({ error: 'orderIds 必須為非空陣列' });
+        }
+        try {
+            const batch = db.batch();
+            const resolvedOrderStatuses = {};
+            const tableSet = new Set();
+            if (Array.isArray(tableNumbers)) {
+                tableNumbers.forEach(t => {
+                    if (t && !String(t).includes('外帶') && String(t).toLowerCase() !== 'takeout') {
+                        tableSet.add(String(t).trim());
+                    }
+                });
+            }
+            for (const id of orderIds) {
+                const orderRef = db.collection('orders').doc(id);
+                const orderDoc = await orderRef.get();
+                if (!orderDoc.exists)
+                    continue;
+                const orderData = orderDoc.data();
+                const currentStatus = orderData?.status;
+                const resolvedStatus = (currentStatus === 'completed' || currentStatus === 'cancelled') ? currentStatus : 'paid';
+                resolvedOrderStatuses[id] = resolvedStatus;
+                batch.update(orderRef, {
+                    paymentMethod: paymentMethod || 'cash',
+                    cashTendered: cashTendered || 0,
+                    changeAmount: changeAmount || 0,
+                    isPaid: true,
+                    status: resolvedStatus,
+                    updatedAt: new Date().toISOString()
+                });
+                if (orderData?.tableNumber && !String(orderData.tableNumber).includes('外帶') && String(orderData.tableNumber).toLowerCase() !== 'takeout') {
+                    tableSet.add(String(orderData.tableNumber).trim());
+                }
+                if (orderData?.reservationNo) {
+                    const resQuery = await db.collection('reservations').where('reservationNo', '==', orderData.reservationNo).get();
+                    if (!resQuery.empty) {
+                        for (const doc of resQuery.docs) {
+                            batch.delete(db.collection('reservations').doc(doc.id));
+                        }
+                    }
+                    else {
+                        const resDoc = await db.collection('reservations').doc(orderData.reservationNo).get();
+                        if (resDoc.exists) {
+                            batch.delete(db.collection('reservations').doc(orderData.reservationNo));
+                        }
+                    }
+                }
+            }
+            for (const tblId of tableSet) {
+                try {
+                    const unpaidSnap = await db.collection('orders')
+                        .where('tableNumber', '==', tblId)
+                        .where('isPaid', '==', false)
+                        .get();
+                    const otherUnpaid = unpaidSnap.docs.filter(doc => !orderIds.includes(doc.id) && doc.data().status !== 'cancelled');
+                    if (otherUnpaid.length === 0) {
+                        const tableRef = db.collection('tables').doc(tblId);
+                        batch.update(tableRef, {
+                            status: 'cleaning',
+                            preservedFor: '',
+                            mergedWith: '',
+                            cleaningStartedAt: new Date().toISOString()
+                        });
+                    }
+                }
+                catch (tblErr) {
+                    console.warn(`[bulk-checkout] Failed to check table status for table ${tblId}:`, tblErr);
+                }
+            }
+            if (checkoutRecord && typeof checkoutRecord === 'object') {
+                const txId = checkoutRecord.id || `TX-${Date.now()}`;
+                const checkoutRef = db.collection('checkouts').doc(txId);
+                batch.set(checkoutRef, {
+                    ...checkoutRecord,
+                    id: txId,
+                    checkoutTime: checkoutRecord.checkoutTime || new Date().toISOString()
+                });
+            }
+            await batch.commit();
+            res.json({
+                success: true,
+                processedCount: orderIds.length,
+                orderIds,
+                resolvedOrderStatuses,
+                checkoutId: checkoutRecord?.id
+            });
+        }
+        catch (error) {
+            console.error('[bulk-checkout error]', error);
+            res.status(500).json({ error: '批次結帳處理失敗', details: error });
+        }
+    });
     put('/orders/:id/complete', requireStaffAuth, async (req, res) => {
         const id = req.params.id;
         try {

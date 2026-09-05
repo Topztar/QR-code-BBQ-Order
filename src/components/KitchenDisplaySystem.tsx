@@ -67,9 +67,9 @@ interface KitchenDisplaySystemProps {
 
 export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
   currentLang,
-  orders,
+  orders = [],
   onUpdateOrderStatus,
-  printLogs,
+  printLogs = [],
   onClearPrintLogs,
   printerIp,
   onUpdatePrinterIp,
