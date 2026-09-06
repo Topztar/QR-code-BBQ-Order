@@ -26,9 +26,9 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // 5. orders (訂單) - 前端唯讀即時監聽，建立與結帳一律由後端原子事務執行
+    // 5. orders (訂單) - 前端唯讀即時監聽（需已驗證身分），建立與結帳一律由後端原子事務執行
     match /orders/{id} {
-      allow read: if true;
+      allow read: if request.auth != null;
       allow write: if false;
     }
 
