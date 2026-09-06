@@ -155,11 +155,17 @@ function registerTablesRoutes(app, ctx) {
                     throw new Error(`CONFLICT:用餐人數 (${newGuestCount}人) 超過該時段（含3小時用餐時段）可容納之剩餘客席上限 (${availableWindowCapacity}人)！`);
                 }
                 const requestedTables = String(data.tableNumber).split(',').map(t => t.trim()).filter(Boolean);
-                const selectedTablesCapacity = allTables
-                    .filter(t => requestedTables.includes(String(t.id).trim()))
-                    .reduce((sum, t) => sum + (t.maxCapacity || 4), 0);
+                const requestedTableObjs = allTables.filter(t => requestedTables.includes(String(t.id).trim()));
+                const selectedTablesCapacity = requestedTableObjs.reduce((sum, t) => sum + (t.maxCapacity || 4), 0);
                 if (selectedTablesCapacity > 0 && selectedTablesCapacity < newGuestCount) {
                     throw new Error(`CONFLICT:指定桌號加總人數上限 (${selectedTablesCapacity}人) 不足：不可低於用餐人數 (${newGuestCount}人)！`);
+                }
+                if (requestedTables.length > 1 && requestedTableObjs.length > 1) {
+                    for (const tbl of requestedTableObjs) {
+                        if (selectedTablesCapacity - (tbl.maxCapacity || 4) >= newGuestCount) {
+                            throw new Error(`CONFLICT:過度佔用桌席：用餐人數 (${newGuestCount}人) 無需佔用多張桌位，請精簡指定桌號以釋放客席！`);
+                        }
+                    }
                 }
                 for (const r of overlapping) {
                     const rTables = String(r.tableNumber || '').split(',').map(t => t.trim()).filter(Boolean);

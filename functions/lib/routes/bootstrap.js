@@ -58,7 +58,7 @@ function registerBootstrapRoutes(app, ctx) {
                     ? db.collection('ingredients').select('id', 'name', 'stock', 'minThreshold', 'unit').get()
                     : Promise.resolve({ docs: [] }),
                 isStaffRequest
-                    ? db.collection('reservations').select('id', 'guestCount', 'tableNumber', 'date', 'time', 'status', 'reservationNo').where('date', '>=', todayStr).limit(100).get()
+                    ? db.collection('reservations').select('id', 'customerName', 'phone', 'notes', 'createdAt', 'guestCount', 'tableNumber', 'date', 'time', 'status', 'reservationNo').where('date', '>=', todayStr).limit(100).get()
                     : Promise.resolve({ docs: [] })
             ]);
             const now = new Date();

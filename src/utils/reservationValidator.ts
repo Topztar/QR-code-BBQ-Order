@@ -154,3 +154,155 @@ export function getEarliestReservableOption(
 
   return { date: todayStr, time: '' };
 }
+
+export interface ReservationAvailabilityResult {
+  totalStoreCapacity: number;
+  bookedGuestsInWindow: number;
+  availableWindowCapacity: number;
+  availableTables: any[];
+  isFullyBooked: boolean;
+  suggestedTimes: Array<{ time: string; freeCount: number; firstFreeTableId?: string }>;
+}
+
+/**
+ * Calculates total capacity, booked guests, and available tables within a 3-hour overlapping window.
+ */
+export function calculateReservationAvailability(
+  resDate: string,
+  resTime: string,
+  tables: any[] = [],
+  reservations: any[] = [],
+  options?: { excludeReservationId?: string; windowMinutes?: number }
+): ReservationAvailabilityResult {
+  const totalStoreCapacity = (tables || []).reduce((sum, t) => sum + (t.maxCapacity || 4), 0);
+  if (!resDate || !resTime || !tables || tables.length === 0) {
+    return {
+      totalStoreCapacity,
+      bookedGuestsInWindow: 0,
+      availableWindowCapacity: totalStoreCapacity,
+      availableTables: tables || [],
+      isFullyBooked: false,
+      suggestedTimes: [],
+    };
+  }
+
+  const targetMins = parseTimeToMinutes(resTime);
+  const windowMins = options?.windowMinutes ?? 180;
+  const excludeId = options?.excludeReservationId;
+
+  const overlapping = (reservations || []).filter((r) => {
+    if (excludeId && (r.id === excludeId || r.reservationNo === excludeId)) return false;
+    if (r.status === 'cancelled' || r.status === 'rejected') return false;
+    if (r.date.trim() !== resDate.trim()) return false;
+    const rMins = parseTimeToMinutes(r.time);
+    return Math.abs(rMins - targetMins) < windowMins;
+  });
+
+  let bookedGuestsInWindow = 0;
+  const unavailableTableIds = new Set<string>();
+  overlapping.forEach((r) => {
+    bookedGuestsInWindow += Number(r.guestCount) || 0;
+    const rTables = String(r.tableNumber || '').split(',').map((t) => t.trim()).filter(Boolean);
+    rTables.forEach((tId) => unavailableTableIds.add(tId));
+  });
+
+  const availableTables = tables.filter((t) => !unavailableTableIds.has(t.id));
+  const availableWindowCapacity = availableTables.reduce((sum, t) => sum + (t.maxCapacity || 4), 0);
+
+  return {
+    totalStoreCapacity,
+    bookedGuestsInWindow,
+    availableWindowCapacity,
+    availableTables,
+    isFullyBooked: availableTables.length === 0 || availableWindowCapacity <= 0,
+    suggestedTimes: [],
+  };
+}
+
+/**
+ * Auto-assigns optimal tables for guestCount.
+ * 1. Prefer single table that satisfies guestCount (exact or minimum excess capacity)
+ * 2. Otherwise sort descending by maxCapacity to assign minimum number of tables
+ */
+export function autoSelectOptimalTables(
+  availableTables: any[] = [],
+  guestCount: number
+): string[] {
+  if (!availableTables || availableTables.length === 0 || guestCount <= 0) {
+    return [];
+  }
+
+  const tablesCopy = [...availableTables];
+
+  // 1. Prefer single table that satisfies guestCount
+  const exactFit = tablesCopy
+    .filter((t) => (t.maxCapacity || 4) >= guestCount)
+    .sort((a, b) => (a.maxCapacity || 4) - (b.maxCapacity || 4))[0];
+
+  if (exactFit) {
+    return [exactFit.id];
+  }
+
+  // 2. Otherwise sort descending by maxCapacity to assign minimum number of tables
+  tablesCopy.sort((a, b) => (b.maxCapacity || 4) - (a.maxCapacity || 4));
+  let currentCap = 0;
+  const selectedIds: string[] = [];
+
+  for (const t of tablesCopy) {
+    if (currentCap >= guestCount) break;
+    selectedIds.push(t.id);
+    currentCap += t.maxCapacity || 4;
+  }
+
+  return selectedIds;
+}
+
+/**
+ * Validates that requested tables do not hoard/monopolize multiple tables when fewer tables suffice.
+ */
+export function validateTableMonopoly(
+  requestedTableObjs: any[] = [],
+  guestCount: number
+): { valid: boolean; error?: string } {
+  if (!requestedTableObjs || requestedTableObjs.length <= 1) {
+    return { valid: true };
+  }
+
+  const selectedTablesCapacity = requestedTableObjs.reduce((sum, t) => sum + (t.maxCapacity || 4), 0);
+
+  for (const tbl of requestedTableObjs) {
+    if (selectedTablesCapacity - (tbl.maxCapacity || 4) >= guestCount) {
+      return {
+        valid: false,
+        error: `過度佔用桌席：用餐人數 (${guestCount}人) 無需使用多張桌席，請縮減指定桌席以釋出多餘空位！`
+      };
+    }
+  }
+
+  return { valid: true };
+}
+
+/**
+ * Validates reservation capacity constraints
+ */
+export function validateCapacity(
+  resGuestsInput: number,
+  availableWindowCapacity: number,
+  designatedCapacity: number
+): { valid: boolean; error?: string } {
+  if (availableWindowCapacity > 0 && resGuestsInput > availableWindowCapacity) {
+    return {
+      valid: false,
+      error: `⚠️ 用餐人數 (${resGuestsInput}人) 超過該時段（含3小時用餐時段）可容納之剩餘客席上限 (${availableWindowCapacity}人)！`
+    };
+  }
+
+  if (designatedCapacity > 0 && resGuestsInput > designatedCapacity) {
+    return {
+      valid: false,
+      error: `⚠️ 指定桌號加總人數上限 (${designatedCapacity}人) 不足：不可低於用餐人數 (${resGuestsInput}人)！請於下方加選桌位或調減人數。`
+    };
+  }
+
+  return { valid: true };
+}

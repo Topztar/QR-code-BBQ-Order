@@ -321,22 +321,28 @@ export const ReservationSettingModal: React.FC<ReservationSettingModalProps> = (
                     </span>
                   )}
                 </div>
-                <div className="w-full bg-[#1e1e1e] border border-white/10 rounded p-1.5 text-white max-h-32 overflow-y-auto space-y-1">
+                <div className="w-full bg-[#1e1e1e] border border-white/10 rounded p-1.5 text-white max-h-36 overflow-y-auto space-y-1">
                   {(() => {
                     const currentSelectedCapacity = tables
                       .filter((t) => resTableInputs.includes(t.id))
-                      .reduce((sum, t) => sum + (t.maxCapacity || 0), 0);
+                      .reduce((sum, t) => sum + (t.maxCapacity || 4), 0);
 
                     return tables.map((t) => {
                       const isChecked = resTableInputs.includes(t.id);
+                      // 防獨占核心規則：用餐人數尚未達到當前已選桌位的桌席人數上限時，禁止加選其他桌席
                       const isDisabled = !isChecked && currentSelectedCapacity >= resGuestsInput;
 
                       return (
                         <label
                           key={t.id}
                           className={`flex items-center gap-2 p-1 rounded transition-opacity ${
-                            isDisabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-white/5'
+                            isDisabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:bg-white/5'
                           }`}
+                          title={
+                            isDisabled
+                              ? `現有已選桌席容量 (${currentSelectedCapacity}人) 已足以容納用餐人數 (${resGuestsInput}人)，若需加選其他桌請先調高用餐人數`
+                              : undefined
+                          }
                         >
                           <input
                             type="checkbox"
@@ -352,7 +358,7 @@ export const ReservationSettingModal: React.FC<ReservationSettingModalProps> = (
                             className="accent-amber-500 cursor-pointer"
                           />
                           <span className="text-xs">
-                            {t.id} 號桌位 {t.maxCapacity ? `(上限 ${t.maxCapacity}人)` : ''}
+                            {t.id} 號桌位 {t.maxCapacity ? `(上限 ${t.maxCapacity}人)` : '(上限 4人)'}
                             <span className="text-zinc-400 ml-1 text-[10px]">
                               (現狀: {t.status === 'preserved' ? '保留中' : t.status === 'in_use' ? '用餐中' : '空閒'})
                             </span>
@@ -362,6 +368,9 @@ export const ReservationSettingModal: React.FC<ReservationSettingModalProps> = (
                     });
                   })()}
                 </div>
+                <p className="text-[10px] text-zinc-500 leading-tight">
+                  💡 <span className="text-zinc-400">防獨占規則</span>：用餐人數須達已選桌位之客席人數上限後，方可加選其他桌席。
+                </p>
               </div>
             </div>
 

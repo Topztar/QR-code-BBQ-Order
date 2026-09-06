@@ -3,6 +3,7 @@ import React, { Component, useState, useEffect, useMemo, useCallback } from 'rea
 import { Ingredient, Language, Category, TableConfig, Order, OrderStatus, Reservation } from '../types';
 import { getLocalizedText } from '../utils/i18n';
 import { sanitizePhoneDigits, isValidTaiwanPhone, TAIWAN_PHONE_ERROR_MSG } from '../utils/phoneValidator';
+import { calculateReservationAvailability, autoSelectOptimalTables, validateCapacity } from '../utils/reservationValidator';
 import { AlertTriangle, Sparkles, Coins, Trash2, Plus, Download, Check, Minus, Printer } from 'lucide-react';
 import { db, isFirebaseSyncEnabled } from '../lib/firebase';
 import { safeStorage } from '../lib/safeStorage';
@@ -3121,47 +3122,9 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
 
   // 3-Hour Overlapping Window Capacity Calculation for Manager Reservation Form
   const managerResAvailability = useMemo(() => {
-    const totalStoreCapacity = (tables || []).reduce((sum, t) => sum + (t.maxCapacity || 4), 0);
-    if (!resDateInput || !resTimeInput || tables.length === 0) {
-      return {
-        totalStoreCapacity,
-        bookedGuestsInWindow: 0,
-        availableWindowCapacity: totalStoreCapacity,
-        availableTables: tables || [],
-        isFullyBooked: false
-      };
-    }
-    const parseMins = (t: string) => {
-      if (!t) return 0;
-      const [h, m] = t.split(':').map(Number);
-      return (h || 0) * 60 + (m || 0);
-    };
-    const targetMins = parseMins(resTimeInput);
-    const overlapping = reservations.filter(r => {
-      if (editingResObj && (r.id === editingResObj.id || (r as any).reservationNo === editingResObj.id)) return false;
-      if (r.status === 'cancelled' || (r as any).status === 'rejected') return false;
-      if (r.date.trim() !== resDateInput.trim()) return false;
-      const rMins = parseMins(r.time);
-      return Math.abs(rMins - targetMins) < 180;
+    return calculateReservationAvailability(resDateInput, resTimeInput, tables, reservations, {
+      excludeReservationId: editingResObj ? editingResObj.id : undefined,
     });
-
-    let bookedGuestsInWindow = 0;
-    const unavailableTableIds = new Set<string>();
-    overlapping.forEach(r => {
-      bookedGuestsInWindow += (Number(r.guestCount) || 0);
-      const rTables = String(r.tableNumber || '').split(',').map(t => t.trim()).filter(Boolean);
-      rTables.forEach(tId => unavailableTableIds.add(tId));
-    });
-
-    const availableTables = tables.filter(t => !unavailableTableIds.has(t.id));
-    const availableWindowCapacity = availableTables.reduce((sum, t) => sum + (t.maxCapacity || 4), 0);
-    return {
-      totalStoreCapacity,
-      bookedGuestsInWindow,
-      availableWindowCapacity,
-      availableTables,
-      isFullyBooked: availableTables.length === 0 || availableWindowCapacity <= 0
-    };
   }, [resDateInput, resTimeInput, tables, reservations, editingResObj]);
 
   const managerDesignatedCapacity = useMemo(() => {
@@ -3174,20 +3137,8 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   // Auto-assign tables based on guest count and availability
   useEffect(() => {
     if (!isResFormOpen || !resDateInput || !resTimeInput || tables.length === 0 || editingResObj) return;
-
-    const availableTables = [...managerResAvailability.availableTables];
-    availableTables.sort((a, b) => (b.maxCapacity || 4) - (a.maxCapacity || 4));
-
-    let currentCapacity = 0;
-    const selectedIds: string[] = [];
-    
-    for (const t of availableTables) {
-      if (currentCapacity >= resGuestsInput) break;
-      selectedIds.push(t.id);
-      currentCapacity += (t.maxCapacity || 4);
-    }
-    
-    setResTableInputs(selectedIds);
+    const selected = autoSelectOptimalTables(managerResAvailability.availableTables, resGuestsInput);
+    setResTableInputs(selected);
   }, [resGuestsInput, resDateInput, resTimeInput, tables, isResFormOpen, editingResObj, managerResAvailability.availableTables]);
 
   const handleReservationSaveSubmit = async (e: React.FormEvent) => {
@@ -3229,13 +3180,9 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
       return;
     }
 
-    if (managerResAvailability.availableWindowCapacity > 0 && resGuestsInput > managerResAvailability.availableWindowCapacity) {
-      setResError(`⚠️ 用餐人數 (${resGuestsInput}人) 超過該時段（含3小時用餐時段）可容納之剩餘客席上限 (${managerResAvailability.availableWindowCapacity}人)！`);
-      return;
-    }
-
-    if (managerDesignatedCapacity > 0 && resGuestsInput > managerDesignatedCapacity) {
-      setResError(`⚠️ 指定桌號加總人數上限 (${managerDesignatedCapacity}人) 不足：不可低於用餐人數 (${resGuestsInput}人)！請於下方加選桌位或調減人數。`);
+    const capacityValidation = validateCapacity(resGuestsInput, managerResAvailability.availableWindowCapacity, managerDesignatedCapacity);
+    if (!capacityValidation.valid) {
+      setResError(capacityValidation.error!);
       return;
     }
 

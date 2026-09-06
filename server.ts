@@ -2817,12 +2817,20 @@ app.post('/api/reservations', reservationRateLimiter, (req, res) => {
 
   // 2. Selected Tables Capacity Check
   const requestedTables = String(tableNumber).split(',').map(t => t.trim()).filter(Boolean);
-  const selectedTablesCapacity = liveTables
-    .filter(t => requestedTables.includes(t.id.toString()))
-    .reduce((sum, t) => sum + (t.maxCapacity || 4), 0);
+  const requestedTableObjs = liveTables.filter(t => requestedTables.includes(t.id.toString()));
+  const selectedTablesCapacity = requestedTableObjs.reduce((sum, t) => sum + (t.maxCapacity || 4), 0);
   
   if (selectedTablesCapacity > 0 && selectedTablesCapacity < newGuestCount) {
     return res.status(400).json({ error: `指定桌號加總人數上限 (${selectedTablesCapacity}人) 不足：不可低於用餐人數 (${newGuestCount}人)！` });
+  }
+
+  // 2.1 Anti-monopoly Check: prevent occupying multiple tables when fewer tables suffice
+  if (requestedTables.length > 1 && requestedTableObjs.length > 1) {
+    for (const tbl of requestedTableObjs) {
+      if (selectedTablesCapacity - (tbl.maxCapacity || 4) >= newGuestCount) {
+        return res.status(400).json({ error: `過度佔用桌席：用餐人數 (${newGuestCount}人) 無需佔用多張桌位，請精簡指定桌號以釋放客席！` });
+      }
+    }
   }
 
   // 3. Table Conflict Check
@@ -2934,12 +2942,20 @@ app.put('/api/reservations/:id', (req, res) => {
 
       // 2. Selected Tables Capacity Check
       const requestedTables = String(newTable).split(',').map(t => t.trim()).filter(Boolean);
-      const selectedTablesCapacity = liveTables
-        .filter(t => requestedTables.includes(t.id.toString()))
-        .reduce((sum, t) => sum + (t.maxCapacity || 4), 0);
+      const requestedTableObjs = liveTables.filter(t => requestedTables.includes(t.id.toString()));
+      const selectedTablesCapacity = requestedTableObjs.reduce((sum, t) => sum + (t.maxCapacity || 4), 0);
       
       if (selectedTablesCapacity > 0 && selectedTablesCapacity < updatedGuestCount) {
         return res.status(400).json({ error: `指定桌號加總人數上限 (${selectedTablesCapacity}人) 不足：不可低於用餐人數 (${updatedGuestCount}人)！` });
+      }
+
+      // 2.1 Anti-monopoly Check: prevent occupying multiple tables when fewer tables suffice
+      if (requestedTables.length > 1 && requestedTableObjs.length > 1) {
+        for (const tbl of requestedTableObjs) {
+          if (selectedTablesCapacity - (tbl.maxCapacity || 4) >= updatedGuestCount) {
+            return res.status(400).json({ error: `過度佔用桌席：用餐人數 (${updatedGuestCount}人) 無需佔用多張桌位，請精簡指定桌號以釋放客席！` });
+          }
+        }
       }
 
       // 3. Table Conflict Check

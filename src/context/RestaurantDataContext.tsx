@@ -5,6 +5,7 @@ import { db, isFirebaseSyncEnabled, startFirebaseSync, stopFirebaseSync } from '
 import { collection, onSnapshot } from 'firebase/firestore';
 import { INITIAL_MENU, INITIAL_CATEGORIES, loadData } from '../data';
 import { addRequestToQueue } from '../lib/offlineQueue';
+import { validateTableMonopoly } from '../utils/reservationValidator';
 
 export interface AnalyticsData {
   totalRevenue: number;
@@ -744,9 +745,8 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
     }
 
     const requestedTables = String(reservation.tableNumber).split(',').map(t => t.trim()).filter(Boolean);
-    const selectedTablesCapacity = (tables || [])
-      .filter(t => requestedTables.includes(t.id))
-      .reduce((sum, t) => sum + (t.maxCapacity || 4), 0);
+    const requestedTableObjs = (tables || []).filter(t => requestedTables.includes(t.id));
+    const selectedTablesCapacity = requestedTableObjs.reduce((sum, t) => sum + (t.maxCapacity || 4), 0);
     const newGuestCount = Number(reservation.guestCount) || 1;
 
     if (selectedTablesCapacity > 0 && selectedTablesCapacity < newGuestCount) {
@@ -754,6 +754,11 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
         success: false,
         error: `指定桌號加總人數上限 (${selectedTablesCapacity}人) 不足：不可低於用餐人數 (${newGuestCount}人)！`
       };
+    }
+
+    const monopolyCheck = validateTableMonopoly(requestedTableObjs, newGuestCount);
+    if (!monopolyCheck.valid) {
+      return { success: false, error: monopolyCheck.error };
     }
 
     const conflict = (reservations || []).find(r => {
@@ -808,15 +813,19 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
         };
         const targetMins = parseMins(targetTime);
         const requestedTables = targetTable.split(',').map(t => t.trim()).filter(Boolean);
-        const selectedTablesCapacity = (tables || [])
-          .filter(t => requestedTables.includes(t.id))
-          .reduce((sum, t) => sum + (t.maxCapacity || 4), 0);
+        const requestedTableObjs = (tables || []).filter(t => requestedTables.includes(t.id));
+        const selectedTablesCapacity = requestedTableObjs.reduce((sum, t) => sum + (t.maxCapacity || 4), 0);
 
         if (selectedTablesCapacity > 0 && selectedTablesCapacity < targetGuestCount) {
           return {
             success: false,
             error: `指定桌號加總人數上限 (${selectedTablesCapacity}人) 不足：不可低於用餐人數 (${targetGuestCount}人)！`
           };
+        }
+
+        const monopolyCheck = validateTableMonopoly(requestedTableObjs, targetGuestCount);
+        if (!monopolyCheck.valid) {
+          return { success: false, error: monopolyCheck.error };
         }
 
         const conflict = (reservations || []).find(r => {

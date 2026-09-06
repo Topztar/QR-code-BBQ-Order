@@ -19,6 +19,8 @@ import {
   getAvailableReservationSlots,
   getEarliestReservableOption,
   isReservationTimeAllowed,
+  calculateReservationAvailability,
+  autoSelectOptimalTables,
 } from '../utils/reservationValidator';
 import { useCustomerCart } from '../hooks/useCustomerCart';
 import { CustomerHeader } from './customer/CustomerHeader';
@@ -385,6 +387,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
     expressFee,
     cartTotal,
     cartItemsCount,
+    handleReorderItems,
   } = useCustomerCart({
     promoCombo,
     paymentMethod,
@@ -611,27 +614,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
   };
 
   const handleReorderOrder = (orderItems: any[]) => {
-    const newItemsToAdd = orderItems.map((oldItem: any) => {
-      const cartId = `cart-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-      const menuItem = displayedMenuItems.find((m) => m.id === oldItem.menuItemId);
-      return {
-        id: cartId,
-        menuItemId: oldItem.menuItemId,
-        name: menuItem ? menuItem.name : oldItem.name,
-        price: menuItem ? menuItem.price : oldItem.price,
-        qty: oldItem.qty,
-        customization: {
-          spiciness: 1,
-          notes: '由歷史訂單一鍵加點 (Quick reordered from past orders)',
-        },
-      };
-    });
-    setCart((prev) => [...prev, ...newItemsToAdd]);
-    if (newItemsToAdd.length > 0) {
-      setHoverCartItem(newItemsToAdd[0]);
-      setIsHoverCartOpen(true);
-    }
-    setIsCartOpen(false);
+    handleReorderItems(orderItems, displayedMenuItems);
   };
 
   const handleRedeemReward = (reward: any) => {
@@ -661,20 +644,24 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
     [operatingHours, restDays]
   );
 
+  // 3-Hour Overlapping Window Capacity Calculation for Customer Reservation Form
   const reservationAvailabilityInfo = useMemo(() => {
-    return {
-      isFullyBooked: false,
-      availableWindowCapacity: 24,
-      totalStoreCapacity: 30,
-      bookedGuestsInWindow: 6,
-      suggestedTimes: [
-        { time: '18:00', freeCount: 4, firstFreeTableId: '1' },
-        { time: '18:30', freeCount: 3, firstFreeTableId: '2' },
-        { time: '19:00', freeCount: 2, firstFreeTableId: '3' },
-      ],
-      availableTables: ['1', '2', '3', '4', '5'],
-    };
-  }, []);
+    return calculateReservationAvailability(resDate, resTime, tables, reservations);
+  }, [resDate, resTime, tables, reservations]);
+
+  // Keep resGuests within available window capacity if window capacity is constrained
+  useEffect(() => {
+    if (reservationAvailabilityInfo.availableWindowCapacity > 0 && resGuests > reservationAvailabilityInfo.availableWindowCapacity) {
+      setResGuests(reservationAvailabilityInfo.availableWindowCapacity);
+    }
+  }, [reservationAvailabilityInfo.availableWindowCapacity, resGuests]);
+
+  // Auto-assign table(s) if user has not manually customized them
+  useEffect(() => {
+    if (!showReservationModal || isManualTableSelection || tables.length === 0) return;
+    const selected = autoSelectOptimalTables(reservationAvailabilityInfo.availableTables, resGuests);
+    setResTableNumbers(selected);
+  }, [resGuests, reservationAvailabilityInfo.availableTables, showReservationModal, isManualTableSelection, tables]);
 
   const designatedTablesCapacity = useMemo(() => {
     return tables

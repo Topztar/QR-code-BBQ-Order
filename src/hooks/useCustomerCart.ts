@@ -82,6 +82,30 @@ export function useCustomerCart({
     setIsCartOpen(false);
   };
 
+  const handleReorderItems = (orderItems: any[], displayedMenuItems: MenuItem[]) => {
+    const newItemsToAdd = orderItems.map((oldItem: any) => {
+      const cartId = `cart-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      const menuItem = displayedMenuItems.find((m) => m.id === oldItem.menuItemId);
+      return {
+        id: cartId,
+        menuItemId: oldItem.menuItemId,
+        name: menuItem ? menuItem.name : oldItem.name,
+        price: menuItem ? menuItem.price : oldItem.price,
+        qty: oldItem.qty,
+        customization: {
+          spiciness: 1,
+          notes: '由歷史訂單一鍵加點 (Quick reordered from past orders)',
+        },
+      };
+    });
+    setCart((prev) => [...prev, ...newItemsToAdd]);
+    if (newItemsToAdd.length > 0) {
+      setHoverCartItem(newItemsToAdd[0]);
+      setIsHoverCartOpen(true);
+    }
+    setIsCartOpen(false);
+  };
+
   const handleRemoveFromCart = (id: string) => {
     setCart((prev) => prev.filter((i) => i.id !== id));
   };
@@ -173,6 +197,7 @@ export function useCustomerCart({
     setIsHoverCartOpen,
     handleAddToCart,
     handleQuickAddToCart,
+    handleReorderItems,
     handleRemoveFromCart,
     handleUpdateCartQty,
     clearCart,

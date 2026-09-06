@@ -6,6 +6,9 @@ import {
   isReservationTimeAllowed,
   getAvailableReservationSlots,
   getEarliestReservableOption,
+  calculateReservationAvailability,
+  autoSelectOptimalTables,
+  validateTableMonopoly,
   DEFAULT_CANDIDATE_SLOTS,
 } from '../reservationValidator';
 
@@ -130,4 +133,136 @@ describe('reservationValidator', () => {
       expect(opt.time).toBe('11:30');
     });
   });
+
+  describe('calculateReservationAvailability & Table Selection', () => {
+    const mockTables = [
+      { id: 'A1', maxCapacity: 4 },
+      { id: 'A2', maxCapacity: 4 },
+      { id: 'B1', maxCapacity: 6 },
+    ];
+
+    const mockReservations = [
+      { id: 'r1', date: '2026-09-10', time: '18:00', tableNumber: 'A1', guestCount: 4, status: 'confirmed' },
+    ];
+
+    it('calculateReservationAvailability computes 3h overlapping window capacity correctly', () => {
+      // Target time 18:30 overlaps with 18:00 reservation (within 180 mins)
+      const avail = calculateReservationAvailability('2026-09-10', '18:30', mockTables, mockReservations);
+      expect(avail.totalStoreCapacity).toBe(14);
+      expect(avail.bookedGuestsInWindow).toBe(4);
+      expect(avail.availableWindowCapacity).toBe(10); // A2(4) + B1(6)
+      expect(avail.availableTables.map((t: any) => t.id)).toEqual(['A2', 'B1']);
+    });
+
+    it('autoSelectOptimalTables selects single fitting table (exactFit) first', () => {
+      // Available: A1(4), A2(4), B1(6). Guest count = 4.
+      // Fits A1(4) or A2(4). exactFit should pick single 4-person table.
+      const selected = autoSelectOptimalTables(mockTables, 4);
+      expect(selected.length).toBe(1);
+      expect(mockTables.find((t) => t.id === selected[0])?.maxCapacity).toBe(4);
+    });
+
+    it('autoSelectOptimalTables selects single larger table if smaller table is insufficient', () => {
+      // Guest count = 5. A1(4) and A2(4) are insufficient, B1(6) fits single table.
+      const selected = autoSelectOptimalTables(mockTables, 5);
+      expect(selected).toEqual(['B1']);
+    });
+
+    it('autoSelectOptimalTables selects minimum combination of tables if no single table fits', () => {
+      // Guest count = 8. No single table fits (max is 6).
+      // Available: B1(6), A1(4), A2(4).
+      // Should pick B1(6) + A1(4) = 10 capacity.
+      const selected = autoSelectOptimalTables(mockTables, 8);
+      expect(selected).toEqual(['B1', 'A1']);
+    });
+
+    it('validateTableMonopoly detects when multiple tables are unnecessarily selected', () => {
+      // 2 guests selecting A1(4) + A2(4) -> Capacity 8.
+      // Removing A2 leaves A1(4) >= 2 guests. Should fail validation.
+      const result = validateTableMonopoly([mockTables[0], mockTables[1]], 2);
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('過度佔用桌席');
+    });
+
+    it('validateTableMonopoly passes when multiple tables are genuinely required', () => {
+      // 7 guests selecting A1(4) + B1(6) -> Capacity 10.
+      // Removing B1 leaves 4 < 7. Removing A1 leaves 6 < 7. Valid!
+      const result = validateTableMonopoly([mockTables[0], mockTables[2]], 7);
+      expect(result.valid).toBe(true);
+    });
+
+    describe('Boundary & Edge Cases', () => {
+      it('calculateReservationAvailability respects 180-minute window boundaries', () => {
+        const reservations = [
+          { id: 'r1', date: '2026-09-10', time: '12:00', tableNumber: 'A1', guestCount: 4, status: 'confirmed' }, // 12:00 = 720m
+        ];
+        // 14:59 = 899m. Math.abs(899 - 720) = 179m < 180m -> Overlaps
+        const avail179 = calculateReservationAvailability('2026-09-10', '14:59', mockTables, reservations);
+        expect(avail179.availableTables.some((t: any) => t.id === 'A1')).toBe(false);
+
+        // 15:00 = 900m. Math.abs(900 - 720) = 180m -> Does NOT overlap
+        const avail180 = calculateReservationAvailability('2026-09-10', '15:00', mockTables, reservations);
+        expect(avail180.availableTables.some((t: any) => t.id === 'A1')).toBe(true);
+      });
+
+      it('calculateReservationAvailability excludes editing reservation via excludeReservationId', () => {
+        const reservations = [
+          { id: 'r1', date: '2026-09-10', time: '18:00', tableNumber: 'A1', guestCount: 4, status: 'confirmed' },
+        ];
+        // Editing r1 should ignore r1 and keep A1 available
+        const avail = calculateReservationAvailability('2026-09-10', '18:00', mockTables, reservations, {
+          excludeReservationId: 'r1',
+        });
+        expect(avail.availableTables.some((t: any) => t.id === 'A1')).toBe(true);
+      });
+
+      it('calculateReservationAvailability ignores cancelled and rejected reservations', () => {
+        const reservations = [
+          { id: 'r1', date: '2026-09-10', time: '18:00', tableNumber: 'A1', guestCount: 4, status: 'cancelled' },
+          { id: 'r2', date: '2026-09-10', time: '18:00', tableNumber: 'A2', guestCount: 4, status: 'rejected' },
+        ];
+        const avail = calculateReservationAvailability('2026-09-10', '18:00', mockTables, reservations);
+        expect(avail.availableTables.length).toBe(3);
+        expect(avail.bookedGuestsInWindow).toBe(0);
+      });
+
+      it('autoSelectOptimalTables selects tightest fit single table (avoids wasting larger tables)', () => {
+        // Available: A1(4), B1(6). Guest count = 3.
+        // Both A1(4) and B1(6) fit 3 guests. Should select A1(4) because it's a tighter fit.
+        const tables = [
+          { id: 'B1', maxCapacity: 6 },
+          { id: 'A1', maxCapacity: 4 },
+        ];
+        const selected = autoSelectOptimalTables(tables, 3);
+        expect(selected).toEqual(['A1']);
+      });
+
+      it('autoSelectOptimalTables returns empty array for empty inputs or non-positive guest count', () => {
+        expect(autoSelectOptimalTables([], 4)).toEqual([]);
+        expect(autoSelectOptimalTables(mockTables, 0)).toEqual([]);
+        expect(autoSelectOptimalTables(mockTables, -2)).toEqual([]);
+      });
+
+      it('validateTableMonopoly handles exact capacity boundary cases', () => {
+        const two4CapTables = [
+          { id: 'A1', maxCapacity: 4 },
+          { id: 'A2', maxCapacity: 4 },
+        ];
+
+        // 4 guests selecting two 4-cap tables (Cap 8). 8 - 4 = 4 >= 4 -> Invalid (A1 alone satisfies 4 guests)!
+        const res4 = validateTableMonopoly(two4CapTables, 4);
+        expect(res4.valid).toBe(false);
+
+        // 5 guests selecting two 4-cap tables (Cap 8). 8 - 4 = 4 < 5 -> Valid (needs both tables)!
+        const res5 = validateTableMonopoly(two4CapTables, 5);
+        expect(res5.valid).toBe(true);
+
+        // Single table selected -> Always valid
+        const resSingle = validateTableMonopoly([two4CapTables[0]], 2);
+        expect(resSingle.valid).toBe(true);
+      });
+    });
+  });
 });
+
+
