@@ -305,14 +305,13 @@ export const KdsTicketCard: React.FC<KdsTicketCardProps> = React.memo(({
                         </option>
                       ))}
                       {tables &&
-                        tables.map(
-                          (t) =>
-                            !Array.from({ length: 12 }, (_, i) => String(i + 1)).includes(t.id) && (
-                              <option key={t.id} value={t.id}>
-                                🪑 第 {t.id} 桌
-                              </option>
-                            )
-                        )}
+                        tables
+                          .filter((t) => !Array.from({ length: 12 }, (_, i) => String(i + 1)).includes(t.id))
+                          .map((t) => (
+                            <option key={t.id} value={t.id}>
+                              🪑 第 {t.id} 桌
+                            </option>
+                          ))}
                     </optgroup>
                     <optgroup label="外帶自取佇列">
                       {Array.from({ length: 15 }, (_, i) => `外帶 #${i + 1}`).map((takeoutId) => (
@@ -558,7 +557,7 @@ ${specLines}
                     (menuItem && menuItem.category === selectedCategory);
                   return (
                     <div
-                      key={idx}
+                      key={it.id || `${order.id}-${it.menuItemId}-${idx}`}
                       className={`flex items-center justify-between border-b border-dashed border-white/5 pb-2.5 transition-all duration-200 gap-3 ${
                         isMatch ? 'opacity-100' : 'opacity-20 scale-[0.98]'
                       } ${

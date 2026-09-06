@@ -190,7 +190,7 @@ export const KdsQuickViewModal: React.FC<KdsQuickViewModalProps> = ({
 
                 return (
                   <div
-                    key={idx}
+                    key={it.id || `${quickViewOrder.id}-${idx}`}
                     className={`border rounded-xl p-4 space-y-3 transition ${
                       it.isCompleted
                         ? 'bg-emerald-950/10 border-emerald-500/20 hover:border-emerald-500/30'

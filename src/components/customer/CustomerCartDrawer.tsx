@@ -443,7 +443,7 @@ export const CustomerCartDrawer: React.FC<CustomerCartDrawerProps> = ({
                       if (count === 0) return null;
 
                       return (
-                        <div key={combo.id || idx}>
+                        <div key={combo.id || `combo-${combo.name}-${idx}`}>
                           {count < combo.requiredQty ? (
                             <div
                               className={`text-[10px] border rounded-lg p-2.5 mt-2 flex flex-col space-y-1 ${

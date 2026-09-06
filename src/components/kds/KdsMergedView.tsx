@@ -77,7 +77,7 @@ export const KdsMergedView: React.FC<KdsMergedViewProps> = React.memo(({
 
                   return (
                     <div
-                      key={idx}
+                      key={`${dish.id}-${oi.orderId}-${oi.tableNumber}-${idx}`}
                       className="bg-black/30 border border-white/5 p-3 rounded-lg flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-xs"
                     >
                       <div className="space-y-1.5 flex-1">

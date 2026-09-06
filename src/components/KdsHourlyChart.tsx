@@ -176,7 +176,7 @@ export const KdsHourlyChart: React.FC<KdsHourlyChartProps> = React.memo(({
             </p>
             
             <div className="h-60 w-full pt-1">
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
                 <ComposedChart
                   data={predictionData}
                   margin={{ top: 10, right: 10, bottom: 0, left: -25 }}

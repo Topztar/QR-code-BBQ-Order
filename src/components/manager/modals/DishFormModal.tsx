@@ -346,7 +346,7 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
                   ) : (
                     <div className="grid grid-cols-1 gap-1.5">
                       {customAddOns.map((opt, idx) => (
-                        <div key={opt.id || idx} className="flex items-center justify-between bg-white/5 px-2.5 py-2 rounded-lg border border-white/10 text-[11px]">
+                        <div key={opt.id || `${getLocalizedText(opt.name, 'zh')}-${opt.price}-${idx}`} className="flex items-center justify-between bg-white/5 px-2.5 py-2 rounded-lg border border-white/10 text-[11px]">
                           <span className="font-bold text-white/90">{getLocalizedText(opt.name, 'zh')}</span>
                           <div className="flex items-center space-x-2.5">
                             <span className="font-mono text-[#E5B453] font-bold">+NT$ {opt.price}</span>

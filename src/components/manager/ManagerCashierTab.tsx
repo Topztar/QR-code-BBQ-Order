@@ -1023,13 +1023,13 @@ export const ManagerCashierTab: React.FC<ManagerCashierTabProps> = (props) => {
                                         🪑 第 {num} 桌 (Dine-in)
                                       </option>
                                     ))}
-                                    {tables && tables.map((t) => (
-                                      !Array.from({ length: 12 }, (_, i) => String(i + 1)).includes(t.id) && (
+                                    {tables && tables
+                                      .filter((t) => !Array.from({ length: 12 }, (_, i) => String(i + 1)).includes(t.id))
+                                      .map((t) => (
                                         <option key={t.id} value={t.id}>
                                           🪑 第 {t.id} 桌
                                         </option>
-                                      )
-                                    ))}
+                                      ))}
                                   </optgroup>
                                   <optgroup label="外帶自取佇列">
                                     {Array.from({ length: 15 }, (_, i) => `外帶 #${i + 1}`).map((takeoutId) => (
@@ -1645,7 +1645,7 @@ export const ManagerCashierTab: React.FC<ManagerCashierTabProps> = (props) => {
                                                   const addOnName = getLocalizedText(addOn.name, currentLang) || (typeof addOn.name === 'string' ? addOn.name : '加點項目');
                                                   const addOnPrice = Number(addOn.price) || 0;
                                                   return (
-                                                    <div key={aidx} className="flex justify-between items-center bg-black/50 border border-amber-500/20 rounded px-2.5 py-1 text-[11px]">
+                                                    <div key={addOn.id || `${it.id || 'item'}-addon-${aidx}`} className="flex justify-between items-center bg-black/50 border border-amber-500/20 rounded px-2.5 py-1 text-[11px]">
                                                       <span className="text-zinc-200 font-bold">
                                                         • {addOnName}
                                                       </span>
@@ -3938,7 +3938,7 @@ export const ManagerCashierTab: React.FC<ManagerCashierTabProps> = (props) => {
                       const itemSubtotal = (item.price || 0) * (item.qty || 1);
 
                       return (
-                        <div key={idx} className="p-3 flex items-start justify-between gap-3 text-xs">
+                        <div key={item.id || `${takeoutDetailModalOrder?.id || 'takeout'}-${idx}`} className="p-3 flex items-start justify-between gap-3 text-xs">
                           <div className="space-y-1">
                             <div className="font-bold text-white text-sm flex items-center gap-2">
                               <span>{itemName}</span>

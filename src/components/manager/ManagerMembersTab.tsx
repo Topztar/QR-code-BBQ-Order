@@ -473,7 +473,7 @@ export const ManagerMembersTab: React.FC<ManagerMembersTabProps> = ({
               <div className="space-y-3">
                 {tempRewards.map((reward, index) => {
                   return (
-                    <div key={reward.id || index} className="bg-black/40 border border-white/5 rounded-lg p-3 space-y-2">
+                    <div key={reward.id || `reward-${reward.name || index}`} className="bg-black/40 border border-white/5 rounded-lg p-3 space-y-2">
                       <div className="flex items-center justify-between">
                         <span className="font-mono text-[10px] text-zinc-500 uppercase">選項 {index + 1} ({reward.id})</span>
                         <label className="flex items-center space-x-1.5 cursor-pointer text-zinc-400 hover:text-white select-none">
@@ -664,7 +664,7 @@ export const ManagerMembersTab: React.FC<ManagerMembersTabProps> = ({
               {tempOperatingHours.map((slot, idx) => {
                 const daysOfWeekLabels = ['日', '一', '二', '三', '四', '五', '六'];
                 return (
-                  <div key={slot.id || idx} className="p-3 bg-black/40 border border-[#E5B453]/10 rounded-xl space-y-3 relative">
+                  <div key={slot.id || `slot-${slot.name || idx}`} className="p-3 bg-black/40 border border-[#E5B453]/10 rounded-xl space-y-3 relative">
                     <div className="flex items-center justify-between">
                       <input
                         type="text"
@@ -874,7 +874,7 @@ export const ManagerMembersTab: React.FC<ManagerMembersTabProps> = ({
                   <span className="text-[11px] text-zinc-500 italic">目前無設定公休日 No scheduled rest days.</span>
                 ) : (
                   tempRestDays.map((dateStr, dIdx) => (
-                    <div key={dIdx} className="flex items-center gap-1.5 px-2 py-0.5 bg-rose-500/10 text-rose-400 border border-rose-500/25 rounded-md text-[11px] font-mono font-bold">
+                    <div key={dateStr} className="flex items-center gap-1.5 px-2 py-0.5 bg-rose-500/10 text-rose-400 border border-rose-500/25 rounded-md text-[11px] font-mono font-bold">
                       <span>📅 {dateStr}</span>
                       <button
                         type="button"

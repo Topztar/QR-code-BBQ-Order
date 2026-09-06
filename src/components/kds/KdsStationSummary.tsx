@@ -721,7 +721,7 @@ export const KdsStationSummary: React.FC<KdsStationSummaryProps> = React.memo(({
           ) : (
             printLogs.map((log, index) => (
               <div
-                key={index}
+                key={log.id || `${log.timestamp}-${index}`}
                 className="bg-[#1C1C1C] text-white p-3.5 rounded-lg border border-white/10 shadow-sm relative overflow-hidden"
               >
                 <div className="absolute top-0 right-0 bg-[#E5B453] text-[#0F0F0F] text-[8px] font-black px-1.5 py-0.5 rounded-bl uppercase tracking-wider">

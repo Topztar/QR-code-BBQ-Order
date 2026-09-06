@@ -207,7 +207,7 @@ export const CustomerOrderTracker: React.FC<CustomerOrderTrackerProps> = ({
                                 const unitPrice = getItemUnitPrice(it);
                                 return (
                                   <div
-                                    key={idx}
+                                    key={it.id || `${order.id}-${idx}`}
                                     className="flex flex-col mb-1.5 border-b border-white/5 pb-1.5 last:border-0 last:pb-0"
                                   >
                                     <div className="flex justify-between font-medium">
@@ -249,7 +249,7 @@ export const CustomerOrderTracker: React.FC<CustomerOrderTrackerProps> = ({
                                         )}
                                         {it.customization.selectedAddOns &&
                                           it.customization.selectedAddOns.map((addon, aIdx) => (
-                                            <div key={aIdx} className="flex justify-between text-white/50">
+                                            <div key={addon.id || `${it.id || idx}-addon-${aIdx}`} className="flex justify-between text-white/50">
                                               <span>
                                                 +{' '}
                                                 {typeof addon.name === 'object'
@@ -606,7 +606,7 @@ export const CustomerOrderTracker: React.FC<CustomerOrderTrackerProps> = ({
                               const unitPrice = getItemUnitPrice(it);
                               return (
                                 <div
-                                  key={iIdx}
+                                  key={it.id || `${pastOrder.id}-${iIdx}`}
                                   className="flex flex-col mb-1.5 border-b border-white/5 pb-1.5 last:border-0 last:pb-0"
                                 >
                                   <div className="flex justify-between text-xs text-white/80 font-sans">
@@ -649,7 +649,7 @@ export const CustomerOrderTracker: React.FC<CustomerOrderTrackerProps> = ({
                                       )}
                                       {it.customization.selectedAddOns &&
                                         it.customization.selectedAddOns.map((addon, aIdx) => (
-                                          <div key={aIdx} className="flex justify-between text-white/50">
+                                          <div key={addon.id || `${it.id || iIdx}-addon-${aIdx}`} className="flex justify-between text-white/50">
                                             <span>
                                               +{' '}
                                               {typeof addon.name === 'object'

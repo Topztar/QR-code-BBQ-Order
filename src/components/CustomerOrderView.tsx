@@ -1132,7 +1132,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
                 {hoverCartItem.customization.selectedAddOns &&
                   hoverCartItem.customization.selectedAddOns.map((addOn, index) => (
                     <span
-                      key={index}
+                      key={addOn.id || `${addOn.price}-${index}`}
                       className={`text-[10px] px-1.5 py-0.5 rounded ${
                         isSimplifiedMode
                           ? 'bg-[#FFA500]/10 text-black font-bold'

@@ -127,13 +127,13 @@ export const OrderDetailDrilldownModal: React.FC<OrderDetailDrilldownModalProps>
                                   🪑 第 {num} 桌 (Dine-in)
                                 </option>
                               ))}
-                              {tables && tables.map((t) => (
-                                !Array.from({ length: 12 }, (_, i) => String(i + 1)).includes(t.id) && (
+                              {tables && tables
+                                .filter((t) => !Array.from({ length: 12 }, (_, i) => String(i + 1)).includes(t.id))
+                                .map((t) => (
                                   <option key={t.id} value={t.id}>
                                     🪑 第 {t.id} 桌
                                   </option>
-                                )
-                              ))}
+                                ))}
                             </optgroup>
                             <optgroup label="外帶自取佇列號碼">
                               {Array.from({ length: 15 }, (_, i) => `外帶 #${i + 1}`).map((takeoutId) => (

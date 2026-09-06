@@ -184,7 +184,7 @@ export const ManagerStatsTab: React.FC<ManagerStatsTabProps> = ({
           </h4>
           <p className="text-white/40 text-xs text-sans">用以分析哪些料理為沙貝之金雞母類別</p>
           <div className="h-64 pt-3" id="revenue-barchart-container">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
               <BarChart data={chartCategoryData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
                 <XAxis dataKey="name" tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }} axisLine={false} />
@@ -204,7 +204,7 @@ export const ManagerStatsTab: React.FC<ManagerStatsTabProps> = ({
           <p className="text-white/40 text-xs text-sans">視覺化分析今日不同餐點類別之營業額佔比份額</p>
           <div className="h-64 pt-3 flex flex-col md:flex-row items-center justify-center gap-2" id="piechart-container">
             <div className="w-1/2 h-full min-h-[160px] relative">
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
                 <PieChart>
                   <Pie
                     data={chartCategoryData}
@@ -216,10 +216,10 @@ export const ManagerStatsTab: React.FC<ManagerStatsTabProps> = ({
                     dataKey="營業額 NT$"
                     nameKey="name"
                   >
-                    {chartCategoryData.map((_entry, index) => {
+                    {chartCategoryData.map((entry, index) => {
                       const colors = ['#E5B453', '#FFA500', '#F3CD78', '#D4AF37', '#FF8C00', '#FFD700', '#CD7F32'];
                       return (
-                        <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
+                        <Cell key={`cell-${entry.name || index}`} fill={colors[index % colors.length]} />
                       );
                     })}
                   </Pie>
@@ -237,7 +237,7 @@ export const ManagerStatsTab: React.FC<ManagerStatsTabProps> = ({
                 const totalRevenue = chartCategoryData.reduce((sum, item) => sum + (item['營業額 NT$'] || 0), 0);
                 const percentage = totalRevenue > 0 ? ((entry['營業額 NT$'] / totalRevenue) * 100).toFixed(1) : '0.0';
                 return (
-                  <div key={index} className="flex flex-col text-[10px] text-zinc-300 font-sans border-b border-white/5 pb-1">
+                  <div key={entry.name || index} className="flex flex-col text-[10px] text-zinc-300 font-sans border-b border-white/5 pb-1">
                     <div className="flex items-center space-x-1.5">
                       <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: colors[index % colors.length] }} />
                       <span className="truncate font-semibold text-white/90">{entry.name}</span>
@@ -260,7 +260,7 @@ export const ManagerStatsTab: React.FC<ManagerStatsTabProps> = ({
           </h4>
           <p className="text-white/40 text-xs text-sans">營業時間 17:30 - 00:30。有助於適當調度內外場人力。</p>
           <div className="h-64 pt-3" id="busy-hours-linechart-container">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
               <LineChart data={chartHourlyData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
                 <XAxis dataKey="用餐時段" tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }} axisLine={false} />
@@ -285,7 +285,7 @@ export const ManagerStatsTab: React.FC<ManagerStatsTabProps> = ({
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3.5">
           {analytics.topDishes.map((dish, i) => (
-            <div key={dish.name} className="bg-black/30 border border-white/5 p-3 rounded-lg text-center relative overflow-hidden">
+            <div key={`${dish.name || 'dish'}-${i}`} className="bg-black/30 border border-white/5 p-3 rounded-lg text-center relative overflow-hidden">
               <span className="absolute top-0 left-0 bg-amber-500 text-black text-[9px] font-black px-1.5 py-0.5 rounded-br">
                 NO.{i + 1}
               </span>

@@ -777,7 +777,7 @@ export const ManagerPrinterTab: React.FC<ManagerPrinterTabProps> = ({
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[360px] overflow-y-auto scrollbar-thin p-1">
             {printLogs.slice().reverse().map((log: any, idx: number) => (
-              <div key={idx} className="bg-black/45 border border-white/10 rounded-xl p-3.5 space-y-2 relative overflow-hidden flex flex-col justify-between">
+              <div key={log.id || `${log.timestamp}-${log.type}-${idx}`} className="bg-black/45 border border-white/10 rounded-xl p-3.5 space-y-2 relative overflow-hidden flex flex-col justify-between">
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
                     <span className={`text-[8.5px] font-black tracking-widest px-1.5 py-0.5 rounded font-mono uppercase ${

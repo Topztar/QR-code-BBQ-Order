@@ -404,7 +404,7 @@ export const ManagerInventoryTab: React.FC<ManagerInventoryTabProps> = ({
                 <span className="font-bold text-[#E5B453] line-clamp-1">{menuItem ? menuItem.name.zh : key}</span>
                 <div className="space-y-1 text-[11px] text-zinc-400">
                   {recipeCompositionMap[key].map((rec, i) => (
-                    <p key={i} className="flex justify-between">
+                    <p key={rec.name || i} className="flex justify-between">
                       <span>{rec.name}</span>
                       <span className="font-mono text-white text-right font-semibold">{rec.qty}</span>
                     </p>
@@ -473,7 +473,7 @@ export const ManagerInventoryTab: React.FC<ManagerInventoryTabProps> = ({
                   if (!k) return true;
                   return l.ingredientName.toLowerCase().includes(k) || l.note.toLowerCase().includes(k);
                 }).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).map((l, i) => (
-                  <tr key={l.id || i} className="hover:bg-white/[2%] font-sans">
+                  <tr key={l.id || `${l.timestamp}-${l.ingredientName}-${i}`} className="hover:bg-white/[2%] font-sans">
                     <td className="py-2.5 px-3 text-zinc-500 font-mono">{new Date(l.timestamp).toLocaleString()}</td>
                     <td className="py-2.5 px-3 font-bold text-white">{l.ingredientName}</td>
                     <td className="py-2.5 px-3 text-center">
