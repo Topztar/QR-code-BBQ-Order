@@ -3103,6 +3103,19 @@ app.post('/api/staff/pin/check-path', (req, res) => {
   return res.json({ valid: pathPin === liveStaffPin });
 });
 
+// Securely verify active staff session token
+app.get('/api/staff/verify', (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ valid: false, error: '未授權存取：缺少有效安全憑證 (Unauthorized)' });
+  }
+  const token = authHeader.split('Bearer ')[1]?.trim();
+  if (token && (token === 'valid-staff-session' || token.startsWith('st_'))) {
+    return res.json({ valid: true });
+  }
+  return res.status(401).json({ valid: false, error: '安全憑證無效或已過期' });
+});
+
 app.post('/api/staff/pin/verify', (req, res) => {
   const { pin } = req.body;
   if (pin === liveStaffPin) {

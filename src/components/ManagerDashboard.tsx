@@ -95,50 +95,24 @@ class ModalErrorBoundary extends Component<ModalErrorBoundaryProps, ModalErrorBo
 }
 
 
-// Helper to mask sensitive email topztar@gmail.com and other personal emails to show only a custom Member Code / Masked ID
-export const getMaskedEmail = (email: string | null | undefined): string => {
-  if (!email) return '';
-  const emailLower = email.toLowerCase().trim();
-  if (emailLower === 'topztar@gmail.com') {
-    return 'VIP-001 (topz****@gmail.com)';
-  }
-  if (emailLower === 'thai_foodie@gmail.com') {
-    return 'VIP-002 (thai_****@gmail.com)';
-  }
-  if (emailLower === 'vegan_sabay@gmail.com') {
-    return 'VIP-003 (vega_****@gmail.com)';
-  }
-  const parts = emailLower.split('@');
-  const user = parts[0] || '';
-  const domain = parts[1] || 'gmail.com';
-  if (user.length <= 3) {
-    return `VIP-USR (${user[0]}***@${domain})`;
-  }
-  return `VIP-USR (${user.slice(0, 3)}****@${domain})`;
-};
-
 import {
-  computeOrderItemUnitPrice as _computeOrderItemUnitPrice,
-  computeOrderItemsSubtotal as _computeOrderItemsSubtotal,
-  calculateOrderTotalWithPayment as _calculateOrderTotalWithPayment
+  getMaskedEmail,
+  computeOrderItemUnitPrice,
+  computeOrderItemsSubtotal,
+  calculateOrderTotalWithPayment,
+  getLocalDateString,
+  isOrderOnLocalDate,
+  generateReservationNo,
 } from './manager/ManagerDashboardUtils';
 
-export const computeOrderItemUnitPrice = _computeOrderItemUnitPrice;
-export const computeOrderItemsSubtotal = _computeOrderItemsSubtotal;
-export const calculateOrderTotalWithPayment = _calculateOrderTotalWithPayment;
-
-export const getLocalDateString = (d: Date = new Date()): string => {
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
-
-export const isOrderOnLocalDate = (createdAt: string | undefined | null, targetDateStr: string): boolean => {
-  if (!createdAt) return false;
-  const d = new Date(createdAt);
-  if (isNaN(d.getTime())) return false;
-  return getLocalDateString(d) === targetDateStr;
+export {
+  getMaskedEmail,
+  computeOrderItemUnitPrice,
+  computeOrderItemsSubtotal,
+  calculateOrderTotalWithPayment,
+  getLocalDateString,
+  isOrderOnLocalDate,
+  generateReservationNo,
 };
 
 
@@ -769,13 +743,6 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     if (!operatingHours || operatingHours.length === 0) return true;
     return slots.includes(resTimeInput);
   }, [resDateInput, resTimeInput, generateCandidateSlots, restDays, operatingHours]);
-
-  const generateReservationNo = (dateStr: string, existingRes: Reservation[]) => {
-    const cleanDate = (dateStr || new Date().toISOString().split('T')[0]).replace(/-/g, '');
-    const count = (existingRes || []).filter(r => r.date === dateStr).length;
-    const seq = String(count + 1).padStart(3, '0');
-    return `RES-${cleanDate}-${seq}`;
-  };
 
   // PIN security states
   const [currentPinInput, setCurrentPinInput] = useState('');

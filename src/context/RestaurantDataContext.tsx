@@ -388,11 +388,15 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
   }, [activeTab, syncActive]);
 
   // Reservation auto-check mechanism: Automatically mark confirmed reservations within 1 hour as "upcoming"
+  const reservationsRef = useRef(reservations);
+  reservationsRef.current = reservations;
+
   useEffect(() => {
-    if (!reservations || reservations.length === 0) return;
     const checkUpcomingInterval = setInterval(() => {
+      const currentRes = reservationsRef.current;
+      if (!currentRes || currentRes.length === 0) return;
       const now = new Date();
-      reservations.forEach(res => {
+      currentRes.forEach(res => {
         if (res.status === 'confirmed') {
           const [year, month, day] = res.date.split('-').map(Number);
           const [hour, minute] = res.time.split(':').map(Number);
@@ -408,7 +412,7 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
       });
     }, 10000);
     return () => clearInterval(checkUpcomingInterval);
-  }, [reservations]);
+  }, []);
 
   // CRUD Handlers
   const handleRestock = async (id: string, amount: number) => {
