@@ -82,6 +82,11 @@ export default defineConfig({
     target: 'es2020',
     // 減少 chunk 大小警告門檻
     chunkSizeWarningLimit: 600,
+    modulePreload: {
+      resolveDependencies: (filename, deps, { hostId, hostType }) => {
+        return deps.filter(dep => !dep.includes('vendor-charts'));
+      }
+    },
     rollupOptions: {
       output: {
         manualChunks(id) {

@@ -45,6 +45,10 @@ get('/staff/pin/value', (_req, res) => {
   res.json({ blocked: true });
 });
 
+get('/staff/verify', requireStaffAuth, (_req, res) => {
+  res.json({ valid: true });
+});
+
 post('/staff/pin/check-path', async (req, res) => {
   const { pathPin } = req.body;
   if (!pathPin) {

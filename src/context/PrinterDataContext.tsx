@@ -261,7 +261,15 @@ export function PrinterDataProvider({ children, activeTab }: ProviderProps) {
 export function usePrinterData(): PrinterDataContextType {
   const context = useContext(PrinterDataContext);
   if (!context) {
-    throw new Error('usePrinterData must be used within a PrinterDataProvider');
+    return {
+      printerIp: '',
+      setPrinterIp: () => {},
+      printLogs: [],
+      setPrintLogs: () => {},
+      handleUpdatePrinterIp: async () => ({ success: false }),
+      handleClearPrintLogs: async () => {},
+      handlePrintTestPage: async () => ({ success: false }),
+    };
   }
   return context;
 }

@@ -3,6 +3,7 @@ import { Firestore } from 'firebase-admin/firestore';
 import { Bucket } from '@google-cloud/storage';
 import * as crypto from 'crypto';
 import { processMenuItemSoldOut, isStoreOpenFromData } from '../helpers';
+import { getStoredActiveToken } from '../auth';
 
 // ============================================================
 // BOOTSTRAP 路由模組
@@ -33,7 +34,18 @@ export function registerBootstrapRoutes(app: express.Application, ctx: RouteCont
     try {
       res.setHeader('Cache-Control', 'public, max-age=15, s-maxage=180, stale-while-revalidate=600');
       const todayStr = new Date().toISOString().split('T')[0];
-      const isStaffRequest = req.query.role === 'staff' || !!req.headers.authorization;
+      
+      let isStaffRequest = false;
+      const authHeader = req.headers.authorization;
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        const token = authHeader.split('Bearer ')[1]?.trim();
+        if (token) {
+          const storedAuth = await getStoredActiveToken(db);
+          if (storedAuth && storedAuth.token === token && Date.now() <= storedAuth.expiresAt) {
+            isStaffRequest = true;
+          }
+        }
+      }
       
       const [
         categoriesSnap,

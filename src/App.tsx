@@ -4,6 +4,7 @@ import { clearOfflineQueue } from './lib/offlineQueue';
 import { safeStorage } from './lib/safeStorage';
 import { TRANSLATIONS } from './data';
 import { LanguageSelector } from './components/LanguageSelector';
+import { sessionAuth } from './lib/sessionAuth';
 import { ChefHat, Smartphone, BarChart3, UtensilsCrossed, LogOut, Lock, Phone, MapPin, Eye, EyeOff, Coins, Monitor } from 'lucide-react';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { RestaurantDataProvider, useRestaurantData } from './context/RestaurantDataContext';
@@ -84,12 +85,19 @@ function AppContent({
     return undefined;
   });
   const [isStaff, setIsStaff] = useState<boolean>(() => {
-    try {
-      return safeStorage.getItem('sabay-staff-auth') === 'true';
-    } catch {
-      return false;
-    }
+    return sessionAuth.isAuthenticated();
   });
+
+  useEffect(() => {
+    if (isStaff) {
+      sessionAuth.verify().then(isValid => {
+        if (!isValid) {
+          setIsStaff(false);
+          navigateTo('/');
+        }
+      });
+    }
+  }, [isStaff, navigateTo]);
   const [staffPin] = useState<string>('');
   const [showContactDetails, setShowContactDetails] = useState<boolean>(false);
 
@@ -381,7 +389,7 @@ function AppContent({
                       id="tab-btn-logout-staff"
                       onClick={() => {
                         setIsStaff(false);
-                        safeStorage.removeItem('sabay-staff-auth');
+                        sessionAuth.clear();
                         safeStorage.removeItem('sabay-staff-active-tab');
                         safeStorage.removeItem('sabay-staff-subtab');
                         navigateTo('/');
@@ -559,7 +567,7 @@ function AppContent({
           <button
             onClick={() => {
               setIsStaff(false);
-              safeStorage.removeItem('sabay-staff-auth');
+              sessionAuth.clear();
               safeStorage.removeItem('sabay-staff-active-tab');
               safeStorage.removeItem('sabay-staff-subtab');
               navigateTo('/');
@@ -679,7 +687,7 @@ function AppContent({
                   <StaffLoginGate
                     onLoginSuccess={() => {
                       setIsStaff(true);
-                      safeStorage.setItem('sabay-staff-auth', 'true');
+                      // sessionAuth.setToken is called inside StaffLoginGate
                       const targetSubTab = 'stats';
                       setAdminSubTab(targetSubTab);
                       safeStorage.setItem('sabay-staff-active-tab', 'admin');
@@ -939,14 +947,23 @@ function OrderDataConsumerWrapper({
       handleUpdateTableStatus={handleUpdateTableStatus}
       onRefreshData={fetchData}
     >
-      <PrinterDataProvider activeTab={activeTab}>
+      {activeTab !== 'customer' ? (
+        <PrinterDataProvider activeTab={activeTab}>
+          <AppContent
+            activeTab={activeTab}
+            setActiveTab={setActiveTab}
+            currentPath={currentPath}
+            navigateTo={navigateTo}
+          />
+        </PrinterDataProvider>
+      ) : (
         <AppContent
           activeTab={activeTab}
           setActiveTab={setActiveTab}
           currentPath={currentPath}
           navigateTo={navigateTo}
         />
-      </PrinterDataProvider>
+      )}
     </OrderDataProvider>
   );
 }

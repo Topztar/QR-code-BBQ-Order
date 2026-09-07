@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { ShieldCheck, ArrowLeft, KeyRound, AlertCircle } from 'lucide-react';
+import { sessionAuth } from '../lib/sessionAuth';
 
 interface StaffLoginGateProps {
   onLoginSuccess: () => void;
@@ -40,7 +41,7 @@ export const StaffLoginGate: React.FC<StaffLoginGateProps> = ({ onLoginSuccess, 
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data?.access_token) {
-        localStorage.setItem("sabay_jwt_token", data.access_token);
+        sessionAuth.setToken(data.access_token);
         onLoginSuccess();
       } else {
         setErrorMessage(data?.error || '解鎖金鑰錯誤！(請輸入正確的 6 位數金鑰)');

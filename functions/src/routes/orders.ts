@@ -30,7 +30,7 @@ export function registerOrdersRoutes(app: express.Application, ctx: RouteContext
   const put: RouteRegister = (routePath, ...handlers) => app.put([`/api${routePath}`, routePath], ...handlers);
   const del: RouteRegister = (routePath, ...handlers) => app.delete([`/api${routePath}`, routePath], ...handlers);
 
-get('/orders', async (_req, res) => {
+get('/orders', requireStaffAuth, async (_req, res) => {
   try {
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     let snapshot;
