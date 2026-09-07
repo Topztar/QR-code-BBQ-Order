@@ -268,7 +268,7 @@ export function registerMenuRoutes(app: express.Application, ctx: RouteContext) 
       }
 
       const now = new Date();
-      const snapshot = await db.collection('menu').select('id', 'category', 'name', 'price', 'image', 'thumbnailUrl', 'avifUrl', 'avifThumbnailUrl', 'description', 'available', 'isAvailable', 'isSetMeal', 'requiredSaucesOption', 'hasNoodlesOption', 'hasCoconutsMilkOption', 'containsBeef', 'containsPork', 'containsSeafood', 'isNotSpicy', 'customAddOns', 'recipe', 'orderIndex', 'isTakeoutAvailable', 'soldOutAt').orderBy('orderIndex').get();
+      const snapshot = await db.collection('menu').select('id', 'category', 'name', 'price', 'image', 'thumbnailUrl', 'avifUrl', 'avifThumbnailUrl', 'description', 'available', 'isAvailable', 'isSetMeal', 'requiredSaucesOption', 'hasNoodlesOption', 'hasCoconutsMilkOption', 'containsBeef', 'containsPork', 'containsSeafood', 'isNotSpicy', 'customAddOns', 'recipe', 'orderIndex', 'isTakeoutAvailable', 'soldOutAt', 'soldOutType', 'soldOutDate').orderBy('orderIndex').get();
       const items = snapshot.docs.map(doc => {
         const d = doc.data() as any;
         return {
@@ -283,6 +283,8 @@ export function registerMenuRoutes(app: express.Application, ctx: RouteContext) 
           description: d.description ?? { zh: '' },
           available: !!d.available,
           isAvailable: d.isAvailable,
+          soldOutType: d.soldOutType || (d.available ? 'none' : 'permanent'),
+          soldOutDate: d.soldOutDate ?? null,
           isSetMeal: !!d.isSetMeal,
           requiredSaucesOption: !!d.requiredSaucesOption,
           hasNoodlesOption: !!d.hasNoodlesOption,
@@ -455,7 +457,7 @@ export function registerMenuRoutes(app: express.Application, ctx: RouteContext) 
   // 8. Toggle Menu Availability (設為沽清 / 恢復販售)
   post('/menu/toggle-available', requireStaffAuth, async (req, res) => {
     try {
-      const { id } = req.body;
+      const { id, soldOutType, soldOutDate } = req.body;
       if (!id) {
         return res.status(400).json({ error: 'Missing menu item id' });
       }
@@ -473,10 +475,28 @@ export function registerMenuRoutes(app: express.Application, ctx: RouteContext) 
 
       if (docSnap.exists) {
         const currentData = docSnap.data();
-        const newAvailable = !(currentData?.available ?? true);
+        let newAvailable = !(currentData?.available ?? true);
+        let newSoldOutType = undefined;
+        let newSoldOutDate = undefined;
+        
+        // Handle explicit dual-mode overrides
+        if (soldOutType) {
+           newAvailable = soldOutType === 'none';
+           newSoldOutType = soldOutType;
+           newSoldOutDate = soldOutDate || undefined;
+        }
+
         const newSoldOutAt = !newAvailable ? new Date().toISOString() : null;
-        await docRef.set({ available: newAvailable, soldOutAt: newSoldOutAt }, { merge: true });
-        const updatedItem = { ...currentData, available: newAvailable, soldOutAt: newSoldOutAt };
+        const updateData: any = { 
+          available: newAvailable, 
+          soldOutAt: newSoldOutAt,
+          soldOutType: newSoldOutType || null,
+          soldOutDate: newSoldOutDate || null,
+          updatedAt: new Date().toISOString()
+        };
+        
+        await docRef.set(updateData, { merge: true });
+        const updatedItem = { ...currentData, ...updateData };
         return res.json({ success: true, item: updatedItem, available: newAvailable });
       }
 

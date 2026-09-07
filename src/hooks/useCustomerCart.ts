@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { MenuItem, OrderItem, CustomAddOn } from '../types';
+import { orderCalculationService } from '../services/orderCalculationService';
 
 export interface UseCustomerCartProps {
   promoCombo?: any;
@@ -35,6 +36,7 @@ export function useCustomerCart({
     selectedAddOns: CustomAddOn[];
   }) => {
     if (!isStoreCurrentlyOpen) return;
+    if (item.available === false) return;
 
     const cartId = `cart-${Date.now()}-${Math.floor(Math.random() * 100)}`;
     const newOrderItem: OrderItem = {
@@ -60,6 +62,7 @@ export function useCustomerCart({
 
   const handleQuickAddToCart = (item: MenuItem) => {
     if (!isStoreCurrentlyOpen) return;
+    if (item.available === false) return;
     const isSpicyCategory = !item.isNotSpicy;
 
     const newOrderItem: OrderItem = {
@@ -83,10 +86,13 @@ export function useCustomerCart({
   };
 
   const handleReorderItems = (orderItems: any[], displayedMenuItems: MenuItem[]) => {
-    const newItemsToAdd = orderItems.map((oldItem: any) => {
-      const cartId = `cart-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const newItemsToAdd: any[] = [];
+    orderItems.forEach((oldItem: any) => {
       const menuItem = displayedMenuItems.find((m) => m.id === oldItem.menuItemId);
-      return {
+      if (menuItem && menuItem.available === false) return; // Skip sold out items
+
+      const cartId = `cart-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      newItemsToAdd.push({
         id: cartId,
         menuItemId: oldItem.menuItemId,
         name: menuItem ? menuItem.name : oldItem.name,
@@ -96,8 +102,11 @@ export function useCustomerCart({
           spiciness: 1,
           notes: '由歷史訂單一鍵加點 (Quick reordered from past orders)',
         },
-      };
+      });
     });
+
+    if (newItemsToAdd.length === 0) return; // All items were sold out
+
     setCart((prev) => [...prev, ...newItemsToAdd]);
     if (newItemsToAdd.length > 0) {
       setHoverCartItem(newItemsToAdd[0]);
@@ -160,12 +169,7 @@ export function useCustomerCart({
   }, [activeCombosAndDiscounts]);
 
   const cartSubtotal = useMemo(() => {
-    return cart.reduce((sum, item) => {
-      let finalPrice = item.price;
-      if (item.customization?.soupBase === 'coconut-milk') finalPrice += 50;
-      const addOnPrice = item.customization?.selectedAddOns?.reduce((s, a) => s + a.price, 0) || 0;
-      return sum + (finalPrice + addOnPrice) * item.qty;
-    }, 0);
+    return orderCalculationService.computeOrderItemsSubtotal(cart, []);
   }, [cart]);
 
   const discountedSubtotal = useMemo(() => {

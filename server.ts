@@ -6,7 +6,7 @@ import net from 'net';
 import { initializeApp as initializeClientApp, getApps as getClientApps } from 'firebase/app';
 import { getFirestore as getClientFirestore, collection, doc, deleteDoc, getDoc, getDocs, setDoc, writeBatch } from 'firebase/firestore';
 import { createServer as createViteServer } from 'vite';
-import { Order, Ingredient, MenuItem, OrderItem, Category, TableConfig, OperatingHourSlot, Reservation } from './src/types';
+import { Order, Ingredient, MenuItem, OrderItem, Category, TableConfig, OperatingHourSlot, Reservation, SoldOutType } from './src/types';
 import fs from 'fs';
 const dataJson = JSON.parse(fs.readFileSync('./public/data.json', 'utf-8'));
 const { INITIAL_MENU, INITIAL_INGREDIENTS, INITIAL_CATEGORIES, INGREDIENT_RECIPE_MAP } = dataJson;
@@ -17,6 +17,7 @@ import {
   printCustomerReceipt
 } from './hardware/printerDriver';
 import { sendReservationNotifications, sendTestNotification } from './functions/src/services/notification';
+import { orderCalculationService } from './src/services/orderCalculationService';
 
 import { initFirebaseStorage, gcsBucket, getGeminiClient, app, PORT } from './src/server/init';
 import { setupMiddleware, createRateLimiter } from './src/server/middleware';
@@ -958,42 +959,29 @@ function sanitizeMenu(menu: MenuItem[]) {
 
 /**
  * Automatically check and restore menu items marked as SOLD OUT (available: false)
- * Rule: Automatically restore to available (available: true) after 12:00 PM (noon) the next day.
+ * Rule: 
+ *  - 'daily' soldOutType: Automatically restore to available after local midnight (00:00:00) Asia/Taipei.
+ *  - 'permanent' soldOutType: Locked sold out until manual restoration.
+ *  - Legacy items: If available === false without soldOutType, treated as permanent.
  */
 function checkAndRestoreSoldOutMenuItems(): boolean {
-  const now = new Date();
+  const todayStr = getTaiwanDateString();
   let changed = false;
 
   liveMenu.forEach((item) => {
-    if (item.available === false) {
-      if (!item.soldOutAt) {
-        // If an item is marked sold out but has no timestamp recorded, record now
-        item.soldOutAt = now.toISOString();
-        changed = true;
-        return;
-      }
-
-      const soldDate = new Date(item.soldOutAt);
-      if (isNaN(soldDate.getTime())) {
-        item.soldOutAt = now.toISOString();
-        changed = true;
-        return;
-      }
-
-      // Calculate next day 12:00:00.000 (noon)
-      const restoreTime = new Date(soldDate);
-      restoreTime.setDate(restoreTime.getDate() + 1);
-      restoreTime.setHours(12, 0, 0, 0);
-
-      if (now.getTime() >= restoreTime.getTime()) {
+    if (item.soldOutType === 'daily') {
+      // If soldOutDate is before today, midnight has passed -> auto-restore
+      if (item.soldOutDate && item.soldOutDate < todayStr) {
         const dishName = typeof item.name === 'object' ? (item.name.zh || item.name.en || item.id) : item.name;
-        console.log(`[Sabay Menu Auto-Restore] 🍲 餐點 [${item.id} - ${dishName}] 於 ${item.soldOutAt} 設為沽清，已過隔日 12:00，系統自動恢復為「販售中 (Supply)」！`);
+        console.log(`[Sabay Menu Auto-Restore] 🍲 餐點 [${item.id} - ${dishName}] 設為當日結清 (${item.soldOutDate})，已過台灣午夜，自動恢復為「可販售」！`);
         item.available = true;
+        item.soldOutType = 'none';
+        item.soldOutDate = undefined;
         item.soldOutAt = null;
         changed = true;
       }
-    } else if (item.soldOutAt) {
-      // Clean up leftover timestamp if item is available
+    } else if (item.soldOutType === 'none' && item.available === false) {
+      item.available = true;
       item.soldOutAt = null;
       changed = true;
     }
@@ -1944,6 +1932,37 @@ app.post('/api/images/upload', async (req, res) => {
 
 // -----------------------------------------------------------------
 
+// Helper to project menu items consistently across all responses (deduplicating logic)
+function toPublicMenuItem(m: MenuItem) {
+  return {
+    id: m.id,
+    category: m.category,
+    name: m.name,
+    price: m.price,
+    image: m.image,
+    thumbnailUrl: m.thumbnailUrl,
+    avifUrl: m.avifUrl,
+    avifThumbnailUrl: m.avifThumbnailUrl,
+    description: m.description,
+    available: m.available,
+    soldOutType: m.soldOutType || (m.available ? 'none' : 'permanent'),
+    soldOutDate: m.soldOutDate,
+    soldOutAt: m.soldOutAt,
+    isSetMeal: m.isSetMeal,
+    requiredSaucesOption: m.requiredSaucesOption,
+    hasNoodlesOption: m.hasNoodlesOption,
+    hasCoconutsMilkOption: m.hasCoconutsMilkOption,
+    containsBeef: m.containsBeef,
+    containsPork: m.containsPork,
+    containsSeafood: m.containsSeafood,
+    isNotSpicy: m.isNotSpicy,
+    customAddOns: m.customAddOns,
+    recipe: m.recipe,
+    orderIndex: m.orderIndex,
+    isTakeoutAvailable: m.isTakeoutAvailable
+  };
+}
+
 // 0. Consolidated Bootstrap endpoint for fast initial load
 app.get('/api/bootstrap', (_req, res) => {
   checkAndRestoreSoldOutMenuItems();
@@ -1951,7 +1970,7 @@ app.get('/api/bootstrap', (_req, res) => {
   res.setHeader('Cache-Control', 'public, max-age=15, s-maxage=60, stale-while-revalidate=300');
   res.json({
     isFirebaseSyncEnabled: !DISABLE_FIREBASE_SYNC,
-    menu: liveMenu.map(m => ({ id: m.id, category: m.category, name: m.name, price: m.price, image: m.image, description: m.description, available: m.available, isSetMeal: m.isSetMeal, requiredSaucesOption: m.requiredSaucesOption, hasNoodlesOption: m.hasNoodlesOption, hasCoconutsMilkOption: m.hasCoconutsMilkOption, containsBeef: m.containsBeef, containsPork: m.containsPork, containsSeafood: m.containsSeafood, isNotSpicy: m.isNotSpicy, customAddOns: m.customAddOns, orderIndex: m.orderIndex, isTakeoutAvailable: m.isTakeoutAvailable, soldOutAt: m.soldOutAt })),
+    menu: liveMenu.map(toPublicMenuItem),
     categories: liveCategories,
     tables: liveTables,
     operatingHours: {
@@ -1983,7 +2002,7 @@ app.get('/api/bootstrap', (_req, res) => {
 app.get('/api/menu', (_req, res) => {
   checkAndRestoreSoldOutMenuItems();
   res.setHeader('Cache-Control', 'public, max-age=15, s-maxage=60, stale-while-revalidate=300');
-  res.json(liveMenu.map(m => ({ id: m.id, category: m.category, name: m.name, price: m.price, image: m.image, description: m.description, available: m.available, isSetMeal: m.isSetMeal, requiredSaucesOption: m.requiredSaucesOption, hasNoodlesOption: m.hasNoodlesOption, hasCoconutsMilkOption: m.hasCoconutsMilkOption, containsBeef: m.containsBeef, containsPork: m.containsPork, containsSeafood: m.containsSeafood, isNotSpicy: m.isNotSpicy, customAddOns: m.customAddOns, orderIndex: m.orderIndex, isTakeoutAvailable: m.isTakeoutAvailable, soldOutAt: m.soldOutAt })));
+  res.json(liveMenu.map(toPublicMenuItem));
 });
 
 // Create live menu item
@@ -1999,10 +2018,10 @@ app.post('/api/menu', (req, res) => {
   const newItem: MenuItem = {
     id: `dish-${Date.now()}`,
     category,
-    name: typeof name === 'object' ? name : { zh: name || '', en: name || '', ko: name || '', ja: name || '', th: name || '', vi: name || '' },
+    name: typeof name === 'object' ? name : { zh: name || '', en: name || '', ko: name || '', ja: name || '', th: name || '', vi: name || '', ru: name || '', es: name || '' },
     price: Number(price),
     image: cleanImage || 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=400',
-    description: typeof description === 'object' ? description : { zh: description || '', en: description || '', ko: description || '', ja: description || '', th: description || '', vi: description || '' },
+    description: typeof description === 'object' ? description : { zh: description || '', en: description || '', ko: description || '', ja: description || '', th: description || '', vi: description || '', ru: description || '', es: description || '' },
     available: isAvail,
     soldOutAt: !isAvail ? new Date().toISOString() : null,
     isSetMeal: !!isSetMeal,
@@ -2049,13 +2068,13 @@ app.put('/api/menu/reorder', (req, res) => {
   });
   liveMenu = reordered;
   saveStateToDisk();
-  res.json({ success: true, menu: liveMenu.map(m => ({ id: m.id, category: m.category, name: m.name, price: m.price, image: m.image, description: m.description, available: m.available, isSetMeal: m.isSetMeal, requiredSaucesOption: m.requiredSaucesOption, hasNoodlesOption: m.hasNoodlesOption, hasCoconutsMilkOption: m.hasCoconutsMilkOption, containsBeef: m.containsBeef, containsPork: m.containsPork, containsSeafood: m.containsSeafood, isNotSpicy: m.isNotSpicy, customAddOns: m.customAddOns, orderIndex: m.orderIndex, isTakeoutAvailable: m.isTakeoutAvailable, soldOutAt: m.soldOutAt })) });
+  res.json({ success: true, menu: liveMenu.map(toPublicMenuItem) });
 });
 
 // Update live menu item
 app.put('/api/menu/:id', (req, res) => {
   const { id } = req.params;
-  const { category, name, price, image, description, available, isSetMeal, requiredSaucesOption, hasNoodlesOption, hasCoconutsMilkOption, containsBeef, containsPork, containsSeafood, isNotSpicy, isTakeoutAvailable, customAddOns, recipe } = req.body;
+  const { category, name, price, image, description, available, soldOutType, soldOutDate, isSetMeal, requiredSaucesOption, hasNoodlesOption, hasCoconutsMilkOption, containsBeef, containsPork, containsSeafood, isNotSpicy, isTakeoutAvailable, customAddOns, recipe } = req.body;
   
   const itemIndex = liveMenu.findIndex(m => m.id === id);
   if (itemIndex > -1) {
@@ -2073,11 +2092,13 @@ app.put('/api/menu/:id', (req, res) => {
     const updated = {
       ...liveMenu[itemIndex],
       category: category || liveMenu[itemIndex].category,
-      name: name !== undefined ? (typeof name === 'object' ? name : { zh: name || '', en: name || '', ko: name || '', ja: name || '', th: name || '', vi: name || '' }) : liveMenu[itemIndex].name,
+      name: name !== undefined ? (typeof name === 'object' ? name : { zh: name || '', en: name || '', ko: name || '', ja: name || '', th: name || '', vi: name || '', ru: name || '', es: name || '' }) : liveMenu[itemIndex].name,
       price: price !== undefined ? Number(price) : liveMenu[itemIndex].price,
       image: cleanImage,
-      description: description !== undefined ? (typeof description === 'object' ? description : { zh: description || '', en: description || '', ko: description || '', ja: description || '', th: description || '', vi: description || '' }) : liveMenu[itemIndex].description,
+      description: description !== undefined ? (typeof description === 'object' ? description : { zh: description || '', en: description || '', ko: description || '', ja: description || '', th: description || '', vi: description || '', ru: description || '', es: description || '' }) : liveMenu[itemIndex].description,
       available: targetAvailable,
+      soldOutType: soldOutType !== undefined ? soldOutType : liveMenu[itemIndex].soldOutType,
+      soldOutDate: soldOutDate !== undefined ? soldOutDate : liveMenu[itemIndex].soldOutDate,
       soldOutAt: targetSoldOutAt,
       isSetMeal: isSetMeal !== undefined ? !!isSetMeal : liveMenu[itemIndex].isSetMeal,
       requiredSaucesOption: requiredSaucesOption !== undefined ? !!requiredSaucesOption : liveMenu[itemIndex].requiredSaucesOption,
@@ -2102,17 +2123,27 @@ app.put('/api/menu/:id', (req, res) => {
 
 // Toggle item availability (設為沽清 / 恢復販售)
 app.post('/api/menu/toggle-available', (req, res) => {
-  const { id } = req.body;
+  const { id, soldOutType, soldOutDate } = req.body;
   const item = liveMenu.find(m => m.id === id);
   if (item) {
-    item.available = !item.available;
-    if (!item.available) {
-      item.soldOutAt = new Date().toISOString();
+    if (soldOutType) {
+      item.available = soldOutType === 'none';
+      item.soldOutType = soldOutType;
+      item.soldOutDate = soldOutType === 'daily' ? (soldOutDate || getTaiwanDateString()) : undefined;
+      item.soldOutAt = !item.available ? new Date().toISOString() : null;
     } else {
-      item.soldOutAt = null;
+      item.available = !item.available;
+      if (!item.available) {
+        item.soldOutType = 'permanent';
+        item.soldOutAt = new Date().toISOString();
+      } else {
+        item.soldOutType = 'none';
+        item.soldOutDate = undefined;
+        item.soldOutAt = null;
+      }
     }
     saveStateToDisk();
-    return res.json({ success: true, item });
+    return res.json({ success: true, item, available: item.available });
   }
   res.status(404).json({ error: 'Item not found' });
 });
@@ -3310,19 +3341,37 @@ app.post('/api/orders', orderRateLimiter, (req, res) => {
   }
 
   // Validate that each ordered item's MenuItem is available (not sold out)
+  const todayStr = getTaiwanDateString();
   const unavailableItems: string[] = [];
   for (const orderItem of items as any[]) {
     const dish = liveMenu.find(m => m.id === orderItem.menuItemId);
     if (!dish) {
       unavailableItems.push(orderItem.name.zh || '未知菜品');
-    } else if (dish.available === false) {
-      unavailableItems.push(dish.name.zh);
+    } else {
+      let isAvailable = dish.available ?? true;
+      if (dish.soldOutType === 'permanent') {
+        isAvailable = false;
+      } else if (dish.soldOutType === 'daily') {
+        if (dish.soldOutDate === todayStr) {
+          isAvailable = false;
+        } else {
+          // Passed midnight Taiwan time
+          isAvailable = true;
+        }
+      } else if (dish.available === false) {
+        isAvailable = false;
+      }
+
+      if (!isAvailable) {
+        const dishName = typeof dish.name === 'object' ? (dish.name.zh || dish.name.en || dish.id) : dish.name;
+        unavailableItems.push(dishName);
+      }
     }
   }
 
   if (unavailableItems.length > 0) {
     return res.status(400).json({
-      error: '抱歉，以下餐點目前已售完/暫不供應，請重新調整您的點餐內容：' + unavailableItems.join(', '),
+      error: '抱歉，以下餐點目前已售罄/暫不供應，請重新調整您的點餐內容：' + unavailableItems.join(', '),
       itemUnavailable: true
     });
   }
@@ -3369,20 +3418,7 @@ app.post('/api/orders', orderRateLimiter, (req, res) => {
   // Calculation parameters
   let subtotal = 0;
   const processedItems = (items as OrderItem[]).map((item, index) => {
-    let finalItemPrice = item.price;
-    // custom spicy sauce fee markup
-    if (item.customization?.spiciness === 3) {
-      finalItemPrice += 10;
-    }
-    // custom coconut base upgrade markup
-    if (item.customization?.soupBase === 'coconut-milk') {
-      finalItemPrice += 50;
-    }
-    // custom selected add-ons markup
-    if (item.customization?.selectedAddOns && Array.isArray(item.customization.selectedAddOns)) {
-      const addOnsTotal = item.customization.selectedAddOns.reduce((sum, a) => sum + (Number(a.price) || 0), 0);
-      finalItemPrice += addOnsTotal;
-    }
+    const finalItemPrice = orderCalculationService.computeOrderItemUnitPrice(item, liveMenu);
     const itemCost = finalItemPrice * item.qty;
     subtotal += itemCost;
 
@@ -3940,15 +3976,8 @@ app.put('/api/orders/:id/items', (req, res) => {
     const origP = (it as any).originalPrice !== undefined ? Number((it as any).originalPrice) : null;
     let basePrice = origP !== null ? origP : (Number(it.price) || 0);
     
-    let addOnsTotal = 0;
-    if (it.customization?.selectedAddOns && Array.isArray(it.customization.selectedAddOns)) {
-      addOnsTotal = it.customization.selectedAddOns.reduce((s: number, a: any) => s + (Number(a.price) || 0), 0);
-    }
-    const soupBaseAdd = it.customization?.soupBase === 'coconut-milk' ? 50 : 0;
-    const spicyAdd = it.customization?.spiciness === 3 ? 10 : 0;
-    
     // Always calculate unit price from base price + customizations
-    const unitP = basePrice + addOnsTotal + soupBaseAdd + spicyAdd;
+    const unitP = orderCalculationService.computeOrderItemUnitPrice(it, liveMenu);
     it.price = unitP; // update price so it reflects total unit cost
     (it as any).originalPrice = basePrice; // Ensure originalPrice is stored for future updates
 
@@ -4536,7 +4565,7 @@ async function main() {
       }
     }, 15000); // Check every 15 seconds for real-time transitions
 
-    // Background Task: Automatically restore SOLD OUT menu items after next-day 12:00 PM
+    // Background Task: Automatically restore 'daily' SOLD OUT menu items after Taiwan midnight (00:00:00)
     setInterval(() => {
       try {
         checkAndRestoreSoldOutMenuItems();

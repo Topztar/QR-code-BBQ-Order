@@ -138,6 +138,7 @@ export const KdsTicketCard: React.FC<KdsTicketCardProps> = React.memo(({
   const offset = drag.isDragging ? Math.max(0, drag.currentX - drag.startX) : 0;
   const lateCheck = isOrderLateForPrepTime(order);
   const holdCheck = checkReservationOrderHoldStatus(order);
+  const totalQty = order.items.reduce((sum, item) => sum + (item.qty || 0), 0);
 
   return (
     <div
@@ -281,6 +282,11 @@ export const KdsTicketCard: React.FC<KdsTicketCardProps> = React.memo(({
               <span className="bg-white/5 border border-white/10 text-[#E5B453] font-mono font-bold text-xs px-2.5 py-0.5 rounded shrink-0">
                 {order.id}
               </span>
+              <span className="bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 font-bold text-xs px-2 py-0.5 rounded shrink-0 shadow-[0_0_8px_rgba(99,102,241,0.15)] flex items-center gap-1">
+                <span>{currentLang === 'zh' ? '共' : 'Total'}</span>
+                <span className="text-sm font-black">{totalQty}</span>
+                <span>{t('qtyPortion')}</span>
+              </span>
               {order.isPaid && (
                 <span className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-[10px] font-black px-2 py-0.5 rounded shadow-[0_0_10px_rgba(16,185,129,0.2)] shrink-0">
                   💳 櫃檯已結帳 (Paid)
@@ -288,7 +294,7 @@ export const KdsTicketCard: React.FC<KdsTicketCardProps> = React.memo(({
               )}
               {collapsedOrders.has(order.id) && (
                 <span className="text-[10px] text-amber-300/90 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded font-bold shrink-0">
-                  已收合 ({order.items.reduce((sum, item) => sum + item.qty, 0)} 份)
+                  已收合
                 </span>
               )}
               {editingOrderId === order.id ? (

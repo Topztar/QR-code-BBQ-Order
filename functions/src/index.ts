@@ -1,5 +1,6 @@
 import { onRequest } from 'firebase-functions/v2/https';
 import { onDocumentWritten } from 'firebase-functions/v2/firestore';
+import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { setGlobalOptions } from 'firebase-functions/v2';
 import * as admin from 'firebase-admin';
 import { getStorage } from 'firebase-admin/storage';
@@ -303,3 +304,50 @@ export const onMenuItemWritten = onDocumentWritten({
   }
 });
 
+// 22. Daily Sold-Out Reconciler
+// Runs at 00:01 Asia/Taipei timezone to clean up explicitly outdated 'daily' sold-out items.
+export const reconcileDailySoldOut = onSchedule(
+  {
+    schedule: '1 0 * * *',
+    timeZone: 'Asia/Taipei',
+    region: 'asia-east1',
+  },
+  async (event) => {
+    try {
+      const todayStr = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Taipei',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(new Date());
+
+
+
+      const querySnap = await db.collection('menu')
+        .where('soldOutType', '==', 'daily')
+        .where('soldOutDate', '<', todayStr)
+        .get();
+
+      if (querySnap.empty) {
+        console.log(`[Reconciler] No outdated daily sold-out items found.`);
+        return;
+      }
+
+      const batch = db.batch();
+      querySnap.docs.forEach((doc) => {
+        batch.update(doc.ref, {
+          available: true,
+          soldOutType: 'none',
+          soldOutDate: FieldValue.delete(),
+          soldOutAt: null,
+          updatedAt: new Date().toISOString()
+        });
+      });
+
+      await batch.commit();
+      console.log(`[Reconciler] Reset ${querySnap.size} daily sold-out items to available.`);
+    } catch (err) {
+      console.error('[Reconciler] Failed to reset daily sold-out items:', err);
+    }
+  }
+);

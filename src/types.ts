@@ -17,6 +17,8 @@ export interface FoodCustomization {
   selectedAddOns?: CustomAddOn[];
 }
 
+export type SoldOutType = 'none' | 'daily' | 'permanent';
+
 export interface MenuItem {
   id: string;
   category: string;
@@ -42,8 +44,13 @@ export interface MenuItem {
   orderIndex?: number;
   isTakeoutAvailable?: boolean;
   soldOutAt?: string | null;
+  soldOutType?: SoldOutType;
+  soldOutDate?: string; // YYYY-MM-DD
+  updatedAt?: any;
   showOnCustomerPage?: boolean;
 }
+
+export type Dish = MenuItem;
 
 export interface OrderItem {
   id: string; // instance id
@@ -74,6 +81,41 @@ export interface RefundLog {
   authorizedByPin?: string;
   items?: { id: string; name: string; qty: number; price: number }[];
   refundedBy?: string;
+  processedBy?: string;
+}
+
+export interface KitchenReceiptLog {
+  id: string;
+  orderId: string;
+  printedAt: string;
+  status: 'success' | 'failed';
+  error?: string;
+}
+
+export interface TakeoutQueueInfo {
+  queueNumber: string;
+  estimatedReadyTime?: string;
+  notifiedAt?: string;
+  pickedUpAt?: string;
+}
+
+export interface StoreSettings {
+  isOpen: boolean;
+  minSpend?: number;
+  operatingHours?: OperatingHourSlot[];
+  servicePaused?: boolean;
+  customerNotice?: string;
+}
+
+export interface OfflineQueueRequest {
+  id: string;
+  url: string;
+  method: string;
+  body: any;
+  timestamp: number;
+  status: 'pending' | 'syncing' | 'failed';
+  description?: string;
+  retryCount?: number;
 }
 
 export interface Order {

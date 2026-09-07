@@ -46,7 +46,7 @@ const DishCard = React.memo<DishCardProps>(({
       className={`bg-[#161616] rounded-xl overflow-hidden shadow-md hover:shadow-2xl border border-white/10 hover:border-[#E5B453]/30 transition-all duration-300 flex flex-row items-stretch text-left relative ${
         item.available && !isTakeoutDisabled
           ? 'cursor-pointer active:scale-[1.01]'
-          : 'opacity-65 cursor-not-allowed'
+          : 'grayscale-[50%] opacity-60 cursor-not-allowed'
       }`}
     >
       {isPopular && (
@@ -93,10 +93,15 @@ const DishCard = React.memo<DishCardProps>(({
 
         {/* Out of stock label inside photo */}
         {!item.available && (
-          <div className="absolute inset-0 bg-black/75 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/75 flex flex-col items-center justify-center p-1 text-center">
             <span className="bg-red-600 text-white text-[9px] sm:text-[10px] font-black px-1.5 py-0.5 rounded shadow-md uppercase tracking-wide">
               {t('soldOut')}
             </span>
+            {item.soldOutType === 'daily' && (
+              <span className="text-[8px] sm:text-[9px] text-amber-300 mt-1 font-bold">
+                {t('tomorrowAvailable') || '明日恢復販售'}
+              </span>
+            )}
           </div>
         )}
 
@@ -206,7 +211,7 @@ const SimplifiedDishCard = React.memo<DishCardProps>(({
       className={`bg-white text-black rounded-2xl overflow-hidden shadow-lg border-2 ${
         item.available && !isTakeoutDisabled
           ? 'border-[#FFA500] hover:border-amber-500 cursor-pointer active:scale-[1.01] transition-all'
-          : 'border-zinc-300 opacity-60 cursor-not-allowed'
+          : 'border-zinc-300 grayscale-[50%] opacity-60 cursor-not-allowed'
       } flex flex-row items-stretch text-left relative`}
     >
       {isPopular && (

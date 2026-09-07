@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useMemo, ReactNode } from 'react';
-import { MenuItem, Ingredient, Category, TableConfig, OperatingHourSlot, Reservation, Language } from '../types';
+import { MenuItem, Ingredient, Category, TableConfig, OperatingHourSlot, Reservation, Language, SoldOutType } from '../types';
+import { evaluateDishAvailability, getTaiwanDateString } from '../utils/menuAvailability';
 import { apiFetch } from '../lib/api';
 import { db, isFirebaseSyncEnabled, startFirebaseSync, stopFirebaseSync } from '../lib/firebase';
 import { collection, onSnapshot } from 'firebase/firestore';
@@ -47,7 +48,7 @@ export interface RestaurantDataContextType {
   handleAddMenuItem: (itemData: any) => Promise<void>;
   handleEditMenuItem: (id: string, itemData: any) => Promise<void>;
   handleDeleteMenuItem: (id: string) => Promise<void>;
-  handleToggleMenuItemAvailability: (id: string) => Promise<void>;
+  handleToggleMenuItemAvailability: (id: string, targetType?: SoldOutType) => Promise<void>;
   handleReorderMenuItems: (order: string[]) => Promise<void>;
   handleAddCategory: (id: string, name: any, showOnCustomerPage?: boolean) => Promise<{ success: boolean; error?: string }>;
   handleEditCategory: (id: string, name: any, showOnCustomerPage?: boolean) => Promise<{ success: boolean; error?: string }>;
@@ -78,7 +79,10 @@ const enrichMenuItems = (items: MenuItem[]): MenuItem[] => {
   if (!Array.isArray(items)) return [];
   const defaults = INITIAL_MENU || [];
   return items.map(item => {
+    const todayStr = getTaiwanDateString();
+    let processedItem = item;
     const defaultItem = defaults.find(x => x.id === item.id);
+
     if (defaultItem) {
       const cleanName = { ...item.name };
       const cleanDesc = { ...item.description };
@@ -88,9 +92,15 @@ const enrichMenuItems = (items: MenuItem[]): MenuItem[] => {
       });
       const name = { ...defaultItem.name, ...cleanName };
       const description = { ...defaultItem.description, ...cleanDesc };
-      return { ...item, name, description };
+      processedItem = { ...item, name, description };
     }
-    return item;
+
+    const { isAvailable, effectiveSoldOutType } = evaluateDishAvailability(processedItem, todayStr);
+    return {
+      ...processedItem,
+      available: isAvailable,
+      soldOutType: effectiveSoldOutType,
+    };
   });
 };
 
@@ -177,6 +187,37 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
     topDishes: [],
     stockWarnings: [],
   });
+
+  // Midnight Auto-Refresh logic for Dual-Mode Sold-Out
+  useEffect(() => {
+    let timeoutId: NodeJS.Timeout;
+
+    const setupMidnightRefresh = () => {
+      // Calculate time until next midnight in Asia/Taipei
+      const now = new Date();
+      const options = { timeZone: 'Asia/Taipei' };
+      const tzhString = now.toLocaleString('en-US', options);
+      const tzDate = new Date(tzhString);
+      
+      const nextMidnight = new Date(tzDate);
+      nextMidnight.setHours(24, 0, 0, 100); // 100ms after midnight to be safe
+
+      const msUntilMidnight = nextMidnight.getTime() - tzDate.getTime();
+      
+      timeoutId = setTimeout(() => {
+        // Trigger a re-evaluation of all menu items in state
+        setMenuItems(prev => [...prev]);
+        // Setup next day's timer
+        setupMidnightRefresh();
+      }, msUntilMidnight);
+    };
+
+    setupMidnightRefresh();
+
+    return () => {
+      clearTimeout(timeoutId);
+    };
+  }, []);
 
   const fetchData = async (forceFull: boolean = true, bypassReorderLock: boolean = false) => {
     const fetchStartTime = Date.now();
@@ -402,28 +443,53 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
     }
   };
 
-  const handleToggleMenuItemAvailability = async (id: string) => {
+  const handleToggleMenuItemAvailability = async (id: string, targetType?: SoldOutType) => {
     lastMenuReorderTimeRef.current = Date.now() + 15000;
-    setMenuItems(prev => prev.map(m => m.id === id ? { ...m, available: !m.available } : m));
+    
+    // Optimistic Update
+    setMenuItems(prev => prev.map(m => {
+      if (m.id !== id) return m;
+      if (targetType) {
+        const nextAvailable = targetType === 'none';
+        return { 
+          ...m, 
+          soldOutType: targetType, 
+          available: nextAvailable,
+          soldOutDate: targetType === 'daily' ? getTaiwanDateString() : undefined
+        };
+      }
+      return { ...m, available: !m.available }; // Legacy fallback
+    }));
 
     try {
+      const payload: any = { id };
+      if (targetType) {
+        payload.soldOutType = targetType;
+        payload.soldOutDate = targetType === 'daily' ? getTaiwanDateString() : undefined;
+      }
+
       const res = await apiFetch('/api/menu/toggle-available', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id }),
+        body: JSON.stringify(payload),
       });
       if (res.ok) {
         const data = await res.json();
         if (data && data.item) {
-          setMenuItems(prev => prev.map(m => m.id === id ? { ...m, available: data.item.available } : m));
+          setMenuItems(prev => prev.map(m => m.id === id ? { 
+            ...m, 
+            available: data.item.available,
+            soldOutType: data.item.soldOutType || targetType || (data.item.available ? 'none' : 'permanent'),
+            soldOutDate: data.item.soldOutDate !== undefined ? data.item.soldOutDate : (targetType === 'daily' ? getTaiwanDateString() : undefined)
+          } : m));
         }
       } else {
-        setMenuItems(prev => prev.map(m => m.id === id ? { ...m, available: !m.available } : m));
+        // Rollback on failure
+        await fetchData(true, false);
       }
-      await fetchData(true, false);
     } catch (err) {
       console.error('[Sabay Menu lock toggle error]', err);
-      setMenuItems(prev => prev.map(m => m.id === id ? { ...m, available: !m.available } : m));
+      await fetchData(true, false);
     }
   };
 

@@ -100,7 +100,6 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [isMergedView, setIsMergedView] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [beepSim, setBeepSim] = useState(false);
 
   // Hook: useKdsAudio
   const {
@@ -109,11 +108,12 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
     setAudioNeedsUnlock,
     handleToggleTts,
     announceOrderNotification,
-    playOrderChimeSound,
-    playStatusBeepSound,
     playOvertimeBeepSound,
-    formatOrderAnnouncementText,
     stopSpeech,
+    beepSim,
+    setBeepSim,
+    notifyNewOrders,
+    notifyStatusChange,
   } = useKdsAudio();
 
   // Role: 'kitchen' vs 'staff'
@@ -206,6 +206,23 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
   const [noteError, setNoteError] = useState<string | null>(null);
   const [speechRecInstance, setSpeechRecInstance] = useState<any>(null);
 
+  const isMountedRef = useRef<boolean>(true);
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+      stopSpeech();
+    };
+  }, [stopSpeech]);
+
+  // Cleanup Dictation on unmount
+  useEffect(() => {
+    return () => {
+      if (speechRecInstance) {
+        try { speechRecInstance.stop(); } catch {}
+      }
+    };
+  }, [speechRecInstance]);
+
   // Auto-scroll toggle
   const [autoScrollEnabled, setAutoScrollEnabled] = useState<boolean>(() => {
     try {
@@ -237,29 +254,28 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
 
   const seenOrderIdsRef = useRef<Set<string>>(new Set());
 
-  // Detect new pending orders and trigger chime / TTS
+  // Detect new pending orders and trigger high-frequency chime + TTS (桌號 / 外帶單號)
   useEffect(() => {
     const isInitialMount = seenOrderIdsRef.current.size === 0;
+    const newPendingOrders: Order[] = [];
 
     orders.forEach((order) => {
       if (!seenOrderIdsRef.current.has(order.id)) {
         seenOrderIdsRef.current.add(order.id);
 
         if (!isInitialMount && order.status === 'pending') {
-          playOrderChimeSound();
-          if (ttsEnabled) {
-            const speechText = formatOrderAnnouncementText(order);
-            announceOrderNotification(speechText);
-          }
-          if (autoScrollEnabled) {
-            scrollToHeaderTop();
-          }
-          setBeepSim(true);
-          setTimeout(() => setBeepSim(false), 3000);
+          newPendingOrders.push(order);
         }
       }
     });
-  }, [orders, ttsEnabled, autoScrollEnabled, playOrderChimeSound, formatOrderAnnouncementText, announceOrderNotification]);
+
+    if (newPendingOrders.length > 0) {
+      notifyNewOrders(newPendingOrders);
+      if (autoScrollEnabled) {
+        scrollToHeaderTop();
+      }
+    }
+  }, [orders, notifyNewOrders, autoScrollEnabled, scrollToHeaderTop]);
 
   // Track Severely Overtime Orders (> 30 mins)
   const [overtimeCount, setOvertimeCount] = useState(0);
@@ -311,11 +327,13 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
 
   const triggerPrinterPing = useCallback(
     async (ip: string) => {
+      if (!isMountedRef.current) return;
       setPingState((prev) => ({ ...prev, loading: true, error: null, skipped: false }));
       try {
         let isReachable = false;
         let lastErr: any = null;
         for (let attempt = 0; attempt < 3; attempt++) {
+          if (!isMountedRef.current) return;
           try {
             isReachable = await checkPrinterReachability(ip);
             if (isReachable) break;
@@ -327,6 +345,7 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
           }
         }
 
+        if (!isMountedRef.current) return;
         setPingState({
           reachable: isReachable,
           loading: false,
@@ -334,6 +353,7 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
           lastChecked: new Date().toLocaleTimeString(),
         });
       } catch (err: any) {
+        if (!isMountedRef.current) return;
         setPingState({
           reachable: false,
           loading: false,
@@ -361,7 +381,7 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
     setProcessingOrderIds((prev) => new Set(prev).add(orderId));
     try {
       await onUpdateOrderStatus(orderId, newStatus);
-      playStatusBeepSound();
+      notifyStatusChange();
     } catch (e) {
       console.error('[KDS Update Status Error]', e);
     } finally {
@@ -371,7 +391,7 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
         return next;
       });
     }
-  }, [processingOrderIds, onUpdateOrderStatus, playStatusBeepSound]);
+  }, [processingOrderIds, onUpdateOrderStatus, notifyStatusChange]);
 
   const handleItemStatusToggle = useCallback(async (
     orderId: string,

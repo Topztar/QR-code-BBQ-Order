@@ -198,7 +198,7 @@ function registerMenuRoutes(app, ctx) {
                 return res.json(helpers_1.cachedMenu.data);
             }
             const now = new Date();
-            const snapshot = await db.collection('menu').select('id', 'category', 'name', 'price', 'image', 'thumbnailUrl', 'avifUrl', 'avifThumbnailUrl', 'description', 'available', 'isAvailable', 'isSetMeal', 'requiredSaucesOption', 'hasNoodlesOption', 'hasCoconutsMilkOption', 'containsBeef', 'containsPork', 'containsSeafood', 'isNotSpicy', 'customAddOns', 'recipe', 'orderIndex', 'isTakeoutAvailable', 'soldOutAt').orderBy('orderIndex').get();
+            const snapshot = await db.collection('menu').select('id', 'category', 'name', 'price', 'image', 'thumbnailUrl', 'avifUrl', 'avifThumbnailUrl', 'description', 'available', 'isAvailable', 'isSetMeal', 'requiredSaucesOption', 'hasNoodlesOption', 'hasCoconutsMilkOption', 'containsBeef', 'containsPork', 'containsSeafood', 'isNotSpicy', 'customAddOns', 'recipe', 'orderIndex', 'isTakeoutAvailable', 'soldOutAt', 'soldOutType', 'soldOutDate').orderBy('orderIndex').get();
             const items = snapshot.docs.map(doc => {
                 const d = doc.data();
                 return {
@@ -213,6 +213,8 @@ function registerMenuRoutes(app, ctx) {
                     description: d.description ?? { zh: '' },
                     available: !!d.available,
                     isAvailable: d.isAvailable,
+                    soldOutType: d.soldOutType || (d.available ? 'none' : 'permanent'),
+                    soldOutDate: d.soldOutDate ?? null,
                     isSetMeal: !!d.isSetMeal,
                     requiredSaucesOption: !!d.requiredSaucesOption,
                     hasNoodlesOption: !!d.hasNoodlesOption,
@@ -374,7 +376,7 @@ function registerMenuRoutes(app, ctx) {
     });
     post('/menu/toggle-available', requireStaffAuth, async (req, res) => {
         try {
-            const { id } = req.body;
+            const { id, soldOutType, soldOutDate } = req.body;
             if (!id) {
                 return res.status(400).json({ error: 'Missing menu item id' });
             }
@@ -389,10 +391,24 @@ function registerMenuRoutes(app, ctx) {
             }
             if (docSnap.exists) {
                 const currentData = docSnap.data();
-                const newAvailable = !(currentData?.available ?? true);
+                let newAvailable = !(currentData?.available ?? true);
+                let newSoldOutType = undefined;
+                let newSoldOutDate = undefined;
+                if (soldOutType) {
+                    newAvailable = soldOutType === 'none';
+                    newSoldOutType = soldOutType;
+                    newSoldOutDate = soldOutDate || undefined;
+                }
                 const newSoldOutAt = !newAvailable ? new Date().toISOString() : null;
-                await docRef.set({ available: newAvailable, soldOutAt: newSoldOutAt }, { merge: true });
-                const updatedItem = { ...currentData, available: newAvailable, soldOutAt: newSoldOutAt };
+                const updateData = {
+                    available: newAvailable,
+                    soldOutAt: newSoldOutAt,
+                    soldOutType: newSoldOutType || null,
+                    soldOutDate: newSoldOutDate || null,
+                    updatedAt: new Date().toISOString()
+                };
+                await docRef.set(updateData, { merge: true });
+                const updatedItem = { ...currentData, ...updateData };
                 return res.json({ success: true, item: updatedItem, available: newAvailable });
             }
             return res.status(404).json({ error: 'Menu item not found' });

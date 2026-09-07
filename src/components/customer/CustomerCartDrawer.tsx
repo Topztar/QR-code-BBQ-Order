@@ -1,13 +1,15 @@
 import React from 'react';
-import { OrderItem, Language } from '../../types';
+import { OrderItem, Language, MenuItem } from '../../types';
 import { getLocalizedText } from '../../utils/i18n';
 import { TRANSLATIONS } from '../../data';
 import { ShoppingCart, X } from 'lucide-react';
+import { orderCalculationService } from '../../services/orderCalculationService';
 
 export interface CustomerCartDrawerProps {
   isCartOpen: boolean;
   setIsCartOpen: (val: boolean) => void;
   cart: OrderItem[];
+  menuItems?: MenuItem[];
   currentLang: Language;
   isSimplifiedMode?: boolean;
   paymentMethod: 'cash' | 'credit' | 'member' | 'twqr';
@@ -34,6 +36,7 @@ export const CustomerCartDrawer: React.FC<CustomerCartDrawerProps> = ({
   isCartOpen,
   setIsCartOpen,
   cart,
+  menuItems = [],
   currentLang,
   isSimplifiedMode = false,
   paymentMethod,
@@ -56,6 +59,11 @@ export const CustomerCartDrawer: React.FC<CustomerCartDrawerProps> = ({
   t,
 }) => {
   if (!isCartOpen) return null;
+
+  const hasSoldOutItems = cart.some(cartItem => {
+    const matchedMenu = menuItems.find(m => m.id === cartItem.menuItemId);
+    return matchedMenu && matchedMenu.available === false;
+  });
 
   return (
     <div
@@ -108,22 +116,37 @@ export const CustomerCartDrawer: React.FC<CustomerCartDrawerProps> = ({
             </div>
           ) : (
             <div className="space-y-4">
-              {cart.map((item) => (
+              {cart.map((item) => {
+                const matchedMenu = menuItems.find((m) => m.id === item.menuItemId);
+                const isItemSoldOut = matchedMenu ? matchedMenu.available === false : false;
+
+                return (
                 <div
                   key={item.id}
                   id={`cart-item-${item.id}`}
                   className={`flex items-start justify-between p-3.5 rounded-xl border shadow-inner ${
-                    isSimplifiedMode ? 'bg-[#FFF9EE] border-zinc-300 text-black' : 'bg-white/5 border-white/5'
+                    isItemSoldOut
+                      ? 'bg-rose-950/20 border-rose-500/30 text-white'
+                      : isSimplifiedMode
+                        ? 'bg-[#FFF9EE] border-zinc-300 text-black'
+                        : 'bg-white/5 border-white/5'
                   }`}
                 >
                   <div className="text-left space-y-1">
-                    <h6
-                      className={`font-bold text-sm leading-snug ${
-                        isSimplifiedMode ? 'text-black text-base font-black' : 'text-white'
-                      }`}
-                    >
-                      {getLocalizedText(item.name, currentLang) || ''}
-                    </h6>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <h6
+                        className={`font-bold text-sm leading-snug ${
+                          isSimplifiedMode ? 'text-black text-base font-black' : 'text-white'
+                        }`}
+                      >
+                        {getLocalizedText(item.name, currentLang) || ''}
+                      </h6>
+                      {isItemSoldOut && (
+                        <span className="bg-rose-500/20 text-rose-400 border border-rose-500/30 text-[9px] font-black px-1.5 py-0.5 rounded animate-pulse">
+                          {TRANSLATIONS.itemSoldOutTitle?.[currentLang] || '已售罄 (請移除)'}
+                        </span>
+                      )}
+                    </div>
                     <div className="flex flex-wrap gap-1">
                       {item.customization.noodleType && (
                         <span
@@ -221,11 +244,14 @@ export const CustomerCartDrawer: React.FC<CustomerCartDrawerProps> = ({
                       <button
                         type="button"
                         id={`inc-qty-${item.id}`}
+                        disabled={isItemSoldOut}
                         onClick={() => handleUpdateCartQty(item.id, item.qty + 1)}
-                        className={`w-6 h-6 rounded-lg flex items-center justify-center transition active:scale-90 cursor-pointer border ${
-                          isSimplifiedMode
-                            ? 'text-black bg-[#FFA500] hover:bg-[#E5B453] border-black font-extrabold'
-                            : 'bg-white/5 hover:bg-white/15 hover:text-white text-[#E5B453]/90 border-[#E5B453]/20'
+                        className={`w-6 h-6 rounded-lg flex items-center justify-center transition active:scale-90 border ${
+                          isItemSoldOut
+                            ? 'bg-zinc-800 text-zinc-600 border-zinc-700 cursor-not-allowed opacity-50'
+                            : isSimplifiedMode
+                              ? 'text-black bg-[#FFA500] hover:bg-[#E5B453] border-black font-extrabold cursor-pointer'
+                              : 'bg-white/5 hover:bg-white/15 hover:text-white text-[#E5B453]/90 border-[#E5B453]/20 cursor-pointer'
                         }`}
                       >
                         <span className="text-sm font-bold leading-none">+</span>
@@ -240,9 +266,7 @@ export const CustomerCartDrawer: React.FC<CustomerCartDrawerProps> = ({
                       }`}
                     >
                       NT${' '}
-                      {(item.price +
-                        (item.customization.soupBase === 'coconut-milk' ? 50 : 0) +
-                        (item.customization.selectedAddOns?.reduce((sum, a) => sum + a.price, 0) || 0)) *
+                      {(orderCalculationService.computeOrderItemUnitPrice(item)) *
                         item.qty}
                     </span>
                     <button
@@ -254,7 +278,8 @@ export const CustomerCartDrawer: React.FC<CustomerCartDrawerProps> = ({
                     </button>
                   </div>
                 </div>
-              ))}
+                );
+              })}
 
               {/* Payment Method selector */}
               <div
@@ -612,10 +637,10 @@ export const CustomerCartDrawer: React.FC<CustomerCartDrawerProps> = ({
           >
             <button
               id="checkout-confirm-btn"
-              disabled={(servicePaused && !urlReservationParams?.reservationNo) || isCheckoutSubmitting}
+              disabled={(servicePaused && !urlReservationParams?.reservationNo) || isCheckoutSubmitting || hasSoldOutItems}
               onClick={() => handleCheckout()}
               className={`w-full font-black px-2 min-[360px]:px-4 rounded-xl transition text-center flex items-center justify-center space-x-1 sm:space-x-1.5 whitespace-nowrap ${
-                (servicePaused && !urlReservationParams?.reservationNo) || isCheckoutSubmitting
+                (servicePaused && !urlReservationParams?.reservationNo) || isCheckoutSubmitting || hasSoldOutItems
                   ? 'bg-zinc-800 text-zinc-500 border border-zinc-700/50 cursor-not-allowed py-3 text-xs opacity-60'
                   : isSimplifiedMode
                     ? 'bg-[#FFA500] hover:bg-amber-400 text-black border-2 border-black font-extrabold text-base py-4 sm:py-4.5 shadow-lg active:scale-95 cursor-pointer'
@@ -631,7 +656,9 @@ export const CustomerCartDrawer: React.FC<CustomerCartDrawerProps> = ({
                 />
               )}
               <span>
-                {isCheckoutSubmitting
+                {hasSoldOutItems
+                  ? TRANSLATIONS.itemSoldOutTitle?.[currentLang] || '餐點已售罄 (Contains Sold Out Items)'
+                  : isCheckoutSubmitting
                   ? TRANSLATIONS.placingOrder?.[currentLang] || '正在傳送訂單中 (Placing Order...)'
                   : servicePaused && !urlReservationParams?.reservationNo
                     ? TRANSLATIONS.kitchenPaused?.[currentLang] ||

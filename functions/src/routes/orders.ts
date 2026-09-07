@@ -99,6 +99,48 @@ post('/orders', requireAppCheck, orderRateLimiter, async (req, res) => {
         tableSnap = await t.get(tableRef);
       }
 
+      // 1.5 Validate if any ordered items are sold out
+      if (orderData.items && orderData.items.length > 0) {
+        const menuItemIds = [...new Set(orderData.items.map((i: any) => i.menuItemId))];
+        const menuRefs = menuItemIds.map((id: string) => db.collection('menu').doc(id));
+        const menuSnaps = await t.getAll(...menuRefs);
+        
+        // Taiwan Time String (YYYY-MM-DD)
+        const todayStr = new Intl.DateTimeFormat('en-CA', {
+          timeZone: 'Asia/Taipei',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+        }).format(new Date());
+
+        const soldOutItems = [];
+        for (const snap of menuSnaps) {
+          if (!snap.exists) continue;
+          const data = snap.data() || {};
+          let isAvailable = data.available ?? true;
+          
+          if (data.soldOutType === 'permanent') {
+            isAvailable = false;
+          } else if (data.soldOutType === 'daily') {
+            if (data.soldOutDate === todayStr) {
+              isAvailable = false;
+            } else {
+              // Daily sold out has expired (passed midnight Taiwan time)
+              isAvailable = true;
+            }
+          }
+
+          if (!isAvailable) {
+            const nameZh = data.name?.zh || data.name?.en || snap.id;
+            soldOutItems.push(nameZh);
+          }
+        }
+
+        if (soldOutItems.length > 0) {
+          throw new Error(`SOLDOUT:抱歉，以下餐點已售罄：${soldOutItems.join(', ')}。請重新整理頁面後再試一次。`);
+        }
+      }
+
       // 2. Writes
       const orderToSave = {
         ...orderData,
@@ -123,6 +165,9 @@ post('/orders', requireAppCheck, orderRateLimiter, async (req, res) => {
     if (error instanceof Error && error.message.startsWith('CLOSED:')) {
       return res.status(403).json({ error: error.message.replace('CLOSED:', '') });
     }
+    if (error instanceof Error && error.message.startsWith('SOLDOUT:')) {
+      return res.status(409).json({ error: error.message.replace('SOLDOUT:', '') });
+    }
     res.status(500).send(error);
   }
 });
@@ -139,7 +184,20 @@ put('/orders/:id/status', requireStaffAuth, async (req, res) => {
   }
 
   try {
-    await db.collection('orders').doc(id).update({ status });
+    await db.runTransaction(async (t) => {
+      const orderRef = db.collection('orders').doc(id);
+      const doc = await t.get(orderRef);
+      if (!doc.exists) throw new Error('Order not found');
+      const data = doc.data();
+      
+      // Block backward transition if already paid or cancelled (unless manual override to cancel/paid)
+      if ((data?.status === 'paid' || data?.status === 'cancelled') && status !== 'cancelled' && status !== 'paid') {
+        console.warn(`[Backend] Rejected status update to ${status} for order ${id} because it's already ${data?.status}`);
+        return;
+      }
+      
+      t.update(orderRef, { status });
+    });
     res.json({ id, status });
   } catch (error) {
     res.status(500).send(error);
@@ -202,24 +260,29 @@ put('/orders/:id/checkout', requireStaffAuth, async (req, res) => {
   const id = req.params.id as string;
   const { paymentMethod, cashTendered, changeAmount } = req.body;
   try {
-    // Check if the order has a reservationNo
-    const orderDoc = await db.collection('orders').doc(id).get();
-    const orderData = orderDoc.data();
+    let resolvedStatus = 'paid';
+    let orderDataToUse: any = null;
 
-    // 🛡️ If order was already completed or cancelled, keep its status instead of rolling back to 'paid'
-    const currentStatus = orderData?.status;
-    const resolvedStatus = (currentStatus === 'completed' || currentStatus === 'cancelled') ? currentStatus : 'paid';
+    await db.runTransaction(async (t) => {
+      const orderRef = db.collection('orders').doc(id);
+      const orderDoc = await t.get(orderRef);
+      if (!orderDoc.exists) throw new Error('Order not found');
+      
+      orderDataToUse = orderDoc.data();
+      const currentStatus = orderDataToUse?.status;
+      resolvedStatus = (currentStatus === 'completed' || currentStatus === 'cancelled') ? currentStatus : 'paid';
 
-    await db.collection('orders').doc(id).update({
-      paymentMethod: paymentMethod || 'cash',
-      cashTendered: cashTendered || 0,
-      changeAmount: changeAmount || 0,
-      isPaid: true,
-      status: resolvedStatus
+      t.update(orderRef, {
+        paymentMethod: paymentMethod || 'cash',
+        cashTendered: cashTendered || 0,
+        changeAmount: changeAmount || 0,
+        isPaid: true,
+        status: resolvedStatus
+      });
     });
 
-    if (orderData && orderData.tableNumber && !String(orderData.tableNumber).includes('外帶') && String(orderData.tableNumber).toLowerCase() !== 'takeout') {
-      const tblId = String(orderData.tableNumber).trim();
+    if (orderDataToUse && orderDataToUse.tableNumber && !String(orderDataToUse.tableNumber).includes('外帶') && String(orderDataToUse.tableNumber).toLowerCase() !== 'takeout') {
+      const tblId = String(orderDataToUse.tableNumber).trim();
       const tableRef = db.collection('tables').doc(tblId);
       const tableSnap = await tableRef.get();
       if (tableSnap.exists) {
@@ -231,18 +294,16 @@ put('/orders/:id/checkout', requireStaffAuth, async (req, res) => {
       }
     }
 
-    if (orderData && orderData.reservationNo) {
-      // Find the reservation by reservationNo (it could be stored as `id` or `reservationNo`)
-      const resQuery = await db.collection('reservations').where('reservationNo', '==', orderData.reservationNo).get();
+    if (orderDataToUse && orderDataToUse.reservationNo) {
+      const resQuery = await db.collection('reservations').where('reservationNo', '==', orderDataToUse.reservationNo).get();
       if (!resQuery.empty) {
         for (const doc of resQuery.docs) {
           await db.collection('reservations').doc(doc.id).delete();
         }
       } else {
-        // Fallback: it might be stored directly as the document ID
-        const resDoc = await db.collection('reservations').doc(orderData.reservationNo).get();
+        const resDoc = await db.collection('reservations').doc(orderDataToUse.reservationNo).get();
         if (resDoc.exists) {
-          await db.collection('reservations').doc(orderData.reservationNo).delete();
+          await db.collection('reservations').doc(orderDataToUse.reservationNo).delete();
         }
       }
     }
@@ -367,8 +428,15 @@ post('/orders/bulk-checkout', requireStaffAuth, async (req, res) => {
 put('/orders/:id/complete', requireStaffAuth, async (req, res) => {
   const id = req.params.id as string;
   try {
-    await db.collection('orders').doc(id).update({
-      status: 'completed'
+    await db.runTransaction(async (t) => {
+      const orderRef = db.collection('orders').doc(id);
+      const doc = await t.get(orderRef);
+      if (!doc.exists) throw new Error('Order not found');
+      const data = doc.data();
+      if (data?.status === 'paid' || data?.status === 'cancelled') {
+        return; // Skip, don't rollback
+      }
+      t.update(orderRef, { status: 'completed' });
     });
     res.json({ id, status: 'completed' });
   } catch (error) {
@@ -385,37 +453,40 @@ put('/orders/:id/items/:itemId/complete', requireStaffAuth, async (req, res) => 
 
   try {
     const docRef = db.collection('orders').doc(id);
-    const docSnap = await docRef.get();
-    if (!docSnap.exists) {
-      return res.status(404).json({ error: 'Order not found' });
-    }
-
-    const order = docSnap.data() as any;
-    const item = order.items.find((it: any) => it.id === itemId);
-    if (!item) {
-      return res.status(404).json({ error: 'Item not found' });
-    }
-
-    if (typeof isCompleted !== 'undefined') {
-      item.isCompleted = !!isCompleted;
-      if (item.isCompleted) {
-        item.isPrepared = true;
+    const updatedOrder = await db.runTransaction(async (t) => {
+      const docSnap = await t.get(docRef);
+      if (!docSnap.exists) {
+        throw new Error('Order not found');
       }
-    }
 
-    if (typeof isPrepared !== 'undefined') {
-      item.isPrepared = !!isPrepared;
-    }
+      const order = docSnap.data() as any;
+      const item = order.items.find((it: any) => it.id === itemId);
+      if (!item) {
+        throw new Error('Item not found');
+      }
 
-    const allCompleted = order.items.every((it: any) => it.isCompleted);
-    if (allCompleted && order.status !== 'paid') {
-      order.status = 'completed';
-    } else if (order.status === 'completed') {
-      order.status = 'preparing';
-    }
+      if (typeof isCompleted !== 'undefined') {
+        item.isCompleted = !!isCompleted;
+        if (item.isCompleted) {
+          item.isPrepared = true;
+        }
+      }
 
-    await docRef.set(order, { merge: true });
-    return res.json(order);
+      if (typeof isPrepared !== 'undefined') {
+        item.isPrepared = !!isPrepared;
+      }
+
+      const allCompleted = order.items.every((it: any) => it.isCompleted);
+      if (allCompleted && order.status !== 'paid' && order.status !== 'cancelled') {
+        order.status = 'completed';
+      } else if (!allCompleted && order.status === 'completed') {
+        order.status = 'preparing';
+      }
+
+      t.set(docRef, order, { merge: true });
+      return order;
+    });
+    return res.json(updatedOrder);
   } catch (error) {
     res.status(500).send(error);
   }
@@ -452,13 +523,19 @@ put('/orders/:id/pay', requireStaffAuth, async (req, res) => {
   const id = req.params.id as string;
   const { isPaid } = req.body;
   try {
-    const orderDoc = await db.collection('orders').doc(id).get();
-    const orderData = orderDoc.data();
+    let orderDataToUse: any = null;
 
-    await db.collection('orders').doc(id).update({ isPaid });
+    await db.runTransaction(async (t) => {
+      const orderRef = db.collection('orders').doc(id);
+      const orderDoc = await t.get(orderRef);
+      if (!orderDoc.exists) throw new Error('Order not found');
+      
+      orderDataToUse = orderDoc.data();
+      t.update(orderRef, { isPaid });
+    });
 
-    if (isPaid && orderData && orderData.tableNumber && !String(orderData.tableNumber).includes('外帶') && String(orderData.tableNumber).toLowerCase() !== 'takeout') {
-      const tblId = String(orderData.tableNumber).trim();
+    if (isPaid && orderDataToUse && orderDataToUse.tableNumber && !String(orderDataToUse.tableNumber).includes('外帶') && String(orderDataToUse.tableNumber).toLowerCase() !== 'takeout') {
+      const tblId = String(orderDataToUse.tableNumber).trim();
       const tableRef = db.collection('tables').doc(tblId);
       const tableSnap = await tableRef.get();
       if (tableSnap.exists) {

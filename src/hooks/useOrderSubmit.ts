@@ -4,6 +4,7 @@ import { apiFetch } from '../lib/api';
 import { addRequestToQueue } from '../lib/offlineQueue';
 import { safeStorage } from '../lib/safeStorage';
 import { broadcastOrderEvent } from '../context/OrderDataContext';
+import { orderCalculationService } from '../services/orderCalculationService';
 
 export interface OrderDataPayload {
   tableNumber: string;
@@ -51,14 +52,7 @@ export function useOrderSubmit(
       ...orderData,
       clientOrderId,
     };
-    const totalAmount = orderData.items.reduce((sum, item) => {
-      let unitP = item.price;
-      if (item.customization?.soupBase === 'coconut-milk') unitP += 50;
-      if (item.customization?.selectedAddOns && Array.isArray(item.customization.selectedAddOns)) {
-        unitP += item.customization.selectedAddOns.reduce((s, a) => s + (Number(a.price) || 0), 0);
-      }
-      return sum + unitP * item.qty;
-    }, 0);
+    const totalAmount = orderCalculationService.computeOrderItemsSubtotal(orderData.items);
     const tempId = `ord_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     const description = `桌號 🥢 ${orderData.tableNumber || '外帶'} • 點購 ${orderData.items.length} 份餐點 (金額: $${totalAmount})`;
     const offlineSvc = (orderData.paymentMethod === 'credit' || orderData.paymentMethod === 'twqr') ? Math.round(totalAmount * 0.1) : 0;

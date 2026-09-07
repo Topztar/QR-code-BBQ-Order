@@ -24,24 +24,19 @@ export function useKdsAudio() {
     }
   });
 
-  const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
-    try {
-      const saved = localStorage.getItem('kds_sound_enabled');
-      return saved !== 'false';
-    } catch {
-      return true;
-    }
-  });
-
   const [audioNeedsUnlock, setAudioNeedsUnlock] = useState<boolean>(true);
   const [beepSim, setBeepSim] = useState<boolean>(false);
-  const prevOrdersCountRef = useRef<number | null>(null);
+
+  const isMountedRef = useRef<boolean>(true);
+  useEffect(() => {
+    return () => { isMountedRef.current = false; };
+  }, []);
 
   // Auto-listen for user gesture to unlock audio
   useEffect(() => {
     const handleGesture = async () => {
       const unlocked = await unlockAudio();
-      if (unlocked) {
+      if (unlocked && isMountedRef.current) {
         setAudioNeedsUnlock(false);
       }
     };
@@ -78,68 +73,70 @@ export function useKdsAudio() {
     }
   }, [ttsEnabled]);
 
-  const toggleSound = useCallback(async () => {
-    const nextState = !soundEnabled;
-    setSoundEnabled(nextState);
-    try {
-      localStorage.setItem('kds_sound_enabled', String(nextState));
-    } catch (e) {
-      console.error(e);
-    }
+  /**
+   * Play high-frequency chime tone + announce table or takeout number via TTS
+   */
+  const notifyNewOrders = useCallback(
+    (newOrders: Order[]) => {
+      if (!newOrders || newOrders.length === 0) return;
 
-    if (nextState) {
-      await unlockAudio();
-      setAudioNeedsUnlock(false);
-      playStatusBeepSound();
-    }
-  }, [soundEnabled]);
+      if (ttsEnabled) {
+        // High-frequency chime followed sequentially by Mandarin TTS (桌號 / 外帶單號)
+        const text = formatOrderAnnouncementText(newOrders);
+        announceOrderNotification(text, true);
+      } else {
+        // High-frequency chime only
+        playOrderChimeSound();
+      }
+
+      setBeepSim(true);
+      setTimeout(() => {
+        if (isMountedRef.current) {
+          setBeepSim(false);
+        }
+      }, 3000);
+    },
+    [ttsEnabled]
+  );
 
   const notifyNewOrder = useCallback(
     (order?: Order) => {
-      if (!soundEnabled && !ttsEnabled) return;
-      playOrderChimeSound();
-      if (order && ttsEnabled) {
-        const text = formatOrderAnnouncementText([order]);
-        announceOrderNotification(text, false);
+      if (order) {
+        notifyNewOrders([order]);
       }
-      setBeepSim(true);
-      setTimeout(() => setBeepSim(false), 800);
     },
-    [soundEnabled, ttsEnabled]
+    [notifyNewOrders]
   );
 
   const notifyStatusChange = useCallback(() => {
-    if (!soundEnabled) return;
     playStatusBeepSound();
     setBeepSim(true);
-    setTimeout(() => setBeepSim(false), 800);
-  }, [soundEnabled]);
-
-  const formatAnnouncement = useCallback((order: Order) => {
-    return formatOrderAnnouncementText([order]);
+    setTimeout(() => {
+      if (isMountedRef.current) {
+        setBeepSim(false);
+      }
+    }, 800);
   }, []);
 
   return {
     ttsEnabled,
     setTtsEnabled,
-    soundEnabled,
-    setSoundEnabled,
     audioNeedsUnlock,
     setAudioNeedsUnlock,
     beepSim,
     setBeepSim,
     handleUnlockAudio,
     handleToggleTts,
-    toggleSound,
+    notifyNewOrders,
     notifyNewOrder,
     notifyStatusChange,
     announceOrderNotification,
     playOrderChimeSound,
     playStatusBeepSound,
     playOvertimeBeepSound,
-    formatOrderAnnouncementText: formatAnnouncement,
+    formatOrderAnnouncementText,
     stopSpeech,
     speakUtterance,
-    prevOrdersCountRef,
   };
 }
+

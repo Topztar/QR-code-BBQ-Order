@@ -4,7 +4,7 @@ import { Language } from '../types';
  * Built-in translation dictionary for standard dish names, descriptions, categories, and add-ons.
  * Provides fallback translations for all 8 supported languages.
  */
-const TRANSLATION_DICTIONARY: Record<string, Partial<Record<Language, string>>> = {
+export const TRANSLATION_DICTIONARY: Record<string, Partial<Record<Language, string>>> = {
   "Vitamilk豆奶": {
     "ja": "ビタミルク豆乳",
     "zh": "Vitamilk豆奶",
@@ -2265,5 +2265,95 @@ export const getLocalizedText = (
 export const translateKey = (key: string, currentLang: Language = 'zh'): string => {
   if (!key) return '';
   return TRANSLATION_DICTIONARY[key]?.[currentLang] || key;
+};
+
+export const SUPPORTED_LANGUAGES: { code: Language; name: string; nativeName: string; short: string }[] = [
+  { code: 'zh', name: '正體中文', nativeName: '繁體中文', short: 'TW' },
+  { code: 'en', name: '英文', nativeName: 'English', short: 'EN' },
+  { code: 'th', name: '泰文', nativeName: 'ไทย', short: 'TH' },
+  { code: 'ja', name: '日文', nativeName: '日本語', short: 'JP' },
+  { code: 'ko', name: '韓文', nativeName: '한국어', short: 'KR' },
+  { code: 'vi', name: '越南文', nativeName: 'Tiếng Việt', short: 'VN' },
+  { code: 'ru', name: '俄文', nativeName: 'Русский', short: 'RU' },
+  { code: 'es', name: '西班牙文', nativeName: 'Español', short: 'ES' },
+];
+
+const GOOGLE_LANG_MAP: Record<Language, string> = {
+  zh: 'zh-TW',
+  en: 'en',
+  th: 'th',
+  ja: 'ja',
+  ko: 'ko',
+  vi: 'vi',
+  ru: 'ru',
+  es: 'es',
+};
+
+export const translateTextToLanguage = async (
+  text: string,
+  targetLang: Language,
+  sourceLang: Language = 'zh'
+): Promise<string> => {
+  const trimmed = text.trim();
+  if (!trimmed) return '';
+  if (targetLang === sourceLang) return trimmed;
+
+  // 1. Check built-in dictionary
+  if (TRANSLATION_DICTIONARY[trimmed]?.[targetLang]) {
+    return TRANSLATION_DICTIONARY[trimmed]![targetLang]!;
+  }
+
+  // 2. Fetch via Google Translate public API
+  try {
+    const sl = GOOGLE_LANG_MAP[sourceLang] || 'auto';
+    const tl = GOOGLE_LANG_MAP[targetLang] || targetLang;
+    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${sl}&tl=${tl}&dt=t&q=${encodeURIComponent(trimmed)}`;
+    const res = await fetch(url);
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data?.[0])) {
+        const translated = data[0].map((item: any) => item?.[0] || '').join('').trim();
+        if (translated) return translated;
+      }
+    }
+  } catch (err) {
+    console.warn(`[AutoTranslate] Failed to translate "${trimmed}" to ${targetLang}:`, err);
+  }
+
+  return '';
+};
+
+export const translateTextToAllLanguages = async (
+  text: string,
+  sourceLang: Language = 'zh'
+): Promise<Record<Language, string>> => {
+  const result: Record<Language, string> = {
+    zh: '',
+    en: '',
+    th: '',
+    ja: '',
+    ko: '',
+    vi: '',
+    ru: '',
+    es: '',
+  };
+  const trimmed = text.trim();
+  if (!trimmed) return result;
+  result[sourceLang] = trimmed;
+
+  const targetLangs = (['zh', 'en', 'th', 'ja', 'ko', 'vi', 'ru', 'es'] as Language[]).filter(
+    (l) => l !== sourceLang
+  );
+
+  await Promise.all(
+    targetLangs.map(async (lang) => {
+      const trans = await translateTextToLanguage(trimmed, lang, sourceLang);
+      if (trans) {
+        result[lang] = trans;
+      }
+    })
+  );
+
+  return result;
 };
 

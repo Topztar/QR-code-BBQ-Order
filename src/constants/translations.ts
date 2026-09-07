@@ -1102,6 +1102,56 @@ export const INITIAL_TRANSLATIONS: { [key: string]: { [lang in Language]?: strin
     "ru": "Оценить обслуживание",
     "es": "Calificar Experiencia"
   },
+  "dailySoldOut": {
+    "zh": "當日結清",
+    "en": "Daily Sold Out",
+    "ko": "당일 품절",
+    "ja": "当日売り切れ",
+    "th": "หมดประจำวัน",
+    "vi": "Hết hàng hôm nay",
+    "ru": "Распродано на сегодня",
+    "es": "Agotado por hoy"
+  },
+  "permanentSoldOut": {
+    "zh": "永久結清",
+    "en": "Permanent Sold Out",
+    "ko": "영구 품절",
+    "ja": "無期限売り切れ",
+    "th": "หมดถาวร",
+    "vi": "Hết hàng vĩnh viễn",
+    "ru": "Снято с продажи",
+    "es": "Agotado permanente"
+  },
+  "dailySoldOutBadge": {
+    "zh": "今日售罄 (明日凌晨自動恢復)",
+    "en": "Sold Out Today (Auto-resets at midnight)",
+    "ko": "오늘 품절 (자정 자동 해제)",
+    "ja": "本日売り切れ (深夜自動復帰)",
+    "th": "หมดวันนี้ (รีเซ็ตตอนเที่ยงคืน)",
+    "vi": "Hôm nay hết (Tự động mở lại lúc nửa đêm)",
+    "ru": "Сегодня распродано (Сброс в полночь)",
+    "es": "Agotado hoy (Reinicio a medianoche)"
+  },
+  "permanentSoldOutBadge": {
+    "zh": "長期下架 (需手動恢復)",
+    "en": "Archived (Manual restore required)",
+    "ko": "장기 판매 중단 (수동 복구 필요)",
+    "ja": "長期販売停止 (手動復帰が必要)",
+    "th": "ระงับระยะยาว (ต้องเปิดเอง)",
+    "vi": "Tạm dừng dài hạn (Cần mở lại thủ công)",
+    "ru": "Долгосрочно снято (Требуется ручной возврат)",
+    "es": "Archivado (Restauración manual requerida)"
+  },
+  "availableBadge": {
+    "zh": "正常供應",
+    "en": "Available",
+    "ko": "정상 판매",
+    "ja": "通常販売",
+    "th": "พร้อมจำหน่าย",
+    "vi": "Đang bán",
+    "ru": "Доступно",
+    "es": "Disponible"
+  },
   "selectStars": {
     "zh": "請點擊星星進行評分:",
     "en": "Click stars to rate:",
@@ -1411,6 +1461,36 @@ export const INITIAL_TRANSLATIONS: { [key: string]: { [lang in Language]?: strin
     "vi": "Tổng cộng",
     "ru": "Итоговая сумма",
     "es": "Monto Total"
+  },
+  "tomorrowAvailable": {
+    "zh": "明日恢復販售",
+    "en": "Available Tomorrow",
+    "ko": "내일 판매 재개",
+    "ja": "明日販売再開",
+    "th": "พร้อมให้บริการพรุ่งนี้",
+    "vi": "Sẽ có vào ngày mai",
+    "ru": "Доступно завтра",
+    "es": "Disponible Mañana"
+  },
+  "itemSoldOutTitle": {
+    "zh": "餐點已售罄",
+    "en": "Item Sold Out",
+    "ko": "품절",
+    "ja": "売り切れ",
+    "th": "สินค้าหมด",
+    "vi": "Đã hết hàng",
+    "ru": "Товар распродан",
+    "es": "Agotado"
+  },
+  "itemSoldOutDesc": {
+    "zh": "包含此餐點的品項無法結帳或加入購物車。",
+    "en": "Items containing this dish cannot be added to cart or checked out.",
+    "ko": "이 요리가 포함된 항목은 장바구니에 추가하거나 결제할 수 없습니다.",
+    "ja": "この料理を含む商品はカートに追加したり、チェックアウトしたりすることはできません。",
+    "th": "ไม่สามารถเพิ่มรายการที่มีอาหารนี้ลงในตะกร้าหรือชำระเงินได้",
+    "vi": "Không thể thêm hoặc thanh toán các món có chứa món này.",
+    "ru": "Товары, содержащие это блюдо, не могут быть добавлены в корзину или оплачены.",
+    "es": "Los artículos que contienen este plato no se pueden agregar al carrito ni pagar."
   },
   "addToCartConfirm": {
     "zh": "確定加入點餐單",

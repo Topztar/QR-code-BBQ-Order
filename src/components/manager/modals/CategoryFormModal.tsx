@@ -20,6 +20,10 @@ export interface CategoryFormModalProps {
   setCatNameKo: (val: string) => void;
   catNameVi: string;
   setCatNameVi: (val: string) => void;
+  catNameRu: string;
+  setCatNameRu: (val: string) => void;
+  catNameEs: string;
+  setCatNameEs: (val: string) => void;
   catShowOnCustomer: boolean;
   setCatShowOnCustomer: (val: boolean) => void;
   catError: string | null;
@@ -44,6 +48,10 @@ export const CategoryFormModal: React.FC<CategoryFormModalProps> = ({
   setCatNameKo,
   catNameVi,
   setCatNameVi,
+  catNameRu,
+  setCatNameRu,
+  catNameEs,
+  setCatNameEs,
   catShowOnCustomer,
   setCatShowOnCustomer,
   catError,
@@ -129,42 +137,63 @@ export const CategoryFormModal: React.FC<CategoryFormModalProps> = ({
                 className="w-full bg-[#1e1e1e] border border-white/10 rounded px-2.5 py-1.5 text-white"
               />
             </div>
-            <div className="grid grid-cols-4 gap-2.5 text-[11px]">
-              <div className="space-y-1">
-                <label className="text-zinc-500">泰文 Name Th</label>
-                <input
-                  type="text"
-                  value={catNameTh}
-                  onChange={(e) => setCatNameTh(e.target.value)}
-                  className="w-full bg-[#1e1e1e] border border-white/10 rounded px-2 py-1 text-white"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-zinc-500">日文 Name Ja</label>
-                <input
-                  type="text"
-                  value={catNameJa}
-                  onChange={(e) => setCatNameJa(e.target.value)}
-                  className="w-full bg-[#1e1e1e] border border-white/10 rounded px-2 py-1 text-white"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-zinc-500">韓文 Name Ko</label>
-                <input
-                  type="text"
-                  value={catNameKo}
-                  onChange={(e) => setCatNameKo(e.target.value)}
-                  className="w-full bg-[#1e1e1e] border border-white/10 rounded px-2 py-1 text-white"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-zinc-500">越文 Name Vi</label>
-                <input
-                  type="text"
-                  value={catNameVi}
-                  onChange={(e) => setCatNameVi(e.target.value)}
-                  className="w-full bg-[#1e1e1e] border border-white/10 rounded px-2 py-1 text-white"
-                />
+            <div className="space-y-1 pt-1">
+              <label className="text-zinc-400 block font-medium">多國語言名稱對應 Multilingual Names</label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-[11px]">
+                <div className="space-y-1">
+                  <label className="text-zinc-400 flex items-center space-x-1"><span>🇹🇭</span><span>泰文 Th</span></label>
+                  <input
+                    type="text"
+                    value={catNameTh}
+                    onChange={(e) => setCatNameTh(e.target.value)}
+                    className="w-full bg-[#1e1e1e] border border-white/10 rounded px-2 py-1 text-white"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-zinc-400 flex items-center space-x-1"><span>🇯🇵</span><span>日文 Ja</span></label>
+                  <input
+                    type="text"
+                    value={catNameJa}
+                    onChange={(e) => setCatNameJa(e.target.value)}
+                    className="w-full bg-[#1e1e1e] border border-white/10 rounded px-2 py-1 text-white"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-zinc-400 flex items-center space-x-1"><span>🇰🇷</span><span>韓文 Ko</span></label>
+                  <input
+                    type="text"
+                    value={catNameKo}
+                    onChange={(e) => setCatNameKo(e.target.value)}
+                    className="w-full bg-[#1e1e1e] border border-white/10 rounded px-2 py-1 text-white"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-zinc-400 flex items-center space-x-1"><span>🇻🇳</span><span>越文 Vi</span></label>
+                  <input
+                    type="text"
+                    value={catNameVi}
+                    onChange={(e) => setCatNameVi(e.target.value)}
+                    className="w-full bg-[#1e1e1e] border border-white/10 rounded px-2 py-1 text-white"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-zinc-400 flex items-center space-x-1"><span>🇷🇺</span><span>俄文 Ru</span></label>
+                  <input
+                    type="text"
+                    value={catNameRu}
+                    onChange={(e) => setCatNameRu(e.target.value)}
+                    className="w-full bg-[#1e1e1e] border border-white/10 rounded px-2 py-1 text-white"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-zinc-400 flex items-center space-x-1"><span>🇪🇸</span><span>西文 Es</span></label>
+                  <input
+                    type="text"
+                    value={catNameEs}
+                    onChange={(e) => setCatNameEs(e.target.value)}
+                    className="w-full bg-[#1e1e1e] border border-white/10 rounded px-2 py-1 text-white"
+                  />
+                </div>
               </div>
             </div>
           </div>

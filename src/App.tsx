@@ -72,7 +72,17 @@ function AppContent({
     safeStorage.setItem('sabay-language', newLang);
   };
 
-  const [adminSubTab, setAdminSubTab] = useState<'stats' | 'orders' | 'inventory' | 'menu' | 'members' | 'cashier' | 'printer' | 'options' | 'notifications' | 'eod' | 'terminal' | undefined>(undefined);
+  const [adminSubTab, setAdminSubTab] = useState<'stats' | 'orders' | 'inventory' | 'menu' | 'members' | 'cashier' | 'printer' | 'options' | 'notifications' | 'eod' | 'terminal' | undefined>(() => {
+    try {
+      // Restore sub-tab from URL query param first, then fall back to safeStorage
+      const urlSubTab = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('tab') : null;
+      const validSubTabs = ['stats', 'orders', 'inventory', 'menu', 'members', 'cashier', 'printer', 'options', 'notifications', 'eod', 'terminal'];
+      if (urlSubTab && validSubTabs.includes(urlSubTab)) return urlSubTab as any;
+      const stored = safeStorage.getItem('sabay-staff-subtab');
+      if (stored && validSubTabs.includes(stored)) return stored as any;
+    } catch { /* ignore */ }
+    return undefined;
+  });
   const [isStaff, setIsStaff] = useState<boolean>(() => {
     try {
       return safeStorage.getItem('sabay-staff-auth') === 'true';
@@ -116,24 +126,31 @@ function AppContent({
       if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey) {
         if (e.key === '1') {
           e.preventDefault();
-          setActiveTab('cashier');
+          navigateTo('/cashier');
           setAdminSubTab('cashier');
+          safeStorage.setItem('sabay-staff-active-tab', 'cashier');
+          safeStorage.setItem('sabay-staff-subtab', 'cashier');
         } else if (e.key === '2') {
           e.preventDefault();
-          setActiveTab('kitchen');
+          navigateTo('/kitchen');
           setAdminSubTab(undefined);
+          safeStorage.setItem('sabay-staff-active-tab', 'kitchen');
+          safeStorage.removeItem('sabay-staff-subtab');
         } else if (e.key === '3') {
           e.preventDefault();
-          setActiveTab('admin');
+          navigateTo('/admin?tab=stats');
           setAdminSubTab('stats');
+          safeStorage.setItem('sabay-staff-active-tab', 'admin');
+          safeStorage.setItem('sabay-staff-subtab', 'stats');
         } else if (e.key === '4') {
           e.preventDefault();
-          setActiveTab('customer');
           navigateTo('/');
         } else if (e.key === '5') {
           e.preventDefault();
-          setActiveTab('admin');
+          navigateTo('/admin?tab=eod');
           setAdminSubTab('eod');
+          safeStorage.setItem('sabay-staff-active-tab', 'admin');
+          safeStorage.setItem('sabay-staff-subtab', 'eod');
         }
       }
     };
@@ -251,16 +268,17 @@ function AppContent({
               </div>
             </div>
 
-            {/* Viewport switch tabs */}
+            {/* Viewport switch tabs — visible whenever staff is logged in, regardless of current tab */}
             <div className="hidden lg:flex items-center space-x-2">
-              {isAtStaffPath ? (
-                isStaff ? (
-                  <div className="flex bg-white/5 p-1 rounded-2xl border border-white/10 space-x-1 overflow-x-hidden shrink-0" id="desktop-tab-selector">
+              {isStaff ? (
+                <div className="flex bg-white/5 p-1 rounded-2xl border border-white/10 space-x-1 overflow-x-hidden shrink-0" id="desktop-tab-selector">
                     <button
                       id="tab-btn-cashier-main"
                       onClick={() => {
-                        setActiveTab('cashier');
+                        navigateTo('/cashier');
                         setAdminSubTab('cashier');
+                        safeStorage.setItem('sabay-staff-active-tab', 'cashier');
+                        safeStorage.setItem('sabay-staff-subtab', 'cashier');
                       }}
                       className={`flex items-center space-x-1.5 px-4 py-2 rounded-xl text-xs font-black transition cursor-pointer whitespace-nowrap ${
                         activeTab === 'cashier'
@@ -275,8 +293,10 @@ function AppContent({
                     <button
                       id="tab-btn-kitchen"
                       onClick={() => {
-                        setActiveTab('kitchen');
+                        navigateTo('/kitchen');
                         setAdminSubTab(undefined);
+                        safeStorage.setItem('sabay-staff-active-tab', 'kitchen');
+                        safeStorage.removeItem('sabay-staff-subtab');
                       }}
                       className={`flex items-center space-x-1.5 px-4 py-2 rounded-xl text-xs font-black transition cursor-pointer whitespace-nowrap ${
                         activeTab === 'kitchen'
@@ -291,8 +311,10 @@ function AppContent({
                     <button
                       id="tab-btn-admin"
                       onClick={() => {
-                        setActiveTab('admin');
+                        navigateTo('/admin?tab=stats');
                         setAdminSubTab('stats');
+                        safeStorage.setItem('sabay-staff-active-tab', 'admin');
+                        safeStorage.setItem('sabay-staff-subtab', 'stats');
                       }}
                       className={`flex items-center space-x-1.5 px-4 py-2 rounded-xl text-xs font-black transition cursor-pointer whitespace-nowrap ${
                         activeTab === 'admin'
@@ -307,20 +329,25 @@ function AppContent({
                     <button
                       id="tab-btn-customer-from-staff"
                       onClick={() => {
-                        setActiveTab('customer');
                         navigateTo('/');
                       }}
-                      className="flex items-center space-x-1.5 px-4 py-2 text-white/50 hover:text-white hover:bg-white/5 rounded-xl cursor-pointer transition text-xs font-black whitespace-nowrap"
+                      className={`flex items-center space-x-1.5 px-4 py-2 rounded-xl cursor-pointer transition text-xs font-black whitespace-nowrap ${
+                        activeTab === 'customer'
+                          ? 'bg-[#E5B453] text-[#0F0F0F] shadow-md shadow-[#E5B453]/15'
+                          : 'text-white/50 hover:text-white hover:bg-white/5'
+                      }`}
                     >
                       <Smartphone size={14} />
-                      <span className="whitespace-nowrap">📱 返回顧客點餐 <kbd className="ml-1 bg-black/30 text-[10px] px-1 py-0.5 rounded border border-white/10">Ctrl+4</kbd></span>
+                      <span className="whitespace-nowrap">📱 顧客前台 <kbd className="ml-1 bg-black/30 text-[10px] px-1 py-0.5 rounded border border-white/10">Ctrl+4</kbd></span>
                     </button>
 
                     <button
                       id="tab-btn-eod-main"
                       onClick={() => {
-                        setActiveTab('admin');
+                        navigateTo('/admin?tab=eod');
                         setAdminSubTab('eod');
+                        safeStorage.setItem('sabay-staff-active-tab', 'admin');
+                        safeStorage.setItem('sabay-staff-subtab', 'eod');
                       }}
                       className={`flex items-center space-x-1 px-3.5 py-2 font-black text-xs rounded-xl cursor-pointer transition ml-1 shrink-0 whitespace-nowrap ${
                         activeTab === 'admin' && adminSubTab === 'eod'
@@ -335,8 +362,10 @@ function AppContent({
                     <button
                       id="tab-btn-cashier-nav-right"
                       onClick={() => {
-                        setActiveTab('cashier');
+                        navigateTo('/cashier');
                         setAdminSubTab('cashier');
+                        safeStorage.setItem('sabay-staff-active-tab', 'cashier');
+                        safeStorage.setItem('sabay-staff-subtab', 'cashier');
                       }}
                       className={`flex items-center space-x-1 px-3.5 py-2 font-black text-xs rounded-xl cursor-pointer transition ml-1 shrink-0 whitespace-nowrap ${
                         activeTab === 'cashier'
@@ -353,6 +382,8 @@ function AppContent({
                       onClick={() => {
                         setIsStaff(false);
                         safeStorage.removeItem('sabay-staff-auth');
+                        safeStorage.removeItem('sabay-staff-active-tab');
+                        safeStorage.removeItem('sabay-staff-subtab');
                         navigateTo('/');
                       }}
                       className="flex items-center space-x-1 px-3.5 py-2 text-rose-400 hover:text-rose-300 font-bold text-xs hover:bg-white/5 rounded-xl cursor-pointer transition ml-1 whitespace-nowrap"
@@ -360,13 +391,12 @@ function AppContent({
                       <LogOut size={13} />
                       <span className="whitespace-nowrap">員工登出</span>
                     </button>
-                  </div>
-                ) : (
-                  <div className="flex items-center space-x-2 text-xs text-[#E5B453]/80 bg-[#E5B453]/5 border border-[#E5B453]/10 px-3.5 py-1.5 rounded-xl font-bold font-mono">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    <span>SECURE AUTH PORTAL MODE</span>
-                  </div>
-                )
+                </div>
+              ) : isAtStaffPath ? (
+                <div className="flex items-center space-x-2 text-xs text-[#E5B453]/80 bg-[#E5B453]/5 border border-[#E5B453]/10 px-3.5 py-1.5 rounded-xl font-bold font-mono">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  <span>SECURE AUTH PORTAL MODE</span>
+                </div>
               ) : null}
             </div>
 
@@ -430,14 +460,16 @@ function AppContent({
         </div>
       )}
 
-      {/* Mobile Sticky Tab selectors */}
-      {isAtStaffPath && isStaff && (
+      {/* Mobile Sticky Tab selectors — visible whenever staff is logged in, regardless of current tab */}
+      {isStaff && (
         <div className="lg:hidden bg-[#121212] border-b border-white/10 p-2 flex justify-around sticky top-18 z-30 shadow-md" id="mobile-tab-selector">
           <button
             id="m-tab-btn-terminal"
             onClick={() => {
-              setActiveTab('admin');
+              navigateTo('/admin?tab=terminal');
               setAdminSubTab('terminal');
+              safeStorage.setItem('sabay-staff-active-tab', 'admin');
+              safeStorage.setItem('sabay-staff-subtab', 'terminal');
             }}
             className={`flex-1 py-1.5 text-center text-[10px] font-bold transition flex flex-col items-center gap-1 cursor-pointer ${
               activeTab === 'admin' && adminSubTab === 'terminal' ? 'text-[#E5B453]' : 'text-white/40'
@@ -450,8 +482,10 @@ function AppContent({
           <button
             id="m-tab-btn-cashier"
             onClick={() => {
-              setActiveTab('cashier');
+              navigateTo('/cashier');
               setAdminSubTab('cashier');
+              safeStorage.setItem('sabay-staff-active-tab', 'cashier');
+              safeStorage.setItem('sabay-staff-subtab', 'cashier');
             }}
             className={`flex-1 py-1.5 text-center text-[10px] font-bold transition flex flex-col items-center gap-1 cursor-pointer ${
               activeTab === 'cashier' ? 'text-[#E5B453]' : 'text-white/40'
@@ -464,8 +498,10 @@ function AppContent({
           <button
             id="m-tab-btn-kitchen"
             onClick={() => {
-              setActiveTab('kitchen');
+              navigateTo('/kitchen');
               setAdminSubTab(undefined);
+              safeStorage.setItem('sabay-staff-active-tab', 'kitchen');
+              safeStorage.removeItem('sabay-staff-subtab');
             }}
             className={`flex-1 py-1.5 text-center text-[10px] font-bold transition flex flex-col items-center gap-1 cursor-pointer ${
               activeTab === 'kitchen' ? 'text-[#E5B453]' : 'text-white/40'
@@ -478,11 +514,13 @@ function AppContent({
           <button
             id="m-tab-btn-admin"
             onClick={() => {
-              setActiveTab('admin');
+              navigateTo('/admin?tab=stats');
               setAdminSubTab('stats');
+              safeStorage.setItem('sabay-staff-active-tab', 'admin');
+              safeStorage.setItem('sabay-staff-subtab', 'stats');
             }}
             className={`flex-1 py-1.5 text-center text-[10px] font-bold transition flex flex-col items-center gap-1 cursor-pointer ${
-              activeTab === 'admin' && adminSubTab !== 'eod' ? 'text-[#E5B453]' : 'text-white/40'
+              activeTab === 'admin' && adminSubTab !== 'eod' && adminSubTab !== 'terminal' ? 'text-[#E5B453]' : 'text-white/40'
             }`}
           >
             <BarChart3 size={15} />
@@ -492,8 +530,10 @@ function AppContent({
           <button
             id="m-tab-btn-eod"
             onClick={() => {
-              setActiveTab('admin');
+              navigateTo('/admin?tab=eod');
               setAdminSubTab('eod');
+              safeStorage.setItem('sabay-staff-active-tab', 'admin');
+              safeStorage.setItem('sabay-staff-subtab', 'eod');
             }}
             className={`flex-1 py-1.5 text-center text-[10px] font-bold transition flex flex-col items-center gap-1 cursor-pointer ${
               activeTab === 'admin' && adminSubTab === 'eod' ? 'text-[#E5B453]' : 'text-white/40'
@@ -506,10 +546,11 @@ function AppContent({
           <button
             id="m-tab-btn-customer"
             onClick={() => {
-              setActiveTab('customer');
               navigateTo('/');
             }}
-            className="flex-1 py-1.5 text-center text-[10px] text-white/65 font-bold flex flex-col items-center gap-1 cursor-pointer"
+            className={`flex-1 py-1.5 text-center text-[10px] font-bold transition flex flex-col items-center gap-1 cursor-pointer ${
+              activeTab === 'customer' ? 'text-[#E5B453]' : 'text-white/40'
+            }`}
           >
             <Smartphone size={15} />
             <span>顧客前台</span>
@@ -519,6 +560,8 @@ function AppContent({
             onClick={() => {
               setIsStaff(false);
               safeStorage.removeItem('sabay-staff-auth');
+              safeStorage.removeItem('sabay-staff-active-tab');
+              safeStorage.removeItem('sabay-staff-subtab');
               navigateTo('/');
             }}
             className="flex-1 py-1.5 text-center text-[10px] text-rose-400 font-bold flex flex-col items-center gap-1 cursor-pointer"
@@ -637,7 +680,11 @@ function AppContent({
                     onLoginSuccess={() => {
                       setIsStaff(true);
                       safeStorage.setItem('sabay-staff-auth', 'true');
-                      setActiveTab(prev => (prev === 'customer' ? 'admin' : prev));
+                      const targetSubTab = 'stats';
+                      setAdminSubTab(targetSubTab);
+                      safeStorage.setItem('sabay-staff-active-tab', 'admin');
+                      safeStorage.setItem('sabay-staff-subtab', targetSubTab);
+                      navigateTo('/admin?tab=stats');
                     }}
                     onCancel={() => {
                       setActiveTab('customer');
@@ -649,9 +696,9 @@ function AppContent({
             </div>
           ) : (
             <div>
-              <ErrorBoundary fallbackTitle="管理系統載入異常" fallbackMessage="後台系統視圖遇到短暫渲染問題，請點擊下方按鈕重新整理或修復快取。">
-                <Suspense fallback={<ViewLoadingFallback />}>
-                  {activeTab === 'kitchen' ? (
+              <Suspense fallback={<ViewLoadingFallback />}>
+                {activeTab === 'kitchen' ? (
+                  <ErrorBoundary fallbackTitle="廚房監控系統載入異常" fallbackMessage="KDS 系統遇到短暫渲染問題，請點擊下方按鈕重新整理。">
                     <KitchenDisplaySystem
                       currentLang={lang}
                       orders={orders}
@@ -676,7 +723,9 @@ function AppContent({
                       onToggleOrderItemComplete={handleToggleOrderItemComplete}
                       reservations={reservations}
                     />
-                  ) : (
+                  </ErrorBoundary>
+                ) : (
+                  <ErrorBoundary fallbackTitle="管理後台載入異常" fallbackMessage="後台系統視圖遇到短暫渲染問題，請點擊下方按鈕重新整理。">
                     <ManagerDashboard
                       currentLang={lang}
                       analytics={analytics}
@@ -712,7 +761,12 @@ function AppContent({
                       onUpdateTableNumber={handleUpdateTableNumber}
                       onUpdateOrderItems={handleUpdateOrderItems}
                       defaultSubTab={adminSubTab || (activeTab === 'cashier' ? 'cashier' : 'stats')}
-                      onSubTabChange={(subTab) => setAdminSubTab(subTab)}
+                      onSubTabChange={(subTab) => {
+                        setAdminSubTab(subTab);
+                        safeStorage.setItem('sabay-staff-subtab', subTab);
+                        safeStorage.setItem('sabay-staff-active-tab', 'admin');
+                        window.history.replaceState({}, '', `/admin?tab=${subTab}`);
+                      }}
                       minSpend={minSpend}
                       onUpdateMinSpend={handleUpdateMinSpend}
                       promoCombo={promoCombo}
@@ -739,9 +793,9 @@ function AppContent({
                       memberRewards={memberRewards}
                       onUpdateMemberConfig={fetchData}
                     />
-                  )}
-                </Suspense>
-              </ErrorBoundary>
+                  </ErrorBoundary>
+                )}
+              </Suspense>
             </div>
           )
         ) : (
@@ -821,8 +875,10 @@ function AppContent({
           <span>A.S.R. Cloud Engine v4.2 // Secured Connection Terminal</span>
           <button
             onClick={() => {
-              setActiveTab('admin');
+              navigateTo('/admin?tab=stats');
               setAdminSubTab('stats');
+              safeStorage.setItem('sabay-staff-active-tab', 'admin');
+              safeStorage.setItem('sabay-staff-subtab', 'stats');
             }}
             className="text-[#0A0A0A] hover:text-white/20 focus:outline-none cursor-pointer select-none ml-1 inline-flex items-center transition-colors"
             title="Secure Portal"
@@ -905,7 +961,27 @@ const getTabFromPath = (path: string): 'customer' | 'kitchen' | 'admin' | 'cashi
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'customer' | 'kitchen' | 'admin' | 'cashier'>(() => {
-    return typeof window !== 'undefined' ? getTabFromPath(window.location.pathname) : 'customer';
+    if (typeof window === 'undefined') return 'customer';
+    const fromPath = getTabFromPath(window.location.pathname);
+    // If URL points to a specific backend tab, use it directly
+    if (fromPath !== 'customer') return fromPath;
+    // If URL is '/' but staff was previously on a backend tab, restore it
+    try {
+      const isStaffAuth = safeStorage.getItem('sabay-staff-auth') === 'true';
+      if (isStaffAuth) {
+        const savedTab = safeStorage.getItem('sabay-staff-active-tab');
+        if (savedTab === 'admin' || savedTab === 'cashier' || savedTab === 'kitchen') {
+          // Sync URL to reflect the restored tab
+          const savedSubTab = safeStorage.getItem('sabay-staff-subtab');
+          const restoredPath = savedTab === 'admin'
+            ? (savedSubTab ? `/admin?tab=${savedSubTab}` : '/admin')
+            : `/${savedTab}`;
+          window.history.replaceState({}, '', restoredPath);
+          return savedTab;
+        }
+      }
+    } catch { /* ignore */ }
+    return 'customer';
   });
   const [currentPath, setCurrentPath] = useState<string>(typeof window !== 'undefined' ? window.location.pathname : '/');
 

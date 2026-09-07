@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useMemo, useCallback, ReactNode } from 'react';
-import { Order, OrderStatus, OrderItem, TableConfig, Reservation } from '../types';
+import { Order, OrderItem, MenuItem, TableConfig, KitchenReceiptLog, TakeoutQueueInfo, StoreSettings, OfflineQueueRequest, Reservation, OrderStatus } from '../types';
+import { orderCalculationService } from '../services/orderCalculationService';
 import { apiFetch } from '../lib/api';
 import { db, isFirebaseSyncEnabled } from '../lib/firebase';
 import { collection, onSnapshot, query, limit, where, orderBy } from 'firebase/firestore';
@@ -480,10 +481,13 @@ export function OrderDataProvider({
     const checkAndSyncTables = () => {
       const nowMs = Date.now();
       const now = new Date();
-      const yr = now.getFullYear();
-      const mo = String(now.getMonth() + 1).padStart(2, '0');
-      const dy = String(now.getDate()).padStart(2, '0');
-      const todayStr = `${yr}-${mo}-${dy}`;
+      const formatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Taipei',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      });
+      const todayStr = formatter.format(now);
 
       setTables(prevTables => {
         let hasChanges = false;
@@ -804,7 +808,7 @@ export function OrderDataProvider({
 
   const handleUpdateOrderItems = async (orderId: string, items: any[], refundLogs?: any[]) => {
     const description = `調整 🥢 訂單 #${orderId.replace('offline_temp_', '離線')} 品項數量`;
-    const totalAmount = items.reduce((sum, item) => sum + (item.price * (item.qty || item.quantity || 0)), 0);
+    const totalAmount = orderCalculationService.computeOrderItemsSubtotal(items, []);
     const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, items, subtotal: totalAmount, total: totalAmount, isOfflinePending: !isOnline } : o));
 

@@ -44,7 +44,7 @@ export function registerBootstrapRoutes(app: express.Application, ctx: RouteCont
         reservationsSnap
       ] = await Promise.all([
         db.collection('categories').select('id', 'name', 'showOnCustomerPage', 'orderIndex').orderBy('orderIndex').get(),
-        db.collection('menu').select('id', 'category', 'name', 'price', 'image', 'description', 'available', 'isAvailable', 'isSetMeal', 'requiredSaucesOption', 'hasNoodlesOption', 'hasCoconutsMilkOption', 'containsBeef', 'containsPork', 'containsSeafood', 'isNotSpicy', 'customAddOns', 'recipe', 'orderIndex', 'isTakeoutAvailable', 'soldOutAt').orderBy('orderIndex').get(),
+        db.collection('menu').select('id', 'category', 'name', 'price', 'image', 'description', 'available', 'isAvailable', 'isSetMeal', 'requiredSaucesOption', 'hasNoodlesOption', 'hasCoconutsMilkOption', 'containsBeef', 'containsPork', 'containsSeafood', 'isNotSpicy', 'customAddOns', 'recipe', 'orderIndex', 'isTakeoutAvailable', 'soldOutAt', 'soldOutType', 'soldOutDate').orderBy('orderIndex').get(),
         db.collection('tables').select('id', 'qrCodeUrl', 'status', 'cleaningStartedAt', 'maxCapacity', 'positionX', 'positionY', 'preservedFor', 'mergedWith').get(),
         db.collection('settings').doc('system').get(),
         isStaffRequest 
@@ -67,6 +67,8 @@ export function registerBootstrapRoutes(app: express.Application, ctx: RouteCont
           description: d.description ?? { zh: '' },
           available: !!d.available,
           isAvailable: d.isAvailable,
+          soldOutType: d.soldOutType || (d.available ? 'none' : 'permanent'),
+          soldOutDate: d.soldOutDate ?? null,
           isSetMeal: !!d.isSetMeal,
           requiredSaucesOption: !!d.requiredSaucesOption,
           hasNoodlesOption: !!d.hasNoodlesOption,

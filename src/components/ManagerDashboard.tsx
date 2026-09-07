@@ -1,7 +1,8 @@
 import { apiFetch, getAuthHeader } from "../lib/api";
+import { ErrorBoundary } from './ErrorBoundary';
 import React, { Component, useState, useEffect, useMemo, useCallback } from 'react';
-import { Ingredient, Language, Category, TableConfig, Order, OrderStatus, Reservation } from '../types';
-import { getLocalizedText } from '../utils/i18n';
+import { Ingredient, Language, Category, TableConfig, Order, OrderStatus, Reservation, SoldOutType } from '../types';
+import { getLocalizedText, TRANSLATION_DICTIONARY } from '../utils/i18n';
 import { sanitizePhoneDigits, isValidTaiwanPhone, TAIWAN_PHONE_ERROR_MSG } from '../utils/phoneValidator';
 import { calculateReservationAvailability, autoSelectOptimalTables, validateCapacity } from '../utils/reservationValidator';
 import { AlertTriangle, Sparkles, Coins, Trash2, Plus, Download, Check, Minus, Printer } from 'lucide-react';
@@ -157,7 +158,7 @@ interface ManagerDashboardProps {
   onRestock: (id: string, amount: number) => Promise<void>;
 
   onSendPromoPush: (notif: { title: string; message: string; badge: string }) => Promise<void>;
-  onToggleMenuItemAvailability: (id: string) => Promise<void>;
+  onToggleMenuItemAvailability: (id: string, targetType?: SoldOutType) => Promise<void>;
   menuItems: any[];
   onAddMenuItem?: (item: any) => Promise<void>;
   onEditMenuItem?: (id: string, item: any) => Promise<void>;
@@ -2245,16 +2246,32 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   // Menu Creation/Editing states
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<any | null>(null);
-  const [itemNameZh, setItemNameZh] = useState('');
-  const [itemNameEn, setItemNameEn] = useState('');
+  const [itemNames, setItemNames] = useState<Record<Language, string>>({
+    zh: '',
+    en: '',
+    th: '',
+    ja: '',
+    ko: '',
+    vi: '',
+    ru: '',
+    es: '',
+  });
+  const [itemDescs, setItemDescs] = useState<Record<Language, string>>({
+    zh: '',
+    en: '',
+    th: '',
+    ja: '',
+    ko: '',
+    vi: '',
+    ru: '',
+    es: '',
+  });
   const [itemCategory, setItemCategory] = useState('skewers');
   const [itemPrice, setItemPrice] = useState<number | ''>(100);
   const [itemImage, setItemImage] = useState('https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=400');
   const [itemThumbnailUrl, setItemThumbnailUrl] = useState('');
   const [itemAvifUrl, setItemAvifUrl] = useState('');
   const [itemAvifThumbnailUrl, setItemAvifThumbnailUrl] = useState('');
-  const [itemDescZh, setItemDescZh] = useState('');
-  const [itemDescEn, setItemDescEn] = useState('');
   const [hasNoodles, setHasNoodles] = useState(false);
   const [isNotSpicy, setIsNotSpicy] = useState(false);
   const [isTakeoutAvailable, setIsTakeoutAvailable] = useState(false);
@@ -2273,6 +2290,8 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   const [catNameJa, setCatNameJa] = useState('');
   const [catNameKo, setCatNameKo] = useState('');
   const [catNameVi, setCatNameVi] = useState('');
+  const [catNameRu, setCatNameRu] = useState('');
+  const [catNameEs, setCatNameEs] = useState('');
   const [catError, setCatError] = useState<string | null>(null);
   const [catShowOnCustomer, setCatShowOnCustomer] = useState<boolean>(true);
 
@@ -2973,6 +2992,8 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     setCatNameJa('');
     setCatNameKo('');
     setCatNameVi('');
+    setCatNameRu('');
+    setCatNameEs('');
     setCatError(null);
     setCatShowOnCustomer(true);
     setIsCatFormOpen(true);
@@ -2987,6 +3008,8 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     setCatNameJa(cat.name?.ja || '');
     setCatNameKo(cat.name?.ko || '');
     setCatNameVi(cat.name?.vi || '');
+    setCatNameRu(cat.name?.ru || '');
+    setCatNameEs(cat.name?.es || '');
     setCatError(null);
     setCatShowOnCustomer(cat.showOnCustomerPage !== false);
     setIsCatFormOpen(true);
@@ -3010,6 +3033,8 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
       ja: catNameJa || catNameZh,
       ko: catNameKo || catNameZh,
       vi: catNameVi || catNameZh,
+      ru: catNameRu || catNameZh,
+      es: catNameEs || catNameZh,
     };
     if (editingCategory) {
       if (onEditCategory) {
@@ -3224,16 +3249,14 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   // Menu Items form triggers
   const triggerAddMenuItemMode = () => {
     setEditingItem(null);
-    setItemNameZh('');
-    setItemNameEn('');
+    setItemNames({ zh: '', en: '', th: '', ja: '', ko: '', vi: '', ru: '', es: '' });
+    setItemDescs({ zh: '', en: '', th: '', ja: '', ko: '', vi: '', ru: '', es: '' });
     setItemCategory(categories[0]?.id || 'skewers');
     setItemPrice(100);
     setItemImage('https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=400');
     setItemThumbnailUrl('');
     setItemAvifUrl('');
     setItemAvifThumbnailUrl('');
-    setItemDescZh('');
-    setItemDescEn('');
     setHasNoodles(false);
     setIsNotSpicy(false);
     setIsTakeoutAvailable(true);
@@ -3247,8 +3270,28 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   const triggerEditMenuItemMode = (item: any) => {
     if (!item) return;
     setEditingItem(item);
-    setItemNameZh(item.name ? getLocalizedText(item.name, 'zh') : '');
-    setItemNameEn(typeof item.name === 'object' && item.name !== null ? (item.name.en || '') : '');
+    const n = typeof item.name === 'object' && item.name !== null ? item.name : {};
+    const d = typeof item.description === 'object' && item.description !== null ? item.description : {};
+    setItemNames({
+      zh: n.zh || (typeof item.name === 'string' ? item.name : '') || '',
+      en: n.en || '',
+      th: n.th || '',
+      ja: n.ja || '',
+      ko: n.ko || '',
+      vi: n.vi || '',
+      ru: n.ru || '',
+      es: n.es || '',
+    });
+    setItemDescs({
+      zh: d.zh || (typeof item.description === 'string' ? item.description : '') || '',
+      en: d.en || '',
+      th: d.th || '',
+      ja: d.ja || '',
+      ko: d.ko || '',
+      vi: d.vi || '',
+      ru: d.ru || '',
+      es: d.es || '',
+    });
     setItemCategory(typeof item.category === 'string' && item.category ? item.category : (categories?.[0]?.id || 'skewers'));
     const priceNum = typeof item.price === 'number' ? item.price : (typeof item.price === 'string' ? (parseFloat(item.price) || 0) : 100);
     setItemPrice(priceNum);
@@ -3256,8 +3299,6 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     setItemThumbnailUrl(typeof item.thumbnailUrl === 'string' ? item.thumbnailUrl : '');
     setItemAvifUrl(typeof item.avifUrl === 'string' ? item.avifUrl : '');
     setItemAvifThumbnailUrl(typeof item.avifThumbnailUrl === 'string' ? item.avifThumbnailUrl : '');
-    setItemDescZh(item.description ? getLocalizedText(item.description, 'zh') : '');
-    setItemDescEn(typeof item.description === 'object' && item.description !== null ? (item.description.en || '') : '');
     setHasNoodles(!!item.hasNoodlesOption);
     setIsNotSpicy(!!item.isNotSpicy);
     setIsTakeoutAvailable(item.isTakeoutAvailable !== false);
@@ -3270,30 +3311,49 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
 
   const handleSaveItemSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!itemNameZh || isNaN(Number(itemPrice))) {
-      alert('請填載正確餐點名稱及有效金額！');
+    const cleanZhName = itemNames.zh?.trim();
+    if (!cleanZhName || isNaN(Number(itemPrice))) {
+      alert('請填載正體中文餐點名稱及有效金額！');
       return;
     }
     const cleanImage = typeof itemImage === 'string' ? itemImage.trim() : (itemImage || '');
     const cleanThumb = typeof itemThumbnailUrl === 'string' ? itemThumbnailUrl.trim() : (itemThumbnailUrl || '');
     const cleanAvif = typeof itemAvifUrl === 'string' ? itemAvifUrl.trim() : (itemAvifUrl || '');
     const cleanAvifThumb = typeof itemAvifThumbnailUrl === 'string' ? itemAvifThumbnailUrl.trim() : (itemAvifThumbnailUrl || '');
+
+    // Construct full 8-language name map aligned with Firestore format
+    const nameMap: Record<Language, string> = {
+      zh: cleanZhName,
+      en: itemNames.en?.trim() || (TRANSLATION_DICTIONARY[cleanZhName]?.en) || cleanZhName,
+      th: itemNames.th?.trim() || (TRANSLATION_DICTIONARY[cleanZhName]?.th) || itemNames.en?.trim() || cleanZhName,
+      ja: itemNames.ja?.trim() || (TRANSLATION_DICTIONARY[cleanZhName]?.ja) || itemNames.en?.trim() || cleanZhName,
+      ko: itemNames.ko?.trim() || (TRANSLATION_DICTIONARY[cleanZhName]?.ko) || itemNames.en?.trim() || cleanZhName,
+      vi: itemNames.vi?.trim() || (TRANSLATION_DICTIONARY[cleanZhName]?.vi) || itemNames.en?.trim() || cleanZhName,
+      ru: itemNames.ru?.trim() || (TRANSLATION_DICTIONARY[cleanZhName]?.ru) || itemNames.en?.trim() || cleanZhName,
+      es: itemNames.es?.trim() || (TRANSLATION_DICTIONARY[cleanZhName]?.es) || itemNames.en?.trim() || cleanZhName,
+    };
+
+    const cleanZhDesc = itemDescs.zh?.trim() || '';
+    // Construct full 8-language description map aligned with Firestore format
+    const descMap: Record<Language, string> = {
+      zh: cleanZhDesc,
+      en: itemDescs.en?.trim() || (cleanZhDesc ? TRANSLATION_DICTIONARY[cleanZhDesc]?.en || cleanZhDesc : ''),
+      th: itemDescs.th?.trim() || (cleanZhDesc ? TRANSLATION_DICTIONARY[cleanZhDesc]?.th || itemDescs.en?.trim() || cleanZhDesc : ''),
+      ja: itemDescs.ja?.trim() || (cleanZhDesc ? TRANSLATION_DICTIONARY[cleanZhDesc]?.ja || itemDescs.en?.trim() || cleanZhDesc : ''),
+      ko: itemDescs.ko?.trim() || (cleanZhDesc ? TRANSLATION_DICTIONARY[cleanZhDesc]?.ko || itemDescs.en?.trim() || cleanZhDesc : ''),
+      vi: itemDescs.vi?.trim() || (cleanZhDesc ? TRANSLATION_DICTIONARY[cleanZhDesc]?.vi || itemDescs.en?.trim() || cleanZhDesc : ''),
+      ru: itemDescs.ru?.trim() || (cleanZhDesc ? TRANSLATION_DICTIONARY[cleanZhDesc]?.ru || itemDescs.en?.trim() || cleanZhDesc : ''),
+      es: itemDescs.es?.trim() || (cleanZhDesc ? TRANSLATION_DICTIONARY[cleanZhDesc]?.es || itemDescs.en?.trim() || cleanZhDesc : ''),
+    };
+
     const payload = {
-      name: { 
-        ...(typeof editingItem?.name === 'object' ? editingItem.name : {}), 
-        zh: itemNameZh, 
-        ...(itemNameEn ? { en: itemNameEn } : {})
-      },
+      name: nameMap,
       price: Number(itemPrice),
       image: cleanImage,
       thumbnailUrl: cleanThumb,
       avifUrl: cleanAvif,
       avifThumbnailUrl: cleanAvifThumb,
-      description: { 
-        ...(typeof editingItem?.description === 'object' ? editingItem.description : {}), 
-        zh: itemDescZh, 
-        ...(itemDescEn ? { en: itemDescEn } : {})
-      },
+      description: descMap,
       category: itemCategory,
       available: editingItem ? (editingItem.available !== undefined ? editingItem.available : true) : true,
       hasNoodlesOption: hasNoodles,
@@ -3394,40 +3454,42 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
 
       {/* ==================== TAB: CASHIER REGISTRY SYSTEM ==================== */}
       {activeSubTab === 'cashier' && (
-        <ManagerCashierTab
-          currentLang={currentLang}
-          orders={orders}
-          menuItems={menuItems}
-          tables={tables}
-          categories={categories}
-          reservations={reservations}
-          minSpend={minSpend}
-          isOpen={isOpen}
-          handleManualOpenDrawer={handleManualOpenDrawer}
-          handleTableMouseDown={handleTableMouseDown}
-          handleTableTouchStart={handleTableTouchStart}
-          handleFineTunePosition={handleFineTunePosition}
-          triggerEditTableMode={triggerEditTableMode}
-          triggerAddReservationMode={triggerAddReservationMode}
-          triggerEditReservationMode={triggerEditReservationMode}
-          onUpdateTableNumber={onUpdateTableNumber}
-          onDeleteOrder={onDeleteOrder}
-          onUpdateTableStatus={onUpdateTableStatus}
-          onEditReservation={onEditReservation}
-          onDeleteReservation={onDeleteReservation}
-          onDeleteTable={onDeleteTable}
-          onUpdateOrderItems={onUpdateOrderItems}
-          onPayOrder={onPayOrder}
-          onBulkPayOrders={onBulkPayOrders}
-          getPanelWidthClass={getPanelWidthClass}
-          localTablePositions={localTablePositions}
-          staffPin={staffPin}
-          setCheckoutSuccessData={setCheckoutSuccessData}
-          selectedPendingRes={null}
-          setSelectedPendingRes={() => {}}
-          confirmActionModal={confirmActionModal}
-          setConfirmActionModal={setConfirmActionModal}
-        />
+        <ErrorBoundary fallbackTitle="收銀台模組載入異常" fallbackMessage="收銀模組發生崩潰，請切換至其他分頁或重新整理。">
+          <ManagerCashierTab
+            currentLang={currentLang}
+            orders={orders}
+            menuItems={menuItems}
+            tables={tables}
+            categories={categories}
+            reservations={reservations}
+            minSpend={minSpend}
+            isOpen={isOpen}
+            handleManualOpenDrawer={handleManualOpenDrawer}
+            handleTableMouseDown={handleTableMouseDown}
+            handleTableTouchStart={handleTableTouchStart}
+            handleFineTunePosition={handleFineTunePosition}
+            triggerEditTableMode={triggerEditTableMode}
+            triggerAddReservationMode={triggerAddReservationMode}
+            triggerEditReservationMode={triggerEditReservationMode}
+            onUpdateTableNumber={onUpdateTableNumber}
+            onDeleteOrder={onDeleteOrder}
+            onUpdateTableStatus={onUpdateTableStatus}
+            onEditReservation={onEditReservation}
+            onDeleteReservation={onDeleteReservation}
+            onDeleteTable={onDeleteTable}
+            onUpdateOrderItems={onUpdateOrderItems}
+            onPayOrder={onPayOrder}
+            onBulkPayOrders={onBulkPayOrders}
+            getPanelWidthClass={getPanelWidthClass}
+            localTablePositions={localTablePositions}
+            staffPin={staffPin}
+            setCheckoutSuccessData={setCheckoutSuccessData}
+            selectedPendingRes={null}
+            setSelectedPendingRes={() => {}}
+            confirmActionModal={confirmActionModal}
+            setConfirmActionModal={setConfirmActionModal}
+          />
+        </ErrorBoundary>
       )}
 
       {/* ==================== TAB 2: ACCOUNTING LOG CHART & SINGLE DRILLDOWN ==================== */}
@@ -3767,18 +3829,22 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
         setItemThumbnailUrl={setItemThumbnailUrl}
         setItemAvifUrl={setItemAvifUrl}
         setItemAvifThumbnailUrl={setItemAvifThumbnailUrl}
-        itemNameZh={itemNameZh}
-        setItemNameZh={setItemNameZh}
-        itemNameEn={itemNameEn}
-        setItemNameEn={setItemNameEn}
+        itemNames={itemNames}
+        setItemNames={setItemNames}
+        itemDescs={itemDescs}
+        setItemDescs={setItemDescs}
+        itemNameZh={itemNames.zh}
+        setItemNameZh={(val) => setItemNames(prev => ({ ...prev, zh: val }))}
+        itemNameEn={itemNames.en}
+        setItemNameEn={(val) => setItemNames(prev => ({ ...prev, en: val }))}
         itemCategory={itemCategory}
         setItemCategory={setItemCategory}
         itemPrice={itemPrice}
         setItemPrice={setItemPrice}
-        itemDescZh={itemDescZh}
-        setItemDescZh={setItemDescZh}
-        itemDescEn={itemDescEn}
-        setItemDescEn={setItemDescEn}
+        itemDescZh={itemDescs.zh}
+        setItemDescZh={(val) => setItemDescs(prev => ({ ...prev, zh: val }))}
+        itemDescEn={itemDescs.en}
+        setItemDescEn={(val) => setItemDescs(prev => ({ ...prev, en: val }))}
         isNotSpicy={isNotSpicy}
         setIsNotSpicy={setIsNotSpicy}
         isTakeoutAvailable={isTakeoutAvailable}
@@ -3816,6 +3882,10 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
         setCatNameKo={setCatNameKo}
         catNameVi={catNameVi}
         setCatNameVi={setCatNameVi}
+        catNameRu={catNameRu}
+        setCatNameRu={setCatNameRu}
+        catNameEs={catNameEs}
+        setCatNameEs={setCatNameEs}
         catShowOnCustomer={catShowOnCustomer}
         setCatShowOnCustomer={setCatShowOnCustomer}
         catError={catError}

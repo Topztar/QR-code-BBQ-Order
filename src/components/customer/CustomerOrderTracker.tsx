@@ -3,6 +3,7 @@ import { Order, MenuItem, Category, Language } from '../../types';
 import { getLocalizedText } from '../../utils/i18n';
 import { apiFetch } from '../../lib/api';
 import { Clock, Check, Star, Sparkles, Flame, ShoppingCart } from 'lucide-react';
+import { orderCalculationService } from '../../services/orderCalculationService';
 
 export interface CustomerOrderTrackerProps {
   isOrderHistoryVisible: boolean;
@@ -30,18 +31,7 @@ export interface CustomerOrderTrackerProps {
 }
 
 export const getItemUnitPrice = (item: any): number => {
-  let base = Number(item.price) || 0;
-  if (item.customization) {
-    if (item.customization.spiciness === 3) base += 10;
-    if (item.customization.soupBase === 'coconut-milk') base += 50;
-    if (item.customization.selectedAddOns && Array.isArray(item.customization.selectedAddOns)) {
-      base += item.customization.selectedAddOns.reduce(
-        (s: number, a: any) => s + (Number(a.price) || 0),
-        0
-      );
-    }
-  }
-  return base;
+  return orderCalculationService.computeOrderItemUnitPrice(item);
 };
 
 export const CustomerOrderTracker: React.FC<CustomerOrderTrackerProps> = ({

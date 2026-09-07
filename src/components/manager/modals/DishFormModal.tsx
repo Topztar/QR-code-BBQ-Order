@@ -1,7 +1,68 @@
-import React, { Component } from 'react';
-import { Category, Ingredient } from '../../../types';
-import { getLocalizedText } from '../../../utils/i18n';
+import React, { Component, useState } from 'react';
+import { Category, Ingredient, Language } from '../../../types';
+import { getLocalizedText, translateTextToLanguage } from '../../../utils/i18n';
 import { getAuthHeader } from '../../../lib/api';
+
+const ALL_LANGUAGES: Language[] = ['zh', 'en', 'th', 'ja', 'ko', 'vi', 'ru', 'es'];
+
+const LANG_CONFIG: Record<Language, { label: string; namePlaceholder: string; descPlaceholder: string; flag: string; short: string }> = {
+  zh: {
+    label: '正體中文 (繁體中文) *必填',
+    namePlaceholder: '例如：特選泰式烤牛肉串',
+    descPlaceholder: '例如：主廚特調泰式香料醃製，炭火直烤香氣四溢，附獨家秘醬。',
+    flag: '🇹🇼',
+    short: 'TW'
+  },
+  en: {
+    label: '英文 (English)',
+    namePlaceholder: 'e.g. Thai Grilled Beef Skewers',
+    descPlaceholder: 'e.g. Marinated with authentic Thai spices, charcoal-grilled to perfection.',
+    flag: '🇺🇸',
+    short: 'EN'
+  },
+  th: {
+    label: '泰文 (ภาษาไทย)',
+    namePlaceholder: 'เช่น เนื้อย่างสมุนไพรไทย',
+    descPlaceholder: 'เช่น หมักด้วยสมุนไพรสูตรพิเศษ ย่างบนเตาถ่านหอมกรุ่น เสิร์ฟพร้อมน้ำจิ้มรสเด็ด',
+    flag: '🇹🇭',
+    short: 'TH'
+  },
+  ja: {
+    label: '日文 (日本語)',
+    namePlaceholder: '例：特製タイ風牛串焼き',
+    descPlaceholder: '例：厳選されたスパイスで漬け込み、炭火で香ばしく焼き上げました。特製タレ付き。',
+    flag: '🇯🇵',
+    short: 'JP'
+  },
+  ko: {
+    label: '韓文 (한국어)',
+    namePlaceholder: '예: 태국식 특제 소고기 꼬치구이',
+    descPlaceholder: '예: 특제 타이 향신료로 숙성하여 숯불에 구워낸 고소하고 부드러운 소고기 꼬치구이.',
+    flag: '🇰🇷',
+    short: 'KR'
+  },
+  vi: {
+    label: '越南文 (Tiếng Việt)',
+    namePlaceholder: 'Ví dụ: Bò xiên nướng kiểu Thái',
+    descPlaceholder: 'Ví dụ: Thịt bò ướp gia vị Thái đặc trưng nướng than thơm lừng, kèm nước chấm đặc biệt.',
+    flag: '🇻🇳',
+    short: 'VN'
+  },
+  ru: {
+    label: '俄文 (Русский)',
+    namePlaceholder: 'Например: Шашлык из говядины по-тайски',
+    descPlaceholder: 'Например: Маринованная говядина в тайских специях, обжаренная на углях с фирменным соусом.',
+    flag: '🇷🇺',
+    short: 'RU'
+  },
+  es: {
+    label: '西班牙文 (Español)',
+    namePlaceholder: 'Ej: Brochetas de ternera tailandesa',
+    descPlaceholder: 'Ej: Ternera marinada con especias tailandesas a la parrilla de carbón, servida con salsa especial.',
+    flag: '🇪🇸',
+    short: 'ES'
+  }
+};
 
 interface ModalErrorBoundaryProps {
   children: React.ReactNode;
@@ -61,18 +122,22 @@ export interface DishFormModalProps {
   setItemThumbnailUrl: (val: string) => void;
   setItemAvifUrl: (val: string) => void;
   setItemAvifThumbnailUrl: (val: string) => void;
-  itemNameZh: string;
-  setItemNameZh: (val: string) => void;
-  itemNameEn: string;
-  setItemNameEn: (val: string) => void;
+  itemNames?: Record<Language, string>;
+  setItemNames?: React.Dispatch<React.SetStateAction<Record<Language, string>>>;
+  itemDescs?: Record<Language, string>;
+  setItemDescs?: React.Dispatch<React.SetStateAction<Record<Language, string>>>;
+  itemNameZh?: string;
+  setItemNameZh?: (val: string) => void;
+  itemNameEn?: string;
+  setItemNameEn?: (val: string) => void;
   itemCategory: string;
   setItemCategory: (val: string) => void;
   itemPrice: number | '';
   setItemPrice: React.Dispatch<React.SetStateAction<number | ''>>;
-  itemDescZh: string;
-  setItemDescZh: (val: string) => void;
-  itemDescEn: string;
-  setItemDescEn: (val: string) => void;
+  itemDescZh?: string;
+  setItemDescZh?: (val: string) => void;
+  itemDescEn?: string;
+  setItemDescEn?: (val: string) => void;
   isNotSpicy: boolean;
   setIsNotSpicy: (val: boolean) => void;
   isTakeoutAvailable: boolean;
@@ -100,6 +165,10 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
   setItemThumbnailUrl,
   setItemAvifUrl,
   setItemAvifThumbnailUrl,
+  itemNames,
+  setItemNames,
+  itemDescs,
+  setItemDescs,
   itemNameZh,
   setItemNameZh,
   itemNameEn,
@@ -128,6 +197,129 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
   newRecipeAmount,
   setNewRecipeAmount,
 }) => {
+  const [activeLangTab, setActiveLangTab] = useState<Language>('zh');
+  const [viewMode, setViewMode] = useState<'tabs' | 'all'>('tabs');
+  const [isTranslatingAll, setIsTranslatingAll] = useState(false);
+  const [translatingLang, setTranslatingLang] = useState<Language | null>(null);
+
+  // Fallback internal state if not passed from props
+  const [localNames, setLocalNames] = useState<Record<Language, string>>({
+    zh: itemNameZh || '',
+    en: itemNameEn || '',
+    th: '',
+    ja: '',
+    ko: '',
+    vi: '',
+    ru: '',
+    es: '',
+  });
+  const [localDescs, setLocalDescs] = useState<Record<Language, string>>({
+    zh: itemDescZh || '',
+    en: itemDescEn || '',
+    th: '',
+    ja: '',
+    ko: '',
+    vi: '',
+    ru: '',
+    es: '',
+  });
+
+  const names = itemNames || localNames;
+  const descs = itemDescs || localDescs;
+
+  const handleNameChange = (lang: Language, value: string) => {
+    if (setItemNames) {
+      setItemNames((prev) => ({ ...prev, [lang]: value }));
+    } else {
+      setLocalNames((prev) => ({ ...prev, [lang]: value }));
+    }
+    if (lang === 'zh' && setItemNameZh) setItemNameZh(value);
+    if (lang === 'en' && setItemNameEn) setItemNameEn(value);
+  };
+
+  const handleDescChange = (lang: Language, value: string) => {
+    if (setItemDescs) {
+      setItemDescs((prev) => ({ ...prev, [lang]: value }));
+    } else {
+      setLocalDescs((prev) => ({ ...prev, [lang]: value }));
+    }
+    if (lang === 'zh' && setItemDescZh) setItemDescZh(value);
+    if (lang === 'en' && setItemDescEn) setItemDescEn(value);
+  };
+
+  const handleAutoTranslateAll = async () => {
+    const sourceName = (names.zh || names.en || '').trim();
+    const sourceDesc = (descs.zh || descs.en || '').trim();
+    const sourceLang: Language = names.zh ? 'zh' : 'en';
+
+    if (!sourceName && !sourceDesc) {
+      alert('請先填寫正體中文或英文的餐點名稱或說明，即可自動翻譯補齊其他 7 國語言！');
+      return;
+    }
+
+    setIsTranslatingAll(true);
+    try {
+      const updatedNames = { ...names };
+      const updatedDescs = { ...descs };
+
+      await Promise.all(
+        ALL_LANGUAGES.map(async (lang) => {
+          if (lang === sourceLang) return;
+          if (sourceName && !updatedNames[lang]?.trim()) {
+            const transName = await translateTextToLanguage(sourceName, lang, sourceLang);
+            if (transName) updatedNames[lang] = transName;
+          }
+          if (sourceDesc && !updatedDescs[lang]?.trim()) {
+            const transDesc = await translateTextToLanguage(sourceDesc, lang, sourceLang);
+            if (transDesc) updatedDescs[lang] = transDesc;
+          }
+        })
+      );
+
+      if (setItemNames) setItemNames(updatedNames);
+      else setLocalNames(updatedNames);
+
+      if (setItemDescs) setItemDescs(updatedDescs);
+      else setLocalDescs(updatedDescs);
+
+      if (setItemNameZh && updatedNames.zh) setItemNameZh(updatedNames.zh);
+      if (setItemNameEn && updatedNames.en) setItemNameEn(updatedNames.en);
+      if (setItemDescZh && updatedDescs.zh) setItemDescZh(updatedDescs.zh);
+      if (setItemDescEn && updatedDescs.en) setItemDescEn(updatedDescs.en);
+    } catch (err) {
+      console.error('Auto translate error:', err);
+    } finally {
+      setIsTranslatingAll(false);
+    }
+  };
+
+  const handleTranslateSingleLang = async (targetLang: Language) => {
+    const sourceName = (names.zh || names.en || '').trim();
+    const sourceDesc = (descs.zh || descs.en || '').trim();
+    const sourceLang: Language = names.zh ? 'zh' : 'en';
+
+    if (!sourceName && !sourceDesc) {
+      alert('請先填寫正體中文或英文餐點名稱或說明！');
+      return;
+    }
+
+    setTranslatingLang(targetLang);
+    try {
+      if (sourceName) {
+        const transName = await translateTextToLanguage(sourceName, targetLang, sourceLang);
+        if (transName) handleNameChange(targetLang, transName);
+      }
+      if (sourceDesc) {
+        const transDesc = await translateTextToLanguage(sourceDesc, targetLang, sourceLang);
+        if (transDesc) handleDescChange(targetLang, transDesc);
+      }
+    } catch (err) {
+      console.error('Translate single lang error:', err);
+    } finally {
+      setTranslatingLang(null);
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -172,16 +364,6 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
               )}
             </div>
             <div className="space-y-3.5 text-left text-xs">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-zinc-400">正體中文標題 Name Zh</label>
-                  <input type="text" required value={itemNameZh} onChange={(e) => setItemNameZh(e.target.value)} className="w-full bg-[#1e1e1e] border border-white/10 rounded px-2.5 py-1.5 text-white" />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-zinc-400">英文對應 Name En</label>
-                  <input type="text" value={itemNameEn} onChange={(e) => setItemNameEn(e.target.value)} className="w-full bg-[#1e1e1e] border border-white/10 rounded px-2.5 py-1.5 text-white" />
-                </div>
-              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="text-zinc-400">食材分類標記 category</label>
@@ -318,13 +500,204 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
                   </div>
                 </div>
               </div>
-              <div className="space-y-1">
-                <label className="text-zinc-400">正體中文描述 Description Zh</label>
-                <textarea rows={2} value={itemDescZh} onChange={(e) => setItemDescZh(e.target.value)} className="w-full bg-[#1e1e1e] border border-white/10 rounded px-2.5 py-1.5 text-white" />
-              </div>
-              <div className="space-y-1">
-                <label className="text-zinc-400">英文寫法 Desc En</label>
-                <textarea rows={2} value={itemDescEn} onChange={(e) => setItemDescEn(e.target.value)} className="w-full bg-[#1e1e1e] border border-white/10 rounded px-2.5 py-1.5 text-white" />
+              {/* 🌐 多國語言餐點名稱與說明 (Multilingual Dish Details - 8 國語系對齊) */}
+              <div className="space-y-3 border border-amber-500/20 bg-amber-500/[0.03] p-3.5 rounded-xl text-left">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/5 pb-2.5">
+                  <div>
+                    <div className="flex items-center space-x-1.5">
+                      <span className="text-sm">🌐</span>
+                      <label className="text-amber-400 font-bold text-xs tracking-wide">
+                        多國語言餐點設定 Multilingual Details
+                      </label>
+                      <span className="bg-amber-400/10 text-amber-400 text-[10px] px-1.5 py-0.5 rounded font-mono font-bold">8 Languages</span>
+                    </div>
+                    <p className="text-[10px] text-zinc-400 mt-0.5">
+                      完整對齊 Firestore 8 國語系標準格式，顧客切換語言時即可正確顯示。
+                    </p>
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    {/* 一鍵自動翻譯 */}
+                    <button
+                      type="button"
+                      disabled={isTranslatingAll}
+                      onClick={handleAutoTranslateAll}
+                      className="px-2.5 py-1 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-bold rounded-lg text-[10.5px] flex items-center space-x-1 shadow transition active:scale-95 cursor-pointer"
+                      title="依據正體中文/英文內容，自動翻譯補齊其餘 7 國語言"
+                    >
+                      <span>{isTranslatingAll ? '🔄' : '✨'}</span>
+                      <span>{isTranslatingAll ? '多語系翻譯中...' : '一鍵自動翻譯'}</span>
+                    </button>
+
+                    {/* 切換檢視模式 */}
+                    <div className="flex rounded-lg bg-black/40 p-0.5 border border-white/10 text-[10px]">
+                      <button
+                        type="button"
+                        onClick={() => setViewMode('tabs')}
+                        className={`px-2 py-0.5 rounded transition cursor-pointer ${viewMode === 'tabs' ? 'bg-zinc-750 bg-zinc-700 text-white font-bold shadow' : 'text-zinc-400 hover:text-white'}`}
+                      >
+                        分頁模式
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setViewMode('all')}
+                        className={`px-2 py-0.5 rounded transition cursor-pointer ${viewMode === 'all' ? 'bg-zinc-750 bg-zinc-700 text-white font-bold shadow' : 'text-zinc-400 hover:text-white'}`}
+                      >
+                        全部展開
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 分頁模式 Tab View */}
+                {viewMode === 'tabs' ? (
+                  <div className="space-y-3">
+                    {/* 語言切換標籤列 */}
+                    <div className="flex flex-wrap gap-1 bg-black/30 p-1 rounded-xl border border-white/5">
+                      {ALL_LANGUAGES.map((lang) => {
+                        const cfg = LANG_CONFIG[lang];
+                        const isCurrent = activeLangTab === lang;
+                        const hasName = !!names[lang]?.trim();
+                        const hasDesc = !!descs[lang]?.trim();
+                        const isComplete = hasName && hasDesc;
+                        const isPartial = hasName || hasDesc;
+
+                        return (
+                          <button
+                            key={lang}
+                            type="button"
+                            onClick={() => setActiveLangTab(lang)}
+                            className={`flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg text-[11px] transition cursor-pointer ${
+                              isCurrent
+                                ? 'bg-amber-500 text-slate-950 font-bold shadow-md'
+                                : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                            }`}
+                          >
+                            <span>{cfg.flag}</span>
+                            <span>{cfg.short}</span>
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full ${
+                                isComplete
+                                  ? isCurrent ? 'bg-slate-950' : 'bg-emerald-400'
+                                  : isPartial
+                                  ? isCurrent ? 'bg-slate-900' : 'bg-amber-400'
+                                  : isCurrent ? 'bg-slate-800/40' : 'bg-zinc-600'
+                              }`}
+                              title={isComplete ? '已填妥名稱與說明' : isPartial ? '部分填寫' : '尚未填寫'}
+                            />
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* 當前選定語言編輯卡片 */}
+                    <div className="bg-black/40 border border-white/5 p-3 rounded-xl space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                          <span className="text-base">{LANG_CONFIG[activeLangTab].flag}</span>
+                          <span className="font-bold text-white text-xs">
+                            {LANG_CONFIG[activeLangTab].label}
+                          </span>
+                        </div>
+                        {activeLangTab !== 'zh' && (
+                          <button
+                            type="button"
+                            disabled={translatingLang === activeLangTab}
+                            onClick={() => handleTranslateSingleLang(activeLangTab)}
+                            className="text-[10px] text-amber-400 hover:text-amber-300 bg-amber-400/10 hover:bg-amber-400/20 px-2 py-0.5 rounded border border-amber-400/20 transition flex items-center space-x-1 active:scale-95 cursor-pointer"
+                          >
+                            <span>{translatingLang === activeLangTab ? '🔄' : '⚡'}</span>
+                            <span>{translatingLang === activeLangTab ? '翻譯中...' : '從中文自動翻譯此語言'}</span>
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-zinc-400 block text-[11px]">
+                          餐點名稱 Dish Name ({LANG_CONFIG[activeLangTab].short})
+                          {activeLangTab === 'zh' && <span className="text-rose-400 font-bold ml-1">*</span>}
+                        </label>
+                        <input
+                          type="text"
+                          value={names[activeLangTab] || ''}
+                          onChange={(e) => handleNameChange(activeLangTab, e.target.value)}
+                          placeholder={LANG_CONFIG[activeLangTab].namePlaceholder}
+                          className="w-full bg-[#1e1e1e] border border-white/10 rounded px-2.5 py-1.5 text-white text-xs focus:border-amber-400/50 outline-none"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-zinc-400 block text-[11px]">
+                          餐點描述說明 Description ({LANG_CONFIG[activeLangTab].short})
+                        </label>
+                        <textarea
+                          rows={2}
+                          value={descs[activeLangTab] || ''}
+                          onChange={(e) => handleDescChange(activeLangTab, e.target.value)}
+                          placeholder={LANG_CONFIG[activeLangTab].descPlaceholder}
+                          className="w-full bg-[#1e1e1e] border border-white/10 rounded px-2.5 py-1.5 text-white text-xs focus:border-amber-400/50 outline-none"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  /* 全部展開模式 All Fields View */
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <span className="text-[11px] font-bold text-amber-300 block">🍜 各國語言餐點名稱 Dish Names</span>
+                      <div className="grid grid-cols-2 gap-2.5">
+                        {ALL_LANGUAGES.map((lang) => (
+                          <div key={`name-${lang}`} className="space-y-1 bg-black/30 p-2 rounded-lg border border-white/5">
+                            <div className="flex items-center justify-between text-[10.5px]">
+                              <span className="text-zinc-300 flex items-center gap-1 font-medium">
+                                <span>{LANG_CONFIG[lang].flag}</span>
+                                <span>{LANG_CONFIG[lang].short} - {LANG_CONFIG[lang].label.split(' ')[0]}</span>
+                              </span>
+                              {lang !== 'zh' && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleTranslateSingleLang(lang)}
+                                  className="text-amber-400 hover:text-amber-300 text-[9.5px] cursor-pointer"
+                                  title="從中文翻譯"
+                                >
+                                  ⚡翻譯
+                                </button>
+                              )}
+                            </div>
+                            <input
+                              type="text"
+                              value={names[lang] || ''}
+                              onChange={(e) => handleNameChange(lang, e.target.value)}
+                              placeholder={LANG_CONFIG[lang].namePlaceholder}
+                              className="w-full bg-[#1e1e1e] border border-white/10 rounded px-2 py-1 text-white text-xs focus:border-amber-400/50 outline-none"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="space-y-2 border-t border-white/5 pt-3">
+                      <span className="text-[11px] font-bold text-amber-300 block">📝 各國語言餐點描述 Descriptions</span>
+                      <div className="grid grid-cols-2 gap-2.5">
+                        {ALL_LANGUAGES.map((lang) => (
+                          <div key={`desc-${lang}`} className="space-y-1 bg-black/30 p-2 rounded-lg border border-white/5">
+                            <span className="text-zinc-300 flex items-center gap-1 text-[10.5px] font-medium">
+                              <span>{LANG_CONFIG[lang].flag}</span>
+                              <span>{LANG_CONFIG[lang].short} - {LANG_CONFIG[lang].label.split(' ')[0]}</span>
+                            </span>
+                            <textarea
+                              rows={2}
+                              value={descs[lang] || ''}
+                              onChange={(e) => handleDescChange(lang, e.target.value)}
+                              placeholder={LANG_CONFIG[lang].descPlaceholder}
+                              className="w-full bg-[#1e1e1e] border border-white/10 rounded px-2 py-1 text-white text-xs focus:border-amber-400/50 outline-none"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="flex flex-col space-y-2 text-left pt-1">
                 <div className="flex items-center space-x-2">

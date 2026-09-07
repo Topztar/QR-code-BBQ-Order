@@ -1,6 +1,6 @@
 import React from 'react';
 import { Plus, Layers, Edit, Trash2 } from 'lucide-react';
-import { Category, Language, MenuItem } from '../../types';
+import { Category, Language, MenuItem, SoldOutType } from '../../types';
 import { getLocalizedText } from '../../utils/i18n';
 
 interface ManagerMenuTabProps {
@@ -15,7 +15,7 @@ interface ManagerMenuTabProps {
   handleMoveMenuItem: (id: string, dir: 'up' | 'down') => void;
   triggerAddMenuItemMode: () => void;
   triggerEditMenuItemMode: (item: MenuItem) => void;
-  onToggleMenuItemAvailability?: (id: string) => void;
+  onToggleMenuItemAvailability?: (id: string, targetType?: SoldOutType) => void;
   onDeleteMenuItem?: (id: string) => Promise<any>;
   onReorderMenuItems?: (items: any) => Promise<any>;
   localCategoryOrder: Category[];
@@ -230,11 +230,11 @@ export const ManagerMenuTab: React.FC<ManagerMenuTabProps> = ({
                             ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
                             : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
                         }`}>
-                          {item.available ? '● 販售中 Supply' : '✕ 沽清 Sold Out'}
+                          {item.available ? '● 可販售' : (item.soldOutType === 'permanent' ? '🔴 永久結清' : '🟡 當日結清')}
                         </span>
                         {!item.available && (
-                          <span className="text-[9px] text-amber-300/80 tracking-tight" title="隔日中午 12:00 將自動恢復販售">
-                            ⏰ 隔日12:00自動恢復
+                          <span className="text-[9px] text-amber-300/80 tracking-tight" title={item.soldOutType === 'permanent' ? '長期下架 (需手動恢復)' : '今日售罄 (明日凌晨自動恢復)'}>
+                            {item.soldOutType === 'permanent' ? '需手動恢復' : '⏰ 明日自動恢復'}
                           </span>
                         )}
                       </div>
@@ -259,21 +259,35 @@ export const ManagerMenuTab: React.FC<ManagerMenuTabProps> = ({
                     {/* 後端控制 */}
                     <td className="p-2.5 text-center">
                       <div className="flex items-center justify-center space-x-1.5">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (onToggleMenuItemAvailability) {
-                              onToggleMenuItemAvailability(item.id);
-                            }
-                          }}
-                          className={`px-2 py-1 rounded text-[10px] font-bold border transition cursor-pointer select-none active:scale-95 ${
-                            item.available
-                              ? 'bg-[#E5B453]/10 text-amber-300 border-amber-500/30 hover:bg-[#E5B453]/20'
-                              : 'bg-rose-500/10 text-rose-455 border border-rose-500/30 hover:bg-rose-500/20'
-                          }`}
-                        >
-                          {item.available ? '設為沽清' : '恢復販售'}
-                        </button>
+                        <div className="flex bg-black/40 p-0.5 rounded-md border border-white/10 overflow-hidden">
+                          <button
+                            type="button"
+                            onClick={() => onToggleMenuItemAvailability && onToggleMenuItemAvailability(item.id, 'none')}
+                            className={`px-1.5 py-1 text-[9px] font-bold transition select-none ${
+                              item.available ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-sm' : 'text-zinc-500 hover:text-white hover:bg-white/10 rounded-sm'
+                            }`}
+                          >
+                            可販售
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onToggleMenuItemAvailability && onToggleMenuItemAvailability(item.id, 'daily')}
+                            className={`px-1.5 py-1 text-[9px] font-bold transition select-none ${
+                              !item.available && item.soldOutType === 'daily' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-sm' : 'text-zinc-500 hover:text-white hover:bg-white/10 rounded-sm'
+                            }`}
+                          >
+                            當日結清
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onToggleMenuItemAvailability && onToggleMenuItemAvailability(item.id, 'permanent')}
+                            className={`px-1.5 py-1 text-[9px] font-bold transition select-none ${
+                              !item.available && item.soldOutType === 'permanent' ? 'bg-rose-500/20 text-rose-455 border border-rose-500/30 rounded-sm' : 'text-zinc-500 hover:text-white hover:bg-white/10 rounded-sm'
+                            }`}
+                          >
+                            永久結清
+                          </button>
+                        </div>
                         <button
                           type="button"
                           onClick={() => triggerEditMenuItemMode(item)}

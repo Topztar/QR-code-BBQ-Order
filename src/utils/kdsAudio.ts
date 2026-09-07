@@ -372,7 +372,7 @@ export function formatOrderAnnouncementText(orders: Order[]): string {
       // Extract short takeout sequence or order ID number
       let shortNum = '';
       if (order.tableNumber && String(order.tableNumber || '').includes('外帶')) {
-        shortNum = order.tableNumber.replace('外帶', '').replace('-', '').trim();
+        shortNum = String(order.tableNumber).replace(/外帶|#|-/g, '').trim();
       }
       if (!shortNum && order.id) {
         // Use last 3-4 digits of order ID
@@ -381,8 +381,9 @@ export function formatOrderAnnouncementText(orders: Order[]): string {
       }
       return shortNum ? `外帶訂單，單號 ${shortNum}` : '外帶訂單';
     } else {
-      const tableNum = order.tableNumber || '1';
-      return `桌號 ${tableNum} 號`;
+      const rawTable = order.tableNumber || '1';
+      const cleanTableNum = String(rawTable).replace(/^第/, '').replace(/桌$/, '').replace(/號$/, '').trim();
+      return `桌號 ${cleanTableNum || '1'} 號`;
     }
   });
 

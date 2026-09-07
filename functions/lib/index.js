@@ -36,10 +36,11 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.onMenuItemWritten = exports.api = exports.requireAppCheck = exports.sendErrorResponse = exports.requireStaffAuth = void 0;
+exports.reconcileDailySoldOut = exports.onMenuItemWritten = exports.api = exports.requireAppCheck = exports.sendErrorResponse = exports.requireStaffAuth = void 0;
 exports.createRateLimiter = createRateLimiter;
 const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-functions/v2/firestore");
+const scheduler_1 = require("firebase-functions/v2/scheduler");
 const v2_1 = require("firebase-functions/v2");
 const admin = __importStar(require("firebase-admin"));
 const storage_1 = require("firebase-admin/storage");
@@ -265,6 +266,43 @@ exports.onMenuItemWritten = (0, firestore_1.onDocumentWritten)({
     }
     catch (error) {
         console.error(`[Firestore Trigger Error] onMenuItemWritten failed for menuId: ${event.params.menuId}`, error);
+    }
+});
+exports.reconcileDailySoldOut = (0, scheduler_1.onSchedule)({
+    schedule: '1 0 * * *',
+    timeZone: 'Asia/Taipei',
+    region: 'asia-east1',
+}, async (event) => {
+    try {
+        const todayStr = new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'Asia/Taipei',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+        }).format(new Date());
+        const querySnap = await db.collection('menu')
+            .where('soldOutType', '==', 'daily')
+            .where('soldOutDate', '<', todayStr)
+            .get();
+        if (querySnap.empty) {
+            console.log(`[Reconciler] No outdated daily sold-out items found.`);
+            return;
+        }
+        const batch = db.batch();
+        querySnap.docs.forEach((doc) => {
+            batch.update(doc.ref, {
+                available: true,
+                soldOutType: 'none',
+                soldOutDate: firestore_2.FieldValue.delete(),
+                soldOutAt: null,
+                updatedAt: new Date().toISOString()
+            });
+        });
+        await batch.commit();
+        console.log(`[Reconciler] Reset ${querySnap.size} daily sold-out items to available.`);
+    }
+    catch (err) {
+        console.error('[Reconciler] Failed to reset daily sold-out items:', err);
     }
 });
 //# sourceMappingURL=index.js.map

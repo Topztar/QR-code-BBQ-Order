@@ -47,21 +47,36 @@ export function saveOfflineQueue(queue: QueuedRequest[]) {
 }
 
 
-// Add a new request to the queue
 export function addRequestToQueue(
   url: string,
   method: 'POST' | 'PUT' | 'DELETE',
   body: any,
   description: string,
   headers?: Record<string, string>
-): QueuedRequest {
+): QueuedRequest | null {
   const queue = getOfflineQueue();
+  const bodyString = typeof body === 'string' ? body : JSON.stringify(body);
+
+  // Phase 3: Logical Duplicate Checking (Settlement Defense Barrier)
+  // Prevent duplicate requests (e.g., rapid taps on "Pay" or "Complete") from piling up
+  const isDuplicate = queue.some(item => {
+    return item.url === url &&
+           item.method === method &&
+           item.body === bodyString &&
+           (Date.now() - item.timestamp < 5000); // within 5 seconds window
+  });
+
+  if (isDuplicate) {
+    console.warn(`[OfflineQueue] Blocked duplicate request to ${url}`);
+    return null;
+  }
+
   const newItem: QueuedRequest = {
     id: `req_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
     url,
     method,
     headers: headers || { 'Content-Type': 'application/json' },
-    body: typeof body === 'string' ? body : JSON.stringify(body),
+    body: bodyString,
     description,
     timestamp: Date.now()
   };

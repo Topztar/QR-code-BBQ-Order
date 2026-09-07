@@ -1,8 +1,9 @@
 import React from 'react';
-import { MenuItem, CustomAddOn, Language, Ingredient } from '../../types';
+import { MenuItem, CustomAddOn, Language, Ingredient, SoldOutType } from '../../types';
 import { getLocalizedText } from '../../utils/i18n';
 import { TRANSLATIONS } from '../../data';
 import { X, ShoppingCart, Clock, AlertTriangle, Check } from 'lucide-react';
+import { orderCalculationService } from '../../services/orderCalculationService';
 
 export interface CustomerCustomizerModalProps {
   selectedDetailItem: MenuItem | null;
@@ -21,7 +22,7 @@ export interface CustomerCustomizerModalProps {
   setSelectedAddOns: (addons: CustomAddOn[]) => void;
   inventoryWarnings?: any[];
   ingredients?: Ingredient[];
-  onToggleMenuItemAvailability?: (id: string) => Promise<void>;
+  onToggleMenuItemAvailability?: (id: string, targetType?: SoldOutType) => Promise<void> | void;
   onAdjustIngredientStock?: (ingredientId: string, quantityChanged: number, note: string) => Promise<void>;
   handleAddToCart: () => void;
   setActiveLightboxImg: (img: string | null) => void;
@@ -413,28 +414,73 @@ export const CustomerCustomizerModal: React.FC<CustomerCustomizerModalProps> = (
                   LIVE ADJUST
                 </span>
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={async () => {
-                    if (onToggleMenuItemAvailability) {
-                      await onToggleMenuItemAvailability(selectedDetailItem.id);
-                      selectedDetailItem.available = !selectedDetailItem.available;
-                      setSelectedDetailItem({ ...selectedDetailItem });
-                    }
-                  }}
-                  className={`py-1.5 rounded font-black border text-center transition cursor-pointer select-none active:scale-95 ${
-                    selectedDetailItem.available
-                      ? 'bg-rose-500/25 text-rose-300 border-rose-500/40 hover:bg-rose-500/35 animate-pulse'
-                      : 'bg-emerald-500/25 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/35'
-                  }`}
-                >
-                  {selectedDetailItem.available ? (TRANSLATIONS.setSoldOut?.[currentLang] || '✕ 設為沽清') : (TRANSLATIONS.setAvailable?.[currentLang] || '● 開放供應')}
-                </button>
-
-                <span className="text-[10px] text-white/50 flex items-center justify-center text-center font-bold">
-                  {TRANSLATIONS.orderStatusLabel?.[currentLang] || '狀態'}：{selectedDetailItem.available ? (TRANSLATIONS.statusSupply?.[currentLang] || '🟢 供應中') : (TRANSLATIONS.statusSoldOut?.[currentLang] || '🔴 沽清中')}
-                </span>
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between text-[11px] text-white/70 font-sans font-bold">
+                  <span>{TRANSLATIONS.orderStatusLabel?.[currentLang] || '餐點供銷狀態'}：</span>
+                  <span className="font-mono">
+                    {selectedDetailItem.available
+                      ? '🟢 正常供應 (Available)'
+                      : selectedDetailItem.soldOutType === 'daily'
+                        ? '🟡 今日售罄 (Daily Sold Out)'
+                        : '🔴 永久結清 (Permanent Sold Out)'}
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-1.5 bg-black/40 p-1 rounded-lg border border-white/10">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (onToggleMenuItemAvailability) {
+                        await onToggleMenuItemAvailability(selectedDetailItem.id, 'none');
+                        selectedDetailItem.available = true;
+                        selectedDetailItem.soldOutType = 'none';
+                        setSelectedDetailItem({ ...selectedDetailItem });
+                      }
+                    }}
+                    className={`py-1.5 text-[10px] font-black rounded border transition cursor-pointer select-none active:scale-95 text-center ${
+                      selectedDetailItem.available
+                        ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/35 shadow-sm'
+                        : 'bg-white/5 text-zinc-400 border-white/5 hover:text-white hover:bg-white/10'
+                    }`}
+                  >
+                    ● 可販售
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (onToggleMenuItemAvailability) {
+                        await onToggleMenuItemAvailability(selectedDetailItem.id, 'daily');
+                        selectedDetailItem.available = false;
+                        selectedDetailItem.soldOutType = 'daily';
+                        setSelectedDetailItem({ ...selectedDetailItem });
+                      }
+                    }}
+                    className={`py-1.5 text-[10px] font-black rounded border transition cursor-pointer select-none active:scale-95 text-center ${
+                      !selectedDetailItem.available && selectedDetailItem.soldOutType === 'daily'
+                        ? 'bg-amber-500/20 text-amber-400 border-amber-500/35 shadow-sm'
+                        : 'bg-white/5 text-zinc-400 border-white/5 hover:text-white hover:bg-white/10'
+                    }`}
+                  >
+                    🟡 當日結清
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (onToggleMenuItemAvailability) {
+                        await onToggleMenuItemAvailability(selectedDetailItem.id, 'permanent');
+                        selectedDetailItem.available = false;
+                        selectedDetailItem.soldOutType = 'permanent';
+                        setSelectedDetailItem({ ...selectedDetailItem });
+                      }
+                    }}
+                    className={`py-1.5 text-[10px] font-black rounded border transition cursor-pointer select-none active:scale-95 text-center ${
+                      !selectedDetailItem.available && selectedDetailItem.soldOutType === 'permanent'
+                        ? 'bg-rose-500/20 text-rose-455 border-rose-500/35 shadow-sm'
+                        : 'bg-white/5 text-zinc-400 border-white/5 hover:text-white hover:bg-white/10'
+                    }`}
+                  >
+                    🔴 永久結清
+                  </button>
+                </div>
               </div>
 
               {/* Raw Ingredients stock adjustment section */}
@@ -542,14 +588,25 @@ export const CustomerCustomizerModal: React.FC<CustomerCustomizerModalProps> = (
               }`}
             >
               NT${' '}
-              {(selectedDetailItem.price +
-                (soupBase === 'coconut-milk' ? 50 : 0) +
-                selectedAddOns.reduce((sum, a) => sum + a.price, 0)) *
-                qty}
+              {(orderCalculationService.computeOrderItemUnitPrice({
+                  price: selectedDetailItem.price,
+                  menuItemId: selectedDetailItem.id,
+                  customization: { soupBase, spiciness: 0, selectedAddOns }
+                })) * qty}
             </p>
           </div>
 
-          {isStoreCurrentlyOpen ? (
+          {!selectedDetailItem.available ? (
+            <button
+              disabled
+              className="bg-red-950 text-red-500 font-bold px-4 py-3 rounded-xl flex flex-col items-center justify-center text-xs border border-red-900/50 cursor-not-allowed"
+            >
+              <span>{TRANSLATIONS.itemSoldOutTitle?.[currentLang] || '餐點已售罄'}</span>
+              {selectedDetailItem.soldOutType === 'daily' && (
+                <span className="text-[10px] text-amber-500/80 mt-0.5">{TRANSLATIONS.tomorrowAvailable?.[currentLang] || '明日恢復販售'}</span>
+              )}
+            </button>
+          ) : isStoreCurrentlyOpen ? (
             <button
               id="add-to-cart-confirm"
               onClick={handleAddToCart}

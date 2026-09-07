@@ -7,6 +7,7 @@ import {
   Category,
   TableConfig,
   CustomAddOn,
+  SoldOutType,
   OrderHistoryUserStatus,
   OrderHistoryBillStatus,
   Reservation,
@@ -146,7 +147,7 @@ interface CustomerOrderViewProps {
   restDays?: string[];
   promoCombo?: any;
   ingredients?: any[];
-  onToggleMenuItemAvailability?: (id: string) => Promise<void>;
+  onToggleMenuItemAvailability?: (id: string, targetType?: SoldOutType) => Promise<void>;
   onAdjustIngredientStock?: (
     ingredientId: string,
     quantityChanged: number,
@@ -1312,6 +1313,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
         isCartOpen={isCartOpen}
         setIsCartOpen={setIsCartOpen}
         cart={cart}
+        menuItems={displayedMenuItems}
         currentLang={currentLang}
         isSimplifiedMode={isSimplifiedMode}
         paymentMethod={paymentMethod}
