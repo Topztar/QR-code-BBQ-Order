@@ -52,23 +52,24 @@ get('/staff/verify', requireStaffAuth, (_req, res) => {
 post('/staff/pin/check-path', async (req, res) => {
   const { pathPin } = req.body;
   if (!pathPin) {
-    return res.json({ valid: false });
+    return res.status(400).json({ valid: false, error: 'Missing pathPin' });
   }
   try {
     const credsRef = db.collection('secrets').doc('credentials');
     const credsDoc = await credsRef.get();
     const credsData = credsDoc.data() || {};
 
-    // 🛡️ 檢查是否處於暴力破解鎖定狀態
+    // 🛡️ Check for brute‑force lock
     const now = Date.now();
     const lockedUntil = credsData.lockedUntil ? Number(credsData.lockedUntil) : 0;
     if (lockedUntil && now < lockedUntil) {
-      return res.json({ valid: false, locked: true });
+      const remainingMinutes = Math.ceil((lockedUntil - now) / (60 * 1000));
+      return res.status(429).json({ valid: false, locked: true, remainingMinutes });
     }
 
     let storedHash = credsData.staffPinHash;
     if (!storedHash) {
-      // Fallback & automatic migration from legacy settings
+      // Fallback & migrate legacy pin
       const systemDoc = await db.collection('settings').doc('system').get();
       const legacyPin = systemDoc.data()?.liveStaffPin || '000000';
       storedHash = hashPin(legacyPin);
@@ -76,8 +77,9 @@ post('/staff/pin/check-path', async (req, res) => {
     }
     const inputHash = hashPin(pathPin);
     return res.json({ valid: inputHash === storedHash });
-  } catch (_error) {
-    return res.json({ valid: false });
+  } catch (error) {
+    console.error('Error checking staff path PIN:', error);
+    return res.status(500).json({ valid: false, error: 'Internal server error' });
   }
 });
 

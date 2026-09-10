@@ -221,6 +221,18 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
 
   const fetchData = async (forceFull: boolean = true, bypassReorderLock: boolean = false) => {
     const fetchStartTime = Date.now();
+
+    // Ensure local data.json (INITIAL_MENU, INITIAL_CATEGORIES, etc.) is loaded before we
+    // attempt to enrich menu items from the bootstrap response. INITIAL_MENU starts as [] and
+    // is only populated after loadData() resolves, so running enrichMenuItems before it is
+    // ready means RU/ES translation defaults can never be applied.
+    if (INITIAL_MENU.length === 0) {
+      try {
+        await loadData();
+      } catch (_e) {
+        console.warn('[Sabay Sync] loadData() pre-fetch failed, enrichment defaults unavailable.');
+      }
+    }
     
     // Safety timeout to ensure loading screen never hangs indefinitely (e.g. if bootstrap takes > 8s)
     const loadingTimeoutId = setTimeout(() => {

@@ -265,11 +265,14 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
       await Promise.all(
         ALL_LANGUAGES.map(async (lang) => {
           if (lang === sourceLang) return;
-          if (sourceName && !updatedNames[lang]?.trim()) {
+          // 若欄位為空，或等於原文（先前被 fallback 或複製貼成中文），皆應重新進行該語言的翻譯
+          const curName = updatedNames[lang]?.trim();
+          if (sourceName && (!curName || curName === sourceName)) {
             const transName = await translateTextToLanguage(sourceName, lang, sourceLang);
             if (transName) updatedNames[lang] = transName;
           }
-          if (sourceDesc && !updatedDescs[lang]?.trim()) {
+          const curDesc = updatedDescs[lang]?.trim();
+          if (sourceDesc && (!curDesc || curDesc === sourceDesc)) {
             const transDesc = await translateTextToLanguage(sourceDesc, lang, sourceLang);
             if (transDesc) updatedDescs[lang] = transDesc;
           }
@@ -681,10 +684,22 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
                       <div className="grid grid-cols-2 gap-2.5">
                         {ALL_LANGUAGES.map((lang) => (
                           <div key={`desc-${lang}`} className="space-y-1 bg-black/30 p-2 rounded-lg border border-white/5">
-                            <span className="text-zinc-300 flex items-center gap-1 text-[10.5px] font-medium">
-                              <span>{LANG_CONFIG[lang].flag}</span>
-                              <span>{LANG_CONFIG[lang].short} - {LANG_CONFIG[lang].label.split(' ')[0]}</span>
-                            </span>
+                            <div className="flex items-center justify-between text-[10.5px]">
+                              <span className="text-zinc-300 flex items-center gap-1 font-medium">
+                                <span>{LANG_CONFIG[lang].flag}</span>
+                                <span>{LANG_CONFIG[lang].short} - {LANG_CONFIG[lang].label.split(' ')[0]}</span>
+                              </span>
+                              {lang !== 'zh' && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleTranslateSingleLang(lang)}
+                                  className="text-amber-400 hover:text-amber-300 text-[9.5px] cursor-pointer"
+                                  title="從中文翻譯名稱與說明"
+                                >
+                                  ⚡翻譯
+                                </button>
+                              )}
+                            </div>
                             <textarea
                               rows={2}
                               value={descs[lang] || ''}

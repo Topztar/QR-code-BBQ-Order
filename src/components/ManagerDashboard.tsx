@@ -2,7 +2,7 @@ import { apiFetch, getAuthHeader } from "../lib/api";
 import { ErrorBoundary } from './ErrorBoundary';
 import React, { Component, useState, useEffect, useMemo, useCallback } from 'react';
 import { Ingredient, Language, Category, TableConfig, Order, OrderStatus, Reservation, SoldOutType } from '../types';
-import { getLocalizedText, TRANSLATION_DICTIONARY } from '../utils/i18n';
+import { getLocalizedText, TRANSLATION_DICTIONARY, translateTextToLanguage } from '../utils/i18n';
 import { sanitizePhoneDigits, isValidTaiwanPhone, TAIWAN_PHONE_ERROR_MSG } from '../utils/phoneValidator';
 import { calculateReservationAvailability, autoSelectOptimalTables, validateCapacity } from '../utils/reservationValidator';
 import { AlertTriangle, Sparkles, Coins, Trash2, Plus, Download, Check, Minus, Printer } from 'lucide-react';
@@ -3289,29 +3289,54 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     const cleanAvifThumb = typeof itemAvifThumbnailUrl === 'string' ? itemAvifThumbnailUrl.trim() : (itemAvifThumbnailUrl || '');
 
     // Construct full 8-language name map aligned with Firestore format
+    const targetLangs: Language[] = ['en', 'th', 'ja', 'ko', 'vi', 'ru', 'es'];
     const nameMap: Record<Language, string> = {
       zh: cleanZhName,
-      en: itemNames.en?.trim() || (TRANSLATION_DICTIONARY[cleanZhName]?.en) || cleanZhName,
-      th: itemNames.th?.trim() || (TRANSLATION_DICTIONARY[cleanZhName]?.th) || itemNames.en?.trim() || cleanZhName,
-      ja: itemNames.ja?.trim() || (TRANSLATION_DICTIONARY[cleanZhName]?.ja) || itemNames.en?.trim() || cleanZhName,
-      ko: itemNames.ko?.trim() || (TRANSLATION_DICTIONARY[cleanZhName]?.ko) || itemNames.en?.trim() || cleanZhName,
-      vi: itemNames.vi?.trim() || (TRANSLATION_DICTIONARY[cleanZhName]?.vi) || itemNames.en?.trim() || cleanZhName,
-      ru: itemNames.ru?.trim() || (TRANSLATION_DICTIONARY[cleanZhName]?.ru) || itemNames.en?.trim() || cleanZhName,
-      es: itemNames.es?.trim() || (TRANSLATION_DICTIONARY[cleanZhName]?.es) || itemNames.en?.trim() || cleanZhName,
+      en: itemNames.en?.trim() || (TRANSLATION_DICTIONARY[cleanZhName]?.en) || '',
+      th: itemNames.th?.trim() || (TRANSLATION_DICTIONARY[cleanZhName]?.th) || '',
+      ja: itemNames.ja?.trim() || (TRANSLATION_DICTIONARY[cleanZhName]?.ja) || '',
+      ko: itemNames.ko?.trim() || (TRANSLATION_DICTIONARY[cleanZhName]?.ko) || '',
+      vi: itemNames.vi?.trim() || (TRANSLATION_DICTIONARY[cleanZhName]?.vi) || '',
+      ru: itemNames.ru?.trim() || (TRANSLATION_DICTIONARY[cleanZhName]?.ru) || '',
+      es: itemNames.es?.trim() || (TRANSLATION_DICTIONARY[cleanZhName]?.es) || '',
     };
 
     const cleanZhDesc = itemDescs.zh?.trim() || '';
     // Construct full 8-language description map aligned with Firestore format
     const descMap: Record<Language, string> = {
       zh: cleanZhDesc,
-      en: itemDescs.en?.trim() || (cleanZhDesc ? TRANSLATION_DICTIONARY[cleanZhDesc]?.en || cleanZhDesc : ''),
-      th: itemDescs.th?.trim() || (cleanZhDesc ? TRANSLATION_DICTIONARY[cleanZhDesc]?.th || itemDescs.en?.trim() || cleanZhDesc : ''),
-      ja: itemDescs.ja?.trim() || (cleanZhDesc ? TRANSLATION_DICTIONARY[cleanZhDesc]?.ja || itemDescs.en?.trim() || cleanZhDesc : ''),
-      ko: itemDescs.ko?.trim() || (cleanZhDesc ? TRANSLATION_DICTIONARY[cleanZhDesc]?.ko || itemDescs.en?.trim() || cleanZhDesc : ''),
-      vi: itemDescs.vi?.trim() || (cleanZhDesc ? TRANSLATION_DICTIONARY[cleanZhDesc]?.vi || itemDescs.en?.trim() || cleanZhDesc : ''),
-      ru: itemDescs.ru?.trim() || (cleanZhDesc ? TRANSLATION_DICTIONARY[cleanZhDesc]?.ru || itemDescs.en?.trim() || cleanZhDesc : ''),
-      es: itemDescs.es?.trim() || (cleanZhDesc ? TRANSLATION_DICTIONARY[cleanZhDesc]?.es || itemDescs.en?.trim() || cleanZhDesc : ''),
+      en: itemDescs.en?.trim() || (cleanZhDesc ? TRANSLATION_DICTIONARY[cleanZhDesc]?.en || '' : ''),
+      th: itemDescs.th?.trim() || (cleanZhDesc ? TRANSLATION_DICTIONARY[cleanZhDesc]?.th || '' : ''),
+      ja: itemDescs.ja?.trim() || (cleanZhDesc ? TRANSLATION_DICTIONARY[cleanZhDesc]?.ja || '' : ''),
+      ko: itemDescs.ko?.trim() || (cleanZhDesc ? TRANSLATION_DICTIONARY[cleanZhDesc]?.ko || '' : ''),
+      vi: itemDescs.vi?.trim() || (cleanZhDesc ? TRANSLATION_DICTIONARY[cleanZhDesc]?.vi || '' : ''),
+      ru: itemDescs.ru?.trim() || (cleanZhDesc ? TRANSLATION_DICTIONARY[cleanZhDesc]?.ru || '' : ''),
+      es: itemDescs.es?.trim() || (cleanZhDesc ? TRANSLATION_DICTIONARY[cleanZhDesc]?.es || '' : ''),
     };
+
+    // 若未填或等於中文原文，嘗試非同步調用 Google Translate 補齊，確保各語系內容完整
+    await Promise.all(
+      targetLangs.map(async (lang) => {
+        if (!nameMap[lang] || nameMap[lang] === cleanZhName) {
+          try {
+            const trans = await translateTextToLanguage(cleanZhName, lang, 'zh');
+            if (trans) nameMap[lang] = trans;
+            else if (!nameMap[lang]) nameMap[lang] = cleanZhName;
+          } catch {
+            if (!nameMap[lang]) nameMap[lang] = cleanZhName;
+          }
+        }
+        if (cleanZhDesc && (!descMap[lang] || descMap[lang] === cleanZhDesc)) {
+          try {
+            const trans = await translateTextToLanguage(cleanZhDesc, lang, 'zh');
+            if (trans) descMap[lang] = trans;
+            else if (!descMap[lang]) descMap[lang] = cleanZhDesc;
+          } catch {
+            if (!descMap[lang]) descMap[lang] = cleanZhDesc;
+          }
+        }
+      })
+    );
 
     const payload = {
       name: nameMap,

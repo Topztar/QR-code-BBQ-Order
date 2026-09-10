@@ -1039,12 +1039,32 @@ async function loadStateFromFirestore(): Promise<boolean> {
         return idxA - idxB;
       });
       sanitizeMenu(menu);
-      // Enrich with missing translations from INITIAL_MENU
+      // Enrich with missing translations from INITIAL_MENU.
+      // Strategy: strip any language field where the value equals the zh value
+      // (these are un-translated copy-paste placeholders stored in Firestore),
+      // then spread defaults first so the cleaned Firestore data only overrides
+      // when it carries a genuinely different translation.
+      const TRANSLATION_LANGS = ['ko', 'ja', 'th', 'vi', 'ru', 'es'] as const;
       menu.forEach((item) => {
         const defItem = INITIAL_MENU.find(i => i.id === item.id);
         if (defItem) {
-          item.name = { ...defItem.name, ...item.name };
-          item.description = { ...defItem.description, ...item.description };
+          // Clean name: remove lang keys where value === zh (placeholder, not translated)
+          const cleanName = { ...item.name } as Record<string, string>;
+          TRANSLATION_LANGS.forEach(lang => {
+            if (cleanName[lang] !== undefined && cleanName[lang] === cleanName['zh']) {
+              delete cleanName[lang];
+            }
+          });
+          // Clean description: same treatment
+          const cleanDesc = { ...item.description } as Record<string, string>;
+          TRANSLATION_LANGS.forEach(lang => {
+            if (cleanDesc[lang] !== undefined && cleanDesc[lang] === cleanDesc['zh']) {
+              delete cleanDesc[lang];
+            }
+          });
+          // Defaults first, then cleaned Firestore values override only genuine translations
+          item.name = { ...defItem.name, ...cleanName };
+          item.description = { ...defItem.description, ...cleanDesc };
         }
       });
       liveMenu = menu;
