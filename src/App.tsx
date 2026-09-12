@@ -127,7 +127,6 @@ function AppContent({
   }, [isStaff, navigateTo]);
   const [staffPin] = useState<string>('');
   const [showContactDetails, setShowContactDetails] = useState<boolean>(false);
-  const [systemVersion] = useState<string>('1.0.0');
 
   const isAtStaffPath = activeTab !== 'customer';
 
@@ -205,6 +204,7 @@ function AppContent({
     memberRewards,
     analytics,
     loading,
+    systemVersion,
     fetchData,
     handleAddMenuItem,
     handleEditMenuItem,

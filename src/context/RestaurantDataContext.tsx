@@ -44,6 +44,7 @@ export interface RestaurantDataContextType {
   memberRewards: any[];
   analytics: AnalyticsData;
   loading: boolean;
+  systemVersion: string;
   fetchData: (forceFull?: boolean, bypassReorderLock?: boolean) => Promise<void>;
   handleAddMenuItem: (itemData: any) => Promise<void>;
   handleEditMenuItem: (id: string, itemData: any) => Promise<void>;
@@ -160,6 +161,7 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
   const [memberPointsRedeemRate, setMemberPointsRedeemRate] = useState<number>(1);
   const [memberRewards, setMemberRewards] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [systemVersion, setSystemVersion] = useState<string>('1.0.0');
   const [syncActive, setSyncActive] = useState<boolean>(() => isFirebaseSyncEnabled());
 
   useEffect(() => {
@@ -310,6 +312,7 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
           if (bootstrapData.categories && (bypassReorderLock || fetchStartTime > lastCategoryReorderTimeRef.current)) {
             setCategories(bootstrapData.categories);
           }
+          if (bootstrapData.version) setSystemVersion(bootstrapData.version);
           if (Array.isArray(bootstrapData.popularItemIds)) setPopularItemIds(bootstrapData.popularItemIds);
           if (bootstrapData.membersConfig) {
             if (bootstrapData.membersConfig.pointsRatio !== undefined) setMemberPointsRatio(bootstrapData.membersConfig.pointsRatio);
@@ -1106,6 +1109,7 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
     memberRewards,
     analytics,
     loading,
+    systemVersion,
     fetchData,
     handleAddMenuItem,
     handleEditMenuItem,
@@ -1135,7 +1139,7 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
   }), [
     menuItems, categories, tables, ingredients, reservations, minSpend, promoCombo,
     operatingHours, isOpen, restDays, customerNotice, servicePaused, popularItemIds,
-    memberPointsRatio, memberVipThreshold, memberVipDiscountRate, memberEnablePointsDiscount, memberPointsRedeemRate, memberRewards, analytics, loading
+    memberPointsRatio, memberVipThreshold, memberVipDiscountRate, memberEnablePointsDiscount, memberPointsRedeemRate, memberRewards, analytics, loading, systemVersion
   ]);
 
   return (
