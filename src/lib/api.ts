@@ -22,7 +22,8 @@ export const getAuthHeader = async (opts: { skipAuth?: boolean } = {}) => {
 export const apiFetch = async (url: string, options: any = {}) => {
   const method = (options.method || 'GET').toUpperCase();
   const isPublicGet = method === 'GET' && /^\/api\/(bootstrap|menu|categories|settings\/version)/.test(url);
-  const skipAuth = options.skipAuth ?? (isPublicGet && !options.forceAuth);
+  const hasToken = typeof window !== 'undefined' && !!localStorage.getItem('sabay_jwt_token');
+  const skipAuth = options.skipAuth ?? (isPublicGet && !options.forceAuth && !hasToken);
 
   const authHeaders = await getAuthHeader({ skipAuth });
   const headers = {

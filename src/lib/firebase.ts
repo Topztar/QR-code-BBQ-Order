@@ -64,12 +64,7 @@ export const stopFirebaseSync = async () => {
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('firebase_sync_changed', { detail: { syncEnabled: false } }));
   }
-  try {
-    await disableNetwork(db);
-    console.log('[Firebase Sync] Firebase network synchronization is STOPPED.');
-  } catch (err) {
-    console.warn('[Firebase Sync] Error disabling network:', err);
-  }
+  console.log('[Firebase Sync] Firebase network synchronization is STOPPED (disableNetwork omitted to preserve manual queries).');
 };
 
 export const startFirebaseSync = async () => {

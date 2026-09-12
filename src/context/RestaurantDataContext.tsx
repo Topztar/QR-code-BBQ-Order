@@ -348,7 +348,11 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
     } catch (err: any) {
       console.warn('[Sabay Sync] Fetch error, attempting offline data fallback:', err);
       try {
-        await loadData();
+        if (activeTab !== 'customer' && menuItems.length > 0 && categories.length > 0) {
+           console.warn('[Sabay Sync] Admin fallback bypassed to preserve current state');
+        } else {
+           await loadData();
+        }
       } catch (_e) {}
     } finally {
       clearTimeout(loadingTimeoutId);

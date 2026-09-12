@@ -183,7 +183,13 @@ export function registerBootstrapRoutes(app: express.Application, ctx: RouteCont
       }
 
       res.setHeader('ETag', etag);
-      res.setHeader('Cache-Control', 'public, max-age=30, s-maxage=300, stale-while-revalidate=600');
+      res.setHeader('Vary', 'Authorization');
+      
+      if (isStaffRequest) {
+        res.setHeader('Cache-Control', 'private, max-age=0, no-cache');
+      } else {
+        res.setHeader('Cache-Control', 'public, max-age=30, s-maxage=300, stale-while-revalidate=600');
+      }
 
       if (req.headers['if-none-match'] === etag) {
         return res.status(304).end();
