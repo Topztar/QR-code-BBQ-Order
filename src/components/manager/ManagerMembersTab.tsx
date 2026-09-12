@@ -7,11 +7,11 @@ import VersionInput from './VersionInput';
 
 interface ManagerMembersTabProps {
   membersList: any[];
-  setNewMemberName: (name: string) => void;
-  setNewMemberEmail: (email: string) => void;
-  setNewMemberBalance: (bal: string) => void;
-  setNewMemberPoints: (pts: string) => void;
-  setAddMemberError: (err: string | null) => void;
+  setNewMemberName?: (name: string) => void;
+  setNewMemberEmail?: (email: string) => void;
+  setNewMemberBalance?: (bal: string) => void;
+  setNewMemberPoints?: (pts: string) => void;
+  setAddMemberError?: (err: string | null) => void;
   setAddMemberModalOpen: (open: boolean) => void;
   handleAdjustPoints: (email: string) => void;
   handleDeleteMember: (email: string) => void;
@@ -161,11 +161,11 @@ export const ManagerMembersTab: React.FC<ManagerMembersTabProps> = ({
           <button
             type="button"
             onClick={() => {
-              setNewMemberName('');
-              setNewMemberEmail('');
-              setNewMemberBalance('0');
-              setNewMemberPoints('0');
-              setAddMemberError(null);
+              setNewMemberName?.('');
+              setNewMemberEmail?.('');
+              setNewMemberBalance?.('0');
+              setNewMemberPoints?.('0');
+              setAddMemberError?.(null);
               setAddMemberModalOpen(true);
             }}
             className="self-start sm:self-center bg-[#E5B453] hover:bg-[#d6a546] text-black font-extrabold px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 transition active:scale-95 text-xs cursor-pointer shadow-md shadow-[#E5B453]/10"

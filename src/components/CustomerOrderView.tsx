@@ -218,7 +218,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
     }
     return '5';
   });
-  const [activeCustomerReservation, setActiveCustomerReservation] = useState<Reservation | null>(null);
+  const [activeCustomerReservation, _setActiveCustomerReservation] = useState<Reservation | null>(null);
   const [urlReservationParams, setUrlReservationParams] = useState<any>(null);
 
   // Parse URL query / table info
@@ -226,7 +226,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
     if (typeof window === 'undefined') return;
     const searchParams = new URLSearchParams(window.location.search);
     const tableParam = searchParams.get('table');
-    const reserveParam = searchParams.get('reservation');
+    const _reserveParam = searchParams.get('reservation');
     const reserveNoParam = searchParams.get('reservationNo') || searchParams.get('resNo');
     const resDateParam = searchParams.get('resDate') || searchParams.get('date');
     const resTimeParam = searchParams.get('resTime') || searchParams.get('time');
@@ -264,7 +264,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
   const [isTableFixed, setIsTableFixed] = useState(false);
   const [activeLightboxImg, setActiveLightboxImg] = useState<string | null>(null);
 
-  const [loginCount, setLoginCount] = useState<number>(0);
+  const [loginCount] = useState<number>(0);
   const [isMerchantMode, setIsMerchantMode] = useState(false);
   const [showPasscodeModal, setShowPasscodeModal] = useState(false);
   const [pincodeInput, setPincodeInput] = useState('');
@@ -333,7 +333,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
     return localStorage.getItem('sabay_simplified_mode') === 'true';
   });
   const [showBackToTop, setShowBackToTop] = useState(false);
-  const [redeemMessage, setRedeemMessage] = useState<string | null>(null);
+  const [redeemMessage, _setRedeemMessage] = useState<string | null>(null);
 
   // Loyalty Points
   const userPoints = 0;
@@ -369,11 +369,11 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
   // Hook: useCustomerCart
   const {
     cart,
-    setCart,
+    setCart: _setCart,
     isCartOpen,
     setIsCartOpen,
     hoverCartItem,
-    setHoverCartItem,
+    setHoverCartItem: _setHoverCartItem,
     isHoverCartOpen,
     setIsHoverCartOpen,
     handleAddToCart: hookAddToCart,
@@ -384,7 +384,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
     activeCombosAndDiscounts,
     promoComboDiscount,
     cartSubtotal,
-    discountedSubtotal,
+    discountedSubtotal: _discountedSubtotal,
     expressFee,
     cartTotal,
     cartItemsCount,
@@ -618,7 +618,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
     handleReorderItems(orderItems, displayedMenuItems);
   };
 
-  const handleRedeemReward = (reward: any) => {
+  const handleRedeemReward = (_reward: any) => {
     showToast('抱歉，此功能僅限登入會員使用，請先登入帳號。', 'error');
   };
 

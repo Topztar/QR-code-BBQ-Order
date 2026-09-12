@@ -5,7 +5,7 @@ import { safeStorage } from './lib/safeStorage';
 import { TRANSLATIONS } from './data';
 import { LanguageSelector } from './components/LanguageSelector';
 import { sessionAuth } from './lib/sessionAuth';
-import { ChefHat, Smartphone, BarChart3, UtensilsCrossed, LogOut, Lock, Phone, MapPin, Eye, EyeOff, Coins, Monitor } from 'lucide-react';
+import { ChefHat, Smartphone, BarChart3, UtensilsCrossed, LogOut, Lock, Eye, EyeOff, Coins, Monitor } from 'lucide-react';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { RestaurantDataProvider, useRestaurantData } from './context/RestaurantDataContext';
 import { OrderDataProvider, useOrderData } from './context/OrderDataContext';

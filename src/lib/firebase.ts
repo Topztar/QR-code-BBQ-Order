@@ -1,7 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import { getFunctions } from "firebase/functions";
 import { getAuth, signInWithCustomToken } from 'firebase/auth';
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, getFirestore, Firestore, disableNetwork, enableNetwork } from 'firebase/firestore';
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, getFirestore, Firestore, enableNetwork } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);

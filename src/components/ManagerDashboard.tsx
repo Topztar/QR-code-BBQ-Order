@@ -1,11 +1,10 @@
-import { apiFetch, getAuthHeader } from "../lib/api";
+import { apiFetch } from "../lib/api";
 import { ErrorBoundary } from './ErrorBoundary';
-import React, { Component, useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Ingredient, Language, Category, TableConfig, Order, OrderStatus, Reservation, SoldOutType } from '../types';
 import { getLocalizedText, TRANSLATION_DICTIONARY, translateTextToLanguage } from '../utils/i18n';
 import { sanitizePhoneDigits, isValidTaiwanPhone, TAIWAN_PHONE_ERROR_MSG } from '../utils/phoneValidator';
 import { calculateReservationAvailability, autoSelectOptimalTables, validateCapacity } from '../utils/reservationValidator';
-import { AlertTriangle, Sparkles, Coins, Trash2, Plus, Download, Check, Minus, Printer } from 'lucide-react';
 import { db, isFirebaseSyncEnabled } from '../lib/firebase';
 import { safeStorage } from '../lib/safeStorage';
 import { doc, setDoc, writeBatch, collection, getDocs, query, where } from 'firebase/firestore';
@@ -40,60 +39,6 @@ import { DishFormModal } from './manager/modals/DishFormModal';
 import { OrderDetailDrilldownModal } from './manager/modals/OrderDetailDrilldownModal';
 
 const localStorage = safeStorage;
-
-
-
-
-interface ModalErrorBoundaryProps {
-  children: React.ReactNode;
-  onClose: () => void;
-}
-
-interface ModalErrorBoundaryState {
-  hasError: boolean;
-  error: any;
-}
-
-class ModalErrorBoundary extends Component<ModalErrorBoundaryProps, ModalErrorBoundaryState> {
-  state: ModalErrorBoundaryState = { hasError: false, error: null };
-  constructor(props: ModalErrorBoundaryProps) {
-    super(props);
-  }
-  static getDerivedStateFromError(error: any) {
-    return { hasError: true, error };
-  }
-  componentDidCatch(error: any, errorInfo: any) {
-    console.error("Modal Render Error:", error, errorInfo);
-  }
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex items-center justify-center p-4 text-xs font-sans">
-          <div className="bg-zinc-900 border border-rose-500/50 rounded-2xl p-6 max-w-md w-full text-center space-y-4 shadow-2xl">
-            <div className="text-4xl">⚠️</div>
-            <h3 className="text-base font-bold text-rose-400">彈出視窗載入發生異常 (Modal Error)</h3>
-            <p className="text-zinc-400 text-xs leading-relaxed">此項目的部分數據結構與預期不符，系統已自動防護避免頁面崩潰黑屏。</p>
-            <div className="bg-black/60 p-2.5 rounded border border-white/10 text-left text-[10px] font-mono text-rose-300 overflow-x-auto max-h-24">
-              {String((this as any).state?.error?.message || (this as any).state?.error)}
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                (this as any).setState({ hasError: false, error: null });
-                (this as any).props.onClose();
-              }}
-              className="px-5 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-lg transition active:scale-95 cursor-pointer"
-            >
-              關閉視窗 (Close)
-            </button>
-          </div>
-        </div>
-      );
-    }
-    return (this as any).props.children;
-  }
-}
-
 
 import {
   getMaskedEmail,
@@ -293,12 +238,6 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   const [terminalPage, setTerminalPage] = useState(1);
   const [terminalCartPage, setTerminalCartPage] = useState(1);
 
-  // Reservation Status Filter State
-  const [selectedCalendarStatusFilter, setSelectedCalendarStatusFilter] = useState<string>('all');
-  const [selectedResIds, setSelectedResIds] = useState<string[]>([]);
-  const [isBatchProcessing, setIsBatchProcessing] = useState<boolean>(false);
-  const [batchSuccessMessage, setBatchSuccessMessage] = useState<string | null>(null);
-
   useEffect(() => {
     setTerminalPage(1);
   }, [terminalCategory]);
@@ -359,19 +298,15 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   const [takeoutStatus, setTakeoutStatus] = useState({ sequence: 0, lastResetDate: '' });
   const [selectedQrPreviewId, setSelectedQrPreviewId] = useState<string>('1');
   const [copiedTableId, setCopiedTableId] = useState<string | null>(null);
-  const [tableToDeleteId, setTableToDeleteId] = useState<string | null>(null);
   const [showBulkDeleteOrdersModal, setShowBulkDeleteOrdersModal] = useState(false);
   const [bulkDeleteThresholdDate, setBulkDeleteThresholdDate] = useState<string>('');
-  const [bulkDeleteConfirmText, setBulkDeleteConfirmText] = useState('');
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
-  const [reservationToDeleteId, setReservationToDeleteId] = useState<string | null>(null);
   const [showCheckoutConfirm, setShowCheckoutConfirm] = useState(false);
 
   // Table Layout and Floor Map States
-  const [tableLayoutMode, setTableLayoutMode] = useState<'grid' | 'floormap'>('floormap');
   const [localTablePositions, setLocalTablePositions] = useState<Record<string, { x: number; y: number }>>({});
-  const [snapToGrid, setSnapToGrid] = useState<boolean>(true);
-  const [gridSize, setGridSize] = useState<number>(5); // Default grid size is 5%
+  const snapToGrid = true;
+  const gridSize = 5; // Default grid size is 5%
 
   // Local reordering states with confirmation buttons to prevent accidental clicks
   const [localCategoryOrder, setLocalCategoryOrder] = useState<Category[]>([]);
@@ -411,28 +346,17 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     name: string;
     currentPoints: number;
   } | null>(null);
-  const [adjustPointsValue, setAdjustPointsValue] = useState<string>('');
-  const [adjustPointsError, setAdjustPointsError] = useState<string | null>(null);
 
   // Add Member Modal State
   const [addMemberModalOpen, setAddMemberModalOpen] = useState<boolean>(false);
-  const [newMemberName, setNewMemberName] = useState<string>('');
-  const [newMemberEmail, setNewMemberEmail] = useState<string>('');
-  const [newMemberBalance, setNewMemberBalance] = useState<string>('0');
-  const [newMemberPoints, setNewMemberPoints] = useState<string>('0');
-  const [addMemberError, setAddMemberError] = useState<string | null>(null);
 
   // Lock state for guest table slots positioning to prevent unintentional mouse drags / touch moves
-  const [isTableLayoutLocked, setIsTableLayoutLocked] = useState<boolean>(() => {
+  const [isTableLayoutLocked] = useState<boolean>(() => {
     return localStorage.getItem('table-layout-locked') !== 'false'; // Default to true (locked) for safety
   });
 
-  // Reservation pagination
-  const [reservationPage, setReservationPage] = useState<number>(1);
-  const RESERVATION_PAGE_SIZE = 10;
-
   // Tablet selection for map drag helper
-  const [selectedFineTuneTableId, setSelectedFineTuneTableId] = useState<string | null>(null);
+  const [selectedFineTuneTableId, _setSelectedFineTuneTableId] = useState<string | null>(null);
   const fineTuneTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
 
   // Drag and drop mouse event handler
@@ -756,7 +680,6 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   const [tempMinSpend, setTempMinSpend] = useState<number>(minSpend);
   const [minSpendSaveError, setMinSpendSaveError] = useState<string | null>(null);
   const [minSpendSaveSuccess, setMinSpendSaveSuccess] = useState<string | null>(null);
-  const [simulatedElapsedOrders, setSimulatedElapsedOrders] = useState<string[]>([]);
 
   // Member system state variables
   const [tempPointsRatio, setTempPointsRatio] = useState<number>(memberPointsRatio);
@@ -836,8 +759,6 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     mergedCount?: number;
     checkoutScope?: string;
   } | null>(null);
-  const [checkoutPrintLoading, setCheckoutPrintLoading] = useState(false);
-  const [checkoutPrintSuccess, setCheckoutPrintSuccess] = useState<string | null>(null);
 
   const handleExportLast30DaysOrdersCSV = () => {
     try {
@@ -1371,40 +1292,10 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   const [cashierSurchargeFlat, setCashierSurchargeFlat] = useState<number>(0); // flat NT$ surcharge
   const [cashierSurchargeType, setCashierSurchargeType] = useState<'percent' | 'flat'>('percent');
   const [cashierPaymentMethod, setCashierPaymentMethod] = useState<'cash' | 'credit' | 'member' | 'twqr'>('cash');
-  const [cashierCashChannel, setCashierCashChannel] = useState<'counter' | 'kiosk' | 'delivery'>('counter');
   const [cashierCashReceived, setCashierCashReceived] = useState<number>(0);
-  const [cashierListFilter, setCashierListFilter] = useState<'all' | 'completed' | 'dinein' | 'takeout'>('all');
-  const [isAdjustingDiscount, setIsAdjustingDiscount] = useState<boolean>(false);
-  const [isAdjustingSurcharge, setIsAdjustingSurcharge] = useState<boolean>(false);
   // Checkout merge scope: 'single' (獨立結帳) | 'same_table' (同桌合併) | 'all_merged' (跨桌全併) | 'custom' (自訂勾選)
   const [cashierCheckoutScope, setCashierCheckoutScope] = useState<'single' | 'same_table' | 'all_merged' | 'custom'>('single');
   const [cashierSelectedMergeOrderIds, setCashierSelectedMergeOrderIds] = useState<string[]>([]);
-  // Dedicated Take-out Detail Modal State in Cashier Dashboard
-  const [takeoutDetailModalOrder, setTakeoutDetailModalOrder] = useState<Order | null>(null);
-  const [copiedTakeoutPhone, setCopiedTakeoutPhone] = useState<boolean>(false);
-
-  // Auto-scaling width and fit screen boundary state & logic
-  const [cashierPanelWidth, setCashierPanelWidth] = useState<number>(48);
-  const [isCashierWidthAuto, setIsCashierWidthAuto] = useState<boolean>(true);
-
-  useEffect(() => {
-    if (!isCashierWidthAuto) return;
-    const handleResize = () => {
-      const w = window.innerWidth;
-      if (w < 1280) {
-        setCashierPanelWidth(100);
-      } else if (w < 1600) {
-        setCashierPanelWidth(48);
-      } else if (w < 1920) {
-        setCashierPanelWidth(46);
-      } else {
-        setCashierPanelWidth(40);
-      }
-    };
-    handleResize();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [isCashierWidthAuto]);
 
   const getPanelWidthClass = (w: number) => {
     if (w <= 35) return 'xl:w-[35%]';
@@ -1424,74 +1315,16 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     return 'xl:w-[100%]';
   };
 
-  const filteredCashierOrders = useMemo(() => {
-    switch (cashierListFilter) {
-      case 'completed':
-        return orders.filter(o => !o.isPaid && o.status === 'completed');
-      case 'dinein':
-        return orders.filter(o => !o.isPaid && o.tableNumber && !String(o.tableNumber || '').includes('外帶'));
-      case 'takeout':
-        return orders.filter(o => !o.isPaid && o.tableNumber && String(o.tableNumber || '').includes('外帶'));
-      case 'all':
-      default:
-        return orders.filter(o => !o.isPaid);
-    }
-  }, [orders, cashierListFilter]);
-
-  const activeTakeoutOrders = useMemo(() => {
-    return orders.filter(o => !o.isPaid && ((o.tableNumber && String(o.tableNumber || '').includes('外帶')) || o.takeoutInfo));
-  }, [orders]);
-
   const cashierSelectedOrder = useMemo(() => {
     if (!selectedCashierOrderId) return null;
     return orders.find(o => o.id === selectedCashierOrderId) || null;
   }, [orders, selectedCashierOrderId]);
-
-  // Cashier item addition dropdown state
-  const [cashierNewItemInput, setCashierNewItemInput] = useState<string>('');
-
-
-
-  const handleCashierAddMenuItem = async (menuItemId: string) => {
-    if (!cashierSelectedOrder || !onUpdateOrderItems) return;
-    const dish = menuItems.find((m: any) => m.id === menuItemId);
-    if (!dish) return;
-
-    const existing = cashierSelectedOrder.items.find((it: any) => it.menuItemId === menuItemId);
-    let updatedItems;
-    if (existing) {
-      updatedItems = cashierSelectedOrder.items.map((it: any) => {
-        if (it.menuItemId === menuItemId) {
-          return { ...it, qty: it.qty + 1 };
-        }
-        return it;
-      });
-    } else {
-      const newItem = {
-        id: `oi-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-        menuItemId: dish.id,
-        name: dish.name,
-        price: dish.price,
-        qty: 1,
-        customization: {
-          spiciness: 1,
-          notes: '櫃檯收銀加點',
-        }
-      };
-      updatedItems = [...cashierSelectedOrder.items, newItem];
-    }
-
-    await onUpdateOrderItems(cashierSelectedOrder.id, updatedItems);
-    setCashierNewItemInput('');
-  };
 
   useEffect(() => {
     if (cashierSelectedOrder) {
       setCashierDiscountRate(0);
       setCashierDiscountFlat(0);
       setCashierDiscountType('percent');
-      setIsAdjustingDiscount(false);
-      setIsAdjustingSurcharge(false);
       setCashierCheckoutScope('single');
       setCashierSelectedMergeOrderIds([cashierSelectedOrder.id]);
       
@@ -1584,65 +1417,6 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     
     return [cashierSelectedOrder];
   }, [cashierSelectedOrder, cashierCheckoutScope, cashierSelectedMergeOrderIds, cashierCandidateOrders]);
-
-  const handleCombinedQtyChange = async (orderId: string, itemId: string, delta: number) => {
-    if (!onUpdateOrderItems) return;
-    const ordObj = orders.find(o => o.id === orderId);
-    if (!ordObj) return;
-    const updatedItems = ordObj.items.map((it: any) => {
-      if (it.id === itemId) {
-        return { ...it, qty: it.qty + delta };
-      }
-      return it;
-    }).filter((it: any) => it.qty > 0);
-
-    if (updatedItems.length === 0) {
-      setConfirmActionModal({
-        isOpen: true,
-        title: '⚠️ 訂單已無菜品',
-        message: `訂單 [${orderId}] 的菜品已被清空。是否直接刪除此訂單？`,
-        actionLabel: '確定刪除 Delete',
-        onConfirm: async () => {
-          if (onDeleteOrder) {
-            await onDeleteOrder(orderId);
-          }
-          if (selectedCashierOrderId === orderId) {
-            setSelectedCashierOrderId(null);
-          }
-        }
-      });
-      return;
-    }
-
-    await onUpdateOrderItems(orderId, updatedItems);
-  };
-
-  const handleCombinedRemoveItem = async (orderId: string, itemId: string) => {
-    if (!onUpdateOrderItems) return;
-    const ordObj = orders.find(o => o.id === orderId);
-    if (!ordObj) return;
-    const updatedItems = ordObj.items.filter((it: any) => it.id !== itemId);
-
-    if (updatedItems.length === 0) {
-      setConfirmActionModal({
-        isOpen: true,
-        title: '⚠️ 訂單已無菜品',
-        message: `移除此品項後，訂單 [${orderId}] 將無任何菜品。是否直接刪除此訂單？`,
-        actionLabel: '確定刪除 Delete',
-        onConfirm: async () => {
-          if (onDeleteOrder) {
-            await onDeleteOrder(orderId);
-          }
-          if (selectedCashierOrderId === orderId) {
-            setSelectedCashierOrderId(null);
-          }
-        }
-      });
-      return;
-    }
-
-    await onUpdateOrderItems(orderId, updatedItems);
-  };
 
   const cashierCalculatedTotals = useMemo(() => {
     if (!cashierSelectedOrder) return { subtotal: 0, discount: 0, surcharge: 0, total: 0 };
@@ -2168,7 +1942,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   const [inventoryLogSearch, setInventoryLogSearch] = useState('');
   const [restockAmount, setRestockAmount] = useState<{ [key: string]: number }>({});
   const [quickRestockItem, setQuickRestockItem] = useState<Ingredient | null>(null);
-  const [quickRestockQty, setQuickRestockQty] = useState('');
+  const [_quickRestockQty, setQuickRestockQty] = useState('');
 
   // Add Ingredient states
   const [newIngId, setNewIngId] = useState('');
@@ -2184,7 +1958,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   const [popularItemToRemoveId, setPopularItemToRemoveId] = useState<string | null>(null);
   const [showClearAllPopularConfirm, setShowClearAllPopularConfirm] = useState(false);
   const [popularSaveStatus, setPopularSaveStatus] = useState<{ type: 'success' | 'error' | null; message: string }>({ type: null, message: '' });
-  const [printConfirmData, setPrintConfirmData] = useState<{ title: string; ip: string; onConfirm: () => void; receiptType?: string; receiptBody?: string } | null>(null);
+  const [_printConfirmData, setPrintConfirmData] = useState<{ title: string; ip: string; onConfirm: () => void; receiptType?: string; receiptBody?: string } | null>(null);
 
   // Synchronized Print Logs for Manager Exporting
   const [printLogs, setPrintLogs] = useState<any[]>([]);
@@ -2318,7 +2092,6 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   }>({ online: false, checking: false });
   const [posBridgeTesting, setPosBridgeTesting] = useState<boolean>(false);
   const [posBridgeTestResult, setPosBridgeTestResult] = useState<string | null>(null);
-  const [copiedGoogleLinkNotice, setCopiedGoogleLinkNotice] = useState<string | null>(null);
 
   const checkBridgeStatus = useCallback(async () => {
     setPosBridgeStatus(prev => ({ ...prev, checking: true }));
@@ -2559,14 +2332,11 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
       name: member.name,
       currentPoints: member.points || 0,
     });
-    setAdjustPointsValue('');
-    setAdjustPointsError(null);
   };
 
   const handleSavePointsAdjustment = (amount: number) => {
     if (!adjustPointsModal) return { success: false, error: '未選擇會員！' };
     if (isNaN(amount)) {
-      setAdjustPointsError('❌ 請輸入有效的整數點數！');
       return { success: false, error: '❌ 請輸入有效的整數點數！' };
     }
     const { email } = adjustPointsModal;
@@ -2589,11 +2359,9 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
         return { success: true };
       } catch (e) {
         console.error(e);
-        setAdjustPointsError('儲存點數時發生資料處理錯誤！');
         return { success: false, error: '儲存點數時發生資料處理錯誤！' };
       }
     } else {
-      setAdjustPointsError('找不到會員資料庫！');
       return { success: false, error: '找不到會員資料庫！' };
     }
   };
@@ -2880,7 +2648,6 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
 
       alert(`已成功刪除 ${deletedCount} 筆歷史訂單！`);
       setShowBulkDeleteOrdersModal(false);
-      setBulkDeleteConfirmText('');
       setBulkDeleteThresholdDate('');
     } catch (error: any) {
       console.error('Error deleting orders:', error);
@@ -3581,11 +3348,6 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
       {activeSubTab === 'members' && (
         <ManagerMembersTab
           membersList={membersList}
-          setNewMemberName={setNewMemberName}
-          setNewMemberEmail={setNewMemberEmail}
-          setNewMemberBalance={setNewMemberBalance}
-          setNewMemberPoints={setNewMemberPoints}
-          setAddMemberError={setAddMemberError}
           setAddMemberModalOpen={setAddMemberModalOpen}
           handleAdjustPoints={handleAdjustPoints}
           handleDeleteMember={handleDeleteMember}

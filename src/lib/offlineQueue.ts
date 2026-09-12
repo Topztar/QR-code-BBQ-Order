@@ -176,7 +176,7 @@ export async function processOfflineQueue(onProgress?: (msg: string) => void): P
   try {
     const raw = safeStorage.getItem(PROCESSED_QUEUE_KEY);
     if (raw) processedIds = JSON.parse(raw);
-  } catch (e) {}
+  } catch (_e) {}
 
   for (let i = 0; i < queue.length; i++) {
     const item = queue[i];
@@ -206,7 +206,7 @@ export async function processOfflineQueue(onProgress?: (msg: string) => void): P
 
         processedIds.push(item.id);
         if (processedIds.length > 500) processedIds = processedIds.slice(-500);
-        try { safeStorage.setItem(PROCESSED_QUEUE_KEY, JSON.stringify(processedIds)); } catch(e) {}
+        try { safeStorage.setItem(PROCESSED_QUEUE_KEY, JSON.stringify(processedIds)); } catch(_e) {}
 
         // Remove from remaining list
         const idx = remaining.findIndex(r => r.id === item.id);

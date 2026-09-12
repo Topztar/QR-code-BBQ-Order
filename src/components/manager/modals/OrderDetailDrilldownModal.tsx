@@ -34,7 +34,7 @@ export interface OrderDetailDrilldownModalProps {
 export const OrderDetailDrilldownModal: React.FC<OrderDetailDrilldownModalProps> = ({
   selectedOrder,
   setSelectedOrder,
-  orders,
+  orders: _orders,
   tables,
   menuItems,
   currentLang,

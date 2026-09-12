@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useMemo, useCallback, ReactNode } from 'react';
-import { Order, OrderItem, MenuItem, TableConfig, KitchenReceiptLog, TakeoutQueueInfo, StoreSettings, OfflineQueueRequest, Reservation, OrderStatus } from '../types';
+import { Order, OrderItem, TableConfig, Reservation, OrderStatus } from '../types';
 import { orderCalculationService } from '../services/orderCalculationService';
 import { apiFetch } from '../lib/api';
 import { db, isFirebaseSyncEnabled } from '../lib/firebase';
@@ -370,7 +370,6 @@ export function OrderDataProvider({
   // Firestore Realtime Orders listener & Fallback API Polling
   useEffect(() => {
     let unsubscribeOrders = () => {};
-    let pollingInterval: ReturnType<typeof setInterval>;
 
     const isCustomerView = activeTab === 'customer';
     const tableParam = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('table') : null;
@@ -418,7 +417,6 @@ export function OrderDataProvider({
         fetchOrdersFromApi();
         return () => {
           unsubscribeOrders();
-          if (pollingInterval) clearInterval(pollingInterval);
         };
       }
 
@@ -472,7 +470,6 @@ export function OrderDataProvider({
 
     return () => {
       unsubscribeOrders();
-      if (pollingInterval) clearInterval(pollingInterval);
     };
   }, [activeTab, currentPath, forceApiFallback, syncActive]);
 

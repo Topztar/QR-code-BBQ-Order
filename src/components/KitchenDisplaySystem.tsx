@@ -111,7 +111,7 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
     playOvertimeBeepSound,
     stopSpeech,
     beepSim,
-    setBeepSim,
+    setBeepSim: _setBeepSim,
     notifyNewOrders,
     notifyStatusChange,
   } = useKdsAudio();
@@ -405,7 +405,7 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
   }, [onToggleOrderItemComplete]);
 
   // Flag helpers
-  const toggleFlagState = useCallback(async (orderId: string, currentFlagged: boolean, reason: string) => {
+  const toggleFlagState = useCallback(async (orderId: string, currentFlagged: boolean, _reason?: string) => {
     if (!currentFlagged) {
       setFlaggingOrderId(orderId);
       setFlagReasonInput('');
@@ -592,7 +592,7 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
     return { isHold: false, reason: '' };
   };
 
-  const isCloseToClosing = (dateStr: string, opHours: any[]) => {
+  const isCloseToClosing = (_dateStr: string, _opHours: any[]) => {
     return false;
   };
 

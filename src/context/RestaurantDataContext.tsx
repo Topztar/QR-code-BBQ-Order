@@ -282,8 +282,6 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
         }
       };
 
-      const isCustomerView = activeTab === 'customer';
-
       if (isFullCycle) {
         const fetchPromises: Promise<Response>[] = [
           safeFetch('/api/bootstrap', null),
