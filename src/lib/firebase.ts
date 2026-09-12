@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getFunctions } from "firebase/functions";
-import { getAuth } from 'firebase/auth';
+import { getAuth, signInWithCustomToken } from 'firebase/auth';
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, getFirestore, Firestore, disableNetwork, enableNetwork } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
@@ -42,6 +42,17 @@ try {
 
 export const db = firestoreInstance;
 export const auth = getAuth();
+
+export const authenticateFirebaseCustomToken = async (token: string) => {
+  if (!token || !auth) return;
+  try {
+    if (auth.currentUser) return;
+    await signInWithCustomToken(auth, token);
+    console.log('[Firebase Auth] Authenticated staff with Custom Token successfully!');
+  } catch (err) {
+    console.warn('[Firebase Auth] Custom Token login failed:', err);
+  }
+};
 
 // Default state: Default to false (local Express server first), dynamically activated if bootstrap indicates backend enables Firebase sync
 let syncEnabled = false;

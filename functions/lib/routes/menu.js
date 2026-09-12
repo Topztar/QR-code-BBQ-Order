@@ -173,6 +173,56 @@ function registerMenuRoutes(app, ctx) {
             return res.status(500).json({ error: 'Failed to upload image to storage', details: error?.message });
         }
     });
+    get('/images/:path(*)', async (req, res) => {
+        const DEFAULT_FALLBACK_IMAGE = 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=600';
+        try {
+            let rawPath = req.params?.path || req.query.path || req.query.file || req.query.name || '';
+            if (!rawPath && req.query.url) {
+                const urlStr = String(req.query.url);
+                if (urlStr.startsWith('gs://')) {
+                    const parts = urlStr.replace('gs://', '').split('/');
+                    parts.shift();
+                    rawPath = parts.join('/');
+                }
+                else if (urlStr.includes('firebasestorage.googleapis.com') || urlStr.includes('storage.googleapis.com')) {
+                    const match = urlStr.match(/\/o\/([^?]+)/) || urlStr.match(/storage\.googleapis\.com\/[^/]+\/(.+)/);
+                    if (match && match[1]) {
+                        rawPath = decodeURIComponent(match[1]);
+                    }
+                }
+                else if (urlStr.startsWith('http://') || urlStr.startsWith('https://')) {
+                    return res.redirect(302, urlStr);
+                }
+            }
+            if (!rawPath) {
+                return res.redirect(302, DEFAULT_FALLBACK_IMAGE);
+            }
+            if (rawPath.startsWith('http://') || rawPath.startsWith('https://')) {
+                return res.redirect(302, rawPath);
+            }
+            let cleanPath = decodeURIComponent(String(rawPath)).replace(/^\/+/, '').replace(/\.\.\//g, '');
+            let file = storageBucket.file(cleanPath);
+            let [exists] = await file.exists().catch(() => [false]);
+            if (!exists && !cleanPath.startsWith('dishes/')) {
+                const dishFile = storageBucket.file(`dishes/${cleanPath}`);
+                const [dishExists] = await dishFile.exists().catch(() => [false]);
+                if (dishExists) {
+                    cleanPath = `dishes/${cleanPath}`;
+                    exists = true;
+                }
+            }
+            if (exists) {
+                const storagePublicUrl = `https://firebasestorage.googleapis.com/v0/b/${storageBucket.name}/o/${encodeURIComponent(cleanPath)}?alt=media`;
+                res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=604800, stale-while-revalidate=86400');
+                return res.redirect(302, storagePublicUrl);
+            }
+            return res.redirect(302, DEFAULT_FALLBACK_IMAGE);
+        }
+        catch (err) {
+            console.error('[Cloud Functions Images Route Error]:', err);
+            return res.redirect(302, DEFAULT_FALLBACK_IMAGE);
+        }
+    });
     get('/categories', async (_req, res) => {
         try {
             res.setHeader('Cache-Control', 'public, max-age=30, s-maxage=300, stale-while-revalidate=600');

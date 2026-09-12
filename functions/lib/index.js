@@ -36,7 +36,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.reconcileDailySoldOut = exports.onMenuItemWritten = exports.api = exports.requireAppCheck = exports.sendErrorResponse = exports.requireStaffAuth = void 0;
+exports.warmupPrewarmInstance = exports.reconcileDailySoldOut = exports.onMenuItemWritten = exports.api = exports.requireAppCheck = exports.sendErrorResponse = exports.requireStaffAuth = void 0;
 exports.createRateLimiter = createRateLimiter;
 const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-functions/v2/firestore");
@@ -303,6 +303,20 @@ exports.reconcileDailySoldOut = (0, scheduler_1.onSchedule)({
     }
     catch (err) {
         console.error('[Reconciler] Failed to reset daily sold-out items:', err);
+    }
+});
+exports.warmupPrewarmInstance = (0, scheduler_1.onSchedule)({
+    schedule: '*/10 17-22 * * *',
+    timeZone: 'Asia/Taipei',
+    region: 'asia-east1',
+}, async () => {
+    try {
+        console.log('[Warmup Scheduler] Keeping Cloud Functions instance warm during peak dinner hours...');
+        await db.collection('settings').doc('system').get();
+        console.log('[Warmup Scheduler] Pre-warm completed successfully (0ms latency ready).');
+    }
+    catch (err) {
+        console.warn('[Warmup Scheduler] Pre-warm probe failed:', err);
     }
 });
 //# sourceMappingURL=index.js.map

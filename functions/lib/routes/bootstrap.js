@@ -36,6 +36,9 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerBootstrapRoutes = registerBootstrapRoutes;
 const crypto = __importStar(require("crypto"));
 const helpers_1 = require("../helpers");
+const auth_1 = require("../auth");
+let cachedPublicBootstrap = null;
+const BOOTSTRAP_CACHE_TTL_MS = 15 * 1000;
 function registerBootstrapRoutes(app, ctx) {
     const { db, storageBucket, requireStaffAuth, createRateLimiter, sendErrorResponse } = ctx;
     const _storageBucket = storageBucket;
@@ -48,10 +51,28 @@ function registerBootstrapRoutes(app, ctx) {
         try {
             res.setHeader('Cache-Control', 'public, max-age=15, s-maxage=180, stale-while-revalidate=600');
             const todayStr = new Date().toISOString().split('T')[0];
-            const isStaffRequest = req.query.role === 'staff' || !!req.headers.authorization;
+            let isStaffRequest = false;
+            const authHeader = req.headers.authorization;
+            if (authHeader && authHeader.startsWith('Bearer ')) {
+                const token = authHeader.split('Bearer ')[1]?.trim();
+                if (token) {
+                    const storedAuth = await (0, auth_1.getStoredActiveToken)(db);
+                    if (storedAuth && storedAuth.token === token && Date.now() <= storedAuth.expiresAt) {
+                        isStaffRequest = true;
+                    }
+                }
+            }
+            const nowMs = Date.now();
+            if (!isStaffRequest && cachedPublicBootstrap && (nowMs - cachedPublicBootstrap.timestamp < BOOTSTRAP_CACHE_TTL_MS)) {
+                res.setHeader('ETag', cachedPublicBootstrap.etag);
+                if (req.headers['if-none-match'] === cachedPublicBootstrap.etag) {
+                    return res.status(304).end();
+                }
+                return res.json(cachedPublicBootstrap.payload);
+            }
             const [categoriesSnap, menuSnap, tablesSnap, systemDoc, ingredientsSnap, reservationsSnap] = await Promise.all([
                 db.collection('categories').select('id', 'name', 'showOnCustomerPage', 'orderIndex').orderBy('orderIndex').get(),
-                db.collection('menu').select('id', 'category', 'name', 'price', 'image', 'description', 'available', 'isAvailable', 'isSetMeal', 'requiredSaucesOption', 'hasNoodlesOption', 'hasCoconutsMilkOption', 'containsBeef', 'containsPork', 'containsSeafood', 'isNotSpicy', 'customAddOns', 'recipe', 'orderIndex', 'isTakeoutAvailable', 'soldOutAt', 'soldOutType', 'soldOutDate').orderBy('orderIndex').get(),
+                db.collection('menu').select('id', 'category', 'name', 'price', 'image', 'thumbnailUrl', 'avifUrl', 'avifThumbnailUrl', 'description', 'available', 'isAvailable', 'isSetMeal', 'requiredSaucesOption', 'hasNoodlesOption', 'hasCoconutsMilkOption', 'containsBeef', 'containsPork', 'containsSeafood', 'isNotSpicy', 'customAddOns', 'recipe', 'orderIndex', 'isTakeoutAvailable', 'soldOutAt', 'soldOutType', 'soldOutDate').orderBy('orderIndex').get(),
                 db.collection('tables').select('id', 'qrCodeUrl', 'status', 'cleaningStartedAt', 'maxCapacity', 'positionX', 'positionY', 'preservedFor', 'mergedWith').get(),
                 db.collection('settings').doc('system').get(),
                 isStaffRequest
@@ -70,6 +91,9 @@ function registerBootstrapRoutes(app, ctx) {
                     name: d.name ?? { zh: '' },
                     price: typeof d.price === 'number' ? d.price : 0,
                     image: d.image ?? '',
+                    thumbnailUrl: d.thumbnailUrl ?? '',
+                    avifUrl: d.avifUrl ?? '',
+                    avifThumbnailUrl: d.avifThumbnailUrl ?? '',
                     description: d.description ?? { zh: '' },
                     available: !!d.available,
                     isAvailable: d.isAvailable,
@@ -96,7 +120,6 @@ function registerBootstrapRoutes(app, ctx) {
                 delete processed._docId;
                 return processed;
             });
-            const nowMs = Date.now();
             const tables = tablesSnap.docs.map(doc => {
                 const tb = doc.data();
                 if (tb.status === 'cleaning') {
@@ -141,10 +164,18 @@ function registerBootstrapRoutes(app, ctx) {
                 printerConfig: { ip: sysData.livePrinterIp || '192.168.123.100' },
                 ingredients: ingredientsSnap.docs.map(doc => doc.data()),
                 reservations: reservationsSnap.docs.map(doc => doc.data()),
+                version: sysData.version || '1.0.0',
                 isFirebaseSyncEnabled: true
             };
             const rawString = JSON.stringify(responsePayload);
             const etag = `W/"${crypto.createHash('md5').update(rawString).digest('hex').substring(0, 16)}"`;
+            if (!isStaffRequest) {
+                cachedPublicBootstrap = {
+                    payload: responsePayload,
+                    etag,
+                    timestamp: Date.now()
+                };
+            }
             res.setHeader('ETag', etag);
             res.setHeader('Cache-Control', 'public, max-age=30, s-maxage=300, stale-while-revalidate=600');
             if (req.headers['if-none-match'] === etag) {

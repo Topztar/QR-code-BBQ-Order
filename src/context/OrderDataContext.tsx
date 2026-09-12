@@ -413,6 +413,15 @@ export function OrderDataProvider({
     };
 
     if (syncActive && isFirebaseSyncEnabled() && !forceApiFallback) {
+      // 🛡️ 顧客端若無桌號（如瀏覽外帶頁面或訪客首頁），不發起全店 300 筆訂單監聽
+      if (isCustomerView && (!currentTable || currentTable === '')) {
+        fetchOrdersFromApi();
+        return () => {
+          unsubscribeOrders();
+          if (pollingInterval) clearInterval(pollingInterval);
+        };
+      }
+
       try {
         let ordersQuery;
         if (isCustomerView && currentTable && currentTable !== '') {
@@ -421,14 +430,14 @@ export function OrderDataProvider({
             collection(db, "orders"),
             where("tableNumber", "==", currentTable),
             orderBy("createdAt", "desc"),
-            limit(100)
+            limit(50)
           );
         } else {
-          // 🍳 後台 (廚房 KDS / 櫃檯收銀 / 數據分析)：讀取最新待處理與即時訂單 (免強制索引，避免索引未就緒時報錯)
+          // 🍳 後台 (廚房 KDS / 櫃檯收銀 / 數據分析)：讀取最新待處理與即時訂單
           ordersQuery = query(
             collection(db, "orders"),
             orderBy("createdAt", "desc"),
-            limit(300)
+            limit(200)
           );
         }
 
@@ -448,24 +457,17 @@ export function OrderDataProvider({
 
           setOrders(reconcileOrdersWithRecentTransitions(normalizedOrders));
         }, (error) => {
-          console.warn('[Firebase Sync] Orders listener paused or fallback triggered:', error);
+          console.warn('[Firebase Sync] Realtime listener error or paused (fallback to single API sync, polling disabled):', error);
+          // 🛡️ 靜態單次降級同步，嚴禁啟動暴力輪詢 (5秒 setInterval) 導致海量 Billing 帳單！
           fetchOrdersFromApi();
-          if (!pollingInterval) {
-            pollingInterval = setInterval(fetchOrdersFromApi, 5000);
-          }
         });
       } catch (e) {
         console.warn('[Firebase Sync] Realtime listener initialization skipped:', e);
         fetchOrdersFromApi();
-        if (!pollingInterval) {
-          pollingInterval = setInterval(fetchOrdersFromApi, 5000);
-        }
       }
     } else {
-      // Initial fetch
+      // Initial fetch only when sync is inactive or forced API fallback
       fetchOrdersFromApi();
-      // Poll every 5 seconds for new orders/updates
-      pollingInterval = setInterval(fetchOrdersFromApi, 5000);
     }
 
     return () => {

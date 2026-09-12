@@ -19,6 +19,9 @@ export interface RouteContext {
   sendErrorResponse: (res: express.Response, error: any, ctx?: string) => void;
 }
 
+let cachedPublicBootstrap: { payload: any; etag: string; timestamp: number } | null = null;
+const BOOTSTRAP_CACHE_TTL_MS = 15 * 1000;
+
 export function registerBootstrapRoutes(app: express.Application, ctx: RouteContext) {
   const { db, storageBucket, requireStaffAuth, createRateLimiter, sendErrorResponse } = ctx;
   const _storageBucket = storageBucket; // alias for unused var
@@ -46,6 +49,15 @@ export function registerBootstrapRoutes(app: express.Application, ctx: RouteCont
           }
         }
       }
+
+      const nowMs = Date.now();
+      if (!isStaffRequest && cachedPublicBootstrap && (nowMs - cachedPublicBootstrap.timestamp < BOOTSTRAP_CACHE_TTL_MS)) {
+        res.setHeader('ETag', cachedPublicBootstrap.etag);
+        if (req.headers['if-none-match'] === cachedPublicBootstrap.etag) {
+          return res.status(304).end();
+        }
+        return res.json(cachedPublicBootstrap.payload);
+      }
       
       const [
         categoriesSnap,
@@ -56,7 +68,7 @@ export function registerBootstrapRoutes(app: express.Application, ctx: RouteCont
         reservationsSnap
       ] = await Promise.all([
         db.collection('categories').select('id', 'name', 'showOnCustomerPage', 'orderIndex').orderBy('orderIndex').get(),
-        db.collection('menu').select('id', 'category', 'name', 'price', 'image', 'description', 'available', 'isAvailable', 'isSetMeal', 'requiredSaucesOption', 'hasNoodlesOption', 'hasCoconutsMilkOption', 'containsBeef', 'containsPork', 'containsSeafood', 'isNotSpicy', 'customAddOns', 'recipe', 'orderIndex', 'isTakeoutAvailable', 'soldOutAt', 'soldOutType', 'soldOutDate').orderBy('orderIndex').get(),
+        db.collection('menu').select('id', 'category', 'name', 'price', 'image', 'thumbnailUrl', 'avifUrl', 'avifThumbnailUrl', 'description', 'available', 'isAvailable', 'isSetMeal', 'requiredSaucesOption', 'hasNoodlesOption', 'hasCoconutsMilkOption', 'containsBeef', 'containsPork', 'containsSeafood', 'isNotSpicy', 'customAddOns', 'recipe', 'orderIndex', 'isTakeoutAvailable', 'soldOutAt', 'soldOutType', 'soldOutDate').orderBy('orderIndex').get(),
         db.collection('tables').select('id', 'qrCodeUrl', 'status', 'cleaningStartedAt', 'maxCapacity', 'positionX', 'positionY', 'preservedFor', 'mergedWith').get(),
         db.collection('settings').doc('system').get(),
         isStaffRequest 
@@ -76,6 +88,9 @@ export function registerBootstrapRoutes(app: express.Application, ctx: RouteCont
           name: d.name ?? { zh: '' },
           price: typeof d.price === 'number' ? d.price : 0,
           image: d.image ?? '',
+          thumbnailUrl: d.thumbnailUrl ?? '',
+          avifUrl: d.avifUrl ?? '',
+          avifThumbnailUrl: d.avifThumbnailUrl ?? '',
           description: d.description ?? { zh: '' },
           available: !!d.available,
           isAvailable: d.isAvailable,
@@ -104,7 +119,6 @@ export function registerBootstrapRoutes(app: express.Application, ctx: RouteCont
         return processed;
       });
 
-      const nowMs = Date.now();
       const tables = tablesSnap.docs.map(doc => {
         const tb = doc.data() as any;
         if (tb.status === 'cleaning') {
@@ -152,12 +166,21 @@ export function registerBootstrapRoutes(app: express.Application, ctx: RouteCont
         printerConfig: { ip: sysData.livePrinterIp || '192.168.123.100' },
         ingredients: ingredientsSnap.docs.map(doc => doc.data()),
         reservations: reservationsSnap.docs.map(doc => doc.data()),
+        version: sysData.version || '1.0.0',
         isFirebaseSyncEnabled: true
       };
 
       // 🚀 ETag 快取協商 (304 Not Modified): 減少重複序列化與頻寬消耗
       const rawString = JSON.stringify(responsePayload);
       const etag = `W/"${crypto.createHash('md5').update(rawString).digest('hex').substring(0, 16)}"`;
+
+      if (!isStaffRequest) {
+        cachedPublicBootstrap = {
+          payload: responsePayload,
+          etag,
+          timestamp: Date.now()
+        };
+      }
 
       res.setHeader('ETag', etag);
       res.setHeader('Cache-Control', 'public, max-age=30, s-maxage=300, stale-while-revalidate=600');

@@ -44,10 +44,6 @@ export function useOrderSubmit(
     }
     activeOrderSubmissionsRef.current.add(clientOrderId);
 
-    if (orderData.tableNumber && orderData.tableNumber !== '外帶' && orderData.tableNumber !== 'takeout') {
-      handleUpdateTableStatus(orderData.tableNumber, { status: 'in_use', preservedFor: '', cleaningStartedAt: null });
-    }
-
     const orderPayload = {
       ...orderData,
       clientOrderId,

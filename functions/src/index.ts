@@ -351,3 +351,25 @@ export const reconcileDailySoldOut = onSchedule(
     }
   }
 );
+
+// 23. Warmup & Pre-warming Cloud Scheduler (Suggestion 2)
+// Runs every 10 minutes during peak dinner operations (17:00 - 22:50 Asia/Taipei)
+// to keep Gen 2 Cloud Function instances warm, eliminating Cold Starts during rushes.
+export const warmupPrewarmInstance = onSchedule(
+  {
+    schedule: '*/10 17-22 * * *',
+    timeZone: 'Asia/Taipei',
+    region: 'asia-east1',
+  },
+  async () => {
+    try {
+      console.log('[Warmup Scheduler] Keeping Cloud Functions instance warm during peak dinner hours...');
+      // Lightweight Firestore check to pre-warm connection pool
+      await db.collection('settings').doc('system').get();
+      console.log('[Warmup Scheduler] Pre-warm completed successfully (0ms latency ready).');
+    } catch (err) {
+      console.warn('[Warmup Scheduler] Pre-warm probe failed:', err);
+    }
+  }
+);
+

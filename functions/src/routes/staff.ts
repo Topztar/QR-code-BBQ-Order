@@ -1,5 +1,6 @@
 import express from 'express';
 import { Firestore, FieldValue } from 'firebase-admin/firestore';
+import { getAuth } from 'firebase-admin/auth';
 import { Bucket } from '@google-cloud/storage';
 import * as crypto from 'crypto';
 import { hashPin, invalidateAuthCache } from '../auth';
@@ -130,7 +131,20 @@ post('/staff/pin/verify', async (req, res) => {
       }, { merge: true });
 
       invalidateAuthCache();
-      return res.json({ success: true, access_token: sessionToken, expires_in: 28800 });
+
+      let firebaseCustomToken = null;
+      try {
+        firebaseCustomToken = await getAuth().createCustomToken('staff-user', { staff: true });
+      } catch (tokenErr) {
+        console.warn('[Staff Auth] Failed to generate Firebase custom token:', tokenErr);
+      }
+
+      return res.json({
+        success: true,
+        access_token: sessionToken,
+        firebase_custom_token: firebaseCustomToken,
+        expires_in: 28800
+      });
     }
 
     // PIN 錯誤：累計失敗次數並進行安全防護

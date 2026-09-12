@@ -1,4 +1,5 @@
 import express from 'express';
+import { validateVersion } from '../middleware/validateVersion';
 import { Firestore, FieldValue } from 'firebase-admin/firestore';
 import { Bucket } from '@google-cloud/storage';
 import { hashPin, invalidateAuthCache } from '../auth';
@@ -85,6 +86,29 @@ get('/settings/customer-notice', async (_req, res) => {
     res.setHeader('Cache-Control', 'public, max-age=30, s-maxage=300, stale-while-revalidate=600');
     const sysData = await getCachedSettings();
     res.json({ notice: sysData?.liveCustomerNotice || '' });
+  } catch (error) {
+    sendErrorResponse(res, error);
+  }
+});
+
+// 13. System Version Settings
+// GET current version
+get('/settings/version', async (_req, res) => {
+  try {
+    const doc = await db.collection('settings').doc('system').get();
+    const version = doc.data()?.liveSystemVersion || '';
+    res.json({ version });
+  } catch (error) {
+    sendErrorResponse(res, error);
+  }
+});
+
+// POST update version (admin only)
+post('/settings/version', requireStaffAuth, validateVersion, async (req, res) => {
+  const { version } = req.body;
+  try {
+    await db.collection('settings').doc('system').set({ liveSystemVersion: version }, { merge: true });
+    res.json({ success: true, version });
   } catch (error) {
     sendErrorResponse(res, error);
   }

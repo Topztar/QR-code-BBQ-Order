@@ -35,8 +35,9 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerStaffRoutes = registerStaffRoutes;
 const firestore_1 = require("firebase-admin/firestore");
+const auth_1 = require("firebase-admin/auth");
 const crypto = __importStar(require("crypto"));
-const auth_1 = require("../auth");
+const auth_2 = require("../auth");
 function registerStaffRoutes(app, ctx) {
     const { db, requireStaffAuth, sendErrorResponse } = ctx;
     const get = (routePath, ...handlers) => app.get([`/api${routePath}`, routePath], ...handlers);
@@ -55,10 +56,13 @@ function registerStaffRoutes(app, ctx) {
     get('/staff/pin/value', (_req, res) => {
         res.json({ blocked: true });
     });
+    get('/staff/verify', requireStaffAuth, (_req, res) => {
+        res.json({ valid: true });
+    });
     post('/staff/pin/check-path', async (req, res) => {
         const { pathPin } = req.body;
         if (!pathPin) {
-            return res.json({ valid: false });
+            return res.status(400).json({ valid: false, error: 'Missing pathPin' });
         }
         try {
             const credsRef = db.collection('secrets').doc('credentials');
@@ -67,20 +71,22 @@ function registerStaffRoutes(app, ctx) {
             const now = Date.now();
             const lockedUntil = credsData.lockedUntil ? Number(credsData.lockedUntil) : 0;
             if (lockedUntil && now < lockedUntil) {
-                return res.json({ valid: false, locked: true });
+                const remainingMinutes = Math.ceil((lockedUntil - now) / (60 * 1000));
+                return res.status(429).json({ valid: false, locked: true, remainingMinutes });
             }
             let storedHash = credsData.staffPinHash;
             if (!storedHash) {
                 const systemDoc = await db.collection('settings').doc('system').get();
                 const legacyPin = systemDoc.data()?.liveStaffPin || '000000';
-                storedHash = (0, auth_1.hashPin)(legacyPin);
+                storedHash = (0, auth_2.hashPin)(legacyPin);
                 await credsRef.set({ staffPinHash: storedHash }, { merge: true });
             }
-            const inputHash = (0, auth_1.hashPin)(pathPin);
+            const inputHash = (0, auth_2.hashPin)(pathPin);
             return res.json({ valid: inputHash === storedHash });
         }
-        catch (_error) {
-            return res.json({ valid: false });
+        catch (error) {
+            console.error('Error checking staff path PIN:', error);
+            return res.status(500).json({ valid: false, error: 'Internal server error' });
         }
     });
     post('/staff/pin/verify', async (req, res) => {
@@ -107,10 +113,10 @@ function registerStaffRoutes(app, ctx) {
             if (!storedHash) {
                 const systemDoc = await db.collection('settings').doc('system').get();
                 const legacyPin = systemDoc.data()?.liveStaffPin || '000000';
-                storedHash = (0, auth_1.hashPin)(legacyPin);
+                storedHash = (0, auth_2.hashPin)(legacyPin);
                 await credsRef.set({ staffPinHash: storedHash }, { merge: true });
             }
-            const inputHash = (0, auth_1.hashPin)(pin);
+            const inputHash = (0, auth_2.hashPin)(pin);
             if (inputHash === storedHash) {
                 const sessionToken = `st_${Date.now()}_${crypto.randomBytes(16).toString('hex')}`;
                 const tokenExpiresAt = now + (8 * 60 * 60 * 1000);
@@ -121,8 +127,20 @@ function registerStaffRoutes(app, ctx) {
                     failedAttempts: 0,
                     lockedUntil: null
                 }, { merge: true });
-                (0, auth_1.invalidateAuthCache)();
-                return res.json({ success: true, access_token: sessionToken, expires_in: 28800 });
+                (0, auth_2.invalidateAuthCache)();
+                let firebaseCustomToken = null;
+                try {
+                    firebaseCustomToken = await (0, auth_1.getAuth)().createCustomToken('staff-user', { staff: true });
+                }
+                catch (tokenErr) {
+                    console.warn('[Staff Auth] Failed to generate Firebase custom token:', tokenErr);
+                }
+                return res.json({
+                    success: true,
+                    access_token: sessionToken,
+                    firebase_custom_token: firebaseCustomToken,
+                    expires_in: 28800
+                });
             }
             const failedAttempts = (credsData.failedAttempts || 0) + 1;
             const updateData = {
@@ -167,19 +185,19 @@ function registerStaffRoutes(app, ctx) {
             if (!storedHash) {
                 const systemDoc = await db.collection('settings').doc('system').get();
                 const legacyPin = systemDoc.data()?.liveStaffPin || '000000';
-                storedHash = (0, auth_1.hashPin)(legacyPin);
+                storedHash = (0, auth_2.hashPin)(legacyPin);
             }
-            if ((0, auth_1.hashPin)(currentPin) !== storedHash) {
+            if ((0, auth_2.hashPin)(currentPin) !== storedHash) {
                 return res.status(400).json({ error: '目前金鑰輸入錯誤！' });
             }
-            const newHash = (0, auth_1.hashPin)(newPin);
+            const newHash = (0, auth_2.hashPin)(newPin);
             await credsRef.set({
                 staffPinHash: newHash,
                 updatedAt: new Date().toISOString(),
                 failedAttempts: 0,
                 lockedUntil: null
             }, { merge: true });
-            (0, auth_1.invalidateAuthCache)();
+            (0, auth_2.invalidateAuthCache)();
             await db.collection('settings').doc('system').update({ liveStaffPin: firestore_1.FieldValue.delete() }).catch(() => { });
             return res.json({ success: true, message: '員工解鎖金鑰已成功變更並安全儲存！' });
         }

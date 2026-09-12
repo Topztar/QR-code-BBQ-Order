@@ -261,16 +261,23 @@ put('/orders/:id/checkout', requireStaffAuth, async (req, res) => {
   const { paymentMethod, cashTendered, changeAmount } = req.body;
   try {
     let resolvedStatus = 'paid';
-    let orderDataToUse: any = null;
 
     await db.runTransaction(async (t) => {
       const orderRef = db.collection('orders').doc(id);
       const orderDoc = await t.get(orderRef);
       if (!orderDoc.exists) throw new Error('Order not found');
       
-      orderDataToUse = orderDoc.data();
-      const currentStatus = orderDataToUse?.status;
+      const orderData = orderDoc.data();
+      const currentStatus = orderData?.status;
       resolvedStatus = (currentStatus === 'completed' || currentStatus === 'cancelled') ? currentStatus : 'paid';
+
+      let tableRef = null;
+      let tableSnap = null;
+      if (orderData && orderData.tableNumber && !String(orderData.tableNumber).includes('外帶') && String(orderData.tableNumber).toLowerCase() !== 'takeout') {
+        const tblId = String(orderData.tableNumber).trim();
+        tableRef = db.collection('tables').doc(tblId);
+        tableSnap = await t.get(tableRef);
+      }
 
       t.update(orderRef, {
         paymentMethod: paymentMethod || 'cash',
@@ -279,34 +286,15 @@ put('/orders/:id/checkout', requireStaffAuth, async (req, res) => {
         isPaid: true,
         status: resolvedStatus
       });
-    });
 
-    if (orderDataToUse && orderDataToUse.tableNumber && !String(orderDataToUse.tableNumber).includes('外帶') && String(orderDataToUse.tableNumber).toLowerCase() !== 'takeout') {
-      const tblId = String(orderDataToUse.tableNumber).trim();
-      const tableRef = db.collection('tables').doc(tblId);
-      const tableSnap = await tableRef.get();
-      if (tableSnap.exists) {
-        await tableRef.update({
+      if (tableRef && tableSnap && tableSnap.exists) {
+        t.update(tableRef, {
           status: 'cleaning',
           preservedFor: '',
           cleaningStartedAt: new Date().toISOString()
         });
       }
-    }
-
-    if (orderDataToUse && orderDataToUse.reservationNo) {
-      const resQuery = await db.collection('reservations').where('reservationNo', '==', orderDataToUse.reservationNo).get();
-      if (!resQuery.empty) {
-        for (const doc of resQuery.docs) {
-          await db.collection('reservations').doc(doc.id).delete();
-        }
-      } else {
-        const resDoc = await db.collection('reservations').doc(orderDataToUse.reservationNo).get();
-        if (resDoc.exists) {
-          await db.collection('reservations').doc(orderDataToUse.reservationNo).delete();
-        }
-      }
-    }
+    });
 
     res.json({ id, ...req.body, isPaid: true, status: resolvedStatus });
   } catch (error) {

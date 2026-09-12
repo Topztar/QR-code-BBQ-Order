@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerSettingsRoutes = registerSettingsRoutes;
+const validateVersion_1 = require("../middleware/validateVersion");
 const firestore_1 = require("firebase-admin/firestore");
 const auth_1 = require("../auth");
 const helpers_1 = require("../helpers");
@@ -59,6 +60,26 @@ function registerSettingsRoutes(app, ctx) {
             res.setHeader('Cache-Control', 'public, max-age=30, s-maxage=300, stale-while-revalidate=600');
             const sysData = await getCachedSettings();
             res.json({ notice: sysData?.liveCustomerNotice || '' });
+        }
+        catch (error) {
+            sendErrorResponse(res, error);
+        }
+    });
+    get('/settings/version', async (_req, res) => {
+        try {
+            const doc = await db.collection('settings').doc('system').get();
+            const version = doc.data()?.liveSystemVersion || '';
+            res.json({ version });
+        }
+        catch (error) {
+            sendErrorResponse(res, error);
+        }
+    });
+    post('/settings/version', requireStaffAuth, validateVersion_1.validateVersion, async (req, res) => {
+        const { version } = req.body;
+        try {
+            await db.collection('settings').doc('system').set({ liveSystemVersion: version }, { merge: true });
+            res.json({ success: true, version });
         }
         catch (error) {
             sendErrorResponse(res, error);

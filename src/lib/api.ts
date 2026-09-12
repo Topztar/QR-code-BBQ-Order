@@ -1,10 +1,12 @@
 import { getToken } from 'firebase/app-check';
 import { appCheck } from './firebase';
 
-export const getAuthHeader = async () => {
+export const getAuthHeader = async (opts: { skipAuth?: boolean } = {}) => {
   const headers: Record<string, string> = {};
-  const token = localStorage.getItem('sabay_jwt_token');
-  if (token) headers['Authorization'] = `Bearer ${token}`;
+  if (!opts.skipAuth) {
+    const token = localStorage.getItem('sabay_jwt_token');
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+  }
 
   if (appCheck) {
     try {
@@ -18,7 +20,11 @@ export const getAuthHeader = async () => {
 };
 
 export const apiFetch = async (url: string, options: any = {}) => {
-  const authHeaders = await getAuthHeader();
+  const method = (options.method || 'GET').toUpperCase();
+  const isPublicGet = method === 'GET' && /^\/api\/(bootstrap|menu|categories|settings\/version)/.test(url);
+  const skipAuth = options.skipAuth ?? (isPublicGet && !options.forceAuth);
+
+  const authHeaders = await getAuthHeader({ skipAuth });
   const headers = {
     'Content-Type': 'application/json',
     ...options.headers,

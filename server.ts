@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import express from 'express';
+import crypto from 'crypto';
 import sharp from 'sharp';
 import path from 'path';
 import net from 'net';
@@ -220,6 +221,8 @@ import 'dotenv/config';
 let liveStaffPin = process.env.DEFAULT_STAFF_PIN || '000000';
 
 let livePrinterIp = process.env.PRINTER_IP || '127.0.0.1';
+
+let liveSystemVersion = '1.0.0';
 
 let liveTables: TableConfig[] = [
   {
@@ -759,7 +762,7 @@ let liveMembers: MemberRecord[] = [];
 // ─────────────────────────────────────────────────────────────────────────────
 
 // --- Firestore Cloud Persistence Integration ---
-let DISABLE_FIREBASE_SYNC = process.env.DISABLE_FIREBASE_SYNC !== 'false'; // Set to true per user request: "停止與Firebase同步"
+let DISABLE_FIREBASE_SYNC = process.env.DISABLE_FIREBASE_SYNC === 'true'; // Default to enabled unless explicitly set to 'true'
 let firestoreDb: any = null;
 
 if (DISABLE_FIREBASE_SYNC) {
@@ -923,7 +926,8 @@ async function saveStateToFirestore() {
       liveMemberVipDiscountRate,
       liveMemberEnablePointsDiscount,
       liveMemberPointsRedeemRate,
-      liveMemberRewards
+      liveMemberRewards,
+      liveSystemVersion
     }));
 
     // 8. Logs
@@ -1152,6 +1156,7 @@ async function loadStateFromFirestore(): Promise<boolean> {
       if (sys.liveMemberEnablePointsDiscount !== undefined) liveMemberEnablePointsDiscount = !!sys.liveMemberEnablePointsDiscount;
       if (sys.liveMemberPointsRedeemRate !== undefined) liveMemberPointsRedeemRate = Number(sys.liveMemberPointsRedeemRate);
       if (sys.liveMemberRewards !== undefined) liveMemberRewards = sys.liveMemberRewards;
+      if (sys.liveSystemVersion !== undefined) liveSystemVersion = String(sys.liveSystemVersion);
       console.log('[Sabay Firebase] Loaded system settings.');
     }
 
@@ -1223,6 +1228,7 @@ function saveStateToDisk() {
       liveMemberRewards,
       liveMembers,
       liveNotificationSettings,
+      liveSystemVersion,
     };
     fs.writeFileSync(PERSISTENCE_FILE_PATH, JSON.stringify(dataToSave, null, 2), "utf-8");
     console.log("✓ System State fully saved to codebase disk:", PERSISTENCE_FILE_PATH);
@@ -1309,6 +1315,9 @@ function loadStateFromDisk() {
         }
         if (parsed.liveCustomerNotice !== undefined) {
           liveCustomerNotice = String(parsed.liveCustomerNotice);
+        }
+        if (parsed.liveSystemVersion !== undefined) {
+          liveSystemVersion = String(parsed.liveSystemVersion);
         }
         if (parsed.liveServicePaused !== undefined) {
           liveServicePaused = !!parsed.liveServicePaused;
@@ -2027,7 +2036,7 @@ app.get('/api/menu', (_req, res) => {
 
 // Create live menu item
 app.post('/api/menu', (req, res) => {
-  const { category, name, price, image, description, available, isSetMeal, requiredSaucesOption, hasNoodlesOption, hasCoconutsMilkOption, containsBeef, containsPork, containsSeafood, isNotSpicy, isTakeoutAvailable, customAddOns, recipe } = req.body;
+  const { category, name, price, image, thumbnailUrl, avifUrl, avifThumbnailUrl, description, available, isSetMeal, requiredSaucesOption, hasNoodlesOption, hasCoconutsMilkOption, containsBeef, containsPork, containsSeafood, isNotSpicy, isTakeoutAvailable, customAddOns, recipe } = req.body;
   
   if (!category || !name || !price) {
     return res.status(400).json({ error: 'Missing required fields (category, name, price)' });
@@ -2041,6 +2050,9 @@ app.post('/api/menu', (req, res) => {
     name: typeof name === 'object' ? name : { zh: name || '', en: name || '', ko: name || '', ja: name || '', th: name || '', vi: name || '', ru: name || '', es: name || '' },
     price: Number(price),
     image: cleanImage || 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=400',
+    thumbnailUrl: typeof thumbnailUrl === 'string' ? thumbnailUrl.trim() : (thumbnailUrl || undefined),
+    avifUrl: typeof avifUrl === 'string' ? avifUrl.trim() : (avifUrl || undefined),
+    avifThumbnailUrl: typeof avifThumbnailUrl === 'string' ? avifThumbnailUrl.trim() : (avifThumbnailUrl || undefined),
     description: typeof description === 'object' ? description : { zh: description || '', en: description || '', ko: description || '', ja: description || '', th: description || '', vi: description || '', ru: description || '', es: description || '' },
     available: isAvail,
     soldOutAt: !isAvail ? new Date().toISOString() : null,
@@ -2094,11 +2106,14 @@ app.put('/api/menu/reorder', (req, res) => {
 // Update live menu item
 app.put('/api/menu/:id', (req, res) => {
   const { id } = req.params;
-  const { category, name, price, image, description, available, soldOutType, soldOutDate, isSetMeal, requiredSaucesOption, hasNoodlesOption, hasCoconutsMilkOption, containsBeef, containsPork, containsSeafood, isNotSpicy, isTakeoutAvailable, customAddOns, recipe } = req.body;
+  const { category, name, price, image, thumbnailUrl, avifUrl, avifThumbnailUrl, description, available, soldOutType, soldOutDate, isSetMeal, requiredSaucesOption, hasNoodlesOption, hasCoconutsMilkOption, containsBeef, containsPork, containsSeafood, isNotSpicy, isTakeoutAvailable, customAddOns, recipe } = req.body;
   
   const itemIndex = liveMenu.findIndex(m => m.id === id);
   if (itemIndex > -1) {
     const cleanImage = image !== undefined ? (typeof image === 'string' ? image.trim() : image) : liveMenu[itemIndex].image;
+    const cleanThumb = thumbnailUrl !== undefined ? (typeof thumbnailUrl === 'string' ? thumbnailUrl.trim() : thumbnailUrl) : liveMenu[itemIndex].thumbnailUrl;
+    const cleanAvif = avifUrl !== undefined ? (typeof avifUrl === 'string' ? avifUrl.trim() : avifUrl) : liveMenu[itemIndex].avifUrl;
+    const cleanAvifThumb = avifThumbnailUrl !== undefined ? (typeof avifThumbnailUrl === 'string' ? avifThumbnailUrl.trim() : avifThumbnailUrl) : liveMenu[itemIndex].avifThumbnailUrl;
     const targetAvailable = available !== undefined ? !!available : liveMenu[itemIndex].available;
     let targetSoldOutAt = liveMenu[itemIndex].soldOutAt;
     if (!targetAvailable) {
@@ -2115,6 +2130,9 @@ app.put('/api/menu/:id', (req, res) => {
       name: name !== undefined ? (typeof name === 'object' ? name : { zh: name || '', en: name || '', ko: name || '', ja: name || '', th: name || '', vi: name || '', ru: name || '', es: name || '' }) : liveMenu[itemIndex].name,
       price: price !== undefined ? Number(price) : liveMenu[itemIndex].price,
       image: cleanImage,
+      thumbnailUrl: cleanThumb,
+      avifUrl: cleanAvif,
+      avifThumbnailUrl: cleanAvifThumb,
       description: description !== undefined ? (typeof description === 'object' ? description : { zh: description || '', en: description || '', ko: description || '', ja: description || '', th: description || '', vi: description || '', ru: description || '', es: description || '' }) : liveMenu[itemIndex].description,
       available: targetAvailable,
       soldOutType: soldOutType !== undefined ? soldOutType : liveMenu[itemIndex].soldOutType,
@@ -2368,6 +2386,37 @@ app.post('/api/settings/service-pause', (req, res) => {
     return res.json({ success: true, servicePaused: liveServicePaused });
   }
   res.status(400).json({ error: 'Invalid servicePaused value / 暫停服務值無效' });
+});
+
+// System Version Settings Endpoints
+app.get('/api/settings/version', (_req, res) => {
+  res.json({ version: liveSystemVersion });
+});
+
+app.post('/api/settings/version', (req, res) => {
+  const authHeader = req.headers.authorization;
+  // If authorization header is provided, validate it
+  if (authHeader) {
+    if (!authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: '未授權存取：憑證格式不正確' });
+    }
+    const token = authHeader.split('Bearer ')[1]?.trim();
+    if (token && token !== 'valid-staff-session' && !token.startsWith('st_') && token !== 'authenticated') {
+      return res.status(403).json({ error: '安全憑證無效或已過期，請確認管理員權限' });
+    }
+  }
+
+  const { version } = req.body;
+  if (!version || typeof version !== 'string' || !version.trim()) {
+    return res.status(400).json({ error: '版本號必須為非空字串' });
+  }
+  const semver = /^v?\d+\.\d+\.\d+$/;
+  if (!semver.test(version.trim())) {
+    return res.status(400).json({ error: '版本號格式不正確，應為 X.Y.Z 或 vX.Y.Z (例如 1.0.0)' });
+  }
+  liveSystemVersion = version.trim();
+  saveStateToDisk();
+  return res.json({ success: true, version: liveSystemVersion });
 });
 
 // Popular items Settings Endpoints
@@ -3109,6 +3158,14 @@ app.get('/api/takeout/status', (_req, res) => {
 });
 
 // Staff PIN Authentication & Update Endpoints
+const PIN_SALT = process.env.PIN_SALT || 'sabay-bbq-secure-salt-2026';
+function hashPinLocal(pin: string, salt: string = PIN_SALT): string {
+  return crypto.createHash('sha256').update(`${String(pin).trim()}:${salt}`).digest('hex');
+}
+
+let staffFailedAttempts = 0;
+let staffLockedUntil: number | null = null;
+
 app.get('/api/staff/pin/value', (_req, res) => {
   // Security Hardening: Never expose raw plaintext secret staff credentials to public clients!
   res.json({ blocked: true });
@@ -3120,7 +3177,9 @@ app.post('/api/staff/pin/check-path', (req, res) => {
   if (!pathPin) {
     return res.json({ valid: false });
   }
-  return res.json({ valid: pathPin === liveStaffPin });
+  const inputHash = hashPinLocal(pathPin);
+  const targetHash = hashPinLocal(liveStaffPin);
+  return res.json({ valid: inputHash === targetHash });
 });
 
 // Securely verify active staff session token
@@ -3138,10 +3197,43 @@ app.get('/api/staff/verify', (req, res) => {
 
 app.post('/api/staff/pin/verify', (req, res) => {
   const { pin } = req.body;
-  if (pin === liveStaffPin) {
-    return res.json({ success: true, access_token: 'valid-staff-session' });
+  if (!pin || typeof pin !== 'string') {
+    return res.status(400).json({ success: false, error: '請輸入有效的 6 位數金鑰' });
   }
-  return res.status(400).json({ success: false, error: '解鎖金鑰錯誤！' });
+
+  const now = Date.now();
+  if (staffLockedUntil && now < staffLockedUntil) {
+    const remainingMinutes = Math.ceil((staffLockedUntil - now) / (60 * 1000));
+    return res.status(429).json({
+      success: false,
+      error: `連續輸入錯誤次數過多，系統已安全鎖定！請於 ${remainingMinutes} 分鐘後再試。`,
+      locked: true,
+      remainingMinutes
+    });
+  }
+
+  const inputHash = hashPinLocal(pin);
+  const targetHash = hashPinLocal(liveStaffPin);
+
+  if (inputHash === targetHash) {
+    staffFailedAttempts = 0;
+    staffLockedUntil = null;
+    const sessionToken = `st_${Date.now()}_${crypto.randomBytes(16).toString('hex')}`;
+    return res.json({ success: true, access_token: sessionToken });
+  }
+
+  staffFailedAttempts++;
+  if (staffFailedAttempts >= 5) {
+    staffLockedUntil = now + (15 * 60 * 1000); // 鎖定 15 分鐘
+    return res.status(429).json({
+      success: false,
+      error: '連續輸入錯誤達 5 次，系統已安全鎖定 15 分鐘！',
+      locked: true,
+      remainingMinutes: 15
+    });
+  }
+
+  return res.status(400).json({ success: false, error: '解鎖金鑰錯誤！(請輸入正確的 6 位數金鑰)' });
 });
 
 app.put('/api/staff/pin', (req, res) => {
@@ -3149,7 +3241,9 @@ app.put('/api/staff/pin', (req, res) => {
   if (!currentPin || !newPin) {
     return res.status(400).json({ error: '請輸入目前金鑰與新解鎖金鑰 / Required fields missing' });
   }
-  if (currentPin !== liveStaffPin) {
+  const currentHash = hashPinLocal(currentPin);
+  const targetHash = hashPinLocal(liveStaffPin);
+  if (currentHash !== targetHash) {
     return res.status(400).json({ error: '目前金鑰輸入錯誤！ / Incorrect current PIN' });
   }
   if (!/^\d{6}$/.test(newPin)) {

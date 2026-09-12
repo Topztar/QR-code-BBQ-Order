@@ -3,6 +3,7 @@ import { Coins, Plus, Trash2, QrCode, ShoppingBag, Copy, Check, ExternalLink } f
 import { TableConfig } from '../../types';
 import { getLocalizedText } from '../../utils/i18n';
 import { getMaskedEmail } from './ManagerDashboardUtils';
+import VersionInput from './VersionInput';
 
 interface ManagerMembersTabProps {
   membersList: any[];
@@ -594,6 +595,9 @@ export const ManagerMembersTab: React.FC<ManagerMembersTabProps> = ({
             </button>
           </div>
         </div>
+
+        {/* 系統發行版本號設定 (僅管理員授權) */}
+        <VersionInput />
 
         {/* 系統資料清洗 System Sanitize & Reset */}
         <div className="bg-[#161616] border border-rose-500/20 rounded-xl p-5 space-y-4 font-sans text-left">

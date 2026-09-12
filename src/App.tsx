@@ -127,6 +127,7 @@ function AppContent({
   }, [isStaff, navigateTo]);
   const [staffPin] = useState<string>('');
   const [showContactDetails, setShowContactDetails] = useState<boolean>(false);
+  const [systemVersion] = useState<string>('1.0.0');
 
   const isAtStaffPath = activeTab !== 'customer';
 
@@ -410,15 +411,8 @@ function AppContent({
             <div className="flex items-center justify-between sm:justify-end gap-3 flex-1">
               <div className="min-h-6 flex items-center">
                 {showContactDetails ? (
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-4 space-y-1 sm:space-y-0 text-white/90 text-xs font-medium">
-                    <span className="flex items-center space-x-1">
-                      <Phone size={12} className="text-[#E5B453]" />
-                      <span className="font-mono text-[11px] text-white/85">0966-626408</span>
-                    </span>
-                    <span className="flex items-center space-x-1">
-                      <MapPin size={12} className="text-[#E5B453]" />
-                      <span className="font-sans text-[11px] text-white/85">桃園市大園區高鐵北路二段198號1樓</span>
-                    </span>
+                  <div className="text-white/90 text-xs font-medium">
+                    System version: {systemVersion}
                   </div>
                 ) : (
                   <span className="text-[10px] text-white/20 italic font-mono tracking-widest bg-black/10 px-2 py-0.5 rounded">
@@ -441,7 +435,7 @@ function AppContent({
                 ) : (
                   <>
                     <Eye size={10.5} />
-                    <span>點擊解鎖 Reveal Address</span>
+                    <span>Version</span>
                   </>
                 )}
               </button>

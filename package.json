@@ -13,7 +13,8 @@
     "audit:security": "node scripts/run_security_audit.cjs",
     "audit:perf": "node scripts/run_perf_audit.cjs",
     "audit:cost": "node scripts/run_cost_audit.cjs",
-    "audit:all": "node scripts/run_all_checks.cjs"
+    "audit:all": "node scripts/run_all_checks.cjs",
+    "set-version": "node scripts/set-version.cjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
