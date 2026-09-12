@@ -173,7 +173,7 @@ function registerMenuRoutes(app, ctx) {
             return res.status(500).json({ error: 'Failed to upload image to storage', details: error?.message });
         }
     });
-    get('/images/:path(*)', async (req, res) => {
+    get('/images/:path(.*)', async (req, res) => {
         const DEFAULT_FALLBACK_IMAGE = 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=600';
         try {
             let rawPath = req.params?.path || req.query.path || req.query.file || req.query.name || '';
