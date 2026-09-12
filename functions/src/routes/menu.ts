@@ -237,7 +237,7 @@ export function registerMenuRoutes(app: express.Application, ctx: RouteContext) 
   });
 
   // 1.1 Serve / Proxy images from Firebase Storage
-  get('/images/:path*', async (req, res) => {
+  get('/images/*path', async (req, res) => {
     const DEFAULT_FALLBACK_IMAGE = 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=600';
     try {
       let rawPath = (req.params as any)?.path || (req.query.path as string) || (req.query.file as string) || (req.query.name as string) || '';
