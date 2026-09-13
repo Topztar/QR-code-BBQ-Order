@@ -9,6 +9,7 @@ const sharp_1 = __importDefault(require("sharp"));
 const busboy_1 = __importDefault(require("busboy"));
 const validators_1 = require("../validators");
 const helpers_1 = require("../helpers");
+const bootstrap_1 = require("./bootstrap");
 async function processAndSaveImage(buffer, targetFolder, rawFilename, storageBucket) {
     if (buffer.length > 10 * 1024 * 1024) {
         throw new Error('圖片大小超出 10MB 上限 (Max 10MB)');
@@ -306,6 +307,7 @@ function registerMenuRoutes(app, ctx) {
                 orderIndex: data.orderIndex !== undefined ? data.orderIndex : 999
             };
             await db.collection('menu').doc(newItem.id).set(newItem);
+            (0, bootstrap_1.invalidatePublicBootstrapCache)();
             res.status(201).json(newItem);
         }
         catch (error) {
@@ -324,6 +326,7 @@ function registerMenuRoutes(app, ctx) {
                 batch.update(ref, { orderIndex: index });
             });
             await batch.commit();
+            (0, bootstrap_1.invalidatePublicBootstrapCache)();
             res.json({ success: true });
         }
         catch (error) {
@@ -374,6 +377,7 @@ function registerMenuRoutes(app, ctx) {
                 }
             }
             await db.collection('menu').doc(id).set(data, { merge: true });
+            (0, bootstrap_1.invalidatePublicBootstrapCache)();
             res.json({ success: true });
         }
         catch (error) {
@@ -417,6 +421,7 @@ function registerMenuRoutes(app, ctx) {
             else {
                 await db.collection('menu').doc(id).delete();
             }
+            (0, bootstrap_1.invalidatePublicBootstrapCache)();
             res.json({ success: true });
         }
         catch (error) {
@@ -458,6 +463,7 @@ function registerMenuRoutes(app, ctx) {
                     updatedAt: new Date().toISOString()
                 };
                 await docRef.set(updateData, { merge: true });
+                (0, bootstrap_1.invalidatePublicBootstrapCache)();
                 const updatedItem = { ...currentData, ...updateData };
                 return res.json({ success: true, item: updatedItem, available: newAvailable });
             }
@@ -472,6 +478,7 @@ function registerMenuRoutes(app, ctx) {
         try {
             const data = req.body;
             const docRef = await db.collection('categories').add(data);
+            (0, bootstrap_1.invalidatePublicBootstrapCache)();
             res.json({ id: docRef.id });
         }
         catch (error) {
@@ -484,6 +491,7 @@ function registerMenuRoutes(app, ctx) {
             const id = req.params.id;
             const data = req.body;
             await db.collection('categories').doc(id).set(data, { merge: true });
+            (0, bootstrap_1.invalidatePublicBootstrapCache)();
             res.json({ success: true });
         }
         catch (error) {
@@ -495,6 +503,7 @@ function registerMenuRoutes(app, ctx) {
         try {
             const id = req.params.id;
             await db.collection('categories').doc(id).delete();
+            (0, bootstrap_1.invalidatePublicBootstrapCache)();
             res.json({ success: true });
         }
         catch (error) {
@@ -513,6 +522,7 @@ function registerMenuRoutes(app, ctx) {
                 batch.update(ref, { orderIndex: index });
             });
             await batch.commit();
+            (0, bootstrap_1.invalidatePublicBootstrapCache)();
             res.json({ success: true });
         }
         catch (error) {

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Order, MenuItem, Category, TableConfig, Reservation, Language } from '../../types';
 import { getLocalizedText } from '../../utils/i18n';
+import { isReservationUpcoming } from '../../context/RestaurantDataContext';
 import {
   Check,
   ChevronDown,
@@ -226,7 +227,7 @@ export const KdsTicketCard: React.FC<KdsTicketCardProps> = React.memo(({
           const now = new Date();
           const matchingUpcomingRes = (reservations || []).find((r) => {
             if (String(r.tableNumber).trim() !== String(order.tableNumber).trim()) return false;
-            if (r.status === 'upcoming') return true;
+            if (r.status === 'upcoming' || isReservationUpcoming(r)) return true;
             if (r.status === 'pending' && r.date && r.time) {
               const [year, month, day] = r.date.split('-').map(Number);
               const [hour, minute] = r.time.split(':').map(Number);

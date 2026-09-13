@@ -36,7 +36,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.warmupPrewarmInstance = exports.reconcileDailySoldOut = exports.onMenuItemWritten = exports.api = exports.requireAppCheck = exports.sendErrorResponse = exports.requireStaffAuth = void 0;
+exports.reconcileDailySoldOut = exports.onMenuItemWritten = exports.api = exports.requireAppCheck = exports.sendErrorResponse = exports.requireStaffAuth = void 0;
 exports.createRateLimiter = createRateLimiter;
 const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-functions/v2/firestore");
@@ -107,50 +107,17 @@ function createRateLimiter(maxRequests, windowMs = 60 * 1000, actionName = '操�
         if (bucket.count >= maxRequests) {
             const waitSec = Math.ceil((bucket.resetAt - now) / 1000);
             return res.status(429).json({
-                error: `請求頻率過高：${actionName} 頻率已達上限，請於 ${waitSec} 秒後再試 (Too Many Requests - L1)`
+                error: `請求頻率過高：${actionName} 頻率已達上限，請於 ${waitSec} 秒後再試 (Too Many Requests)`
             });
         }
         bucket.count++;
-        const threshold = Math.floor(maxRequests * 0.7);
-        if (bucket.count < threshold) {
-            return next();
-        }
-        const cleanIp = ip.replace(/[^a-zA-Z0-9_.]/g, '_');
-        const timeWindowId = Math.floor(now / windowMs);
-        const fsDocId = `${actionName}_${cleanIp}_${timeWindowId}`;
-        const fsDocRef = db.collection('_ratelimits').doc(fsDocId);
-        try {
-            const docSnap = await fsDocRef.get();
-            const currentGlobalCount = docSnap.exists ? (docSnap.data()?.count || 0) : 0;
-            if (currentGlobalCount >= maxRequests) {
-                bucket.count = maxRequests;
-                const waitSec = Math.ceil((bucket.resetAt - now) / 1000);
-                return res.status(429).json({
-                    error: `請求頻率過高：${actionName} 頻率已達上限，請於 ${waitSec} 秒後再試 (Too Many Requests - L2)`
-                });
+        if (rateLimitStore.size > 1000) {
+            for (const [k, b] of rateLimitStore.entries()) {
+                if (now > b.resetAt)
+                    rateLimitStore.delete(k);
             }
-            fsDocRef.set({
-                count: firestore_2.FieldValue.increment(1),
-                expireAt: new Date(now + windowMs * 2)
-            }, { merge: true }).catch(err => console.error('[RateLimiter L2] Async update failed:', err));
-            if (Math.random() < 0.02) {
-                db.collection('_ratelimits').where('expireAt', '<', new Date()).limit(50).get()
-                    .then(expiredSnap => {
-                    if (!expiredSnap.empty) {
-                        const batch = db.batch();
-                        expiredSnap.docs.forEach(d => batch.delete(d.ref));
-                        return batch.commit();
-                    }
-                    return null;
-                })
-                    .catch(err => console.error('[RateLimiter Cleanup] Failed:', err));
-            }
-            return next();
         }
-        catch (err) {
-            console.warn('[RateLimiter L2] Check failed, falling back to L1:', err);
-            return next();
-        }
+        return next();
     };
 }
 const sendErrorResponse = (res, error, contextMsg = '伺服器內部錯誤') => {
@@ -303,20 +270,6 @@ exports.reconcileDailySoldOut = (0, scheduler_1.onSchedule)({
     }
     catch (err) {
         console.error('[Reconciler] Failed to reset daily sold-out items:', err);
-    }
-});
-exports.warmupPrewarmInstance = (0, scheduler_1.onSchedule)({
-    schedule: '*/10 17-22 * * *',
-    timeZone: 'Asia/Taipei',
-    region: 'asia-east1',
-}, async () => {
-    try {
-        console.log('[Warmup Scheduler] Keeping Cloud Functions instance warm during peak dinner hours...');
-        await db.collection('settings').doc('system').get();
-        console.log('[Warmup Scheduler] Pre-warm completed successfully (0ms latency ready).');
-    }
-    catch (err) {
-        console.warn('[Warmup Scheduler] Pre-warm probe failed:', err);
     }
 });
 //# sourceMappingURL=index.js.map

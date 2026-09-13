@@ -79,18 +79,17 @@ post('/orders', requireAppCheck, orderRateLimiter, async (req, res) => {
   const orderId = orderData.id || `ORD-${Date.now().toString(36).toUpperCase()}`;
 
   try {
+    const sysData = await getCachedSettings();
+    
+    // 預約專屬點餐 (reservationNo/reservationDate) 或 外帶點餐 (takeoutInfo/外帶) 豁免一般營業時間限制
+    const isTakeoutOrder = !!(orderData.takeoutInfo || String(orderData.tableNumber || '').includes('外帶') || String(orderData.tableNumber || '').toLowerCase() === 'takeout');
+    const isReservationOrder = !!(orderData.reservationNo || orderData.reservationDate);
+    if (!isReservationOrder && !isTakeoutOrder && !isStoreOpenFromData(sysData)) {
+      return res.status(400).json({ error: 'CLOSED:目前不在營業時間內（店鋪休息中），系統不開放下單點餐！' });
+    }
+
     const savedOrder = await db.runTransaction(async (t) => {
       // 1. Reads
-      const systemDoc = await t.get(db.collection('settings').doc('system'));
-      const sysData = systemDoc.data();
-      
-      // 預約專屬點餐 (reservationNo/reservationDate) 或 外帶點餐 (takeoutInfo/外帶) 豁免一般營業時間限制
-      const isTakeoutOrder = !!(orderData.takeoutInfo || String(orderData.tableNumber || '').includes('外帶') || String(orderData.tableNumber || '').toLowerCase() === 'takeout');
-      const isReservationOrder = !!(orderData.reservationNo || orderData.reservationDate);
-      if (!isReservationOrder && !isTakeoutOrder && !isStoreOpenFromData(sysData)) {
-        throw new Error('CLOSED:目前不在營業時間內（店鋪休息中），系統不開放下單點餐！');
-      }
-
       let tableSnap = null;
       let tableRef = null;
       if (orderData.tableNumber && !isTakeoutOrder) {
@@ -258,7 +257,7 @@ put('/orders/:id/items', requireStaffAuth, async (req, res) => {
 
 put('/orders/:id/checkout', requireStaffAuth, async (req, res) => {
   const id = req.params.id as string;
-  const { paymentMethod, cashTendered, changeAmount } = req.body;
+  const { paymentMethod, cashTendered, changeAmount, checkoutRecord } = req.body;
   try {
     let resolvedStatus = 'paid';
 
@@ -284,7 +283,8 @@ put('/orders/:id/checkout', requireStaffAuth, async (req, res) => {
         cashTendered: cashTendered || 0,
         changeAmount: changeAmount || 0,
         isPaid: true,
-        status: resolvedStatus
+        status: resolvedStatus,
+        updatedAt: new Date().toISOString()
       });
 
       if (tableRef && tableSnap && tableSnap.exists) {
@@ -292,6 +292,18 @@ put('/orders/:id/checkout', requireStaffAuth, async (req, res) => {
           status: 'cleaning',
           preservedFor: '',
           cleaningStartedAt: new Date().toISOString()
+        });
+      }
+
+      // Atomically persist checkout record in checkouts collection via Admin SDK
+      if (checkoutRecord && typeof checkoutRecord === 'object') {
+        const txId = checkoutRecord.id || `TX-${Date.now()}`;
+        const checkoutRef = db.collection('checkouts').doc(txId);
+        t.set(checkoutRef, {
+          ...checkoutRecord,
+          id: txId,
+          orderId: id,
+          checkoutTime: checkoutRecord.checkoutTime || new Date().toISOString()
         });
       }
     });
@@ -322,11 +334,13 @@ post('/orders/bulk-checkout', requireStaffAuth, async (req, res) => {
       });
     }
 
-    // 1. Process all target orders
-    for (const id of orderIds) {
-      const orderRef = db.collection('orders').doc(id);
-      const orderDoc = await orderRef.get();
+    // 1. Process all target orders (Batch read with db.getAll to eliminate sequential roundtrips)
+    const orderRefs = orderIds.map(id => db.collection('orders').doc(id));
+    const orderDocs = await db.getAll(...orderRefs);
+    for (const orderDoc of orderDocs) {
       if (!orderDoc.exists) continue;
+      const id = orderDoc.id;
+      const orderRef = orderDoc.ref;
       const orderData = orderDoc.data();
 
       const currentStatus = orderData?.status;
@@ -489,6 +503,35 @@ del('/orders/:id', requireStaffAuth, async (req, res) => {
     res.json({ success: true });
   } catch (error) {
     res.status(500).send(error);
+  }
+});
+
+// 24.1. Bulk Delete Historical Orders (Admin SDK batch deletion)
+post('/orders/bulk-delete', requireStaffAuth, async (req, res) => {
+  const { thresholdDate } = req.body;
+  if (!thresholdDate || typeof thresholdDate !== 'string') {
+    return res.status(400).json({ error: '無效的截止日期格式 (thresholdDate is required)' });
+  }
+  try {
+    const snapshot = await db.collection('orders')
+      .where('createdAt', '<', thresholdDate)
+      .limit(450)
+      .get();
+
+    if (snapshot.empty) {
+      return res.json({ success: true, deletedCount: 0, message: '沒有符合條件的歷史訂單' });
+    }
+
+    const batch = db.batch();
+    snapshot.docs.forEach((d) => {
+      batch.delete(d.ref);
+    });
+
+    await batch.commit();
+    res.json({ success: true, deletedCount: snapshot.size });
+  } catch (error) {
+    console.error('[bulk-delete orders error]', error);
+    res.status(500).json({ error: '批量刪除訂單失敗' });
   }
 });
 

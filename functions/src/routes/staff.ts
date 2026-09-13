@@ -265,13 +265,23 @@ post('/takeout/scan', async (_req, res) => {
   }
 });
 
+let cachedTakeoutStatus: { data: any; timestamp: number } | null = null;
+const TAKEOUT_STATUS_CACHE_TTL_MS = 60 * 1000;
+
 get('/takeout/status', async (_req, res) => {
   try {
+    const now = Date.now();
+    res.setHeader('Cache-Control', 'public, max-age=30, s-maxage=60, stale-while-revalidate=120');
+    if (cachedTakeoutStatus && (now - cachedTakeoutStatus.timestamp < TAKEOUT_STATUS_CACHE_TTL_MS)) {
+      return res.json(cachedTakeoutStatus.data);
+    }
     const systemDoc = await db.collection('settings').doc('system').get();
-    res.json({
+    const data = {
       sequence: systemDoc.data()?.liveTakeoutSeq || 0,
       lastResetDate: systemDoc.data()?.lastTakeoutDate || ''
-    });
+    };
+    cachedTakeoutStatus = { data, timestamp: now };
+    res.json(data);
   } catch (error) {
     sendErrorResponse(res, error);
   }

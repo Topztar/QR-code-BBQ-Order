@@ -7,7 +7,6 @@ import { sanitizePhoneDigits, isValidTaiwanPhone, TAIWAN_PHONE_ERROR_MSG } from 
 import { calculateReservationAvailability, autoSelectOptimalTables, validateCapacity } from '../utils/reservationValidator';
 import { db, isFirebaseSyncEnabled } from '../lib/firebase';
 import { safeStorage } from '../lib/safeStorage';
-import { doc, setDoc, writeBatch, collection, getDocs, query, where } from 'firebase/firestore';
 import {
   checkPOSBridgeHealth,
   openCashDrawerViaBridge,
@@ -102,6 +101,9 @@ interface ManagerDashboardProps {
       serviceCharge?: number;
       total?: number;
       discount?: number;
+      cashTendered?: number;
+      changeAmount?: number;
+      checkoutRecord?: any;
       isPaid?: boolean;
     },
     skipRefresh?: boolean
@@ -1581,15 +1583,6 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
         checkoutTime: checkoutRecord.checkoutTime
       };
 
-      try {
-        if (isFirebaseSyncEnabled()) {
-          await setDoc(doc(db, 'checkouts', dbPostRecord.id), dbPostRecord);
-          console.log('✓ Successfully uploaded cashier checkout record to Cloud Firestore. Doc ID:', dbPostRecord.id);
-        }
-      } catch (err: any) {
-        console.warn('⚠️ Firestore upload failed or sync disabled, continuing with local POS checkout flow gracefully:', err);
-      }
-      
       // Make a static copy of the merged orders array to prevent recalculated useMemo states mid-loop
       const staticMergedOrders = [...cashierMergedOrders];
 
@@ -1896,16 +1889,16 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
         checkoutTime: new Date().toISOString()
       };
 
-      try {
-        if (isFirebaseSyncEnabled()) {
-          await setDoc(doc(db, 'checkouts', checkoutRecord.id), checkoutRecord);
-          console.log('✓ Successfully uploaded checkout record to Cloud Firestore. Doc ID:', checkoutRecord.id);
-        }
-      } catch (error: any) {
-        console.warn('⚠️ Firestore upload failed or sync disabled, continuing with local checkout flow:', error);
-      }
-
-      await onPayOrder(selectedOrder.id);
+      await onPayOrder(selectedOrder.id, {
+        paymentMethod: selectedOrder.paymentMethod,
+        subtotal: selectedOrder.subtotal,
+        serviceCharge: selectedOrder.serviceCharge,
+        total: selectedOrder.total,
+        cashTendered: selectedOrder.paymentMethod === 'cash' ? cashReceivedInput : selectedOrder.total,
+        changeAmount: change,
+        isPaid: true,
+        checkoutRecord
+      });
 
       setSelectedOrder({
         ...selectedOrder,
@@ -2246,8 +2239,9 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     }
   }, [activeSubTab]);
 
-  // Polling servers
+  // Fetch takeout status on-demand (only needed for stats tab display, 5s interval eliminated)
   useEffect(() => {
+    if (activeSubTab !== 'stats') return;
     const fetchTakeoutStatus = async () => {
       try {
         const res = await apiFetch('/api/takeout/status');
@@ -2260,9 +2254,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
       }
     };
     fetchTakeoutStatus();
-    const interval = setInterval(fetchTakeoutStatus, 5000);
-    return () => clearInterval(interval);
-  }, []);
+  }, [activeSubTab]);
 
   // Fetch Inventory Logs
   const fetchInventoryLogs = async () => {
@@ -2277,9 +2269,12 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     }
   };
 
+  // Only fetch inventory logs when viewing the inventory or EOD tabs
   useEffect(() => {
-    fetchInventoryLogs();
-  }, [ingredients, orders]);
+    if (activeSubTab === 'inventory' || activeSubTab === 'eod') {
+      fetchInventoryLogs();
+    }
+  }, [activeSubTab]);
 
   // Load Google members statistics
   const loadMembers = () => {
@@ -2611,44 +2606,20 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
 
     setIsBulkDeleting(true);
     try {
-      const q = query(
-        collection(db, 'orders'),
-        where('createdAt', '<', targetDate.toISOString())
-      );
-      const snapshot = await getDocs(q);
-      if (snapshot.empty) {
-        alert('沒有符合條件的訂單可刪除！');
-        setIsBulkDeleting(false);
-        setShowBulkDeleteOrdersModal(false);
-        return;
-      }
-      
-      let deletedCount = 0;
-      const batches = [];
-      let currentBatch = writeBatch(db);
-      let opCount = 0;
-
-      snapshot.docs.forEach((d) => {
-        currentBatch.delete(d.ref);
-        opCount++;
-        deletedCount++;
-        if (opCount === 490) {
-          batches.push(currentBatch);
-          currentBatch = writeBatch(db);
-          opCount = 0;
-        }
+      const res = await apiFetch('/api/orders/bulk-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ thresholdDate: targetDate.toISOString() })
       });
-      if (opCount > 0) {
-        batches.push(currentBatch);
+      if (res.ok) {
+        const data = await res.json();
+        alert(`已成功刪除 ${data.deletedCount || 0} 筆歷史訂單！`);
+        setShowBulkDeleteOrdersModal(false);
+        setBulkDeleteThresholdDate('');
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        alert('刪除失敗: ' + (errData.error || '伺服器處理異常'));
       }
-      
-      for (const batch of batches) {
-        await batch.commit();
-      }
-
-      alert(`已成功刪除 ${deletedCount} 筆歷史訂單！`);
-      setShowBulkDeleteOrdersModal(false);
-      setBulkDeleteThresholdDate('');
     } catch (error: any) {
       console.error('Error deleting orders:', error);
       alert('刪除失敗: ' + error.message);

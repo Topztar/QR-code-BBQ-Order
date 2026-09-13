@@ -92,6 +92,9 @@ export interface OrderDataContextType {
       serviceCharge?: number;
       total?: number;
       discount?: number;
+      cashTendered?: number;
+      changeAmount?: number;
+      checkoutRecord?: any;
       isPaid?: boolean;
     },
     skipRefresh?: boolean
@@ -372,11 +375,18 @@ export function OrderDataProvider({
     let unsubscribeOrders = () => {};
 
     const isCustomerView = activeTab === 'customer';
-    const tableParam = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('table') : null;
-    const cleanPath = currentPath.replace('/', '').trim();
-    const currentTable = tableParam || (cleanPath !== '' && !['admin', 'kitchen', 'cashier'].includes(cleanPath) ? cleanPath : '');
 
-    // Fallback Polling Mechanism for Express Server Backend or when offline / Firebase quota exceeded
+    // 🛡️ 顧客端防護：顧客端手機為匿名訪客，無 staff 權限。
+    // Firestore Rules 與後端 /api/orders 皆拒絕匿名存取全店訂單 (避免顧客資訊外流)。
+    // 顧客訂單完全由提交時的本地狀態與 sabay-my-submitted-order-ids 維護，
+    // 嚴禁顧客端發起 onSnapshot 或 /api/orders 請求，徹底消除 401/403 錯誤與失敗監聽風暴。
+    if (isCustomerView) {
+      return () => {
+        unsubscribeOrders();
+      };
+    }
+
+    // Fallback Polling Mechanism for Staff Views when offline / Firebase quota exceeded
     const fetchOrdersFromApi = async () => {
       try {
         let url = `/api/orders?_t=${Date.now()}`;
@@ -384,13 +394,6 @@ export function OrderDataProvider({
         if (res.ok) {
           let data = await res.json();
           if (Array.isArray(data)) {
-            // Replicate Firebase query filtering logic
-            if (isCustomerView && currentTable && currentTable !== '') {
-              data = data.filter((o: Order) => String(o.tableNumber) === String(currentTable));
-            } else if (isCustomerView) {
-              data = data.filter((o: Order) => String(o.tableNumber) === 'NONE').slice(0, 1);
-            }
-            
             // Replicate Firebase query sorting logic (descending by createdAt)
             data.sort((a: Order, b: Order) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
             
@@ -412,32 +415,13 @@ export function OrderDataProvider({
     };
 
     if (syncActive && isFirebaseSyncEnabled() && !forceApiFallback) {
-      // 🛡️ 顧客端若無桌號（如瀏覽外帶頁面或訪客首頁），不發起全店 300 筆訂單監聽
-      if (isCustomerView && (!currentTable || currentTable === '')) {
-        fetchOrdersFromApi();
-        return () => {
-          unsubscribeOrders();
-        };
-      }
-
       try {
-        let ordersQuery;
-        if (isCustomerView && currentTable && currentTable !== '') {
-          // ☁️ 顧客端精準查詢：僅監聽自己該桌號，節省 90% Firestore 讀取消耗
-          ordersQuery = query(
-            collection(db, "orders"),
-            where("tableNumber", "==", currentTable),
-            orderBy("createdAt", "desc"),
-            limit(50)
-          );
-        } else {
-          // 🍳 後台 (廚房 KDS / 櫃檯收銀 / 數據分析)：讀取最新待處理與即時訂單
-          ordersQuery = query(
-            collection(db, "orders"),
-            orderBy("createdAt", "desc"),
-            limit(200)
-          );
-        }
+        // 🍳 後台 (廚房 KDS / 櫃檯收銀 / 數據分析)：讀取最新待處理與即時訂單
+        const ordersQuery = query(
+          collection(db, "orders"),
+          orderBy("createdAt", "desc"),
+          limit(200)
+        );
 
         unsubscribeOrders = onSnapshot(ordersQuery, (snapshot) => {
           const updatedOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
@@ -456,7 +440,6 @@ export function OrderDataProvider({
           setOrders(reconcileOrdersWithRecentTransitions(normalizedOrders));
         }, (error) => {
           console.warn('[Firebase Sync] Realtime listener error or paused (fallback to single API sync, polling disabled):', error);
-          // 🛡️ 靜態單次降級同步，嚴禁啟動暴力輪詢 (5秒 setInterval) 導致海量 Billing 帳單！
           fetchOrdersFromApi();
         });
       } catch (e) {
@@ -851,6 +834,9 @@ export function OrderDataProvider({
       serviceCharge?: number;
       total?: number;
       discount?: number;
+      cashTendered?: number;
+      changeAmount?: number;
+      checkoutRecord?: any;
       isPaid?: boolean;
     },
     skipRefresh?: boolean
@@ -911,9 +897,7 @@ export function OrderDataProvider({
         body: JSON.stringify(checkoutData || { isPaid: true }),
       });
       if (res.ok) {
-        if (!skipRefresh && onRefreshData) {
-          await onRefreshData();
-        }
+        // 🛡️ 結帳成功：訂單狀態與桌態已由樂觀更新與廣播頻道同步，消除每次結帳重複下載完整 bootstrap 的浪費
       } else {
         addRequestToQueue(`/api/orders/${orderId}/checkout`, 'PUT', checkoutData || { isPaid: true }, description);
       }
@@ -1038,9 +1022,7 @@ export function OrderDataProvider({
         body: JSON.stringify(payload),
       });
       if (res.ok) {
-        if (!skipRefresh && onRefreshData) {
-          await onRefreshData();
-        }
+        // 🛡️ 批次結帳成功：消除重複下載完整 bootstrap 的無效請求
         return { success: true };
       } else {
         addRequestToQueue('/api/orders/bulk-checkout', 'POST', payload, description);

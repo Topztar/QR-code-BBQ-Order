@@ -53,14 +53,13 @@ function registerOrdersRoutes(app, ctx) {
         const orderData = validation.sanitizedData;
         const orderId = orderData.id || `ORD-${Date.now().toString(36).toUpperCase()}`;
         try {
+            const sysData = await getCachedSettings();
+            const isTakeoutOrder = !!(orderData.takeoutInfo || String(orderData.tableNumber || '').includes('外帶') || String(orderData.tableNumber || '').toLowerCase() === 'takeout');
+            const isReservationOrder = !!(orderData.reservationNo || orderData.reservationDate);
+            if (!isReservationOrder && !isTakeoutOrder && !(0, helpers_1.isStoreOpenFromData)(sysData)) {
+                return res.status(400).json({ error: 'CLOSED:目前不在營業時間內（店鋪休息中），系統不開放下單點餐！' });
+            }
             const savedOrder = await db.runTransaction(async (t) => {
-                const systemDoc = await t.get(db.collection('settings').doc('system'));
-                const sysData = systemDoc.data();
-                const isTakeoutOrder = !!(orderData.takeoutInfo || String(orderData.tableNumber || '').includes('外帶') || String(orderData.tableNumber || '').toLowerCase() === 'takeout');
-                const isReservationOrder = !!(orderData.reservationNo || orderData.reservationDate);
-                if (!isReservationOrder && !isTakeoutOrder && !(0, helpers_1.isStoreOpenFromData)(sysData)) {
-                    throw new Error('CLOSED:目前不在營業時間內（店鋪休息中），系統不開放下單點餐！');
-                }
                 let tableSnap = null;
                 let tableRef = null;
                 if (orderData.tableNumber && !isTakeoutOrder) {
@@ -201,7 +200,7 @@ function registerOrdersRoutes(app, ctx) {
     });
     put('/orders/:id/checkout', requireStaffAuth, async (req, res) => {
         const id = req.params.id;
-        const { paymentMethod, cashTendered, changeAmount } = req.body;
+        const { paymentMethod, cashTendered, changeAmount, checkoutRecord } = req.body;
         try {
             let resolvedStatus = 'paid';
             await db.runTransaction(async (t) => {
@@ -224,13 +223,24 @@ function registerOrdersRoutes(app, ctx) {
                     cashTendered: cashTendered || 0,
                     changeAmount: changeAmount || 0,
                     isPaid: true,
-                    status: resolvedStatus
+                    status: resolvedStatus,
+                    updatedAt: new Date().toISOString()
                 });
                 if (tableRef && tableSnap && tableSnap.exists) {
                     t.update(tableRef, {
                         status: 'cleaning',
                         preservedFor: '',
                         cleaningStartedAt: new Date().toISOString()
+                    });
+                }
+                if (checkoutRecord && typeof checkoutRecord === 'object') {
+                    const txId = checkoutRecord.id || `TX-${Date.now()}`;
+                    const checkoutRef = db.collection('checkouts').doc(txId);
+                    t.set(checkoutRef, {
+                        ...checkoutRecord,
+                        id: txId,
+                        orderId: id,
+                        checkoutTime: checkoutRecord.checkoutTime || new Date().toISOString()
                     });
                 }
             });
@@ -256,11 +266,13 @@ function registerOrdersRoutes(app, ctx) {
                     }
                 });
             }
-            for (const id of orderIds) {
-                const orderRef = db.collection('orders').doc(id);
-                const orderDoc = await orderRef.get();
+            const orderRefs = orderIds.map(id => db.collection('orders').doc(id));
+            const orderDocs = await db.getAll(...orderRefs);
+            for (const orderDoc of orderDocs) {
                 if (!orderDoc.exists)
                     continue;
+                const id = orderDoc.id;
+                const orderRef = orderDoc.ref;
                 const orderData = orderDoc.data();
                 const currentStatus = orderData?.status;
                 const resolvedStatus = (currentStatus === 'completed' || currentStatus === 'cancelled') ? currentStatus : 'paid';
@@ -404,6 +416,31 @@ function registerOrdersRoutes(app, ctx) {
         }
         catch (error) {
             res.status(500).send(error);
+        }
+    });
+    post('/orders/bulk-delete', requireStaffAuth, async (req, res) => {
+        const { thresholdDate } = req.body;
+        if (!thresholdDate || typeof thresholdDate !== 'string') {
+            return res.status(400).json({ error: '無效的截止日期格式 (thresholdDate is required)' });
+        }
+        try {
+            const snapshot = await db.collection('orders')
+                .where('createdAt', '<', thresholdDate)
+                .limit(450)
+                .get();
+            if (snapshot.empty) {
+                return res.json({ success: true, deletedCount: 0, message: '沒有符合條件的歷史訂單' });
+            }
+            const batch = db.batch();
+            snapshot.docs.forEach((d) => {
+                batch.delete(d.ref);
+            });
+            await batch.commit();
+            res.json({ success: true, deletedCount: snapshot.size });
+        }
+        catch (error) {
+            console.error('[bulk-delete orders error]', error);
+            res.status(500).json({ error: '批量刪除訂單失敗' });
         }
     });
     post('/print-logs/clear', requireStaffAuth, async (_req, res) => {

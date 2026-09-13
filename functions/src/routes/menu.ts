@@ -5,6 +5,7 @@ import { Firestore } from 'firebase-admin/firestore';
 import { Bucket } from '@google-cloud/storage';
 import { validateImageUploadPayload, sanitizeString } from '../validators';
 import { cachedMenu, cachedCategories, setCachedMenu, setCachedCategories, CACHE_TTL_MS, processMenuItemSoldOut, cleanupStorageImage } from '../helpers';
+import { invalidatePublicBootstrapCache } from './bootstrap';
 
 // ============================================================
 // MENU 路由模組
@@ -386,6 +387,7 @@ export function registerMenuRoutes(app: express.Application, ctx: RouteContext) 
         orderIndex: data.orderIndex !== undefined ? data.orderIndex : 999
       };
       await db.collection('menu').doc(newItem.id).set(newItem);
+      invalidatePublicBootstrapCache();
       res.status(201).json(newItem);
     } catch (error) {
       console.error('Error creating menu:', error);
@@ -404,6 +406,7 @@ export function registerMenuRoutes(app: express.Application, ctx: RouteContext) 
         batch.update(ref, { orderIndex: index });
       });
       await batch.commit();
+      invalidatePublicBootstrapCache();
       res.json({ success: true });
     } catch (error) {
       sendErrorResponse(res, error);
@@ -458,6 +461,7 @@ export function registerMenuRoutes(app: express.Application, ctx: RouteContext) 
       }
 
       await db.collection('menu').doc(id).set(data, { merge: true });
+      invalidatePublicBootstrapCache();
       res.json({ success: true });
     } catch (error) {
       console.error('Error updating menu:', error);
@@ -504,6 +508,7 @@ export function registerMenuRoutes(app: express.Application, ctx: RouteContext) 
         await db.collection('menu').doc(id).delete();
       }
 
+      invalidatePublicBootstrapCache();
       res.json({ success: true });
     } catch (error) {
       console.error('Error deleting menu:', error);
@@ -553,6 +558,7 @@ export function registerMenuRoutes(app: express.Application, ctx: RouteContext) 
         };
         
         await docRef.set(updateData, { merge: true });
+        invalidatePublicBootstrapCache();
         const updatedItem = { ...currentData, ...updateData };
         return res.json({ success: true, item: updatedItem, available: newAvailable });
       }
@@ -569,6 +575,7 @@ export function registerMenuRoutes(app: express.Application, ctx: RouteContext) 
     try {
       const data = req.body;
       const docRef = await db.collection('categories').add(data);
+      invalidatePublicBootstrapCache();
       res.json({ id: docRef.id });
     } catch (error) {
       console.error('Error creating category:', error);
@@ -582,6 +589,7 @@ export function registerMenuRoutes(app: express.Application, ctx: RouteContext) 
       const id = req.params.id as string;
       const data = req.body;
       await db.collection('categories').doc(id).set(data, { merge: true });
+      invalidatePublicBootstrapCache();
       res.json({ success: true });
     } catch (error) {
       console.error('Error updating category:', error);
@@ -594,6 +602,7 @@ export function registerMenuRoutes(app: express.Application, ctx: RouteContext) 
     try {
       const id = req.params.id as string;
       await db.collection('categories').doc(id).delete();
+      invalidatePublicBootstrapCache();
       res.json({ success: true });
     } catch (error) {
       console.error('Error deleting category:', error);
@@ -612,6 +621,7 @@ export function registerMenuRoutes(app: express.Application, ctx: RouteContext) 
         batch.update(ref, { orderIndex: index });
       });
       await batch.commit();
+      invalidatePublicBootstrapCache();
       res.json({ success: true });
     } catch (error) {
       sendErrorResponse(res, error);

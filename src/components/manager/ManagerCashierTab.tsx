@@ -4,11 +4,11 @@ import { VirtuosoGrid } from 'react-virtuoso';
 import { TakeoutLiveCard } from './TakeoutLiveCard';
 import { CashierOrderCard } from './CashierOrderCard';
 import { useCashierState } from '../../hooks/useCashierState';
-import { doc, setDoc } from 'firebase/firestore';
 import { db, isFirebaseSyncEnabled } from '../../lib/firebase';
 import { openCashDrawerViaBridge } from '../../lib/posBridgeClient';
 import { apiFetch } from '../../lib/api';
 import { computeOrderItemsSubtotal } from '../ManagerDashboard';
+import { isReservationUpcoming } from '../../context/RestaurantDataContext';
 
 import {
   Calendar, Check, Clock, Coins, Copy, Edit,
@@ -567,16 +567,7 @@ export const ManagerCashierTab: React.FC<ManagerCashierTabProps> = (props) => {
           checkoutRecord: dbPostRecord
         });
       } else {
-        try {
-          if (isFirebaseSyncEnabled()) {
-            await setDoc(doc(db, 'checkouts', dbPostRecord.id), dbPostRecord);
-            console.log('✓ Successfully uploaded cashier checkout record to Cloud Firestore. Doc ID:', dbPostRecord.id);
-          }
-        } catch (err: any) {
-          console.warn('⚠️ Firestore upload failed or sync disabled, continuing with local POS checkout flow gracefully:', err);
-        }
-
-        // Update all merged orders as paid!
+        // Fallback: Update all merged orders as paid!
         for (let i = 0; i < staticMergedOrders.length; i++) {
           const ord = staticMergedOrders[i];
           const skipRefresh = i < staticMergedOrders.length - 1;
@@ -588,7 +579,8 @@ export const ManagerCashierTab: React.FC<ManagerCashierTabProps> = (props) => {
               serviceCharge: cashierCalculatedTotals.surcharge,
               discount: cashierCalculatedTotals.discount,
               total: cashierCalculatedTotals.total,
-              isPaid: true
+              isPaid: true,
+              checkoutRecord: dbPostRecord
             }, skipRefresh);
           } else {
             await onPayOrder(ord.id, {
@@ -2898,7 +2890,11 @@ export const ManagerCashierTab: React.FC<ManagerCashierTabProps> = (props) => {
 
                   {(() => {
                     const filteredListForBatch = (reservations || []).filter(
-                      r => selectedCalendarStatusFilter === 'all' || r.status === selectedCalendarStatusFilter
+                      r => selectedCalendarStatusFilter === 'all'
+                        ? true
+                        : selectedCalendarStatusFilter === 'upcoming'
+                        ? isReservationUpcoming(r)
+                        : r.status === selectedCalendarStatusFilter
                     );
                     const filteredPendingList = filteredListForBatch.filter(r => r.status === 'pending');
                     const isAllPendingSelected = filteredPendingList.length > 0 && filteredPendingList.every(r => selectedResIds.includes(r.id));
@@ -3088,7 +3084,13 @@ export const ManagerCashierTab: React.FC<ManagerCashierTabProps> = (props) => {
                                       </td>
                                       <td className="p-3 min-w-[120px] whitespace-nowrap">
                                         {res.status === 'pending' && <span className="bg-amber-500/10 border border-amber-500/20 text-amber-400 px-2 py-0.5 rounded-md font-sans font-bold text-[10px] inline-block">⏳ 待確認 Pending</span>}
-                                        {res.status === 'confirmed' && <span className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-md font-sans font-bold text-[10px] inline-block">🟢 已確認 Confirmed</span>}
+                                        {res.status === 'confirmed' && (
+                                          isReservationUpcoming(res) ? (
+                                            <span className="bg-rose-500/15 border border-rose-550/30 text-rose-400 px-2 py-0.5 rounded-md font-sans font-extrabold text-[10px] inline-block animate-pulse">⚡ 即將到來 Upcoming</span>
+                                          ) : (
+                                            <span className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-md font-sans font-bold text-[10px] inline-block">🟢 已確認 Confirmed</span>
+                                          )
+                                        )}
                                         {res.status === 'upcoming' && <span className="bg-rose-500/15 border border-rose-550/30 text-rose-400 px-2 py-0.5 rounded-md font-sans font-extrabold text-[10px] inline-block animate-pulse">⚡ 即將到來 Upcoming</span>}
                                         {res.status === 'seated' && <span className="bg-blue-500/10 border border-blue-500/20 text-blue-400 px-2 py-0.5 rounded-md font-sans font-bold text-[10px] inline-block">🔵 已就座 Seated</span>}
                                         {res.status === 'completed' && <span className="bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 px-2 py-0.5 rounded-md font-sans font-bold text-[10px] inline-block">✅ 已結帳 Completed</span>}

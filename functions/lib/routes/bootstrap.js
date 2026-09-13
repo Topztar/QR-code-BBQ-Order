@@ -33,12 +33,16 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.invalidatePublicBootstrapCache = invalidatePublicBootstrapCache;
 exports.registerBootstrapRoutes = registerBootstrapRoutes;
 const crypto = __importStar(require("crypto"));
 const helpers_1 = require("../helpers");
 const auth_1 = require("../auth");
 let cachedPublicBootstrap = null;
-const BOOTSTRAP_CACHE_TTL_MS = 15 * 1000;
+const BOOTSTRAP_CACHE_TTL_MS = 180 * 1000;
+function invalidatePublicBootstrapCache() {
+    cachedPublicBootstrap = null;
+}
 function registerBootstrapRoutes(app, ctx) {
     const { db, storageBucket, requireStaffAuth, createRateLimiter, sendErrorResponse } = ctx;
     const _storageBucket = storageBucket;
@@ -49,7 +53,7 @@ function registerBootstrapRoutes(app, ctx) {
     const del = (routePath, ...handlers) => app.delete([`/api${routePath}`, routePath], ...handlers);
     get('/bootstrap', async (req, res) => {
         try {
-            res.setHeader('Cache-Control', 'public, max-age=15, s-maxage=180, stale-while-revalidate=600');
+            res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=180, stale-while-revalidate=600');
             const todayStr = new Date().toISOString().split('T')[0];
             let isStaffRequest = false;
             const authHeader = req.headers.authorization;
@@ -177,7 +181,13 @@ function registerBootstrapRoutes(app, ctx) {
                 };
             }
             res.setHeader('ETag', etag);
-            res.setHeader('Cache-Control', 'public, max-age=30, s-maxage=300, stale-while-revalidate=600');
+            res.setHeader('Vary', 'Authorization');
+            if (isStaffRequest) {
+                res.setHeader('Cache-Control', 'private, max-age=0, no-cache');
+            }
+            else {
+                res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=180, stale-while-revalidate=600');
+            }
             if (req.headers['if-none-match'] === etag) {
                 return res.status(304).end();
             }

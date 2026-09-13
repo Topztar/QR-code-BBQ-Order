@@ -20,7 +20,15 @@ export interface RouteContext {
 }
 
 let cachedPublicBootstrap: { payload: any; etag: string; timestamp: number } | null = null;
-const BOOTSTRAP_CACHE_TTL_MS = 15 * 1000;
+const BOOTSTRAP_CACHE_TTL_MS = 180 * 1000; // 3 minutes in-memory TTL to eliminate read storms
+
+/**
+ * ⚡ 主動清除公開 Bootstrap 快取
+ * 當管理員新增/修改/刪除菜單品項、分類、桌位或營業設定時調用
+ */
+export function invalidatePublicBootstrapCache() {
+  cachedPublicBootstrap = null;
+}
 
 export function registerBootstrapRoutes(app: express.Application, ctx: RouteContext) {
   const { db, storageBucket, requireStaffAuth, createRateLimiter, sendErrorResponse } = ctx;
@@ -35,7 +43,7 @@ export function registerBootstrapRoutes(app: express.Application, ctx: RouteCont
 
   get('/bootstrap', async (req, res) => {
     try {
-      res.setHeader('Cache-Control', 'public, max-age=15, s-maxage=180, stale-while-revalidate=600');
+      res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=180, stale-while-revalidate=600');
       const todayStr = new Date().toISOString().split('T')[0];
       
       let isStaffRequest = false;
@@ -188,7 +196,7 @@ export function registerBootstrapRoutes(app: express.Application, ctx: RouteCont
       if (isStaffRequest) {
         res.setHeader('Cache-Control', 'private, max-age=0, no-cache');
       } else {
-        res.setHeader('Cache-Control', 'public, max-age=30, s-maxage=300, stale-while-revalidate=600');
+        res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=180, stale-while-revalidate=600');
       }
 
       if (req.headers['if-none-match'] === etag) {

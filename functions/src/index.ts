@@ -86,7 +86,7 @@ export function createRateLimiter(maxRequests: number, windowMs: number = 60 * 1
     const key = `${actionName}:${ip}`;
     const now = Date.now();
 
-    // 1. L1 Memory Check (擋掉 99% 的短時間巨量狂暴攻擊)
+    // 1. 記憶體高效滑動窗口 (0 Firestore 讀寫消耗，杜絕 Wi-Fi 共享 IP 觸發的 _ratelimits 寫入與批次清理風暴)
     let bucket = rateLimitStore.get(key);
     if (!bucket || now > bucket.resetAt) {
       bucket = { count: 0, resetAt: now + windowMs };
@@ -96,62 +96,19 @@ export function createRateLimiter(maxRequests: number, windowMs: number = 60 * 1
     if (bucket.count >= maxRequests) {
       const waitSec = Math.ceil((bucket.resetAt - now) / 1000);
       return res.status(429).json({
-        error: `請求頻率過高：${actionName} 頻率已達上限，請於 ${waitSec} 秒後再試 (Too Many Requests - L1)`
+        error: `請求頻率過高：${actionName} 頻率已達上限，請於 ${waitSec} 秒後再試 (Too Many Requests)`
       });
     }
     bucket.count++;
 
-    // 🚀 智慧水位節流 (Threshold Buffering): 若 L1 仍在安全水位 (< 70%)，直接放行，0 Firestore 讀寫消耗
-    const threshold = Math.floor(maxRequests * 0.7);
-    if (bucket.count < threshold) {
-      return next();
+    // 週期性清理過期項目，避免記憶體洩漏
+    if (rateLimitStore.size > 1000) {
+      for (const [k, b] of rateLimitStore.entries()) {
+        if (now > b.resetAt) rateLimitStore.delete(k);
+      }
     }
 
-    // 2. L2 Firestore Distributed Check (僅在達到高水位時觸發)
-    const cleanIp = ip.replace(/[^a-zA-Z0-9_.]/g, '_');
-    const timeWindowId = Math.floor(now / windowMs);
-    const fsDocId = `${actionName}_${cleanIp}_${timeWindowId}`;
-    const fsDocRef = db.collection('_ratelimits').doc(fsDocId);
-
-    try {
-      const docSnap = await fsDocRef.get();
-      const currentGlobalCount = docSnap.exists ? (docSnap.data()?.count || 0) : 0;
-
-      if (currentGlobalCount >= maxRequests) {
-        // 同步填滿 L1 Bucket，讓後續同實例請求提早擋下，節省 Firestore 讀取帳單
-        bucket.count = maxRequests;
-        const waitSec = Math.ceil((bucket.resetAt - now) / 1000);
-        return res.status(429).json({
-          error: `請求頻率過高：${actionName} 頻率已達上限，請於 ${waitSec} 秒後再試 (Too Many Requests - L2)`
-        });
-      }
-
-      // 非同步增加全局計數與 TTL，不阻塞主執行緒 (Fire and forget)
-      fsDocRef.set({
-        count: FieldValue.increment(1),
-        expireAt: new Date(now + windowMs * 2)
-      }, { merge: true }).catch(err => console.error('[RateLimiter L2] Async update failed:', err));
-
-      // P2-3: 🗑️ 輕量級隨機清理過期 _ratelimits (機率 2%)
-      if (Math.random() < 0.02) {
-        db.collection('_ratelimits').where('expireAt', '<', new Date()).limit(50).get()
-          .then(expiredSnap => {
-            if (!expiredSnap.empty) {
-              const batch = db.batch();
-              expiredSnap.docs.forEach(d => batch.delete(d.ref));
-              return batch.commit();
-            }
-            return null;
-          })
-          .catch(err => console.error('[RateLimiter Cleanup] Failed:', err));
-      }
-
-      return next();
-    } catch (err) {
-      // 降級放行 (Fail-open): 若 Firestore 異常，不阻斷正常顧客點餐，依賴 L1 防護即可
-      console.warn('[RateLimiter L2] Check failed, falling back to L1:', err);
-      return next();
-    }
+    return next();
   };
 }
 
@@ -352,24 +309,4 @@ export const reconcileDailySoldOut = onSchedule(
   }
 );
 
-// 23. Warmup & Pre-warming Cloud Scheduler (Suggestion 2)
-// Runs every 10 minutes during peak dinner operations (17:00 - 22:50 Asia/Taipei)
-// to keep Gen 2 Cloud Function instances warm, eliminating Cold Starts during rushes.
-export const warmupPrewarmInstance = onSchedule(
-  {
-    schedule: '*/10 17-22 * * *',
-    timeZone: 'Asia/Taipei',
-    region: 'asia-east1',
-  },
-  async () => {
-    try {
-      console.log('[Warmup Scheduler] Keeping Cloud Functions instance warm during peak dinner hours...');
-      // Lightweight Firestore check to pre-warm connection pool
-      await db.collection('settings').doc('system').get();
-      console.log('[Warmup Scheduler] Pre-warm completed successfully (0ms latency ready).');
-    } catch (err) {
-      console.warn('[Warmup Scheduler] Pre-warm probe failed:', err);
-    }
-  }
-);
 

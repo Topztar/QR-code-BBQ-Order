@@ -128,9 +128,8 @@ export function useOrderSubmit(
       // 再次廣播確認後的訂單物件
       broadcastOrderEvent({ type: 'ORDER_CREATED', order: completedOrder });
 
-      if (onRefreshData) {
-        await onRefreshData();
-      }
+      // 🛡️ 顧客下單後無需重新下載完整 bootstrap (菜單/分類未改變，桌位狀態已樂觀更新)，
+      // 消除每次點餐產生 106 次 Firestore 讀取的嚴重浪費。
       activeOrderSubmissionsRef.current.delete(clientOrderId);
       return completedOrder;
     } catch (err: any) {

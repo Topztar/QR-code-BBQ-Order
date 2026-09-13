@@ -4,11 +4,10 @@ import { Bucket } from '@google-cloud/storage';
 import { validateReservationPayload } from '../validators';
 import { createGetCachedSettings, createGetCachedNotificationSettings } from '../helpers';
 import { sendReservationNotifications } from '../services/notification';
-
+import { invalidatePublicBootstrapCache } from './bootstrap';
 
 // ============================================================
 // TABLES 路由模組
-// 此模組由自動拆分腳本生成，請勿手動修改路由定義行順序。
 // ============================================================
 
 type RouteRegister = (path: string, ...handlers: express.RequestHandler[]) => void;
@@ -19,6 +18,13 @@ export interface RouteContext {
   requireStaffAuth: express.RequestHandler;
   createRateLimiter: (max: number, windowMs: number, name: string) => express.RequestHandler;
   sendErrorResponse: (res: express.Response, error: any, ctx?: string) => void;
+}
+
+let cachedTablesData: { data: any; timestamp: number } | null = null;
+const TABLES_CACHE_TTL_MS = 10 * 1000;
+
+export function invalidateTablesCache() {
+  cachedTablesData = null;
 }
 
 export function registerTablesRoutes(app: express.Application, ctx: RouteContext) {
@@ -35,9 +41,12 @@ export function registerTablesRoutes(app: express.Application, ctx: RouteContext
 
 get('/tables', async (_req, res) => {
   try {
-    res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=5, stale-while-revalidate=15');
-    const snapshot = await db.collection('tables').select('id', 'qrCodeUrl', 'status', 'cleaningStartedAt', 'maxCapacity', 'positionX', 'positionY', 'preservedFor', 'mergedWith').get();
     const nowMs = Date.now();
+    res.setHeader('Cache-Control', 'public, max-age=5, s-maxage=10, stale-while-revalidate=15');
+    if (cachedTablesData && (nowMs - cachedTablesData.timestamp < TABLES_CACHE_TTL_MS)) {
+      return res.json(cachedTablesData.data);
+    }
+    const snapshot = await db.collection('tables').select('id', 'qrCodeUrl', 'status', 'cleaningStartedAt', 'maxCapacity', 'positionX', 'positionY', 'preservedFor', 'mergedWith').get();
     const tables = snapshot.docs.map(doc => {
       const tb = doc.data() as any;
       if (tb.status === 'cleaning') {
@@ -53,6 +62,7 @@ get('/tables', async (_req, res) => {
       return tb;
     });
 
+    cachedTablesData = { data: tables, timestamp: nowMs };
     res.json(tables);
   } catch (error) {
     console.error('Error fetching tables:', error);
@@ -79,6 +89,8 @@ post('/tables', requireStaffAuth, async (req, res) => {
   const data = req.body;
   try {
     await db.collection('tables').doc(data.id).set(data);
+    invalidateTablesCache();
+    invalidatePublicBootstrapCache();
     res.status(201).json(data);
   } catch (error) {
     sendErrorResponse(res, error);
@@ -95,6 +107,8 @@ put('/tables/:id', requireStaffAuth, async (req, res) => {
       updates.cleaningStartedAt = null;
     }
     await db.collection('tables').doc(id).update(updates);
+    invalidateTablesCache();
+    invalidatePublicBootstrapCache();
     res.json({ success: true });
   } catch (error) {
     sendErrorResponse(res, error);
@@ -105,6 +119,8 @@ del('/tables/:id', requireStaffAuth, async (req, res) => {
   const id = req.params.id as string;
   try {
     await db.collection('tables').doc(id).delete();
+    invalidateTablesCache();
+    invalidatePublicBootstrapCache();
     res.json({ success: true });
   } catch (error) {
     sendErrorResponse(res, error);

@@ -104,6 +104,25 @@ try {
 console.log('');
 
 // -------------------------------------------------------------
+// 5. 客戶端訂單監聽與防護審計 (OrderDataContext.tsx & offlineQueue.ts)
+// -------------------------------------------------------------
+console.log('🛡️ 5. 客戶端訂單監聽與防護審計 (OrderDataContext.tsx & offlineQueue.ts)');
+try {
+  const orderCtxPath = path.resolve(__dirname, '../src/context/OrderDataContext.tsx');
+  const orderCtxContent = fs.readFileSync(orderCtxPath, 'utf8');
+
+  assert(orderCtxContent.includes("activeTab === 'customer'"), "OrderDataContext.tsx 包含 activeTab === 'customer' 監聽阻斷守衛（避免顧客端建立 Firestore 連線）");
+  assert(orderCtxContent.includes('limit(200)'), "OrderDataContext.tsx 包含 limit(200) 受控監聽限制（防止單一員工頁面超量讀取）");
+
+  const offlineQueuePath = path.resolve(__dirname, '../src/lib/offlineQueue.ts');
+  const offlineQueueContent = fs.readFileSync(offlineQueuePath, 'utf8');
+  assert(offlineQueueContent.includes('calcBackoffMs') && offlineQueueContent.includes('MAX_BACKOFF_MS'), "offlineQueue.ts 包含 calcBackoffMs 與 MAX_BACKOFF_MS 指數退避機制（避免斷線重連風暴）");
+} catch (err) {
+  assert(false, `無法讀取訂單防護檔案: ${err.message}`);
+}
+console.log('');
+
+// -------------------------------------------------------------
 // 審計總結
 // -------------------------------------------------------------
 console.log('===============================================================');

@@ -1,9 +1,16 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.invalidateTablesCache = invalidateTablesCache;
 exports.registerTablesRoutes = registerTablesRoutes;
 const validators_1 = require("../validators");
 const helpers_1 = require("../helpers");
 const notification_1 = require("../services/notification");
+const bootstrap_1 = require("./bootstrap");
+let cachedTablesData = null;
+const TABLES_CACHE_TTL_MS = 10 * 1000;
+function invalidateTablesCache() {
+    cachedTablesData = null;
+}
 function registerTablesRoutes(app, ctx) {
     const { db, requireStaffAuth, createRateLimiter, sendErrorResponse } = ctx;
     const getCachedSettings = (0, helpers_1.createGetCachedSettings)(db);
@@ -15,9 +22,12 @@ function registerTablesRoutes(app, ctx) {
     const del = (routePath, ...handlers) => app.delete([`/api${routePath}`, routePath], ...handlers);
     get('/tables', async (_req, res) => {
         try {
-            res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=5, stale-while-revalidate=15');
-            const snapshot = await db.collection('tables').select('id', 'qrCodeUrl', 'status', 'cleaningStartedAt', 'maxCapacity', 'positionX', 'positionY', 'preservedFor', 'mergedWith').get();
             const nowMs = Date.now();
+            res.setHeader('Cache-Control', 'public, max-age=5, s-maxage=10, stale-while-revalidate=15');
+            if (cachedTablesData && (nowMs - cachedTablesData.timestamp < TABLES_CACHE_TTL_MS)) {
+                return res.json(cachedTablesData.data);
+            }
+            const snapshot = await db.collection('tables').select('id', 'qrCodeUrl', 'status', 'cleaningStartedAt', 'maxCapacity', 'positionX', 'positionY', 'preservedFor', 'mergedWith').get();
             const tables = snapshot.docs.map(doc => {
                 const tb = doc.data();
                 if (tb.status === 'cleaning') {
@@ -32,6 +42,7 @@ function registerTablesRoutes(app, ctx) {
                 }
                 return tb;
             });
+            cachedTablesData = { data: tables, timestamp: nowMs };
             res.json(tables);
         }
         catch (error) {
@@ -56,6 +67,8 @@ function registerTablesRoutes(app, ctx) {
         const data = req.body;
         try {
             await db.collection('tables').doc(data.id).set(data);
+            invalidateTablesCache();
+            (0, bootstrap_1.invalidatePublicBootstrapCache)();
             res.status(201).json(data);
         }
         catch (error) {
@@ -73,6 +86,8 @@ function registerTablesRoutes(app, ctx) {
                 updates.cleaningStartedAt = null;
             }
             await db.collection('tables').doc(id).update(updates);
+            invalidateTablesCache();
+            (0, bootstrap_1.invalidatePublicBootstrapCache)();
             res.json({ success: true });
         }
         catch (error) {
@@ -83,6 +98,8 @@ function registerTablesRoutes(app, ctx) {
         const id = req.params.id;
         try {
             await db.collection('tables').doc(id).delete();
+            invalidateTablesCache();
+            (0, bootstrap_1.invalidatePublicBootstrapCache)();
             res.json({ success: true });
         }
         catch (error) {

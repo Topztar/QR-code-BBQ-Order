@@ -1,3 +1,13 @@
+// ============================================================================
+// ⚠️ ARCHITECTURE DIRECTIVE: LOCAL DEVELOPMENT / MOCK SERVER ONLY
+// ============================================================================
+// This server is strictly used for local development (`npm run dev`) and Vite HMR.
+// Production runtime is hosted on Firebase Cloud Functions Gen 2 (/functions/src/)
+// and Firebase Hosting as defined in firebase.json.
+// State in this file (liveOrders, liveTables, persisted_state.json) is local fallback only.
+// NEVER confuse this server with the production Firebase Cloud Functions backend.
+// ============================================================================
+
 import 'dotenv/config';
 import express from 'express';
 import crypto from 'crypto';
@@ -142,59 +152,6 @@ let liveMenu: MenuItem[] = INITIAL_MENU.map((item, index) => {
   };
 });
 let liveIngredients: Ingredient[] = [...INITIAL_INGREDIENTS];
-
-// Helper to get recipe for a menu item, using explicit recipe if defined, otherwise dynamic rules
-export function getRecipeForMenuItem(item: MenuItem): { ingredientId: string; amount: number }[] {
-  if (item.recipe && Array.isArray(item.recipe) && item.recipe.length > 0) {
-    return item.recipe;
-  }
-  const recipe: { ingredientId: string; amount: number }[] = [];
-  const nameZh = (item.name && item.name.zh) ? item.name.zh : '';
-  
-  if (item.containsBeef || nameZh.includes('牛肉') || nameZh.includes('牛')) {
-    recipe.push({ ingredientId: 'ig-02', amount: item.isSetMeal ? 2 : 1 }); // USDA Beef
-  }
-  if (item.containsPork || nameZh.includes('豬五花') || nameZh.includes('豬肉') || nameZh.includes('豬')) {
-    recipe.push({ ingredientId: 'ig-08', amount: item.isSetMeal ? 2 : 1 }); // Pork Belly / Enoki skewer
-  }
-  if (item.containsSeafood || nameZh.includes('蝦') || nameZh.includes('海鮮') || nameZh.includes('蛤蜊') || nameZh.includes('生蠔') || nameZh.includes('干貝') || nameZh.includes('墨魚')) {
-    if (nameZh.includes('干貝') || nameZh.includes('生蠔')) {
-      recipe.push({ ingredientId: 'ig-04', amount: 2 }); // Oysters / Scallops
-    } else {
-      recipe.push({ ingredientId: 'ig-01', amount: item.isSetMeal ? 3 : 2 }); // Fresh Prawns
-    }
-  }
-  if (item.hasNoodlesOption || nameZh.includes('麵') || nameZh.includes('冬蔭功湯') || item.category === 'noodles') {
-    recipe.push({ ingredientId: 'ig-05', amount: 1 }); // Mama / Rice Noodles
-  }
-  if (item.hasCoconutsMilkOption || nameZh.includes('椰奶') || nameZh.includes('椰子') || nameZh.includes('椰')) {
-    recipe.push({ ingredientId: 'ig-06', amount: 0.25 }); // Coconut Milk
-  }
-  if (item.category === 'drinks' && (nameZh.includes('茶') || nameZh.includes('泰茶') || nameZh.includes('奶茶'))) {
-    recipe.push({ ingredientId: 'ig-07', amount: 0.35 }); // Thai tea brew
-  }
-  if (item.category === 'veggies' || nameZh.includes('高麗菜') || nameZh.includes('菜')) {
-    recipe.push({ ingredientId: 'ig-03', amount: 0.15 }); // Organic cabbage
-  }
-  return recipe;
-}
-
-export function refreshIngredientRecipeMap() {
-  // Clear map entries
-  for (const key in INGREDIENT_RECIPE_MAP) {
-    delete INGREDIENT_RECIPE_MAP[key];
-  }
-  // Populate
-  liveMenu.forEach((item) => {
-    const r = getRecipeForMenuItem(item);
-    if (r.length > 0) {
-      INGREDIENT_RECIPE_MAP[item.id] = r;
-    }
-  });
-}
-
-// Initial populate of the map
-refreshIngredientRecipeMap();
 
 interface InventoryLog {
   id: string;
@@ -1171,7 +1128,6 @@ async function loadStateFromFirestore(): Promise<boolean> {
     }
 
 
-    refreshIngredientRecipeMap();
     console.log('[Sabay Firebase] ✓ State load completed successfully.');
 
     if (categoriesSnapshot.empty && menuSnapshot.empty) {
@@ -1403,7 +1359,6 @@ function loadStateFromDisk() {
           console.log(`[Members] Loaded ${liveMembers.length} member records from disk.`);
         }
         console.log('✓ System State fully loaded from codebase disk:', PERSISTENCE_FILE_PATH);
-        refreshIngredientRecipeMap();
       }
     }
 
@@ -2072,7 +2027,6 @@ app.post('/api/menu', (req, res) => {
 
   sanitizeMenu([newItem]);
   liveMenu.push(newItem);
-  refreshIngredientRecipeMap();
   saveStateToDisk();
   res.status(201).json(newItem);
 });
@@ -2152,7 +2106,6 @@ app.put('/api/menu/:id', (req, res) => {
     };
     sanitizeMenu([updated]);
     liveMenu[itemIndex] = updated;
-    refreshIngredientRecipeMap();
     saveStateToDisk();
     return res.json({ success: true, item: updated });
   }
@@ -2192,7 +2145,6 @@ app.delete('/api/menu/:id', (req, res) => {
   const itemIndex = liveMenu.findIndex(m => m.id === id);
   if (itemIndex > -1) {
     const deletedItem = liveMenu.splice(itemIndex, 1)[0];
-    refreshIngredientRecipeMap();
     saveStateToDisk();
     return res.json({ success: true, message: `Successfully deleted menu item [${deletedItem.name.zh}]` });
   }
@@ -3503,45 +3455,6 @@ app.post('/api/orders', orderRateLimiter, (req, res) => {
     });
   }
 
-  // Check and update raw ingredients inventory
-  const proposedReductions: { [igId: string]: number } = {};
-
-  for (const item of items as OrderItem[]) {
-    const listCosts = INGREDIENT_RECIPE_MAP[item.menuItemId];
-    if (listCosts) {
-      for (const cost of listCosts) {
-        if (!proposedReductions[cost.ingredientId]) {
-          proposedReductions[cost.ingredientId] = 0;
-        }
-        proposedReductions[cost.ingredientId] += cost.amount * item.qty;
-      }
-    }
-  }
-
-  // Validate we have enough raw ingredient stocks
-  const outOfStockItems: string[] = [];
-  for (const [igId, amountNeeded] of Object.entries(proposedReductions)) {
-    const ingredient = liveIngredients.find(ig => ig.id === igId);
-    if (ingredient && ingredient.stock < amountNeeded) {
-      outOfStockItems.push(`${ingredient.name.zh} (庫存不足, 剩餘 ${ingredient.stock} ${ingredient.unit})`);
-    }
-  }
-
-  if (outOfStockItems.length > 0) {
-    return res.status(400).json({
-      error: '部份材料不足，暫時無法下單：' + outOfStockItems.join(', '),
-      outOfStock: true
-    });
-  }
-
-  // Decrement ingredient stocks
-  for (const [igId, amountNeeded] of Object.entries(proposedReductions)) {
-    const ingredient = liveIngredients.find(ig => ig.id === igId);
-    if (ingredient) {
-      ingredient.stock = Math.round((ingredient.stock - amountNeeded) * 100) / 100;
-    }
-  }
-
   // Calculation parameters
   let subtotal = 0;
   const processedItems = (items as OrderItem[]).map((item, index) => {
@@ -3616,23 +3529,6 @@ app.post('/api/orders', orderRateLimiter, (req, res) => {
     }
   }
 
-  // Record inventory transactions for this order
-  for (const [igId, amountNeeded] of Object.entries(proposedReductions)) {
-    const ingredient = liveIngredients.find(ig => ig.id === igId);
-    if (ingredient) {
-      inventoryLogs.push({
-        id: `ir-${Date.now()}-${igId}-${Math.random().toString(36).substr(2, 4)}`,
-        timestamp: newOrder.createdAt,
-        ingredientId: igId,
-        ingredientName: ingredient.name.zh,
-        type: 'outgoing',
-        quantityChanged: -amountNeeded,
-        remainingStock: ingredient.stock,
-        note: `線上點餐消耗：${newOrder.customerName} (單號: ${newOrder.id}，${newOrder.tableNumber} 桌)`
-      });
-    }
-  }
-
   saveStateToDisk();
   res.status(201).json(newOrder);
 });
@@ -3666,31 +3562,6 @@ app.put('/api/orders/:id/status', (req, res) => {
   const order = liveOrders.find(o => o.id === id);
   if (!order) {
     return res.status(404).json({ error: 'Order not found' });
-  }
-
-  // If order is cancelled, we should credit back the ingredients!
-  if (status === 'cancelled' && order.status !== 'cancelled') {
-    for (const item of order.items) {
-      const listCosts = INGREDIENT_RECIPE_MAP[item.menuItemId];
-      if (listCosts) {
-        for (const cost of listCosts) {
-          const ingredient = liveIngredients.find(ig => ig.id === cost.ingredientId);
-          if (ingredient) {
-            ingredient.stock = Math.round((ingredient.stock + cost.amount * item.qty) * 100) / 100;
-            inventoryLogs.push({
-              id: `ir-${Date.now()}-${ingredient.id}-${Math.random().toString(36).substr(2, 4)}`,
-              timestamp: new Date().toISOString(),
-              ingredientId: ingredient.id,
-              ingredientName: ingredient.name.zh,
-              type: 'incoming',
-              quantityChanged: cost.amount * item.qty,
-              remainingStock: ingredient.stock,
-              note: `訂單取消退回庫存 (單號: ${order.id})`
-            });
-          }
-        }
-      }
-    }
   }
 
   // Trigger printing when confirmed by backend/staff (transitions from pending to preparing)

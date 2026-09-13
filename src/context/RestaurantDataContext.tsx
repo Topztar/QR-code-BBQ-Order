@@ -73,6 +73,23 @@ export interface RestaurantDataContextType {
   handleUpdatePopularItemIds: (ids: string[]) => Promise<{ success: boolean; error?: string }>;
 }
 
+/**
+ * ⚡ 純前端動態計算預約是否「即將到來 (Upcoming)」
+ * 避免客戶端使用 setInterval (每10秒) 不斷對 Firestore 執行 mutation 寫入，
+ * 消除高頻率 PUT /api/reservations/:id 與伴隨的 bootstrap 讀取暴增。
+ */
+export const isReservationUpcoming = (res: { status: string; date?: string; time?: string }): boolean => {
+  if (res.status === 'upcoming') return true;
+  if (res.status !== 'confirmed') return false;
+  if (!res.date || !res.time) return false;
+  const [year, month, day] = res.date.split('-').map(Number);
+  const [hour, minute] = res.time.split(':').map(Number);
+  if (isNaN(year) || isNaN(month) || isNaN(day) || isNaN(hour) || isNaN(minute)) return false;
+  const resDateTime = new Date(year, month - 1, day, hour, minute);
+  const diffMinutes = (resDateTime.getTime() - Date.now()) / (1000 * 60);
+  return diffMinutes > -120 && diffMinutes <= 60;
+};
+
 const RestaurantDataContext = createContext<RestaurantDataContextType | undefined>(undefined);
 
 // Helper to enrich menu items with missing translations
@@ -404,32 +421,8 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
     };
   }, [activeTab, syncActive]);
 
-  // Reservation auto-check mechanism: Automatically mark confirmed reservations within 1 hour as "upcoming"
-  const reservationsRef = useRef(reservations);
-  reservationsRef.current = reservations;
-
-  useEffect(() => {
-    const checkUpcomingInterval = setInterval(() => {
-      const currentRes = reservationsRef.current;
-      if (!currentRes || currentRes.length === 0) return;
-      const now = new Date();
-      currentRes.forEach(res => {
-        if (res.status === 'confirmed') {
-          const [year, month, day] = res.date.split('-').map(Number);
-          const [hour, minute] = res.time.split(':').map(Number);
-          if (!isNaN(year) && !isNaN(month) && !isNaN(day) && !isNaN(hour) && !isNaN(minute)) {
-            const resDateTime = new Date(year, month - 1, day, hour, minute);
-            const diffMinutes = (resDateTime.getTime() - now.getTime()) / (1000 * 60);
-            if (diffMinutes > -120 && diffMinutes <= 60) {
-              console.log(`[Client Auto-Check] Confirmed reservation ${res.id} (${res.customerName}) is within 1 hour, marking as upcoming.`);
-              handleUpdateReservation(res.id, { status: 'upcoming' });
-            }
-          }
-        }
-      });
-    }, 10000);
-    return () => clearInterval(checkUpcomingInterval);
-  }, []);
+  // 🛡️ 效能優化：已移除每 10 秒發起 Firestore 寫入的 checkUpcomingInterval 輪詢。
+  // 改由純函數 isReservationUpcoming 在前端動態計算，杜絕全體客戶端同時產生的海量寫入與 bootstrap 重讀。
 
   // CRUD Handlers
   const handleRestock = async (id: string, amount: number) => {
