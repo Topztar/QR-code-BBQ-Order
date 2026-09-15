@@ -3,6 +3,7 @@ import { Firestore } from 'firebase-admin/firestore';
 import { Bucket } from '@google-cloud/storage';
 import { validateOrderPayload, validateRatingPayload } from '../validators';
 import { isStoreOpenFromData, createGetCachedSettings } from '../helpers';
+import { orderCalculationService } from '../services/orderCalculationService';
 
 // ============================================================
 // ORDERS 路由模組（含 print-logs）
@@ -36,11 +37,11 @@ get('/orders', requireStaffAuth, async (_req, res) => {
     let snapshot;
     try {
       snapshot = await db.collection('orders')
-        .select('id', 'tableNumber', 'items', 'subtotal', 'serviceCharge', 'total', 'status', 'createdAt', 'customerName', 'customerPhone', 'customerAvatar', 'paymentMethod', 'isMember', 'isPaid', 'guestCount', 'discount', 'quickNotes', 'isFlagged', 'flagReason', 'takeoutInfo', 'pickupTime')
+        .select('id', 'tableNumber', 'items', 'subtotal', 'serviceCharge', 'total', 'status', 'createdAt', 'customerName', 'customerPhone', 'customerAvatar', 'paymentMethod', 'isMember', 'isPaid', 'guestCount', 'discount', 'quickNotes', 'isFlagged', 'flagReason', 'takeoutInfo', 'pickupTime', 'clientOrderId')
         .orderBy('createdAt', 'desc').limit(200).get();
     } catch (_idxErr) {
       snapshot = await db.collection('orders')
-        .select('id', 'tableNumber', 'items', 'subtotal', 'serviceCharge', 'total', 'status', 'createdAt', 'customerName', 'customerPhone', 'customerAvatar', 'paymentMethod', 'isMember', 'isPaid', 'guestCount', 'discount', 'quickNotes', 'isFlagged', 'flagReason', 'takeoutInfo', 'pickupTime')
+        .select('id', 'tableNumber', 'items', 'subtotal', 'serviceCharge', 'total', 'status', 'createdAt', 'customerName', 'customerPhone', 'customerAvatar', 'paymentMethod', 'isMember', 'isPaid', 'guestCount', 'discount', 'quickNotes', 'isFlagged', 'flagReason', 'takeoutInfo', 'pickupTime', 'clientOrderId')
         .limit(200).get();
     }
     const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -52,11 +53,7 @@ get('/orders', requireStaffAuth, async (_req, res) => {
   }
 });
 
-// --- System & settings GET APIs ---
-
-let cachedServicePause: { data: any; timestamp: number } | null = null;
-
-// 7. Service Pause Settings
+// --- Logs APIs ---
 
 get('/print-logs', async (_req, res) => {
   try {
@@ -76,6 +73,7 @@ post('/orders', requireAppCheck, orderRateLimiter, async (req, res) => {
     return res.status(400).json({ error: validation.error || '無效的訂單資料格式' });
   }
   const orderData = validation.sanitizedData;
+  const clientOrderId = orderData.clientOrderId ? String(orderData.clientOrderId).trim() : null;
   const orderId = orderData.id || `ORD-${Date.now().toString(36).toUpperCase()}`;
 
   try {
@@ -89,6 +87,23 @@ post('/orders', requireAppCheck, orderRateLimiter, async (req, res) => {
     }
 
     const savedOrder = await db.runTransaction(async (t) => {
+      // 0. Atomic Idempotency Check inside Transaction (prevents TOCTOU race conditions)
+      let idempotencyRef = null;
+      if (clientOrderId) {
+        idempotencyRef = db.collection('_idempotency_keys').doc(clientOrderId);
+        const idemSnap = await t.get(idempotencyRef);
+        if (idemSnap.exists) {
+          const existingOrderId = idemSnap.data()?.orderId;
+          if (existingOrderId) {
+            const existingOrderDoc = await t.get(db.collection('orders').doc(existingOrderId));
+            if (existingOrderDoc.exists) {
+              console.log(`[Idempotency check] Atomic duplicate order detected for clientOrderId ${clientOrderId}. Returning existing order #${existingOrderId}`);
+              return { isExisting: true, data: { id: existingOrderDoc.id, ...existingOrderDoc.data() } };
+            }
+          }
+        }
+      }
+
       // 1. Reads
       let tableSnap = null;
       let tableRef = null;
@@ -98,9 +113,10 @@ post('/orders', requireAppCheck, orderRateLimiter, async (req, res) => {
         tableSnap = await t.get(tableRef);
       }
 
-      // 1.5 Validate if any ordered items are sold out
+      // 1.5 Validate if any ordered items are sold out and fetch menu definitions for SSOT pricing
+      const menuItemsList: any[] = [];
       if (orderData.items && orderData.items.length > 0) {
-        const menuItemIds = [...new Set(orderData.items.map((i: any) => i.menuItemId))];
+        const menuItemIds = [...new Set(orderData.items.map((i: any) => i.menuItemId).filter(Boolean))];
         const menuRefs = menuItemIds.map((id: string) => db.collection('menu').doc(id));
         const menuSnaps = await t.getAll(...menuRefs);
         
@@ -116,6 +132,7 @@ post('/orders', requireAppCheck, orderRateLimiter, async (req, res) => {
         for (const snap of menuSnaps) {
           if (!snap.exists) continue;
           const data = snap.data() || {};
+          menuItemsList.push({ id: snap.id, ...data });
           let isAvailable = data.available ?? true;
           
           if (data.soldOutType === 'permanent') {
@@ -140,13 +157,57 @@ post('/orders', requireAppCheck, orderRateLimiter, async (req, res) => {
         }
       }
 
+      // 🛡️ SSOT Server-Side Pricing Calculation & Tamper Protection:
+      // Recalculate authoritative unit price for each item from Firestore menu
+      const verifiedItems = (orderData.items || []).map((item: any) => {
+        const unitPrice = orderCalculationService.computeOrderItemUnitPrice(item, menuItemsList);
+        return {
+          ...item,
+          price: unitPrice
+        };
+      });
+
+      // Recalculate promo combo discount from sysData
+      const combos = sysData?.livePromoCombos || sysData?.livePromoCombo?.combos || [];
+      const verifiedPromoDiscount = orderCalculationService.calculatePromoComboDiscount(
+        verifiedItems,
+        combos,
+        menuItemsList
+      );
+
+      // Recalculate authoritative order pricing
+      const verifiedPricing = orderCalculationService.calculateOrderPricing(
+        {
+          items: verifiedItems,
+          paymentMethod: orderData.paymentMethod,
+          discount: verifiedPromoDiscount,
+          isPaid: false
+        },
+        menuItemsList
+      );
+
       // 2. Writes
       const orderToSave = {
         ...orderData,
         id: orderId,
+        clientOrderId: clientOrderId || orderId,
+        items: verifiedItems,
+        subtotal: verifiedPricing.subtotal,
+        discount: verifiedPricing.discount,
+        serviceCharge: verifiedPricing.serviceCharge,
+        total: verifiedPricing.total,
+        totalAmount: verifiedPricing.total,
         status: orderData.status || 'pending',
         createdAt: orderData.createdAt || new Date().toISOString(),
       };
+
+      // Record atomic idempotency key
+      if (idempotencyRef) {
+        t.set(idempotencyRef, {
+          orderId,
+          createdAt: new Date().toISOString()
+        });
+      }
 
       t.set(db.collection('orders').doc(orderId), orderToSave);
 
@@ -155,10 +216,13 @@ post('/orders', requireAppCheck, orderRateLimiter, async (req, res) => {
         t.update(tableRef, { status: 'in_use', cleaningStartedAt: null });
       }
 
-      return orderToSave;
+      return { isExisting: false, data: orderToSave };
     });
 
-    res.status(201).json(savedOrder);
+    if (savedOrder.isExisting) {
+      return res.status(200).json(savedOrder.data);
+    }
+    res.status(201).json(savedOrder.data);
   } catch (error) {
     console.error('Error submitting order:', error);
     if (error instanceof Error && error.message.startsWith('CLOSED:')) {
@@ -188,17 +252,22 @@ put('/orders/:id/status', requireStaffAuth, async (req, res) => {
       const doc = await t.get(orderRef);
       if (!doc.exists) throw new Error('Order not found');
       const data = doc.data();
-      
       // Block backward transition if already paid or cancelled (unless manual override to cancel/paid)
       if ((data?.status === 'paid' || data?.status === 'cancelled') && status !== 'cancelled' && status !== 'paid') {
         console.warn(`[Backend] Rejected status update to ${status} for order ${id} because it's already ${data?.status}`);
-        return;
+        throw new Error(`TRANSITION_REJECTED:訂單已結帳或已取消 (${data?.status})，不可變更為 ${status}`);
       }
       
       t.update(orderRef, { status });
     });
     res.json({ id, status });
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.message?.startsWith('TRANSITION_REJECTED:')) {
+      return res.status(409).json({ error: error.message.replace('TRANSITION_REJECTED:', '') });
+    }
+    if (error?.message === 'Order not found') {
+      return res.status(404).json({ error: '找不到該訂單' });
+    }
     res.status(500).send(error);
   }
 });
@@ -248,8 +317,30 @@ put('/orders/:id/items', requireStaffAuth, async (req, res) => {
   const id = req.params.id as string;
   const { items, refundLogs } = req.body;
   try {
-    await db.collection('orders').doc(id).update({ items, refundLogs });
-    res.json({ id, items, refundLogs });
+    const orderRef = db.collection('orders').doc(id);
+    const orderSnap = await orderRef.get();
+    if (!orderSnap.exists) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    const orderData = orderSnap.data() || {};
+    const pricing = orderCalculationService.calculateOrderPricing({
+      ...orderData,
+      items
+    });
+    const updatePayload: Record<string, any> = {
+      items,
+      subtotal: pricing.subtotal,
+      serviceCharge: pricing.serviceCharge,
+      discount: pricing.discount,
+      total: pricing.total,
+      totalAmount: pricing.total,
+      updatedAt: new Date().toISOString()
+    };
+    if (refundLogs) {
+      updatePayload.refundLogs = refundLogs;
+    }
+    await orderRef.update(updatePayload);
+    res.json({ id, ...updatePayload });
   } catch (error) {
     res.status(500).send(error);
   }
@@ -436,12 +527,18 @@ put('/orders/:id/complete', requireStaffAuth, async (req, res) => {
       if (!doc.exists) throw new Error('Order not found');
       const data = doc.data();
       if (data?.status === 'paid' || data?.status === 'cancelled') {
-        return; // Skip, don't rollback
+        throw new Error(`TRANSITION_REJECTED:訂單已結帳或已取消 (${data?.status})，不可變更為 completed`);
       }
       t.update(orderRef, { status: 'completed' });
     });
     res.json({ id, status: 'completed' });
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.message?.startsWith('TRANSITION_REJECTED:')) {
+      return res.status(409).json({ error: error.message.replace('TRANSITION_REJECTED:', '') });
+    }
+    if (error?.message === 'Order not found') {
+      return res.status(404).json({ error: '找不到該訂單' });
+    }
     res.status(500).send(error);
   }
 });

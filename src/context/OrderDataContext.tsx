@@ -416,11 +416,17 @@ export function OrderDataProvider({
 
     if (syncActive && isFirebaseSyncEnabled() && !forceApiFallback) {
       try {
-        // 🍳 後台 (廚房 KDS / 櫃檯收銀 / 數據分析)：讀取最新待處理與即時訂單
+        // 🍳 後台 (廚房 KDS / 櫃檯收銀 / 數據分析)：讀取活動中的在席與待處理訂單
+        // ⚡ 效能優化 (修正 2)：利用 firestore.indexes.json 中已部署的 (status ASC, createdAt DESC) 複合索引，
+        // 精確監聽 activeStatuses (pending, confirmed, preparing, delivering, paid)。
+        // 1. 徹底根除 24/7 平板因掛載時戳凍結 (Stale Closure) 導致的視窗老化問題。
+        // 2. 避免高翻桌率時期被 limit(200) 擠掉傍晚未結案/用餐中老單 (防止漏單)。
+        // 3. 已結案或取消的歷史訂單自動退出監聽，比載入 36 小時全量歷史訂單節省 80%~95% 讀取量。
+        const activeStatuses = ['pending', 'confirmed', 'preparing', 'delivering', 'paid'];
         const ordersQuery = query(
           collection(db, "orders"),
-          orderBy("createdAt", "desc"),
-          limit(200)
+          where("status", "in", activeStatuses),
+          orderBy("createdAt", "desc")
         );
 
         unsubscribeOrders = onSnapshot(ordersQuery, (snapshot) => {
@@ -790,14 +796,37 @@ export function OrderDataProvider({
 
   const handleUpdateOrderItems = async (orderId: string, items: any[], refundLogs?: any[]) => {
     const description = `調整 🥢 訂單 #${orderId.replace('offline_temp_', '離線')} 品項數量`;
-    const totalAmount = orderCalculationService.computeOrderItemsSubtotal(items, []);
     const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, items, subtotal: totalAmount, total: totalAmount, isOfflinePending: !isOnline } : o));
-
-    // ☁️ Firestore 即時寫入 (已移除，避免觸發 Security Rules 錯誤導致監聽器死亡，改由後端 API 統一處理)
+    let computedPricing = { subtotal: 0, serviceCharge: 0, discount: 0, total: 0 };
+    setOrders(prev => prev.map(o => {
+      if (o.id !== orderId) return o;
+      computedPricing = orderCalculationService.calculateOrderPricing({
+        ...o,
+        items
+      });
+      return {
+        ...o,
+        items,
+        subtotal: computedPricing.subtotal,
+        serviceCharge: computedPricing.serviceCharge,
+        discount: computedPricing.discount,
+        total: computedPricing.total,
+        isOfflinePending: !isOnline
+      };
+    }));
 
     // 🚀 本地跨分頁 0 成本廣播
-    broadcastOrderEvent({ type: 'ORDER_UPDATED', orderId, updates: { items, subtotal: totalAmount, total: totalAmount } });
+    broadcastOrderEvent({
+      type: 'ORDER_UPDATED',
+      orderId,
+      updates: {
+        items,
+        subtotal: computedPricing.subtotal,
+        serviceCharge: computedPricing.serviceCharge,
+        discount: computedPricing.discount,
+        total: computedPricing.total
+      }
+    });
 
     if (!isOnline || orderId.startsWith('offline_temp_')) {
       addRequestToQueue(`/api/orders/${orderId}/items`, 'PUT', { items, refundLogs }, description);

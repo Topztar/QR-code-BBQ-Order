@@ -45,6 +45,7 @@ async function setVersion() {
     await db.collection('settings').doc('system').set(
       {
         liveSystemVersion: version,
+        version: version,
         versionUpdatedAt: new Date().toISOString(),
       },
       { merge: true }

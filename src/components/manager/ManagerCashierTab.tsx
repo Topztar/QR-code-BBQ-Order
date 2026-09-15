@@ -7,7 +7,7 @@ import { useCashierState } from '../../hooks/useCashierState';
 import { db, isFirebaseSyncEnabled } from '../../lib/firebase';
 import { openCashDrawerViaBridge } from '../../lib/posBridgeClient';
 import { apiFetch } from '../../lib/api';
-import { computeOrderItemsSubtotal } from '../ManagerDashboard';
+import { computeOrderItemsSubtotal } from './ManagerDashboardUtils';
 import { isReservationUpcoming } from '../../context/RestaurantDataContext';
 
 import {

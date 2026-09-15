@@ -31,21 +31,19 @@ export function useCashierState() {
   const [selectedFineTuneTableId, setSelectedFineTuneTableId] = useState<string | null>(null);
   const [showCheckoutConfirm, setShowCheckoutConfirm] = useState<boolean>(false);
   
-  // Table Form
-  const [isTableFormOpen, setIsTableFormOpen] = useState(false);
+  // Table form and editing states used inside ManagerCashierTab
+  const [isTableFormOpen, setIsTableFormOpen] = useState<boolean>(false);
   const [editingTableObj, setEditingTableObj] = useState<TableConfig | null>(null);
-  const [tableIdInput, setTableIdInput] = useState('');
-  const [tableQrUrlInput, setTableQrUrlInput] = useState('');
-  const [tableMaxCapacityInput, setTableMaxCapacityInput] = useState('');
+  const [tableIdInput, setTableIdInput] = useState<string>('');
+  const [tableQrUrlInput, setTableQrUrlInput] = useState<string>('');
+  const [tableMaxCapacityInput, setTableMaxCapacityInput] = useState<string>('');
   const [tableError, setTableError] = useState<string | null>(null);
   const [tableSuccess, setTableSuccess] = useState<string | null>(null);
   const [tableToDeleteId, setTableToDeleteId] = useState<string | null>(null);
   const [reservationToDeleteId, setReservationToDeleteId] = useState<string | null>(null);
-  
-  // Table Order Editing
   const [editingOrderTableId, setEditingOrderTableId] = useState<string | null>(null);
   const [editingOrderTableValue, setEditingOrderTableValue] = useState<string>('');
-
+  
   const [confirmActionModal, setConfirmActionModal] = useState<{
     isOpen: boolean;
     title: string;
@@ -94,17 +92,12 @@ export function useCashierState() {
     selectedCalendarStatusFilter, setSelectedCalendarStatusFilter,
     selectedFineTuneTableId, setSelectedFineTuneTableId,
     showCheckoutConfirm, setShowCheckoutConfirm,
-    isTableFormOpen, setIsTableFormOpen,
-    editingTableObj, setEditingTableObj,
-    tableIdInput, setTableIdInput,
-    tableQrUrlInput, setTableQrUrlInput,
-    tableMaxCapacityInput, setTableMaxCapacityInput,
-    tableError, setTableError,
-    tableSuccess, setTableSuccess,
-    tableToDeleteId, setTableToDeleteId,
-    reservationToDeleteId, setReservationToDeleteId,
+    setIsTableFormOpen, setEditingTableObj, setTableIdInput,
+    setTableQrUrlInput, setTableMaxCapacityInput, setTableError, setTableSuccess,
+    tableToDeleteId, setTableToDeleteId, reservationToDeleteId, setReservationToDeleteId,
     editingOrderTableId, setEditingOrderTableId,
     editingOrderTableValue, setEditingOrderTableValue,
+    isTableFormOpen, editingTableObj, tableIdInput, tableQrUrlInput, tableMaxCapacityInput, tableError, tableSuccess,
     confirmActionModal, setConfirmActionModal,
     resetCashierState
   };

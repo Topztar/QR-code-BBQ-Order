@@ -30,7 +30,7 @@ import {
 import { sendReservationNotifications, sendTestNotification } from './functions/src/services/notification';
 import { orderCalculationService } from './src/services/orderCalculationService';
 
-import { initFirebaseStorage, gcsBucket, getGeminiClient, app, PORT } from './src/server/init';
+import { initFirebaseStorage, gcsBucket, app, PORT } from './src/server/init';
 import { setupMiddleware, createRateLimiter } from './src/server/middleware';
 initFirebaseStorage();
 
@@ -61,6 +61,7 @@ function getMimeTypeFromExt(filePath: string): string {
 }
 
 function getSabayAuthenticImage(nameZh: string, defaultImg: string): string {
+  if (defaultImg && defaultImg.trim() !== "") return defaultImg;
   const n = nameZh || '';
   if (n.includes('大魷MAMA') || n.includes('魷MAMA')) {
     // Tom Yum MAMA noodles with a glorious giant grilled squid on top
@@ -268,7 +269,7 @@ let liveReservations: Reservation[] = [];
 
 let liveTakeoutSeq = 0;
 let lastTakeoutDate = new Date().toDateString();
-let liveMinSpendPerPerson = 500; // default minimum spend NT$ 200 per guest
+let liveMinSpendPerPerson = 500; // default minimum spend NT$ 500 per guest
 
 let liveOperatingHours: OperatingHourSlot[] = [
     {
@@ -466,6 +467,118 @@ function getTaiwanDateString(timestamp?: number): string {
   return `${year}-${month}-${dayOfMonth}`;
 }
 
+
+const sortByOrderIndex = (a: any, b: any) => (a.orderIndex ?? 9999) - (b.orderIndex ?? 9999);
+
+function parseTimeToMinutes(t: string): number {
+  if (!t) return 0;
+  const [h, m] = t.split(':').map(Number);
+  return (h || 0) * 60 + (m || 0);
+}
+
+function scheduleTableAutoRelease(tblId: string) {
+  if (tableCheckoutTimeouts.has(tblId)) {
+    clearTimeout(tableCheckoutTimeouts.get(tblId)!);
+  }
+  const timer = setTimeout(() => {
+    const table = liveTables.find(t => t.id.toString().trim() === tblId);
+    if (table && table.status === 'cleaning') {
+      const activeUnpaid = liveOrders.some(o => String(o.tableNumber).trim() === tblId && !o.isPaid && o.status !== 'cancelled' && o.status !== 'completed' && o.status !== 'paid');
+      if (!activeUnpaid) {
+        table.status = 'available';
+        table.cleaningStartedAt = null;
+        syncTableStatusesWithTodayReservations();
+        saveStateToDisk();
+        console.log(`[Table Auto-Release] Table #${tblId} 15-min timeout fired: switched to available.`);
+      }
+    }
+    tableCheckoutTimeouts.delete(tblId);
+  }, 15 * 60 * 1000); // 15 minutes
+  tableCheckoutTimeouts.set(tblId, timer);
+}
+
+function validateReservationBooking(
+  date: string,
+  time: string,
+  guestCount: number,
+  tableNumber: string,
+  isStaffOverride: boolean,
+  currentResId?: string
+): { error?: string } {
+  const now = new Date();
+  now.setMonth(now.getMonth() + 3);
+  const maxDateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  if (date && date.trim() > maxDateStr && !isStaffOverride) {
+    return { error: `預約日期最多只能提前 3 個月 (最晚至 ${maxDateStr})！` };
+  }
+
+  const targetMins = parseTimeToMinutes(time);
+
+  const todayNow = new Date();
+  const todayDateStr = `${todayNow.getFullYear()}-${String(todayNow.getMonth() + 1).padStart(2, '0')}-${String(todayNow.getDate()).padStart(2, '0')}`;
+  if (date && date.trim() === todayDateStr && !isStaffOverride) {
+    const currentMins = todayNow.getHours() * 60 + todayNow.getMinutes();
+    if (targetMins < currentMins + 240) {
+      return { error: '預約時間必須為現在時間 4 小時之後，避免與現場顧客發生桌席衝突！' };
+    }
+  }
+
+  const overlapping = liveReservations.filter(r => {
+    if (currentResId && (r.id === currentResId || (r as any).reservationNo === currentResId)) return false;
+    if (r.status === 'cancelled' || (r as any).status === 'rejected') return false;
+    if (r.date !== date.trim()) return false;
+    const rMins = parseTimeToMinutes(r.time);
+    return Math.abs(rMins - targetMins) < 180;
+  });
+
+  const newGuestCount = parseInt(String(guestCount), 10) || 1;
+
+  // 1. Total Store Window Capacity Check
+  const unavailableTableIds = new Set<string>();
+  for (const r of overlapping) {
+    const rTables = String(r.tableNumber || '').split(',').map(t => t.trim()).filter(Boolean);
+    rTables.forEach(tId => unavailableTableIds.add(tId));
+  }
+  const availableTables = liveTables.filter(t => !unavailableTableIds.has(t.id.toString()));
+  const availableWindowCapacity = availableTables.reduce((sum, t) => sum + (t.maxCapacity || 4), 0);
+
+  if (availableTables.length === 0 || availableWindowCapacity <= 0) {
+    return { error: '該時段已額滿！全店客席在前後3小時內皆已有預約。' };
+  }
+
+  if (newGuestCount > availableWindowCapacity && availableWindowCapacity > 0) {
+    return { error: `用餐人數 (${newGuestCount}人) 超過該時段（含3小時用餐時段）可容納之剩餘客席上限 (${availableWindowCapacity}人)！` };
+  }
+
+  // 2. Selected Tables Capacity Check
+  const requestedTables = String(tableNumber).split(',').map(t => t.trim()).filter(Boolean);
+  const requestedTableObjs = liveTables.filter(t => requestedTables.includes(t.id.toString()));
+  const selectedTablesCapacity = requestedTableObjs.reduce((sum, t) => sum + (t.maxCapacity || 4), 0);
+
+  if (selectedTablesCapacity > 0 && selectedTablesCapacity < newGuestCount) {
+    return { error: `指定桌號加總人數上限 (${selectedTablesCapacity}人) 不足：不可低於用餐人數 (${newGuestCount}人)！` };
+  }
+
+  // 2.1 Anti-monopoly Check: prevent occupying multiple tables when fewer tables suffice
+  if (requestedTables.length > 1 && requestedTableObjs.length > 1) {
+    for (const tbl of requestedTableObjs) {
+      if (selectedTablesCapacity - (tbl.maxCapacity || 4) >= newGuestCount) {
+        return { error: `過度佔用桌席：用餐人數 (${newGuestCount}人) 無需佔用多張桌位，請精簡指定桌號以釋放客席！` };
+      }
+    }
+  }
+
+  // 3. Table Conflict Check
+  for (const r of overlapping) {
+    const rTables = String(r.tableNumber || '').split(',').map(t => t.trim()).filter(Boolean);
+    const conflictingTable = requestedTables.find(t => rTables.includes(t));
+    if (conflictingTable) {
+      return { error: `預約時段衝突：【${conflictingTable} 桌】在 ${date} ${time} 前後 3 小時內已有預約 (${r.time} ${r.customerName})` };
+    }
+  }
+
+  return {};
+}
 function syncTableStatusesWithTodayReservations() {
   const todayStr = getTaiwanDateString();
   if (!liveTables || liveTables.length === 0) return;
@@ -969,11 +1082,7 @@ async function loadStateFromFirestore(): Promise<boolean> {
       categoriesSnapshot.forEach((snapDoc: any) => {
         cats.push(snapDoc.data() as Category);
       });
-      cats.sort((a: any, b: any) => {
-        const idxA = a.orderIndex !== undefined ? a.orderIndex : 9999;
-        const idxB = b.orderIndex !== undefined ? b.orderIndex : 9999;
-        return idxA - idxB;
-      });
+      cats.sort(sortByOrderIndex);
       // Enrich with missing translations from defaults (like 'vi')
       cats.forEach((cat) => {
         const defCat = defaultCategories.find(c => c.id === cat.id);
@@ -994,11 +1103,7 @@ async function loadStateFromFirestore(): Promise<boolean> {
       menuSnapshot.forEach((snapDoc: any) => {
         menu.push(snapDoc.data() as MenuItem);
       });
-      menu.sort((a: any, b: any) => {
-        const idxA = a.orderIndex !== undefined ? a.orderIndex : 9999;
-        const idxB = b.orderIndex !== undefined ? b.orderIndex : 9999;
-        return idxA - idxB;
-      });
+      menu.sort(sortByOrderIndex);
       sanitizeMenu(menu);
       // Enrich with missing translations from INITIAL_MENU.
       // Strategy: strip any language field where the value equals the zh value
@@ -1144,7 +1249,7 @@ async function loadStateFromFirestore(): Promise<boolean> {
 // File-System Local Codebase Persistence System for Preview Edits:
 const PERSISTENCE_FILE_PATH = path.join(process.cwd(), 'persisted_state.json');
 
-function saveStateToDisk() {
+function flushStateToDiskNow() {
   // 將目前的系統狀態寫入專案根目錄的 persisted_state.json，供開發預覽使用
   try {
     // 重新排序 menu 以確保 orderIndex 正確
@@ -1200,6 +1305,25 @@ function saveStateToDisk() {
   }
 }
 
+let saveDiskTimeout: NodeJS.Timeout | null = null;
+
+function saveStateToDisk() {
+  if (saveDiskTimeout) {
+    clearTimeout(saveDiskTimeout);
+  }
+  saveDiskTimeout = setTimeout(() => {
+    saveDiskTimeout = null;
+    flushStateToDiskNow();
+  }, 400); // 400ms debounce buffer to coalesce rapid sequential API writes
+}
+
+// Flush state to disk on server exit
+process.on("beforeExit", () => {
+  if (saveDiskTimeout) {
+    flushStateToDiskNow();
+  }
+});
+
 function loadStateFromDisk() {
   try {
     if (fs.existsSync(PERSISTENCE_FILE_PATH)) {
@@ -1214,11 +1338,7 @@ function loadStateFromDisk() {
         if (Array.isArray(parsed.liveMenu)) {
           liveMenu = parsed.liveMenu;
           // Sort explicitly by orderIndex to keep layout robust
-          liveMenu.sort((a: any, b: any) => {
-            const idxA = a.orderIndex !== undefined ? a.orderIndex : 9999;
-            const idxB = b.orderIndex !== undefined ? b.orderIndex : 9999;
-            return idxA - idxB;
-          });
+          liveMenu.sort(sortByOrderIndex);
           sanitizeMenu(liveMenu);
         }
         if (Array.isArray(parsed.liveIngredients)) {
@@ -1227,11 +1347,7 @@ function loadStateFromDisk() {
         if (Array.isArray(parsed.liveCategories)) {
           liveCategories = parsed.liveCategories;
           // Sort explicitly by orderIndex to keep layout robust
-          liveCategories.sort((a: any, b: any) => {
-            const idxA = a.orderIndex !== undefined ? a.orderIndex : 9999;
-            const idxB = b.orderIndex !== undefined ? b.orderIndex : 9999;
-            return idxA - idxB;
-          });
+          liveCategories.sort(sortByOrderIndex);
         }
         if (parsed.liveStaffPin !== undefined && parsed.liveStaffPin !== null) {
           liveStaffPin = String(parsed.liveStaffPin);
@@ -1286,7 +1402,6 @@ function loadStateFromDisk() {
           const oneDayMs = 24 * 60 * 60 * 1000;
           liveOrders = parsed.liveOrders.filter((o: any) => {
             if (!o) return false;
-            if (o.id.startsWith('LM-100') || o.id.startsWith('LM-099')) return false;
             if (o.createdAt) {
                const orderTimeMs = new Date(o.createdAt).getTime();
                if (!isNaN(orderTimeMs) && (nowMs - orderTimeMs > oneDayMs)) {
@@ -2816,83 +2931,17 @@ app.post('/api/reservations', reservationRateLimiter, (req, res) => {
     return res.status(400).json({ error: 'Missing required field: customerName, phone, tableNumber, date, time / 缺少預約必填欄位' });
   }
 
-  const now = new Date();
-  now.setMonth(now.getMonth() + 3);
-  const maxDateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-  if (date && date.trim() > maxDateStr) {
-    return res.status(400).json({ error: `預約日期最多只能提前 3 個月 (最晚至 ${maxDateStr})！` });
+  const validation = validateReservationBooking(
+    date,
+    time,
+    guestCount,
+    tableNumber,
+    !!req.body.isStaffOverride
+  );
+  if (validation.error) {
+    return res.status(400).json({ error: validation.error });
   }
 
-  // Check 3-hour reservation time slot conflict & Global Capacity
-  const parseMins = (t: string) => {
-    if (!t) return 0;
-    const [h, m] = t.split(':').map(Number);
-    return (h || 0) * 60 + (m || 0);
-  };
-  const targetMins = parseMins(time);
-
-  // 4-Hour advance rule for same-day reservations to prevent table conflicts with walk-in customers
-  const todayNow = new Date();
-  const todayDateStr = `${todayNow.getFullYear()}-${String(todayNow.getMonth() + 1).padStart(2, '0')}-${String(todayNow.getDate()).padStart(2, '0')}`;
-  if (date && date.trim() === todayDateStr && !req.body.isStaffOverride) {
-    const currentMins = todayNow.getHours() * 60 + todayNow.getMinutes();
-    if (targetMins < currentMins + 240) {
-      return res.status(400).json({ error: '預約時間必須為現在時間 4 小時之後，避免與現場顧客發生桌席衝突！' });
-    }
-  }
-  
-  const overlapping = liveReservations.filter(r => {
-    if (r.status === 'cancelled' || (r as any).status === 'rejected') return false;
-    if (r.date !== date.trim()) return false;
-    const rMins = parseMins(r.time);
-    return Math.abs(rMins - targetMins) < 180;
-  });
-
-  const newGuestCount = parseInt(guestCount, 10) || 1;
-
-  // 1. Total Store Window Capacity Check
-  const unavailableTableIds = new Set<string>();
-  for (const r of overlapping) {
-    const rTables = String(r.tableNumber || '').split(',').map(t => t.trim()).filter(Boolean);
-    rTables.forEach(tId => unavailableTableIds.add(tId));
-  }
-  const availableTables = liveTables.filter(t => !unavailableTableIds.has(t.id.toString()));
-  const availableWindowCapacity = availableTables.reduce((sum, t) => sum + (t.maxCapacity || 4), 0);
-
-  if (availableTables.length === 0 || availableWindowCapacity <= 0) {
-    return res.status(400).json({ error: '該時段已額滿！全店客席在前後3小時內皆已有預約。' });
-  }
-
-  if (newGuestCount > availableWindowCapacity && availableWindowCapacity > 0) {
-    return res.status(400).json({ error: `用餐人數 (${newGuestCount}人) 超過該時段（含3小時用餐時段）可容納之剩餘客席上限 (${availableWindowCapacity}人)！` });
-  }
-
-  // 2. Selected Tables Capacity Check
-  const requestedTables = String(tableNumber).split(',').map(t => t.trim()).filter(Boolean);
-  const requestedTableObjs = liveTables.filter(t => requestedTables.includes(t.id.toString()));
-  const selectedTablesCapacity = requestedTableObjs.reduce((sum, t) => sum + (t.maxCapacity || 4), 0);
-  
-  if (selectedTablesCapacity > 0 && selectedTablesCapacity < newGuestCount) {
-    return res.status(400).json({ error: `指定桌號加總人數上限 (${selectedTablesCapacity}人) 不足：不可低於用餐人數 (${newGuestCount}人)！` });
-  }
-
-  // 2.1 Anti-monopoly Check: prevent occupying multiple tables when fewer tables suffice
-  if (requestedTables.length > 1 && requestedTableObjs.length > 1) {
-    for (const tbl of requestedTableObjs) {
-      if (selectedTablesCapacity - (tbl.maxCapacity || 4) >= newGuestCount) {
-        return res.status(400).json({ error: `過度佔用桌席：用餐人數 (${newGuestCount}人) 無需佔用多張桌位，請精簡指定桌號以釋放客席！` });
-      }
-    }
-  }
-
-  // 3. Table Conflict Check
-  for (const r of overlapping) {
-    const rTables = String(r.tableNumber || '').split(',').map(t => t.trim()).filter(Boolean);
-    const conflictingTable = requestedTables.find(t => rTables.includes(t));
-    if (conflictingTable) {
-      return res.status(400).json({ error: `預約時段衝突：【${conflictingTable} 桌】在 ${date} ${time} 前後 3 小時內已有預約 (${r.time} ${r.customerName})` });
-    }
-  }
 
   const newReservation: Reservation = {
     id: 'res-' + Math.random().toString(36).substring(2, 11),
@@ -2958,65 +3007,16 @@ app.put('/api/reservations/:id', (req, res) => {
     }
 
     if (newStatus !== 'cancelled' && (date !== undefined || time !== undefined || tableNumber !== undefined || guestCount !== undefined)) {
-      const parseMins = (t: string) => {
-        if (!t) return 0;
-        const [h, m] = t.split(':').map(Number);
-        return (h || 0) * 60 + (m || 0);
-      };
-      const targetMins = parseMins(newTime);
-      
-      const overlapping = liveReservations.filter(r => {
-        if (r.id === existing.id || (r as any).reservationNo === existing.id) return false;
-        if (r.status === 'cancelled' || (r as any).status === 'rejected') return false;
-        if (r.date.trim() !== newDate) return false;
-        const rMins = parseMins(r.time);
-        return Math.abs(rMins - targetMins) < 180;
-      });
-
-      const updatedGuestCount = guestCount !== undefined ? parseInt(guestCount as any, 10) || 1 : existing.guestCount;
-
-      // 1. Total Store Window Capacity Check
-      const unavailableTableIds = new Set<string>();
-      for (const r of overlapping) {
-        const rTables = String(r.tableNumber || '').split(',').map(t => t.trim()).filter(Boolean);
-        rTables.forEach(tId => unavailableTableIds.add(tId));
-      }
-      const availableTables = liveTables.filter(t => !unavailableTableIds.has(t.id.toString()));
-      const availableWindowCapacity = availableTables.reduce((sum, t) => sum + (t.maxCapacity || 4), 0);
-
-      if (availableTables.length === 0 || availableWindowCapacity <= 0) {
-        return res.status(400).json({ error: '該時段已額滿！全店客席在前後3小時內皆已有預約。' });
-      }
-
-      if (updatedGuestCount > availableWindowCapacity && availableWindowCapacity > 0) {
-        return res.status(400).json({ error: `用餐人數 (${updatedGuestCount}人) 超過該時段（含3小時用餐時段）可容納之剩餘客席上限 (${availableWindowCapacity}人)！` });
-      }
-
-      // 2. Selected Tables Capacity Check
-      const requestedTables = String(newTable).split(',').map(t => t.trim()).filter(Boolean);
-      const requestedTableObjs = liveTables.filter(t => requestedTables.includes(t.id.toString()));
-      const selectedTablesCapacity = requestedTableObjs.reduce((sum, t) => sum + (t.maxCapacity || 4), 0);
-      
-      if (selectedTablesCapacity > 0 && selectedTablesCapacity < updatedGuestCount) {
-        return res.status(400).json({ error: `指定桌號加總人數上限 (${selectedTablesCapacity}人) 不足：不可低於用餐人數 (${updatedGuestCount}人)！` });
-      }
-
-      // 2.1 Anti-monopoly Check: prevent occupying multiple tables when fewer tables suffice
-      if (requestedTables.length > 1 && requestedTableObjs.length > 1) {
-        for (const tbl of requestedTableObjs) {
-          if (selectedTablesCapacity - (tbl.maxCapacity || 4) >= updatedGuestCount) {
-            return res.status(400).json({ error: `過度佔用桌席：用餐人數 (${updatedGuestCount}人) 無需佔用多張桌位，請精簡指定桌號以釋放客席！` });
-          }
-        }
-      }
-
-      // 3. Table Conflict Check
-      for (const r of overlapping) {
-        const rTables = String(r.tableNumber || '').split(',').map(t => t.trim()).filter(Boolean);
-        const conflictingTable = requestedTables.find(t => rTables.includes(t));
-        if (conflictingTable) {
-          return res.status(400).json({ error: `預約時段衝突：【${conflictingTable} 桌】在 ${newDate} ${newTime} 前後 3 小時內已有預約 (${r.time} ${r.customerName})` });
-        }
+      const validation = validateReservationBooking(
+        newDate,
+        newTime,
+        guestCount !== undefined ? parseInt(guestCount as any, 10) || 1 : existing.guestCount,
+        newTable,
+        !!req.body.isStaffOverride,
+        existing.id
+      );
+      if (validation.error) {
+        return res.status(400).json({ error: validation.error });
       }
     }
     if (customerName !== undefined) liveReservations[index].customerName = customerName;
@@ -3188,23 +3188,40 @@ app.post('/api/staff/pin/verify', (req, res) => {
   return res.status(400).json({ success: false, error: '解鎖金鑰錯誤！(請輸入正確的 6 位數金鑰)' });
 });
 
-app.put('/api/staff/pin', (req, res) => {
+// Update staff authentication PIN (with brute-force lockout protection)
+function handleStaffPinUpdate(req: express.Request, res: express.Response) {
   const { currentPin, newPin } = req.body;
   if (!currentPin || !newPin) {
     return res.status(400).json({ error: '請輸入目前金鑰與新解鎖金鑰 / Required fields missing' });
   }
-  const currentHash = hashPinLocal(currentPin);
-  const targetHash = hashPinLocal(liveStaffPin);
-  if (currentHash !== targetHash) {
-    return res.status(400).json({ error: '目前金鑰輸入錯誤！ / Incorrect current PIN' });
+
+  const now = Date.now();
+  if (staffLockedUntil && now < staffLockedUntil) {
+    const remainingMinutes = Math.ceil((staffLockedUntil - now) / (60 * 1000));
+    return res.status(429).json({ error: `連續輸入錯誤次數過多，系統已安全鎖定！請於 ${remainingMinutes} 分鐘後再試。` });
   }
+
+  const targetHash = hashPinLocal(liveStaffPin);
+  if (hashPinLocal(currentPin) !== targetHash) {
+    staffFailedAttempts++;
+    if (staffFailedAttempts >= 5) {
+      staffLockedUntil = now + (15 * 60 * 1000);
+      return res.status(429).json({ error: '連續輸入錯誤達 5 次，系統已安全鎖定 15 分鐘！' });
+    }
+    return res.status(400).json({ error: '目前解鎖金鑰輸入錯誤！ / Incorrect current PIN' });
+  }
+
+  staffFailedAttempts = 0;
+  staffLockedUntil = null;
   if (!/^\d{6}$/.test(newPin)) {
-    return res.status(400).json({ error: '新金鑰必須為 6 位數字！ / New PIN must be a 6-digit number' });
+    return res.status(400).json({ error: '新金鑰必須為 6 位半形數字！ / New PIN must be a 6-digit number' });
   }
   liveStaffPin = newPin;
   saveStateToDisk();
-  return res.json({ success: true, message: '員工解鎖金鑰已成功變更！ / PIN updated successfully' });
-});
+  res.json({ success: true, message: '員工解鎖金鑰已成功變更！' });
+}
+
+app.put('/api/staff/pin', handleStaffPinUpdate);
 
 // 2. Get Live Ingredients Inventory
 app.get('/api/ingredients', (_req, res) => {
@@ -3772,24 +3789,7 @@ app.put('/api/orders/:id/checkout', (req, res) => {
           tb.status = 'cleaning';
           tb.preservedFor = '';
           tb.cleaningStartedAt = new Date().toISOString();
-          if (tableCheckoutTimeouts.has(tblId)) {
-            clearTimeout(tableCheckoutTimeouts.get(tblId)!);
-          }
-          const timer = setTimeout(() => {
-            const table = liveTables.find(t => t.id.toString().trim() === tblId);
-            if (table && table.status === 'cleaning') {
-              const activeUnpaid = liveOrders.some(o => String(o.tableNumber).trim() === tblId && !o.isPaid && o.status !== 'cancelled' && o.status !== 'completed' && o.status !== 'paid');
-              if (!activeUnpaid) {
-                table.status = 'available';
-                table.cleaningStartedAt = null;
-                syncTableStatusesWithTodayReservations();
-                saveStateToDisk();
-                console.log(`[Table Auto-Release] Table #${tblId} 15-min timeout fired: switched to available.`);
-              }
-            }
-            tableCheckoutTimeouts.delete(tblId);
-          }, 15 * 60 * 1000); // 15 minutes
-          tableCheckoutTimeouts.set(tblId, timer);
+          scheduleTableAutoRelease(tblId);
         } else {
           tb.status = 'available';
           tb.preservedFor = '';
@@ -3849,7 +3849,6 @@ app.put('/api/orders/:id/pay', async (req, res) => {
     return res.json(order);
   }
 
-  const wasPaid = order.isPaid;
   order.isPaid = isPaid !== undefined ? !!isPaid : true;
 
   // Update table status automatically based on paid status
@@ -3861,24 +3860,7 @@ app.put('/api/orders/:id/pay', async (req, res) => {
         tb.status = 'cleaning';
         tb.preservedFor = '';
         tb.cleaningStartedAt = new Date().toISOString();
-        if (tableCheckoutTimeouts.has(tblId)) {
-          clearTimeout(tableCheckoutTimeouts.get(tblId)!);
-        }
-        const timer = setTimeout(() => {
-          const table = liveTables.find(t => t.id.toString().trim() === tblId);
-          if (table && table.status === 'cleaning') {
-            const activeUnpaid = liveOrders.some(o => String(o.tableNumber).trim() === tblId && !o.isPaid && o.status !== 'cancelled' && o.status !== 'completed' && o.status !== 'paid');
-            if (!activeUnpaid) {
-              table.status = 'available';
-              table.cleaningStartedAt = null;
-              syncTableStatusesWithTodayReservations();
-              saveStateToDisk();
-              console.log(`[Table Auto-Release] Table #${tblId} 15-min timeout fired: switched to available.`);
-            }
-          }
-          tableCheckoutTimeouts.delete(tblId);
-        }, 15 * 60 * 1000); // 15 minutes
-        tableCheckoutTimeouts.set(tblId, timer);
+        scheduleTableAutoRelease(tblId);
       } else {
         tb.status = 'available';
         tb.preservedFor = '';
@@ -3896,7 +3878,7 @@ app.put('/api/orders/:id/pay', async (req, res) => {
 
   // Interlock cash drawer trigger: when transition from unpaid to paid, and cash drawer is enabled
   let drawerLog = '';
-  if (order.isPaid && !wasPaid && livePrinterSettings.bill.cashDrawerEnabled) {
+  if (order.isPaid && livePrinterSettings.bill.cashDrawerEnabled) {
     const drawerRes = await triggerCashDrawerOpen(livePrinterSettings.bill);
     drawerLog = drawerRes.log;
 
@@ -4061,191 +4043,6 @@ app.get('/api/analytics', (_req, res) => {
     hourlyDistribution,
     topDishes,
     stockWarnings
-  });
-});
-
-// 9. AI Smart Chef Recommendation Route
-app.post('/api/gemini/analyze', async (req, res) => {
-  const { userQuery, preference, currentCart } = req.body;
-  const queryLower = (userQuery || '').toLowerCase();
-
-  const selectedTags = {
-    seafood: preference === 'seafood' || queryLower.includes('seafood') || queryLower.includes('海鮮') || queryLower.includes('蝦') || queryLower.includes('魚'),
-    beef: preference === 'beef' || queryLower.includes('beef') || queryLower.includes('牛'),
-    pork: preference === 'no-beef' || queryLower.includes('no-beef') || queryLower.includes('不吃牛') || queryLower.includes('豬') || queryLower.includes('雞'),
-    notSpicy: preference === 'not-spicy' || queryLower.includes('vegetable') || queryLower.includes('素') || queryLower.includes('菜') || queryLower.includes('低卡') || queryLower.includes('healthy') || queryLower.includes('健康') || queryLower.includes('not-spicy') || queryLower.includes('不辣'),
-    dessert: preference === 'dessert' || queryLower.includes('dessert') || queryLower.includes('甜') || queryLower.includes('糯米') || queryLower.includes('椰') || queryLower.includes('sweet')
-  };
-
-  const getPrice = (id: string) => {
-    const item = liveMenu.find(m => m.id === id);
-    return item ? item.price : 0;
-  };
-
-  const client = getGeminiClient();
-  let reasoningText = "";
-  let recommendations: any[] = [];
-
-  if (client) {
-    try {
-      const tagPromptStr = JSON.stringify(selectedTags);
-      const cartStr = JSON.stringify(currentCart);
-      const menuStr = JSON.stringify(liveMenu.map(m => ({ 
-        id: m.id, 
-        name: m.name.zh, 
-        price: m.price, 
-        category: m.category, 
-        isAvailable: m.available,
-        containsBeef: !!m.containsBeef,
-        containsPork: !!m.containsPork,
-        containsSeafood: !!m.containsSeafood,
-        isNotSpicy: !!m.isNotSpicy
-      })));
-
-      const prompt = `
-      顧客目前桌次點餐偏好與諮詢：
-      1. 精確飲食限制標籤限制 (Dietary Tags Filtering)：${tagPromptStr}
-      2. 顧客喜好項目與諮詢 (User Query)："${userQuery}"
-      3. 顧客點餐偏好備註 (Preference Note)："${preference}"
-      4. 顧客當前購物車內容 (Current Cart)：${cartStr}
-      5. 可提供餐點菜單 (Available Menu Items)：${menuStr}
-      `;
-
-      const response = await client.models.generateContent({
-        model: "gemini-3.5-flash",
-        contents: prompt,
-        config: {
-          systemInstruction: "你是一位精通泰式料理的沙貝泰式燒烤 (Sabay Thai BBQ) 的首席主廚，請用熱情、專業活潑的泰式口吻（繁體中文）回答。你的分析必須完全契合顧客提出的喜好或抗拒項目（例如：不吃牛就絕對不可以推薦含有 beef/牛肉 的項目；喜歡海鮮就多配海鮮；若標籤有『牛肉』，必須重磅推薦頂級牛肉串燒！若標籤設為『不辣』，則推薦的辣度建議必須全部寫為 0 或 1）。請優先推薦價格高、符合挑選標籤的豪華型招牌品項，將高單價的品項放在最前面的推薦順位。",
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              reasoningText: {
-                type: Type.STRING,
-                description: "一小段溫潤熱情、流暢的 AI 主廚推薦分析，解釋為什麼如此配對，以及如何享用才最對味（繁體中文，約 150 字）。"
-              },
-              recommendations: {
-                type: Type.ARRAY,
-                description: "為顧客精選的至少 8 項不同菜色組合，請依原物料價格從高到低進行首選排序，最頂級、高價的大菜或餐點排在前面。",
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    itemId: {
-                      type: Type.STRING,
-                      description: "推薦項目的 id（必須精準吻合線上餐點中的 ID，例如 'ty-01', 'sk-01', 'sf-01', 'dr-01' 等）"
-                    },
-                    reason: {
-                      type: Type.STRING,
-                      description: "為什麼推薦這道菜的短評理由"
-                    },
-                    suggestedSpiciness: {
-                      type: Type.INTEGER,
-                      description: "建議辣度指數 (0=不辣, 1=微辣, 2=中辣, 3=大辣)"
-                    },
-                    suggestedSweetness: {
-                      type: Type.INTEGER,
-                      description: "建議甜度指數 (0=無糖0分, 1=微糖3分, 2=半糖5分, 3=正宗甜10分)"
-                    }
-                  },
-                  required: ["itemId", "reason", "suggestedSpiciness", "suggestedSweetness"]
-                }
-              }
-            },
-            required: ["reasoningText", "recommendations"]
-          }
-        }
-      });
-
-      const data = JSON.parse(response.text?.trim() || "{}");
-      if (data.reasoningText && Array.isArray(data.recommendations)) {
-        reasoningText = data.reasoningText;
-        recommendations = data.recommendations;
-      }
-    } catch (err) {
-      console.error("[Sabay Gemini] Error calling Gemini API, falling back:", err);
-    }
-  }
-
-  // Fallback if client is missing or API call failed or returned bad format
-  if (!reasoningText || recommendations.length === 0) {
-    if (selectedTags.seafood) {
-      reasoningText = "客官薩瓦迪卡！得知您是海鮮熱愛者，名廚特別為您端出頂級『特盛皇家海陸海鮮宴』！以大鮮蝦為核心的主廚盤套餐打頭陣，搭配酸辣濃厚的冬蔭功海鮮湯，與鮮藍極品的乾拌MAMA麵。這場泰風海味盛宴能讓您一口嚐到泰國海灣吹來的溫暖鹹香！";
-      recommendations = [
-        { itemId: 'cb-02', reason: 'B套餐 得獎頂級大主廚盤 - 包含鮮蝦、烤魚及蔬菜，堪稱店內海鮮大滿貫！', suggestedSpiciness: 2, suggestedSweetness: 1 },
-        { itemId: 'ty-01', reason: '曼谷冬蔭功海鮮湯 - 招牌泰式湯底，與草本、椰漿和新鮮大海蝦、文蛤熬製，泰香熱烈！', suggestedSpiciness: 2, suggestedSweetness: 1 },
-        { itemId: 'nd-01', reason: '豪華版海鮮乾拌MAMA麵 - 酸辣鮮甜乾拌，大隻白蝦與文蛤搭配，麵體Q彈吸附滿滿醬汁。', suggestedSpiciness: 2, suggestedSweetness: 1 },
-        { itemId: 'vg-02', reason: '爆汁櫛瓜 - 炭烤多汁清爽，平衡海鮮的重口味，中和辛辣。', suggestedSpiciness: 0, suggestedSweetness: 0 },
-        { itemId: 'vg-03', reason: '奶油炭烤杏鮑菇 - 散發濃濃奶油香氣，多汁鮮嫩。', suggestedSpiciness: 0, suggestedSweetness: 1 },
-        { itemId: 'sw-01', reason: '泰小農芒果甜糯米飯 - 採用飽滿有嚼勁的泰國長糯米，淋上純椰漿與熟成金黃芒果。', suggestedSpiciness: 0, suggestedSweetness: 2 },
-        { itemId: 'dr-01', reason: '泰式奶茶 1L 桶裝 - 採用泰國正宗茶葉配大量碎冰，甘橘香濃郁，是舒解辛辣、極致解渴的必點良伴。', suggestedSpiciness: 0, suggestedSweetness: 2 }
-      ];
-    } else if (selectedTags.beef) {
-      reasoningText = "客官薩瓦迪卡！看來您是個頂級紅肉與極致肉香愛好者！AI 主廚已經竭盡全力為您策劃了帶有濃厚炙燒焦香的『霸氣極選鮮直火烤牛盛宴』！我們的主打星是經過祕法手工醃漬的泰式手工牛肉串，每一口都蘊藏著泰國傳統香草氣息，配上酸辣乾拌 MAMA 麵與熱呼呼的芒果甜糯米飯，濃郁和諧！";
-      recommendations = [
-        { itemId: 'sk-01', reason: '泰式手工牛肉串 - 沙貝必點鎮店王牌！慢火焦香四溢，草本醬料完全入味，讓人欲罷不能！', suggestedSpiciness: 1, suggestedSweetness: 1 },
-        { itemId: 'cb-01', reason: 'A套餐 人氣招牌盤 - 含有招牌烤雞翅與椒鹽烤物拼盤，與牛肉搭配極富口腹滿足。', suggestedSpiciness: 2, suggestedSweetness: 1 },
-        { itemId: 'nd-01', reason: '豪華版海鮮乾拌MAMA麵 - 麵條帶有經典勁辣，伴隨炭烤牛香的油脂，風味更上一層樓！', suggestedSpiciness: 2, suggestedSweetness: 1 },
-        { itemId: 'vg-01', reason: '脆脆高麗菜 - 微微焦香的高麗菜，提供解膩的清脆口感。', suggestedSpiciness: 0, suggestedSweetness: 0 },
-        { itemId: 'vg-02', reason: '爆汁櫛瓜 - 一口咬下飽滿多汁，為重口味直火牛肉帶來完美的中場休息。', suggestedSpiciness: 0, suggestedSweetness: 0 },
-        { itemId: 'sw-01', reason: '泰小農芒果甜糯米飯 - 熱椰漿糯米與新鮮極甜芒果，冰火交融，結尾驚艷。', suggestedSpiciness: 0, suggestedSweetness: 2 },
-        { itemId: 'dr-01', reason: '泰式奶茶 1L 桶裝 - 正宗茶香與煉乳混合的大桶極致，解辛辣，跟烤牛肉是絕配！', suggestedSpiciness: 0, suggestedSweetness: 2 }
-      ];
-    } else if (selectedTags.pork) {
-      reasoningText = "客官薩瓦迪卡！收到您偏愛豬肉與雞肉（完美避開任何牛肉成分）的奢華要求。AI 主廚誠心獻上『無牛經典泰味烤肉組合』！";
-      recommendations = [
-        { itemId: 'cb-01', reason: 'A套餐 人氣招牌盤 - 烤雞翅與串酥豆腐齊全，豐盛頂奢的無牛之選。', suggestedSpiciness: 1, suggestedSweetness: 1 },
-        { itemId: 'sk-02', reason: '爆汁金針菇豬肉串 - 豬五花薄片層層包裹鮮嫩金針菇，一口咬下極富層次。', suggestedSpiciness: 1, suggestedSweetness: 1 },
-        { itemId: 'vg-04', reason: '鮮脆四季豆 - 清脆可口，僅配少許黑胡椒與海鹽調料。', suggestedSpiciness: 0, suggestedSweetness: 0 },
-        { itemId: 'vg-05', reason: '香脆烤豆皮 - 表皮鬆脆，不加多餘油脂，刷上溫和甘甜醃醬。', suggestedSpiciness: 0, suggestedSweetness: 1 },
-        { itemId: 'vg-06', reason: '烤糯米血糕 - 外層金黃酥脆，內層有彈牙勁道，醬香非常濃郁。', suggestedSpiciness: 1, suggestedSweetness: 1 },
-        { itemId: 'sw-01', reason: '泰小農芒果甜糯米飯 - 採用熟成金煌芒果與椰漿完美搭配，熱呼呼的米飯超幸福。', suggestedSpiciness: 0, suggestedSweetness: 2 },
-        { itemId: 'dr-01', reason: '泰式奶茶 1L 桶裝 - 橘紅色高顏值奶茶，與任何豬肉串、烤物皆是絕頂搭配！', suggestedSpiciness: 0, suggestedSweetness: 2 }
-      ];
-    } else if (selectedTags.dessert) {
-      reasoningText = "客官果然是個熱帶甜食與椰香行家！主廚特別為您設計了『南洋椰香蜜糖派對大派餐』！以代表性的芒果椰漿甜糯米飯、桶裝泰奶、爆汁鮮櫛瓜為核心，搭配高麗菜、烤豆皮、金針菇肉串及海鮮冬蔭功、MAMA麵，鹹甜相間，味道和諧，一秒置身曼谷水上市場！";
-      recommendations = [
-        { itemId: 'sw-01', reason: '泰小農芒果甜糯米飯 - 靈魂推薦！熱糯米香、香甜芒果與濃稠椰水完美相遇。', suggestedSpiciness: 0, suggestedSweetness: 3 },
-        { itemId: 'dr-01', reason: '泰式奶茶 1L 桶裝 - 碎冰充足、醇香滑順，高甜泰味手搖愛好者首選。', suggestedSpiciness: 0, suggestedSweetness: 3 },
-        { itemId: 'vg-02', reason: '爆汁櫛瓜 - 清涼水分十足的鮮美櫛瓜，是清爽口舌，迎接甜點的絕佳過渡。', suggestedSpiciness: 0, suggestedSweetness: 0 },
-        { itemId: 'vg-05', reason: '香脆烤豆皮 - 烤至酥脆，配上香甜椒鹽，爽口酥脆。', suggestedSpiciness: 1, suggestedSweetness: 1 },
-        { itemId: 'sk-02', reason: '爆汁金針菇豬肉串 - 甜鹹交織的醬汁在豬五花上焦化，味道濃密芳香。', suggestedSpiciness: 1, suggestedSweetness: 2 },
-        { itemId: 'cb-01', reason: 'A套餐 人氣招牌盤 - 收錄烤雞翅與椒鹽烤物，為這場甜點派對提供鹹鮮的底襯。', suggestedSpiciness: 2, suggestedSweetness: 1 },
-        { itemId: 'ty-01', reason: '曼谷冬蔭功海鮮湯 - 酸辣湯底與椰奶的極致濃郁，與甜食形成奇妙火花。', suggestedSpiciness: 2, suggestedSweetness: 2 },
-        { itemId: 'nd-01', reason: '豪華版海鮮乾拌MAMA麵 - 酸辛夠味乾拌麵，是搭配餐後甜點的風味擔當。', suggestedSpiciness: 2, suggestedSweetness: 1 }
-      ];
-    } else if (selectedTags.notSpicy) {
-      reasoningText = "薩瓦迪卡！想維持輕盈、享受無負擔的美食，或者享受完全不辣的純樸美味？AI 主廚為您精心盤點『清新小農健康綠野大滿貫』！推薦 8 款富含纖維、少負擔與溫和調味的精緻串烤及搭配，讓您一邊感受炭火帶來的熱力，一邊維持滿滿的健康活力！";
-      recommendations = [
-        { itemId: 'vg-01', reason: '脆脆高麗菜 - 火候極快直逼高溫炭火，鎖住滿溢的蔬菜甜水。', suggestedSpiciness: 0, suggestedSweetness: 0 },
-        { itemId: 'vg-02', reason: '爆汁櫛瓜 - 吃得出新鮮現採的豐沛櫛瓜果汁，口感無比水潤。', suggestedSpiciness: 0, suggestedSweetness: 0 },
-        { itemId: 'vg-03', reason: '奶油炭烤杏鮑菇 - 淡淡奶香融合杏鮑菇本身的鮮甜，爽脆多汁. ', suggestedSpiciness: 0, suggestedSweetness: 0 },
-        { itemId: 'vg-04', reason: '鮮脆四季豆 - 清脆可口，僅配少許黑胡椒與海鹽調料。', suggestedSpiciness: 0, suggestedSweetness: 0 },
-        { itemId: 'vg-05', reason: '香脆烤豆皮 - 表皮鬆脆，不加多餘油脂，刷上溫和甘甜醃醬。', suggestedSpiciness: 0, suggestedSweetness: 1 },
-        { itemId: 'vg-06', reason: '烤糯米血糕 - 傳統手工口感綿密，慢火烤出甘甜稻米香。', suggestedSpiciness: 0, suggestedSweetness: 1 },
-        { itemId: 'sw-01', reason: '泰小農芒果甜糯米飯 - 椰奶與現切新鮮芒果，帶來滿滿的維他命與天然醣分。', suggestedSpiciness: 0, suggestedSweetness: 2 },
-        { itemId: 'dr-01', reason: '泰式奶茶 1L 桶裝 (微糖) - 清新消暑，特調少糖版，微甜更健康無負擔。', suggestedSpiciness: 0, suggestedSweetness: 1 }
-      ];
-    } else {
-      reasoningText = "薩瓦迪卡！歡迎來到沙貝泰式燒烤！第一次看到種類如此繁多的泰味美食感到眼花繚亂嗎？別擔心，AI 主廚已經為您精心配製了我們明星熱銷單品之『沙貝頂級大滿貫霸氣配餐』！從最代表性的冬蔭功、手工牛肉與爆汁豬肉起，加上主理人必點A套餐，一直延伸到消暑泰奶與芒果甜糯米。8 道極致好滋味，一網打盡熱賣單品！";
-      recommendations = [
-        { itemId: 'ty-01', reason: '曼谷冬蔭功海鮮湯 - 鎮店之寶！酸辣鮮美，香南草、香茅與椰奶熬製的金牌好湯。', suggestedSpiciness: 2, suggestedSweetness: 1 },
-        { itemId: 'sk-01', reason: '泰式手工牛肉串 - 嫩烤肉質、直火香氣逼人，泰式草本醃醬帶出原肉極限美味。', suggestedSpiciness: 1, suggestedSweetness: 1 },
-        { itemId: 'sk-02', reason: '爆汁金針菇豬肉串 - 豬五花薄片層層包裹鮮嫩金針菇，一口咬下極富層次。', suggestedSpiciness: 1, suggestedSweetness: 1 },
-        { itemId: 'cb-01', reason: 'A套餐 人氣招牌盤 - 得獎拼盤，結合酥皮豆腐、美式烤翅及冬粉香腸的多樣美味。', suggestedSpiciness: 2, suggestedSweetness: 1 },
-        { itemId: 'vg-01', reason: '脆脆高麗菜 - 微微烤焦外表酥脆，能保留高麗菜原汁原味的田園。', suggestedSpiciness: 0, suggestedSweetness: 0 },
-        { itemId: 'vg-02', reason: '爆汁櫛瓜 - 清嫩爽口，是烤肉串燒的最佳平衡良伴。', suggestedSpiciness: 0, suggestedSweetness: 0 },
-        { itemId: 'sw-01', reason: '泰小農芒果甜糯米飯 - 得過無數食客盛讚的香甜溫熱芒果甜飯。', suggestedSpiciness: 0, suggestedSweetness: 2 },
-        { itemId: 'dr-01', reason: '泰式奶茶 1L 桶裝 - 正泰國手搖！大桶爽快，解辣第一的絕招。', suggestedSpiciness: 0, suggestedSweetness: 2 }
-      ];
-    }
-  }
-
-  // Pre-sort recommendations descending by price
-  recommendations.sort((a, b) => getPrice(b.itemId) - getPrice(a.itemId));
-
-  res.json({
-    reasoningText,
-    recommendations
   });
 });
 

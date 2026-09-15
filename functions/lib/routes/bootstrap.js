@@ -168,7 +168,7 @@ function registerBootstrapRoutes(app, ctx) {
                 printerConfig: { ip: sysData.livePrinterIp || '192.168.123.100' },
                 ingredients: ingredientsSnap.docs.map(doc => doc.data()),
                 reservations: reservationsSnap.docs.map(doc => doc.data()),
-                version: sysData.version || '1.0.0',
+                version: sysData.liveSystemVersion || sysData.version || '1.0.1',
                 isFirebaseSyncEnabled: true
             };
             const rawString = JSON.stringify(responsePayload);
@@ -195,6 +195,58 @@ function registerBootstrapRoutes(app, ctx) {
         }
         catch (error) {
             console.error('Error fetching bootstrap data:', error);
+            sendErrorResponse(res, error);
+        }
+    });
+    get('/store-status', async (_req, res) => {
+        try {
+            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+            res.setHeader('Pragma', 'no-cache');
+            res.setHeader('Expires', '0');
+            const now = new Date();
+            const todayStr = new Intl.DateTimeFormat('en-CA', {
+                timeZone: 'Asia/Taipei',
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+            }).format(now);
+            const [systemDoc, soldOutMenuSnap] = await Promise.all([
+                db.collection('settings').doc('system').get(),
+                db.collection('menu')
+                    .select('available', 'isAvailable', 'soldOutType', 'soldOutDate')
+                    .get()
+            ]);
+            const sysData = systemDoc.data() || {};
+            const isOpen = (0, helpers_1.isStoreOpenFromData)(sysData);
+            const servicePaused = !!sysData.liveServicePaused;
+            const soldOutItemIds = [];
+            for (const doc of soldOutMenuSnap.docs) {
+                const d = doc.data();
+                let isAvailable = d.available ?? true;
+                if (d.soldOutType === 'permanent') {
+                    isAvailable = false;
+                }
+                else if (d.soldOutType === 'daily') {
+                    if (d.soldOutDate === todayStr) {
+                        isAvailable = false;
+                    }
+                    else {
+                        isAvailable = true;
+                    }
+                }
+                if (!isAvailable) {
+                    soldOutItemIds.push(doc.id);
+                }
+            }
+            res.json({
+                isOpen,
+                servicePaused,
+                soldOutItemIds,
+                timestamp: Date.now()
+            });
+        }
+        catch (error) {
+            console.error('Error fetching real-time store status:', error);
             sendErrorResponse(res, error);
         }
     });

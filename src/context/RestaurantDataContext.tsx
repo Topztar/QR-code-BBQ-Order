@@ -71,6 +71,7 @@ export interface RestaurantDataContextType {
   handleUpdateOperatingHours: (slots: OperatingHourSlot[], restDays?: string[]) => Promise<{ success: boolean; error?: string }>;
   handleUpdateCustomerNotice: (notice: string) => Promise<{ success: boolean; error?: string }>;
   handleUpdatePopularItemIds: (ids: string[]) => Promise<{ success: boolean; error?: string }>;
+  handleUpdateSystemVersion: (version: string) => Promise<{ success: boolean; version?: string; error?: string }>;
 }
 
 /**
@@ -178,7 +179,7 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
   const [memberPointsRedeemRate, setMemberPointsRedeemRate] = useState<number>(1);
   const [memberRewards, setMemberRewards] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [systemVersion, setSystemVersion] = useState<string>('1.0.0');
+  const [systemVersion, setSystemVersion] = useState<string>('1.0.1');
   const [syncActive, setSyncActive] = useState<boolean>(() => isFirebaseSyncEnabled());
 
   useEffect(() => {
@@ -302,10 +303,12 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
       if (isFullCycle) {
         const fetchPromises: Promise<Response>[] = [
           safeFetch('/api/bootstrap', null),
+          safeFetch('/api/store-status', null),
         ];
 
         const results = await Promise.all(fetchPromises);
         const bootstrapData = await safeJson(results[0], null);
+        const storeStatusData = await safeJson(results[1], null);
 
         setAnalytics(fallbackAnalytics);
 
@@ -320,14 +323,35 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
           if (bootstrapData.ingredients) setIngredients(bootstrapData.ingredients);
           if (bootstrapData.tables) setTables(bootstrapData.tables);
           if (bootstrapData.reservations) setReservations(bootstrapData.reservations);
-          if (bootstrapData.servicePaused) setServicePaused(!!bootstrapData.servicePaused.servicePaused);
+          
+          // ⚡ 動態狀態優先覆蓋：即時 /api/store-status 覆蓋長效快取之 bootstrap.servicePaused
+          if (storeStatusData && storeStatusData.servicePaused !== undefined) {
+            setServicePaused(!!storeStatusData.servicePaused);
+          } else if (bootstrapData.servicePaused) {
+            setServicePaused(!!bootstrapData.servicePaused.servicePaused);
+          }
+
           if (bootstrapData.menu && (bypassReorderLock || fetchStartTime > lastMenuReorderTimeRef.current)) {
-            setMenuItems(bootstrapData.menu);
+            // ⚡ 售罄狀態即時覆蓋：若即時 storeStatus 回傳了目前 soldOutItemIds，動態同步 menu 中的可用狀態
+            let enrichedMenu = bootstrapData.menu;
+            if (storeStatusData && Array.isArray(storeStatusData.soldOutItemIds)) {
+              const soldOutSet = new Set(storeStatusData.soldOutItemIds);
+              enrichedMenu = enrichedMenu.map((m: any) => ({
+                ...m,
+                available: !soldOutSet.has(m.id),
+                isAvailable: !soldOutSet.has(m.id)
+              }));
+            }
+            setMenuItems(enrichedMenu);
           }
           if (bootstrapData.categories && (bypassReorderLock || fetchStartTime > lastCategoryReorderTimeRef.current)) {
             setCategories(bootstrapData.categories);
           }
-          if (bootstrapData.version) setSystemVersion(bootstrapData.version);
+          if (bootstrapData.version) {
+            setSystemVersion(bootstrapData.version);
+          } else if (bootstrapData.liveSystemVersion) {
+            setSystemVersion(bootstrapData.liveSystemVersion);
+          }
           if (Array.isArray(bootstrapData.popularItemIds)) setPopularItemIds(bootstrapData.popularItemIds);
           if (bootstrapData.membersConfig) {
             if (bootstrapData.membersConfig.pointsRatio !== undefined) setMemberPointsRatio(bootstrapData.membersConfig.pointsRatio);
@@ -342,7 +366,13 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
           if (bootstrapData.operatingHours) {
             if (bootstrapData.operatingHours.slots) setOperatingHours(bootstrapData.operatingHours.slots);
             if (bootstrapData.operatingHours.restDays) setRestDays(bootstrapData.operatingHours.restDays);
-            setIsOpen(bootstrapData.operatingHours.isOpen ?? true);
+            
+            // ⚡ 營業開關優先覆蓋
+            if (storeStatusData && storeStatusData.isOpen !== undefined) {
+              setIsOpen(!!storeStatusData.isOpen);
+            } else {
+              setIsOpen(bootstrapData.operatingHours.isOpen ?? true);
+            }
           }
           if (bootstrapData.customerNotice?.notice !== undefined) setCustomerNotice(bootstrapData.customerNotice.notice);
         }
@@ -1073,6 +1103,29 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
     }
   };
 
+  const handleUpdateSystemVersion = async (version: string) => {
+    try {
+      const res = await apiFetch('/api/settings/version', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ version }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.success) {
+          const newVer = data.version || version;
+          setSystemVersion(newVer);
+          return { success: true, version: newVer };
+        }
+      }
+      const errData = await res.json().catch(() => null);
+      return { success: false, error: errData?.error || '無法更新系統版本號' };
+    } catch (e: any) {
+      console.error('[Update System Version Error]', e);
+      return { success: false, error: e.message || '連線錯誤' };
+    }
+  };
+
   const value = useMemo<RestaurantDataContextType>(() => ({
     menuItems,
     setMenuItems,
@@ -1127,6 +1180,7 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
     handleUpdateOperatingHours,
     handleUpdateCustomerNotice,
     handleUpdatePopularItemIds,
+    handleUpdateSystemVersion,
   }), [
     menuItems, categories, tables, ingredients, reservations, minSpend, promoCombo,
     operatingHours, isOpen, restDays, customerNotice, servicePaused, popularItemIds,

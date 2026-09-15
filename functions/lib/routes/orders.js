@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerOrdersRoutes = registerOrdersRoutes;
 const validators_1 = require("../validators");
 const helpers_1 = require("../helpers");
+const orderCalculationService_1 = require("../services/orderCalculationService");
 function registerOrdersRoutes(app, ctx) {
     const { db, storageBucket, requireStaffAuth, requireAppCheck, createRateLimiter, sendErrorResponse } = ctx;
     const getCachedSettings = (0, helpers_1.createGetCachedSettings)(db);
@@ -17,12 +18,12 @@ function registerOrdersRoutes(app, ctx) {
             let snapshot;
             try {
                 snapshot = await db.collection('orders')
-                    .select('id', 'tableNumber', 'items', 'subtotal', 'serviceCharge', 'total', 'status', 'createdAt', 'customerName', 'customerPhone', 'customerAvatar', 'paymentMethod', 'isMember', 'isPaid', 'guestCount', 'discount', 'quickNotes', 'isFlagged', 'flagReason', 'takeoutInfo', 'pickupTime')
+                    .select('id', 'tableNumber', 'items', 'subtotal', 'serviceCharge', 'total', 'status', 'createdAt', 'customerName', 'customerPhone', 'customerAvatar', 'paymentMethod', 'isMember', 'isPaid', 'guestCount', 'discount', 'quickNotes', 'isFlagged', 'flagReason', 'takeoutInfo', 'pickupTime', 'clientOrderId')
                     .orderBy('createdAt', 'desc').limit(200).get();
             }
             catch (_idxErr) {
                 snapshot = await db.collection('orders')
-                    .select('id', 'tableNumber', 'items', 'subtotal', 'serviceCharge', 'total', 'status', 'createdAt', 'customerName', 'customerPhone', 'customerAvatar', 'paymentMethod', 'isMember', 'isPaid', 'guestCount', 'discount', 'quickNotes', 'isFlagged', 'flagReason', 'takeoutInfo', 'pickupTime')
+                    .select('id', 'tableNumber', 'items', 'subtotal', 'serviceCharge', 'total', 'status', 'createdAt', 'customerName', 'customerPhone', 'customerAvatar', 'paymentMethod', 'isMember', 'isPaid', 'guestCount', 'discount', 'quickNotes', 'isFlagged', 'flagReason', 'takeoutInfo', 'pickupTime', 'clientOrderId')
                     .limit(200).get();
             }
             const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -34,7 +35,6 @@ function registerOrdersRoutes(app, ctx) {
             res.status(500).json({ error: '無法取得訂單列表' });
         }
     });
-    let cachedServicePause = null;
     get('/print-logs', async (_req, res) => {
         try {
             res.setHeader('Cache-Control', 'private, no-cache, no-store, must-revalidate');
@@ -51,6 +51,7 @@ function registerOrdersRoutes(app, ctx) {
             return res.status(400).json({ error: validation.error || '無效的訂單資料格式' });
         }
         const orderData = validation.sanitizedData;
+        const clientOrderId = orderData.clientOrderId ? String(orderData.clientOrderId).trim() : null;
         const orderId = orderData.id || `ORD-${Date.now().toString(36).toUpperCase()}`;
         try {
             const sysData = await getCachedSettings();
@@ -60,6 +61,21 @@ function registerOrdersRoutes(app, ctx) {
                 return res.status(400).json({ error: 'CLOSED:目前不在營業時間內（店鋪休息中），系統不開放下單點餐！' });
             }
             const savedOrder = await db.runTransaction(async (t) => {
+                let idempotencyRef = null;
+                if (clientOrderId) {
+                    idempotencyRef = db.collection('_idempotency_keys').doc(clientOrderId);
+                    const idemSnap = await t.get(idempotencyRef);
+                    if (idemSnap.exists) {
+                        const existingOrderId = idemSnap.data()?.orderId;
+                        if (existingOrderId) {
+                            const existingOrderDoc = await t.get(db.collection('orders').doc(existingOrderId));
+                            if (existingOrderDoc.exists) {
+                                console.log(`[Idempotency check] Atomic duplicate order detected for clientOrderId ${clientOrderId}. Returning existing order #${existingOrderId}`);
+                                return { isExisting: true, data: { id: existingOrderDoc.id, ...existingOrderDoc.data() } };
+                            }
+                        }
+                    }
+                }
                 let tableSnap = null;
                 let tableRef = null;
                 if (orderData.tableNumber && !isTakeoutOrder) {
@@ -67,8 +83,9 @@ function registerOrdersRoutes(app, ctx) {
                     tableRef = db.collection('tables').doc(tblId);
                     tableSnap = await t.get(tableRef);
                 }
+                const menuItemsList = [];
                 if (orderData.items && orderData.items.length > 0) {
-                    const menuItemIds = [...new Set(orderData.items.map((i) => i.menuItemId))];
+                    const menuItemIds = [...new Set(orderData.items.map((i) => i.menuItemId).filter(Boolean))];
                     const menuRefs = menuItemIds.map((id) => db.collection('menu').doc(id));
                     const menuSnaps = await t.getAll(...menuRefs);
                     const todayStr = new Intl.DateTimeFormat('en-CA', {
@@ -82,6 +99,7 @@ function registerOrdersRoutes(app, ctx) {
                         if (!snap.exists)
                             continue;
                         const data = snap.data() || {};
+                        menuItemsList.push({ id: snap.id, ...data });
                         let isAvailable = data.available ?? true;
                         if (data.soldOutType === 'permanent') {
                             isAvailable = false;
@@ -103,19 +121,50 @@ function registerOrdersRoutes(app, ctx) {
                         throw new Error(`SOLDOUT:抱歉，以下餐點已售罄：${soldOutItems.join(', ')}。請重新整理頁面後再試一次。`);
                     }
                 }
+                const verifiedItems = (orderData.items || []).map((item) => {
+                    const unitPrice = orderCalculationService_1.orderCalculationService.computeOrderItemUnitPrice(item, menuItemsList);
+                    return {
+                        ...item,
+                        price: unitPrice
+                    };
+                });
+                const combos = sysData?.livePromoCombos || sysData?.livePromoCombo?.combos || [];
+                const verifiedPromoDiscount = orderCalculationService_1.orderCalculationService.calculatePromoComboDiscount(verifiedItems, combos, menuItemsList);
+                const verifiedPricing = orderCalculationService_1.orderCalculationService.calculateOrderPricing({
+                    items: verifiedItems,
+                    paymentMethod: orderData.paymentMethod,
+                    discount: verifiedPromoDiscount,
+                    isPaid: false
+                }, menuItemsList);
                 const orderToSave = {
                     ...orderData,
                     id: orderId,
+                    clientOrderId: clientOrderId || orderId,
+                    items: verifiedItems,
+                    subtotal: verifiedPricing.subtotal,
+                    discount: verifiedPricing.discount,
+                    serviceCharge: verifiedPricing.serviceCharge,
+                    total: verifiedPricing.total,
+                    totalAmount: verifiedPricing.total,
                     status: orderData.status || 'pending',
                     createdAt: orderData.createdAt || new Date().toISOString(),
                 };
+                if (idempotencyRef) {
+                    t.set(idempotencyRef, {
+                        orderId,
+                        createdAt: new Date().toISOString()
+                    });
+                }
                 t.set(db.collection('orders').doc(orderId), orderToSave);
                 if (tableRef && tableSnap && tableSnap.exists) {
                     t.update(tableRef, { status: 'in_use', cleaningStartedAt: null });
                 }
-                return orderToSave;
+                return { isExisting: false, data: orderToSave };
             });
-            res.status(201).json(savedOrder);
+            if (savedOrder.isExisting) {
+                return res.status(200).json(savedOrder.data);
+            }
+            res.status(201).json(savedOrder.data);
         }
         catch (error) {
             console.error('Error submitting order:', error);
@@ -144,13 +193,19 @@ function registerOrdersRoutes(app, ctx) {
                 const data = doc.data();
                 if ((data?.status === 'paid' || data?.status === 'cancelled') && status !== 'cancelled' && status !== 'paid') {
                     console.warn(`[Backend] Rejected status update to ${status} for order ${id} because it's already ${data?.status}`);
-                    return;
+                    throw new Error(`TRANSITION_REJECTED:訂單已結帳或已取消 (${data?.status})，不可變更為 ${status}`);
                 }
                 t.update(orderRef, { status });
             });
             res.json({ id, status });
         }
         catch (error) {
+            if (error?.message?.startsWith('TRANSITION_REJECTED:')) {
+                return res.status(409).json({ error: error.message.replace('TRANSITION_REJECTED:', '') });
+            }
+            if (error?.message === 'Order not found') {
+                return res.status(404).json({ error: '找不到該訂單' });
+            }
             res.status(500).send(error);
         }
     });
@@ -191,8 +246,30 @@ function registerOrdersRoutes(app, ctx) {
         const id = req.params.id;
         const { items, refundLogs } = req.body;
         try {
-            await db.collection('orders').doc(id).update({ items, refundLogs });
-            res.json({ id, items, refundLogs });
+            const orderRef = db.collection('orders').doc(id);
+            const orderSnap = await orderRef.get();
+            if (!orderSnap.exists) {
+                return res.status(404).json({ error: 'Order not found' });
+            }
+            const orderData = orderSnap.data() || {};
+            const pricing = orderCalculationService_1.orderCalculationService.calculateOrderPricing({
+                ...orderData,
+                items
+            });
+            const updatePayload = {
+                items,
+                subtotal: pricing.subtotal,
+                serviceCharge: pricing.serviceCharge,
+                discount: pricing.discount,
+                total: pricing.total,
+                totalAmount: pricing.total,
+                updatedAt: new Date().toISOString()
+            };
+            if (refundLogs) {
+                updatePayload.refundLogs = refundLogs;
+            }
+            await orderRef.update(updatePayload);
+            res.json({ id, ...updatePayload });
         }
         catch (error) {
             res.status(500).send(error);
@@ -357,13 +434,19 @@ function registerOrdersRoutes(app, ctx) {
                     throw new Error('Order not found');
                 const data = doc.data();
                 if (data?.status === 'paid' || data?.status === 'cancelled') {
-                    return;
+                    throw new Error(`TRANSITION_REJECTED:訂單已結帳或已取消 (${data?.status})，不可變更為 completed`);
                 }
                 t.update(orderRef, { status: 'completed' });
             });
             res.json({ id, status: 'completed' });
         }
         catch (error) {
+            if (error?.message?.startsWith('TRANSITION_REJECTED:')) {
+                return res.status(409).json({ error: error.message.replace('TRANSITION_REJECTED:', '') });
+            }
+            if (error?.message === 'Order not found') {
+                return res.status(404).json({ error: '找不到該訂單' });
+            }
             res.status(500).send(error);
         }
     });

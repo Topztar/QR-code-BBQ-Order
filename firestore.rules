@@ -58,6 +58,11 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // 10.1 _idempotency_keys (分散式冪等性鍵內部記錄) - 嚴格封鎖前端讀寫，僅限 Cloud Functions 事務操作
+    match /_idempotency_keys/{id} {
+      allow read, write: if false;
+    }
+
     // 11. test (測試連線用 - 生產環境停用)
     match /test/{id} {
       allow read, write: if false;

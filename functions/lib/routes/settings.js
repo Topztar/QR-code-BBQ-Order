@@ -6,6 +6,7 @@ const firestore_1 = require("firebase-admin/firestore");
 const auth_1 = require("../auth");
 const helpers_1 = require("../helpers");
 const notification_1 = require("../services/notification");
+const bootstrap_1 = require("./bootstrap");
 function registerSettingsRoutes(app, ctx) {
     const { db, requireStaffAuth, sendErrorResponse } = ctx;
     const getCachedSettings = (0, helpers_1.createGetCachedSettings)(db);
@@ -68,7 +69,7 @@ function registerSettingsRoutes(app, ctx) {
     get('/settings/version', async (_req, res) => {
         try {
             const doc = await db.collection('settings').doc('system').get();
-            const version = doc.data()?.liveSystemVersion || '';
+            const version = doc.data()?.liveSystemVersion || doc.data()?.version || '';
             res.json({ version });
         }
         catch (error) {
@@ -78,7 +79,13 @@ function registerSettingsRoutes(app, ctx) {
     post('/settings/version', requireStaffAuth, validateVersion_1.validateVersion, async (req, res) => {
         const { version } = req.body;
         try {
-            await db.collection('settings').doc('system').set({ liveSystemVersion: version }, { merge: true });
+            await db.collection('settings').doc('system').set({
+                liveSystemVersion: version,
+                version: version,
+                versionUpdatedAt: new Date().toISOString()
+            }, { merge: true });
+            (0, helpers_1.setCachedSettings)(null);
+            (0, bootstrap_1.invalidatePublicBootstrapCache)();
             res.json({ success: true, version });
         }
         catch (error) {

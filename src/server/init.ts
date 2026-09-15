@@ -1,6 +1,5 @@
 import express from 'express';
 import { Storage } from '@google-cloud/storage';
-import { GoogleGenAI } from '@google/genai';
 
 export const app = express();
 export const PORT = 3000;
@@ -19,17 +18,3 @@ export function initFirebaseStorage() {
   }
 }
 
-export function getGeminiClient(): GoogleGenAI | null {
-  if (!process.env.GEMINI_API_KEY) {
-    return null;
-  }
-  return new GoogleGenAI({
-    apiKey: process.env.GEMINI_API_KEY,
-    httpOptions: {
-      timeout: 2000,
-      headers: {
-        'User-Agent': 'aistudio-build',
-      }
-    }
-  });
-}

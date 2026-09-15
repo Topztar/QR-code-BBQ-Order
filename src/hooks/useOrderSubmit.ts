@@ -48,10 +48,13 @@ export function useOrderSubmit(
       ...orderData,
       clientOrderId,
     };
-    const totalAmount = orderCalculationService.computeOrderItemsSubtotal(orderData.items);
+    const pricing = orderCalculationService.calculateOrderPricing({
+      items: orderData.items,
+      paymentMethod: orderData.paymentMethod,
+      isPaid: false
+    });
     const tempId = `ord_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-    const description = `桌號 🥢 ${orderData.tableNumber || '外帶'} • 點購 ${orderData.items.length} 份餐點 (金額: $${totalAmount})`;
-    const offlineSvc = (orderData.paymentMethod === 'credit' || orderData.paymentMethod === 'twqr') ? Math.round(totalAmount * 0.1) : 0;
+    const description = `桌號 🥢 ${orderData.tableNumber || '外帶'} • 點購 ${orderData.items.length} 份餐點 (金額: $${pricing.total})`;
 
     const baseOrder: Order = {
       id: tempId,
@@ -60,9 +63,10 @@ export function useOrderSubmit(
       paymentMethod: orderData.paymentMethod,
       status: 'pending',
       createdAt: new Date().toISOString(),
-      subtotal: totalAmount,
-      serviceCharge: offlineSvc,
-      total: totalAmount + offlineSvc,
+      subtotal: pricing.subtotal,
+      serviceCharge: pricing.serviceCharge,
+      discount: pricing.discount,
+      total: pricing.total,
       customerName: orderPayload.customerName || '',
       customerAvatar: orderPayload.customerAvatar || '',
       isMember: orderPayload.isMember || false,

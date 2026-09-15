@@ -3,8 +3,9 @@ import { validateVersion } from '../middleware/validateVersion';
 import { Firestore, FieldValue } from 'firebase-admin/firestore';
 import { Bucket } from '@google-cloud/storage';
 import { hashPin, invalidateAuthCache } from '../auth';
-import { cachedServicePause, setCachedServicePause, CACHE_TTL_MS, createGetCachedSettings, isStoreOpenFromData, setCachedNotificationSettings } from '../helpers';
+import { cachedServicePause, setCachedServicePause, CACHE_TTL_MS, createGetCachedSettings, isStoreOpenFromData, setCachedNotificationSettings, setCachedSettings } from '../helpers';
 import { sendTestNotification } from '../services/notification';
+import { invalidatePublicBootstrapCache } from './bootstrap';
 
 
 // ============================================================
@@ -96,7 +97,7 @@ get('/settings/customer-notice', async (_req, res) => {
 get('/settings/version', async (_req, res) => {
   try {
     const doc = await db.collection('settings').doc('system').get();
-    const version = doc.data()?.liveSystemVersion || '';
+    const version = doc.data()?.liveSystemVersion || doc.data()?.version || '';
     res.json({ version });
   } catch (error) {
     sendErrorResponse(res, error);
@@ -107,7 +108,13 @@ get('/settings/version', async (_req, res) => {
 post('/settings/version', requireStaffAuth, validateVersion, async (req, res) => {
   const { version } = req.body;
   try {
-    await db.collection('settings').doc('system').set({ liveSystemVersion: version }, { merge: true });
+    await db.collection('settings').doc('system').set({
+      liveSystemVersion: version,
+      version: version,
+      versionUpdatedAt: new Date().toISOString()
+    }, { merge: true });
+    setCachedSettings(null);
+    invalidatePublicBootstrapCache();
     res.json({ success: true, version });
   } catch (error) {
     sendErrorResponse(res, error);

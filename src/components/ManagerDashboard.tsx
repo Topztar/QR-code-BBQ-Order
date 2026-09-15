@@ -33,7 +33,6 @@ import { CategoryFormModal } from './manager/modals/CategoryFormModal';
 import { TableSettingModal } from './manager/modals/TableSettingModal';
 import { ReservationSettingModal } from './manager/modals/ReservationSettingModal';
 import { PaidOrderModificationModal } from './manager/modals/PaidOrderModificationModal';
-import { CashierCheckoutConfirmModal } from './manager/modals/CashierCheckoutConfirmModal';
 import { DishFormModal } from './manager/modals/DishFormModal';
 import { OrderDetailDrilldownModal } from './manager/modals/OrderDetailDrilldownModal';
 
@@ -48,16 +47,6 @@ import {
   isOrderOnLocalDate,
   generateReservationNo,
 } from './manager/ManagerDashboardUtils';
-
-export {
-  getMaskedEmail,
-  computeOrderItemUnitPrice,
-  computeOrderItemsSubtotal,
-  calculateOrderTotalWithPayment,
-  getLocalDateString,
-  isOrderOnLocalDate,
-  generateReservationNo,
-};
 
 
 interface ManagerDashboardProps {
@@ -244,6 +233,18 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     setTerminalPage(1);
   }, [terminalCategory]);
 
+  const getPanelWidthClass = (widthVal?: number) => {
+    switch (widthVal) {
+      case 1: return 'lg:w-1/4';
+      case 2: return 'lg:w-1/3';
+      case 3: return 'lg:w-1/2';
+      case 4: return 'lg:w-2/3';
+      case 5: return 'lg:w-3/4';
+      case 6: return 'lg:w-full';
+      default: return 'lg:w-1/2';
+    }
+  };
+
   useEffect(() => {
     const totalCartPages = Math.max(1, Math.ceil(terminalCart.length / 5));
     if (terminalCartPage > totalCartPages) {
@@ -303,7 +304,6 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   const [showBulkDeleteOrdersModal, setShowBulkDeleteOrdersModal] = useState(false);
   const [bulkDeleteThresholdDate, setBulkDeleteThresholdDate] = useState<string>('');
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
-  const [showCheckoutConfirm, setShowCheckoutConfirm] = useState(false);
 
   // Table Layout and Floor Map States
   const [localTablePositions, setLocalTablePositions] = useState<Record<string, { x: number; y: number }>>({});
@@ -1285,421 +1285,6 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     alert('✅ 已結帳點單帳目異動稽查記錄，已與 Cloud Firestore 資料庫安全核算並同步更新！');
   };
 
-  // Cashier Subsystem States
-  const [selectedCashierOrderId, setSelectedCashierOrderId] = useState<string | null>(null);
-  const [cashierDiscountRate, setCashierDiscountRate] = useState<number>(0); // percentage, e.g. 10 for 10% off
-  const [cashierDiscountFlat, setCashierDiscountFlat] = useState<number>(0); // flat NT$ off
-  const [cashierDiscountType, setCashierDiscountType] = useState<'percent' | 'flat'>('percent');
-  const [cashierSurchargeRate, setCashierSurchargeRate] = useState<number>(0); // percentage surcharge, e.g. 10 for +10% service charge
-  const [cashierSurchargeFlat, setCashierSurchargeFlat] = useState<number>(0); // flat NT$ surcharge
-  const [cashierSurchargeType, setCashierSurchargeType] = useState<'percent' | 'flat'>('percent');
-  const [cashierPaymentMethod, setCashierPaymentMethod] = useState<'cash' | 'credit' | 'member' | 'twqr'>('cash');
-  const [cashierCashReceived, setCashierCashReceived] = useState<number>(0);
-  // Checkout merge scope: 'single' (獨立結帳) | 'same_table' (同桌合併) | 'all_merged' (跨桌全併) | 'custom' (自訂勾選)
-  const [cashierCheckoutScope, setCashierCheckoutScope] = useState<'single' | 'same_table' | 'all_merged' | 'custom'>('single');
-  const [cashierSelectedMergeOrderIds, setCashierSelectedMergeOrderIds] = useState<string[]>([]);
-
-  const getPanelWidthClass = (w: number) => {
-    if (w <= 35) return 'xl:w-[35%]';
-    if (w <= 40) return 'xl:w-[40%]';
-    if (w <= 45) return 'xl:w-[45%]';
-    if (w <= 48) return 'xl:w-[48%]';
-    if (w <= 50) return 'xl:w-[50%]';
-    if (w <= 55) return 'xl:w-[55%]';
-    if (w <= 60) return 'xl:w-[60%]';
-    if (w <= 65) return 'xl:w-[65%]';
-    if (w <= 70) return 'xl:w-[70%]';
-    if (w <= 75) return 'xl:w-[75%]';
-    if (w <= 80) return 'xl:w-[80%]';
-    if (w <= 85) return 'xl:w-[85%]';
-    if (w <= 90) return 'xl:w-[90%]';
-    if (w <= 95) return 'xl:w-[95%]';
-    return 'xl:w-[100%]';
-  };
-
-  const cashierSelectedOrder = useMemo(() => {
-    if (!selectedCashierOrderId) return null;
-    return orders.find(o => o.id === selectedCashierOrderId) || null;
-  }, [orders, selectedCashierOrderId]);
-
-  useEffect(() => {
-    if (cashierSelectedOrder) {
-      setCashierDiscountRate(0);
-      setCashierDiscountFlat(0);
-      setCashierDiscountType('percent');
-      setCashierCheckoutScope('single');
-      setCashierSelectedMergeOrderIds([cashierSelectedOrder.id]);
-      
-      const method = cashierSelectedOrder.paymentMethod === 'credit' ? 'credit' : 
-                     cashierSelectedOrder.paymentMethod === 'member' ? 'member' :
-                     cashierSelectedOrder.paymentMethod === 'twqr' ? 'twqr' : 'cash';
-      setCashierPaymentMethod(method);
-
-      if (method === 'credit' || method === 'twqr') {
-        setCashierSurchargeRate(10);
-        setCashierSurchargeFlat(0);
-        setCashierSurchargeType('percent');
-      } else {
-        setCashierSurchargeRate(0);
-        setCashierSurchargeFlat(0);
-        setCashierSurchargeType('percent');
-      }
-    }
-  }, [selectedCashierOrderId]);
-
-  // All candidate orders for the current table or merged tables
-  const cashierCandidateOrders = useMemo(() => {
-    if (!cashierSelectedOrder) {
-      return { sameTableOrders: [] as Order[], allConnectedOrders: [] as Order[], hasMergedTables: false };
-    }
-    
-    const curTableId = cashierSelectedOrder.tableNumber;
-    if (!curTableId || String(curTableId || '').includes('外帶')) {
-      return { 
-        sameTableOrders: [cashierSelectedOrder], 
-        allConnectedOrders: [cashierSelectedOrder], 
-        hasMergedTables: false 
-      };
-    }
-    
-    // Unpaid orders on the same table
-    const sameTable = orders.filter(
-      o => !o.isPaid && o.status !== 'cancelled' && String(o.tableNumber).trim() === String(curTableId).trim()
-    );
-
-    // Connected tables (mergedWith)
-    const curTableObj = tables.find(t => String(t.id).trim() === String(curTableId).trim());
-    const leadTableId = curTableObj?.mergedWith || curTableId;
-    
-    const mergedTableIds = tables
-      .filter(t => String(t.id).trim() === String(leadTableId).trim() || (t.mergedWith && String(t.mergedWith).trim() === String(leadTableId).trim()))
-      .map(t => String(t.id).trim());
-      
-    const allConnected = orders.filter(
-      o => !o.isPaid && o.status !== 'cancelled' && o.tableNumber && mergedTableIds.includes(String(o.tableNumber).trim())
-    );
-
-    const hasMerged = mergedTableIds.length > 1 || (curTableObj?.mergedWith !== undefined && curTableObj.mergedWith !== '');
-
-    return {
-      sameTableOrders: sameTable.length > 0 ? sameTable : [cashierSelectedOrder],
-      allConnectedOrders: allConnected.length > 0 ? allConnected : [cashierSelectedOrder],
-      hasMergedTables: hasMerged
-    };
-  }, [cashierSelectedOrder, orders, tables]);
-
-  const cashierMergedOrders = useMemo(() => {
-    if (!cashierSelectedOrder) return [];
-    
-    const curTableId = cashierSelectedOrder.tableNumber;
-    if (!curTableId || String(curTableId || '').includes('外帶')) {
-      return [cashierSelectedOrder];
-    }
-    
-    if (cashierCheckoutScope === 'single') {
-      return [cashierSelectedOrder];
-    }
-    
-    if (cashierCheckoutScope === 'same_table') {
-      return cashierCandidateOrders.sameTableOrders;
-    }
-    
-    if (cashierCheckoutScope === 'all_merged') {
-      return cashierCandidateOrders.allConnectedOrders;
-    }
-    
-    if (cashierCheckoutScope === 'custom') {
-      const selectedSet = new Set(cashierSelectedMergeOrderIds);
-      if (!selectedSet.has(cashierSelectedOrder.id)) {
-        selectedSet.add(cashierSelectedOrder.id);
-      }
-      const customList = cashierCandidateOrders.allConnectedOrders.filter(o => selectedSet.has(o.id));
-      return customList.length > 0 ? customList : [cashierSelectedOrder];
-    }
-    
-    return [cashierSelectedOrder];
-  }, [cashierSelectedOrder, cashierCheckoutScope, cashierSelectedMergeOrderIds, cashierCandidateOrders]);
-
-  const cashierCalculatedTotals = useMemo(() => {
-    if (!cashierSelectedOrder) return { subtotal: 0, discount: 0, surcharge: 0, total: 0 };
-    
-    const sub = cashierMergedOrders.reduce((sum, o) => {
-      const itemsSub = computeOrderItemsSubtotal(o.items || [], menuItems);
-      return sum + (itemsSub > 0 ? itemsSub : (o.subtotal || 0));
-    }, 0);
-    
-    // Both Surcharge and Discount are calculated using the original Subtotal (sub) as the reference base
-    let manualDiscount = 0;
-    if (cashierDiscountType === 'percent') {
-      manualDiscount = Math.round(sub * (cashierDiscountRate / 100));
-    } else {
-      manualDiscount = Math.round(cashierDiscountFlat);
-    }
-    
-    let surcharge = 0;
-    const isCreditOrTwqr = cashierPaymentMethod === 'credit' || cashierPaymentMethod === 'twqr';
-    if (cashierSurchargeType === 'percent') {
-      const effectiveRate = isCreditOrTwqr && cashierSurchargeRate === 0 && cashierSurchargeFlat === 0
-        ? 10
-        : cashierSurchargeRate;
-      surcharge = Math.round(sub * (effectiveRate / 100));
-    } else {
-      surcharge = Math.round(cashierSurchargeFlat);
-    }
-    if (surcharge < 0) surcharge = 0;
-    
-    // Auto-combo promo and other pre-existing discounts linked to the orders (優惠規則)
-    const autoDiscount = cashierMergedOrders.reduce((sum, o) => sum + (o.discount || 0), 0);
-    
-    let totalDiscount = manualDiscount + autoDiscount;
-    if (totalDiscount > sub) totalDiscount = sub;
-    if (totalDiscount < 0) totalDiscount = 0;
-    
-    const finalTotal = Math.max(0, sub - totalDiscount + surcharge);
-    
-    return {
-      subtotal: sub,
-      discount: totalDiscount,
-      surcharge,
-      total: finalTotal
-    };
-  }, [
-    cashierSelectedOrder, 
-    cashierMergedOrders, 
-    cashierDiscountType, 
-    cashierDiscountRate, 
-    cashierDiscountFlat, 
-    cashierSurchargeType, 
-    cashierSurchargeRate, 
-    cashierSurchargeFlat,
-    cashierPaymentMethod,
-    menuItems
-  ]);
-
-  useEffect(() => {
-    if (cashierCalculatedTotals) {
-      setCashierCashReceived(cashierCalculatedTotals.total);
-    }
-  }, [cashierCalculatedTotals.total]);
-
-  const handleCashierCheckoutSubmit = async () => {
-    if (!cashierSelectedOrder || !onPayOrder) return;
-    if (isCheckoutSubmitting) return;
-    
-    if (cashierPaymentMethod === 'cash' && cashierCashReceived < cashierCalculatedTotals.total) {
-      alert(`⚠️ 實收現金金額不足！實收 (NT$ ${cashierCashReceived}) 需大於或等於應收總額 (NT$ ${cashierCalculatedTotals.total})。`);
-      return;
-    }
-
-    if (cashierPaymentMethod === 'member') {
-      let vipEmail = '';
-      const dbStr = localStorage.getItem('google-members-database');
-      if (dbStr) {
-        try {
-          const db = JSON.parse(dbStr);
-          if (cashierSelectedOrder?.customerName) {
-            const matched = db.find((m: any) => m.name === cashierSelectedOrder.customerName);
-            if (matched) vipEmail = matched.email;
-          }
-        } catch (e) {
-          console.error(e);
-        }
-      }
-
-      if (!vipEmail) {
-        alert('⚠️ 找不到匹配此結帳單的會員帳戶，無法使用會員餘額付款！');
-        return;
-      }
-
-      try {
-        const deductRes = await fetch(`/api/members/${encodeURIComponent(vipEmail)}/deduct`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ amount: cashierCalculatedTotals.total }),
-        });
-
-        const deductData = await deductRes.json();
-        if (!deductRes.ok || !deductData.member) {
-          alert(`⚠️ 會員餘額扣抵失敗：${deductData.error || '餘額不足或系統異常'}！`);
-          return;
-        }
-
-        // Sync back to localStorage cache
-        if (dbStr) {
-          try {
-            const db = JSON.parse(dbStr);
-            const userIndex = db.findIndex((m: any) => m.email === vipEmail);
-            if (userIndex >= 0) {
-              db[userIndex].balance = deductData.member.balance;
-              db[userIndex].points = deductData.member.points;
-              localStorage.setItem('google-members-database', JSON.stringify(db));
-            }
-          } catch (_ignore) {}
-        }
-        window.dispatchEvent(new Event('local-points-updated'));
-      } catch (err) {
-        alert(`⚠️ 連線伺服器失敗，無法完成會員餘額扣抵：${err}`);
-        return;
-      }
-    }
-    
-    setIsCheckoutSubmitting(true);
-    try {
-      const change = cashierPaymentMethod === 'cash' ? (cashierCashReceived - cashierCalculatedTotals.total) : 0;
-      
-      const mergedTableIds = cashierMergedOrders.map(o => o.tableNumber);
-      const mergedOrderIds = cashierMergedOrders.map(o => o.id);
-
-      const checkoutRecord = {
-        id: `TX-${Date.now()}`,
-        orderId: cashierSelectedOrder.id,
-        tableNumber: cashierSelectedOrder.tableNumber,
-        mergedTableNumbers: mergedTableIds,
-        mergedOrderIds: mergedOrderIds,
-        subtotal: cashierCalculatedTotals.subtotal,
-        discount: cashierCalculatedTotals.discount,
-        serviceCharge: cashierCalculatedTotals.surcharge,
-        total: cashierCalculatedTotals.total,
-        amountPaid: cashierPaymentMethod === 'cash' ? cashierCashReceived : cashierCalculatedTotals.total,
-        changeProvided: change,
-        paymentMethod: cashierPaymentMethod,
-        staffPin: staffPin || '070718',
-        checkoutTime: new Date().toISOString()
-      };
-
-      // Create a filtered record for Cloud Firestore to comply with rigid security rules/schemas
-      const dbPostRecord = {
-        id: checkoutRecord.id,
-        orderId: checkoutRecord.orderId,
-        tableNumber: checkoutRecord.tableNumber,
-        subtotal: checkoutRecord.subtotal,
-        discount: checkoutRecord.discount,
-        serviceCharge: checkoutRecord.serviceCharge,
-        total: checkoutRecord.total,
-        amountPaid: checkoutRecord.amountPaid,
-        changeProvided: checkoutRecord.changeProvided,
-        paymentMethod: checkoutRecord.paymentMethod,
-        staffPin: checkoutRecord.staffPin,
-        checkoutTime: checkoutRecord.checkoutTime
-      };
-
-      // Make a static copy of the merged orders array to prevent recalculated useMemo states mid-loop
-      const staticMergedOrders = [...cashierMergedOrders];
-
-      if (onBulkPayOrders) {
-        await onBulkPayOrders(staticMergedOrders.map(o => o.id), {
-          paymentMethod: cashierPaymentMethod,
-          subtotal: cashierCalculatedTotals.subtotal,
-          serviceCharge: cashierCalculatedTotals.surcharge,
-          discount: cashierCalculatedTotals.discount,
-          total: cashierCalculatedTotals.total,
-          cashTendered: cashierPaymentMethod === 'cash' ? cashierCashReceived : cashierCalculatedTotals.total,
-          changeAmount: change,
-          tableNumbers: mergedTableIds,
-          checkoutRecord: dbPostRecord
-        });
-      } else {
-        // Fallback: Update all merged orders as paid!
-        for (let i = 0; i < staticMergedOrders.length; i++) {
-          const ord = staticMergedOrders[i];
-          const skipRefresh = i < staticMergedOrders.length - 1;
-
-          if (ord.id === cashierSelectedOrder.id) {
-            await onPayOrder(cashierSelectedOrder.id, {
-              paymentMethod: cashierPaymentMethod,
-              subtotal: cashierCalculatedTotals.subtotal,
-              serviceCharge: cashierCalculatedTotals.surcharge,
-              discount: cashierCalculatedTotals.discount,
-              total: cashierCalculatedTotals.total,
-              isPaid: true
-            }, skipRefresh);
-          } else {
-            await onPayOrder(ord.id, {
-              paymentMethod: cashierPaymentMethod,
-              subtotal: 0,
-              serviceCharge: 0,
-              discount: 0,
-              total: 0,
-              isPaid: true
-            }, skipRefresh);
-          }
-        }
-
-        // Smart Table Status Release
-        if (onUpdateTableStatus) {
-          const uniqueTableIds: string[] = Array.from(new Set<string>(mergedTableIds));
-          for (const tid of uniqueTableIds) {
-            if (tid && !tid.includes('外帶')) {
-              const remainingUnpaidForTable = orders.filter(
-                o => String(o.tableNumber).trim() === String(tid).trim() &&
-                !staticMergedOrders.some(m => m.id === o.id) &&
-                !o.isPaid &&
-                o.status !== 'cancelled'
-              );
-              if (remainingUnpaidForTable.length === 0) {
-                await onUpdateTableStatus(tid, {
-                  status: 'cleaning',
-                  preservedFor: '',
-                  mergedWith: '',
-                  cleaningStartedAt: new Date().toISOString()
-                });
-              }
-            }
-          }
-        }
-      }
-      
-      setSelectedCashierOrderId(null);
-      
-      const distinctTableDisplay = Array.from(new Set(staticMergedOrders.map(o => o.tableNumber))).join(' + ');
-      
-      setCheckoutSuccessData({
-        id: cashierSelectedOrder.id,
-        tableNumber: distinctTableDisplay || cashierSelectedOrder.tableNumber,
-        subtotal: checkoutRecord.subtotal,
-        discount: checkoutRecord.discount,
-        serviceCharge: checkoutRecord.serviceCharge,
-        total: checkoutRecord.total,
-        amountPaid: checkoutRecord.amountPaid,
-        changeProvided: checkoutRecord.changeProvided,
-        paymentMethod: checkoutRecord.paymentMethod,
-        isCashier: true,
-        mergedCount: staticMergedOrders.length,
-        checkoutScope: cashierCheckoutScope
-      });
-
-      // Cash drawer interlock linkage via LOCAL-PRINTER-POS-BRIDGE & Server API
-      if (billPrinter.cashDrawerEnabled) {
-        // Direct local bridge dispatch (works on localhost, LAN, and Windows POS Bridge)
-        const targetPort = billPrinter.usbPort?.includes(':') ? billPrinter.usbPort.toUpperCase() : `${billPrinter.usbPort?.toUpperCase() || 'LPT1'}:`;
-        openCashDrawerViaBridge(targetPort, posBridgeUrl)
-          .then(bRes => {
-            if (bRes.success) {
-              console.log('[Cash Drawer Bridge Success]', bRes.message);
-            }
-          })
-          .catch(e => console.warn('[Cash Drawer Bridge Warning]', e));
-
-        // Server API logging and execution
-        apiFetch('/api/printer/open-drawer', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ settings: billPrinter })
-        })
-          .then(res => res.json())
-          .then(data => {
-            console.log('[Cash Drawer Server Log]', data.log);
-          })
-          .catch(e => console.error('[Cash Drawer Server Error]', e));
-      }
-
-    } catch (err: any) {
-      console.error('[Cashier Checkout processing error]', err);
-      alert(`❌ 收銀失敗: ${err?.message || String(err)}`);
-    } finally {
-      setIsCheckoutSubmitting(false);
-    }
-  };
 
   const handleManualOpenDrawer = async () => {
     try {
@@ -3685,23 +3270,6 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
         checkoutSuccessData={checkoutSuccessData}
       />
 
-      {/* 🧾 櫃檯收銀二次確認彈出視窗 Cashier Checkout Confirmation Dialog */}
-      <CashierCheckoutConfirmModal
-        isOpen={showCheckoutConfirm && cashierSelectedOrder !== null}
-        onClose={() => setShowCheckoutConfirm(false)}
-        order={cashierSelectedOrder}
-        mergedOrders={cashierMergedOrders}
-        checkoutScope={cashierCheckoutScope}
-        paymentMethod={cashierPaymentMethod}
-        calculatedTotals={cashierCalculatedTotals}
-        discountType={cashierDiscountType}
-        discountRate={cashierDiscountRate}
-        surchargeType={cashierSurchargeType}
-        surchargeRate={cashierSurchargeRate}
-        cashReceived={cashierCashReceived}
-        isSubmitting={isCheckoutSubmitting}
-        onConfirm={handleCashierCheckoutSubmit}
-      />
 
 {/* Reusable Action Confirmation Dialog */}
       <ConfirmActionModal 

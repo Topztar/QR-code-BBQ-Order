@@ -174,7 +174,7 @@ export function registerBootstrapRoutes(app: express.Application, ctx: RouteCont
         printerConfig: { ip: sysData.livePrinterIp || '192.168.123.100' },
         ingredients: ingredientsSnap.docs.map(doc => doc.data()),
         reservations: reservationsSnap.docs.map(doc => doc.data()),
-        version: sysData.version || '1.0.0',
+        version: sysData.liveSystemVersion || sysData.version || '1.0.1',
         isFirebaseSyncEnabled: true
       };
 
@@ -209,4 +209,66 @@ export function registerBootstrapRoutes(app: express.Application, ctx: RouteCont
       sendErrorResponse(res, error);
     }
   });
+
+  // ============================================================
+  // ⚡ 修正 3：即時動態營運狀態端點 (/api/store-status)
+  // 解耦 CDN 靜態長效快取與動態高急迫性營運狀態 (售罄/暫停接單/營業開關)
+  // Cache-Control: no-cache, no-store, must-revalidate (杜絕顧客因 CDN 快取延遲點到售罄餐點)
+  // ============================================================
+  get('/store-status', async (_req, res) => {
+    try {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+
+      const now = new Date();
+      const todayStr = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Taipei',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(now);
+
+      const [systemDoc, soldOutMenuSnap] = await Promise.all([
+        db.collection('settings').doc('system').get(),
+        db.collection('menu')
+          .select('available', 'isAvailable', 'soldOutType', 'soldOutDate')
+          .get()
+      ]);
+
+      const sysData = systemDoc.data() || {};
+      const isOpen = isStoreOpenFromData(sysData);
+      const servicePaused = !!sysData.liveServicePaused;
+
+      // 提取目前真實售罄的品項 ID 清單
+      const soldOutItemIds: string[] = [];
+      for (const doc of soldOutMenuSnap.docs) {
+        const d = doc.data() as any;
+        let isAvailable = d.available ?? true;
+        if (d.soldOutType === 'permanent') {
+          isAvailable = false;
+        } else if (d.soldOutType === 'daily') {
+          if (d.soldOutDate === todayStr) {
+            isAvailable = false;
+          } else {
+            isAvailable = true;
+          }
+        }
+        if (!isAvailable) {
+          soldOutItemIds.push(doc.id);
+        }
+      }
+
+      res.json({
+        isOpen,
+        servicePaused,
+        soldOutItemIds,
+        timestamp: Date.now()
+      });
+    } catch (error) {
+      console.error('Error fetching real-time store status:', error);
+      sendErrorResponse(res, error);
+    }
+  });
 }
+

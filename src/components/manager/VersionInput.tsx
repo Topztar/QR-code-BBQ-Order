@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Tag, Save, Check, AlertCircle, RefreshCw, ShieldCheck } from 'lucide-react';
-import { apiFetch } from '../../lib/api';
+import { useRestaurantData } from '../../context/RestaurantDataContext';
 
 interface VersionInputProps {
   className?: string;
@@ -8,37 +8,28 @@ interface VersionInputProps {
 }
 
 export const VersionInput: React.FC<VersionInputProps> = ({ className = '', onVersionUpdated }) => {
-  const [currentVersion, setCurrentVersion] = useState<string>('');
-  const [inputVersion, setInputVersion] = useState<string>('');
-  const [loading, setLoading] = useState<boolean>(true);
+  const { systemVersion, handleUpdateSystemVersion, fetchData } = useRestaurantData();
+  const [inputVersion, setInputVersion] = useState<string>(systemVersion || '');
+  const [refreshing, setRefreshing] = useState<boolean>(false);
   const [saving, setSaving] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const fetchVersion = async () => {
-    setLoading(true);
+  useEffect(() => {
+    if (systemVersion) {
+      setInputVersion(systemVersion);
+    }
+  }, [systemVersion]);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
     setError(null);
     try {
-      const res = await fetch('/api/settings/version');
-      if (res.ok) {
-        const data = await res.json();
-        const ver = data.version || '';
-        setCurrentVersion(ver);
-        setInputVersion(ver);
-      } else {
-        setError('無法取得系統版本號');
-      }
-    } catch (e: any) {
-      console.error('[VersionInput] Failed to fetch version:', e);
-      setError('連線失敗，無法取得版本號');
+      await fetchData(true);
     } finally {
-      setLoading(false);
+      setRefreshing(false);
     }
   };
-
-  useEffect(() => {
-    fetchVersion();
-  }, []);
 
   const handleSave = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -59,35 +50,16 @@ export const VersionInput: React.FC<VersionInputProps> = ({ className = '', onVe
     setSuccess(null);
 
     try {
-      const res = await apiFetch('/api/settings/version', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ version: cleanVer }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        const savedVer = data.version || cleanVer;
-        setCurrentVersion(savedVer);
-        setInputVersion(savedVer);
+      const res = await handleUpdateSystemVersion(cleanVer);
+      if (res.success) {
+        const savedVer = res.version || cleanVer;
         setSuccess(`🎉 系統版本號已成功更新為 ${savedVer}！`);
         if (onVersionUpdated) {
           onVersionUpdated(savedVer);
         }
         setTimeout(() => setSuccess(null), 3500);
       } else {
-        const errData = await res.json().catch(() => ({}));
-        let errorMsg = errData.error;
-        if (!errorMsg) {
-          if (res.status === 401 || res.status === 403) {
-            errorMsg = '安全憑證已逾期或權限不足，請重新驗證管理員權限';
-          } else if (res.status === 400) {
-            errorMsg = '版本號格式錯誤，應為 X.Y.Z 或 vX.Y.Z';
-          } else {
-            errorMsg = '儲存失敗，請檢查伺服器狀態';
-          }
-        }
-        setError(errorMsg);
+        setError(res.error || '儲存失敗，請檢查伺服器狀態');
       }
     } catch (e: any) {
       console.error('[VersionInput] Failed to save version:', e);
@@ -114,12 +86,12 @@ export const VersionInput: React.FC<VersionInputProps> = ({ className = '', onVe
           </span>
           <button
             type="button"
-            onClick={fetchVersion}
-            disabled={loading}
+            onClick={handleRefresh}
+            disabled={refreshing}
             className="p-1 text-white/40 hover:text-white hover:bg-white/5 rounded transition cursor-pointer"
             title="重新整理版本號"
           >
-            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+            <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />
           </button>
         </div>
       </div>
@@ -154,12 +126,12 @@ export const VersionInput: React.FC<VersionInputProps> = ({ className = '', onVe
                 value={inputVersion}
                 onChange={(e) => setInputVersion(e.target.value)}
                 placeholder="例如: 1.0.0"
-                disabled={loading || saving}
+                disabled={saving}
                 className="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-white font-mono text-sm focus:ring-1 focus:ring-[#E5B453] focus:border-[#E5B453] outline-none transition"
               />
-              {currentVersion && (
+              {systemVersion && (
                 <span className="absolute right-3 top-2.5 text-[10px] text-zinc-500 font-mono pointer-events-none">
-                  當前: {currentVersion}
+                  當前: {systemVersion}
                 </span>
               )}
             </div>
@@ -167,7 +139,7 @@ export const VersionInput: React.FC<VersionInputProps> = ({ className = '', onVe
 
           <button
             type="submit"
-            disabled={loading || saving || inputVersion === currentVersion}
+            disabled={saving || inputVersion === systemVersion}
             className="w-full py-2 px-4 bg-[#E5B453] hover:bg-[#d6a546] disabled:bg-zinc-800 disabled:text-zinc-500 disabled:cursor-not-allowed text-black font-extrabold rounded-lg active:scale-95 cursor-pointer text-xs shadow-md tracking-wide transition flex items-center justify-center gap-1.5 h-[38px]"
           >
             {saving ? (
