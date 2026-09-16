@@ -3,6 +3,7 @@ import { Order, TableConfig } from '../types';
 import { computeOrderItemsSubtotal } from '../components/manager/ManagerDashboardUtils';
 import { openCashDrawerViaBridge } from '../lib/posBridgeClient';
 import { apiFetch } from '../lib/api';
+import { memberService } from '../services/memberService';
 
 export interface UseCashierCalculationsProps {
   orders: Order[];
@@ -183,19 +184,10 @@ export function useCashierCalculations({
     }
 
     if (cashierPaymentMethod === 'member') {
-      let vipEmail = '';
-      const dbStr = localStorage.getItem('google-members-database');
-      if (dbStr) {
-        try {
-          const db = JSON.parse(dbStr);
-          if (cashierSelectedOrder?.customerName) {
-            const matched = db.find((m: any) => m.name === cashierSelectedOrder.customerName);
-            if (matched) vipEmail = matched.email;
-          }
-        } catch (e) {
-          console.error(e);
-        }
-      }
+      const member = cashierSelectedOrder?.customerName
+        ? memberService.getMemberByName(cashierSelectedOrder.customerName)
+        : null;
+      const vipEmail = member?.email || '';
 
       if (!vipEmail) {
         alert('⚠️ 找不到匹配此結帳單的會員帳戶，無法使用會員餘額付款！');
@@ -215,18 +207,10 @@ export function useCashierCalculations({
           return;
         }
 
-        if (dbStr) {
-          try {
-            const db = JSON.parse(dbStr);
-            const userIndex = db.findIndex((m: any) => m.email === vipEmail);
-            if (userIndex >= 0) {
-              db[userIndex].balance = deductData.member.balance;
-              db[userIndex].points = deductData.member.points;
-              localStorage.setItem('google-members-database', JSON.stringify(db));
-            }
-          } catch (_ignore) {}
-        }
-        window.dispatchEvent(new Event('local-points-updated'));
+        memberService.updateMember(vipEmail, {
+          balance: deductData.member.balance,
+          points: deductData.member.points,
+        });
       } catch (err) {
         alert(`⚠️ 連線伺服器失敗，無法完成會員餘額扣抵：${err}`);
         return;
@@ -253,24 +237,11 @@ export function useCashierCalculations({
         amountPaid: cashierPaymentMethod === 'cash' ? cashierCashReceived : cashierCalculatedTotals.total,
         changeProvided: change,
         paymentMethod: cashierPaymentMethod,
-        staffPin: staffPin || '070718',
+        staffPin: staffPin || '',
         checkoutTime: new Date().toISOString()
       };
 
-      const dbPostRecord = {
-        id: checkoutRecord.id,
-        orderId: checkoutRecord.orderId,
-        tableNumber: checkoutRecord.tableNumber,
-        subtotal: checkoutRecord.subtotal,
-        discount: checkoutRecord.discount,
-        serviceCharge: checkoutRecord.serviceCharge,
-        total: checkoutRecord.total,
-        amountPaid: checkoutRecord.amountPaid,
-        changeProvided: checkoutRecord.changeProvided,
-        paymentMethod: checkoutRecord.paymentMethod,
-        staffPin: checkoutRecord.staffPin,
-        checkoutTime: checkoutRecord.checkoutTime
-      };
+      const { mergedTableNumbers: _mtn, mergedOrderIds: _moi, ...dbPostRecord } = checkoutRecord;
 
       const staticMergedOrders = [...cashierMergedOrders];
 
@@ -360,15 +331,24 @@ export function useCashierCalculations({
         const targetPort = billPrinter.usbPort?.includes(':') ? billPrinter.usbPort.toUpperCase() : `${billPrinter.usbPort?.toUpperCase() || 'LPT1'}:`;
         openCashDrawerViaBridge(targetPort, posBridgeUrl)
           .then(bRes => {
-            if (bRes.success) console.log('[Cash Drawer Bridge Success]', bRes.message);
+            if (bRes.success) {
+              console.log('[Cash Drawer Bridge Success]', bRes.message);
+            } else {
+              apiFetch('/api/printer/open-drawer', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ settings: billPrinter })
+              }).catch(e => console.error('[Cash Drawer Server Error]', e));
+            }
           })
-          .catch(e => console.warn('[Cash Drawer Bridge Warning]', e));
-
-        apiFetch('/api/printer/open-drawer', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ settings: billPrinter })
-        }).catch(e => console.error('[Cash Drawer Server Error]', e));
+          .catch(e => {
+            console.warn('[Cash Drawer Bridge Warning]', e);
+            apiFetch('/api/printer/open-drawer', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ settings: billPrinter })
+            }).catch(err => console.error('[Cash Drawer Server Error]', err));
+          });
       }
 
     } catch (err: any) {

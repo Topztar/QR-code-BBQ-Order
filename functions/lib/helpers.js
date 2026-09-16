@@ -235,7 +235,7 @@ function processMenuItemSoldOut(item, now) {
         if (!item.soldOutAt) {
             item.soldOutAt = now.toISOString();
         }
-        else {
+        else if (item.soldOutType === 'daily') {
             const soldDate = new Date(item.soldOutAt);
             if (!isNaN(soldDate.getTime())) {
                 const restoreTime = new Date(soldDate);
@@ -244,6 +244,8 @@ function processMenuItemSoldOut(item, now) {
                 if (now.getTime() >= restoreTime.getTime()) {
                     item.available = true;
                     item.soldOutAt = null;
+                    item.soldOutType = 'none';
+                    item.soldOutDate = null;
                 }
             }
         }

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Plus } from 'lucide-react';
+import { memberService } from '../../../services/memberService';
 
 export interface AddMemberModalProps {
   isOpen: boolean;
@@ -49,35 +50,18 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({
       return;
     }
 
-    const dbStr = localStorage.getItem('google-members-database');
-    let db: any[] = [];
-    if (dbStr) {
-      try {
-        db = JSON.parse(dbStr);
-      } catch (_e) {
-        db = [];
-      }
-    }
+    const result = memberService.addMember({
+      name: trimmedName,
+      email: trimmedEmail,
+      balance: parsedBalance,
+      points: parsedPoints,
+    });
 
-    if (db.some((m: any) => m.email && m.email.toLowerCase().trim() === trimmedEmail)) {
-      setError('此電子郵箱已被其他會員綁定使用！');
+    if (!result.success) {
+      setError(result.error || '新增會員失敗！');
       return;
     }
 
-    const newMember = {
-      name: trimmedName,
-      email: trimmedEmail,
-      avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150',
-      joinedAt: new Date().toISOString().split('T')[0],
-      balance: parsedBalance,
-      points: parsedPoints,
-    };
-
-    db.push(newMember);
-    localStorage.setItem('google-members-database', JSON.stringify(db));
-    localStorage.setItem(`google-points-${trimmedEmail}`, String(parsedPoints));
-
-    window.dispatchEvent(new Event('local-points-updated'));
     onSuccess();
     onClose();
   };

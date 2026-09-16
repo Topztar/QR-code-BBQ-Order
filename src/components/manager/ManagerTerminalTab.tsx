@@ -2,24 +2,13 @@ import React from 'react';
 import { ShoppingBag, Minimize2, Maximize2, ShoppingCart, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Category, Language, TableConfig } from '../../types';
 import { getLocalizedText } from '../../utils/i18n';
+import { useDashboardStore } from '../../stores/dashboard/useDashboardStore';
 
 interface ManagerTerminalTabProps {
   currentLang: Language;
   menuItems: any[];
   categories: Category[];
   tables: TableConfig[];
-  terminalCategory: string;
-  setTerminalCategory: (cat: string) => void;
-  terminalTable: string;
-  setTerminalTable: (tbl: string) => void;
-  terminalCart: any[];
-  setTerminalCart: React.Dispatch<React.SetStateAction<any[]>>;
-  terminalPage: number;
-  setTerminalPage: React.Dispatch<React.SetStateAction<number>>;
-  terminalCartPage: number;
-  setTerminalCartPage: React.Dispatch<React.SetStateAction<number>>;
-  isTerminalFullScreen: boolean;
-  setIsTerminalFullScreen: React.Dispatch<React.SetStateAction<boolean>>;
   onPlaceOrder?: (orderData: any) => Promise<any>;
 }
 
@@ -28,20 +17,22 @@ export const ManagerTerminalTab: React.FC<ManagerTerminalTabProps> = ({
   menuItems,
   categories,
   tables,
-  terminalCategory,
-  setTerminalCategory,
-  terminalTable,
-  setTerminalTable,
-  terminalCart,
-  setTerminalCart,
-  terminalPage,
-  setTerminalPage,
-  terminalCartPage,
-  setTerminalCartPage,
-  isTerminalFullScreen,
-  setIsTerminalFullScreen,
   onPlaceOrder,
 }) => {
+  const {
+    terminalCategory,
+    setTerminalCategory,
+    terminalTable,
+    setTerminalTable,
+    terminalCart,
+    setTerminalCart,
+    terminalPage,
+    setTerminalPage,
+    terminalCartPage,
+    setTerminalCartPage,
+    isTerminalFullScreen,
+    setIsTerminalFullScreen,
+  } = useDashboardStore();
   const filteredMenuItems = menuItems.filter(item => item.available && (terminalCategory === 'all' || item.category === terminalCategory));
   const itemsPerPage = 20;
   const totalPages = Math.max(1, Math.ceil(filteredMenuItems.length / itemsPerPage));

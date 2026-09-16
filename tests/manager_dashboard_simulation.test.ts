@@ -26,9 +26,9 @@ describe('ManagerDashboard & Extended Files Functional Simulation Suite', () => 
     expect(getMaskedEmail('')).toBe('');
     expect(getMaskedEmail(null)).toBe('');
 
-    // Legacy demo accounts
-    expect(getMaskedEmail('topztar@gmail.com')).toBe('VIP-001 (topz****@gmail.com)');
-    expect(getMaskedEmail('thai_foodie@gmail.com')).toBe('VIP-002 (thai_****@gmail.com)');
+    // Accounts now use standard unified masking
+    expect(getMaskedEmail('topztar@gmail.com')).toBe('VIP-USR (top****@gmail.com)');
+    expect(getMaskedEmail('thai_foodie@gmail.com')).toBe('VIP-USR (tha****@gmail.com)');
 
     // Reservation No generation
     const existingRes = [

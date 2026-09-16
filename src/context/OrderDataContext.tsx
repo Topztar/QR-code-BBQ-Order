@@ -163,6 +163,11 @@ export function OrderDataProvider({
     isSyncingRef.current = isSyncing;
   }, [isSyncing]);
 
+  const reservationsRef = useRef(reservations);
+  useEffect(() => {
+    reservationsRef.current = reservations;
+  }, [reservations]);
+
   const onRefreshDataRef = useRef(onRefreshData);
   useEffect(() => {
     onRefreshDataRef.current = onRefreshData;
@@ -595,7 +600,6 @@ export function OrderDataProvider({
       });
       if (res.ok) {
         console.log(`[KDS Sync] Order #${orderId} status synced to "${status}" successfully`);
-        setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status, isOfflinePending: false } : o));
       } else {
         console.warn(`[KDS Sync] Server returned status ${res.status}, keeping optimistic update`);
       }
@@ -896,7 +900,7 @@ export function OrderDataProvider({
         }
       }
       const resNo = targetOrder.reservationNo;
-      const matchingRes = (reservations || []).find(r =>
+      const matchingRes = (reservationsRef.current || []).find(r =>
         (resNo && (r.id === resNo || (r as any).reservationNo === resNo)) ||
         (r.tableNumber === targetOrder.tableNumber && r.date === targetOrder.reservationDate)
       );
@@ -1020,7 +1024,7 @@ export function OrderDataProvider({
       const ord = orders.find(o => o.id === id);
       if (ord) {
         const resNo = ord.reservationNo;
-        const matchingRes = (reservations || []).find(r =>
+        const matchingRes = (reservationsRef.current || []).find(r =>
           (resNo && (r.id === resNo || (r as any).reservationNo === resNo)) ||
           (r.tableNumber === ord.tableNumber && r.date === ord.reservationDate)
         );

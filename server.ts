@@ -21,7 +21,6 @@ import { Order, Ingredient, MenuItem, OrderItem, Category, TableConfig, Operatin
 import fs from 'fs';
 const dataJson = JSON.parse(fs.readFileSync('./public/data.json', 'utf-8'));
 const { INITIAL_MENU, INITIAL_INGREDIENTS, INITIAL_CATEGORIES, INGREDIENT_RECIPE_MAP } = dataJson;
-import { Type } from '@google/genai';
 import {
   triggerRealCashDrawer,
   printKitchenTicket,

@@ -43,7 +43,6 @@ export function validateOrderPayload(body: any): ValidationResult<any> {
   }
 
   const sanitizedItems = [];
-  let calculatedTotal = 0;
 
   for (let i = 0; i < body.items.length; i++) {
     const item = body.items[i];
@@ -73,27 +72,14 @@ export function validateOrderPayload(body: any): ValidationResult<any> {
       price,
       notes: sanitizeString(item.notes || '', 200)
     });
-
-    calculatedTotal += (price * qty);
   }
-
-  const subtotal = calculatedTotal;
-  const discount = Math.max(0, Number(body.discount) || 0);
-  const serviceCharge = Math.max(0, Number(body.serviceCharge) || 0);
-  const safeTotal = Math.max(0, subtotal + serviceCharge - discount);
-
   const sanitizedOrder = {
     ...body,
     tableNumber,
     items: sanitizedItems,
     customerName: sanitizeString(body.customerName || '', 50),
     customerPhone: sanitizeString(body.customerPhone || body.phone || '', 30),
-    notes: sanitizeString(body.notes || '', 500),
-    subtotal,
-    discount,
-    serviceCharge,
-    total: safeTotal,
-    totalAmount: safeTotal
+    notes: sanitizeString(body.notes || '', 500)
   };
 
   return { isValid: true, sanitizedData: sanitizedOrder };

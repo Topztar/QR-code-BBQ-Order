@@ -3,70 +3,124 @@ import { Plus, Layers, Edit, Trash2 } from 'lucide-react';
 import { Category, Language, MenuItem, SoldOutType } from '../../types';
 import { getLocalizedText } from '../../utils/i18n';
 
+import { useDashboardStore } from '../../stores/dashboard/useDashboardStore';
+
 interface ManagerMenuTabProps {
   currentLang: Language;
   menuItems: MenuItem[];
   categories: Category[];
-  localMenuItemOrder: MenuItem[];
-  isMenuItemSortingMode: boolean;
-  setIsMenuItemSortingMode: (sorting: boolean) => void;
-  handleSaveMenuItemOrder: () => void;
-  handleCancelMenuItemOrder: () => void;
-  handleMoveMenuItem: (id: string, dir: 'up' | 'down') => void;
   triggerAddMenuItemMode: () => void;
   triggerEditMenuItemMode: (item: MenuItem) => void;
   onToggleMenuItemAvailability?: (id: string, targetType?: SoldOutType) => void;
   onDeleteMenuItem?: (id: string) => Promise<any>;
   onReorderMenuItems?: (items: any) => Promise<any>;
-  localCategoryOrder: Category[];
-  isCategorySortingMode: boolean;
-  setIsCategorySortingMode: (sorting: boolean) => void;
-  handleSaveCategoryOrder: () => void;
-  handleCancelCategoryOrder: () => void;
-  handleMoveCategory: (id: string, dir: 'up' | 'down') => void;
   triggerAddCatMode: () => void;
   triggerEditCatMode: (cat: Category) => void;
   onAddCategory?: (id: any, name?: any, show?: any) => Promise<any>;
   onEditCategory?: (id: any, name?: any, show?: any) => Promise<any>;
   onDeleteCategory?: (id: string) => Promise<any>;
   onReorderCategories?: (cats: any) => Promise<any>;
-  setConfirmActionModal: (modal: {
-    isOpen: boolean;
-    title: string;
-    message: string;
-    actionLabel: string;
-    onConfirm: () => Promise<void>;
-  }) => void;
 }
 
 export const ManagerMenuTab: React.FC<ManagerMenuTabProps> = ({
   currentLang,
+  menuItems,
   categories,
-  localMenuItemOrder,
-  isMenuItemSortingMode,
-  setIsMenuItemSortingMode,
-  handleSaveMenuItemOrder,
-  handleCancelMenuItemOrder,
-  handleMoveMenuItem,
   triggerAddMenuItemMode,
   triggerEditMenuItemMode,
   onToggleMenuItemAvailability,
   onDeleteMenuItem,
   onReorderMenuItems,
-  localCategoryOrder,
-  isCategorySortingMode,
-  setIsCategorySortingMode,
-  handleSaveCategoryOrder,
-  handleCancelCategoryOrder,
-  handleMoveCategory,
   triggerAddCatMode,
   triggerEditCatMode,
   onAddCategory,
   onEditCategory,
   onDeleteCategory,
   onReorderCategories,
-  setConfirmActionModal,
 }) => {
+  const {
+    localMenuItemOrder,
+    setLocalMenuItemOrder,
+    isMenuItemSortingMode,
+    setIsMenuItemSortingMode,
+    setHasUnsavedMenuItemOrder,
+    localCategoryOrder,
+    setLocalCategoryOrder,
+    isCategorySortingMode,
+    setIsCategorySortingMode,
+    setHasUnsavedCategoryOrder,
+    setConfirmActionModal,
+  } = useDashboardStore();
+
+  const handleMoveMenuItem = (id: string, direction: 'up' | 'down') => {
+    const index = localMenuItemOrder.findIndex(m => m.id === id);
+    if (index === -1) return;
+    
+    const newItems = [...localMenuItemOrder];
+    if (direction === 'up' && index > 0) {
+      const temp = newItems[index];
+      newItems[index] = newItems[index - 1];
+      newItems[index - 1] = temp;
+    } else if (direction === 'down' && index < newItems.length - 1) {
+      const temp = newItems[index];
+      newItems[index] = newItems[index + 1];
+      newItems[index + 1] = temp;
+    } else {
+      return;
+    }
+    
+    setLocalMenuItemOrder(newItems);
+    setHasUnsavedMenuItemOrder(true);
+  };
+
+  const handleSaveMenuItemOrder = async () => {
+    if (!onReorderMenuItems) return;
+    const orderIds = localMenuItemOrder.map(item => item.id);
+    await onReorderMenuItems(orderIds);
+    setHasUnsavedMenuItemOrder(false);
+    setIsMenuItemSortingMode(false);
+  };
+
+  const handleCancelMenuItemOrder = () => {
+    setLocalMenuItemOrder(menuItems);
+    setHasUnsavedMenuItemOrder(false);
+    setIsMenuItemSortingMode(false);
+  };
+
+  const handleMoveCategory = (id: string, direction: 'up' | 'down') => {
+    const index = localCategoryOrder.findIndex(c => c.id === id);
+    if (index === -1) return;
+    
+    const newCategories = [...localCategoryOrder];
+    if (direction === 'up' && index > 0) {
+      const temp = newCategories[index];
+      newCategories[index] = newCategories[index - 1];
+      newCategories[index - 1] = temp;
+    } else if (direction === 'down' && index < newCategories.length - 1) {
+      const temp = newCategories[index];
+      newCategories[index] = newCategories[index + 1];
+      newCategories[index + 1] = temp;
+    } else {
+      return;
+    }
+    
+    setLocalCategoryOrder(newCategories);
+    setHasUnsavedCategoryOrder(true);
+  };
+
+  const handleSaveCategoryOrder = async () => {
+    if (!onReorderCategories) return;
+    const orderIds = localCategoryOrder.map(cat => cat.id);
+    await onReorderCategories(orderIds);
+    setHasUnsavedCategoryOrder(false);
+    setIsCategorySortingMode(false);
+  };
+
+  const handleCancelCategoryOrder = () => {
+    setLocalCategoryOrder(categories);
+    setHasUnsavedCategoryOrder(false);
+    setIsCategorySortingMode(false);
+  };
   return (
     <div className="space-y-6 animate-fadeIn text-left" id="subtab-section-menu">
       {/* Main List & Create trigger */}

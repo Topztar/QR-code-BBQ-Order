@@ -3,7 +3,7 @@ import { useState, useMemo, useEffect, useCallback } from 'react';
 import { VirtuosoGrid } from 'react-virtuoso';
 import { TakeoutLiveCard } from './TakeoutLiveCard';
 import { CashierOrderCard } from './CashierOrderCard';
-import { useCashierState } from '../../hooks/useCashierState';
+import { useDashboardStore } from '../../stores/dashboard/useDashboardStore';
 import { db, isFirebaseSyncEnabled } from '../../lib/firebase';
 import { openCashDrawerViaBridge } from '../../lib/posBridgeClient';
 import { apiFetch } from '../../lib/api';
@@ -22,6 +22,7 @@ import {
   calculateOrderTotalWithPayment,
   computeOrderItemUnitPrice
 } from './ManagerDashboardUtils';
+import { memberService } from '../../services/memberService';
 
 // ============================================================
 // ManagerCashierTab — 收銀結帳系統 Tab
@@ -77,8 +78,6 @@ export interface ManagerCashierTabProps {
   localTablePositions: Record<string, { x: number; y: number }>;
   setCheckoutSuccessData?: (data: any) => void;
   staffPin?: string;
-  selectedPendingRes?: Reservation | null;
-  setSelectedPendingRes?: (res: Reservation | null) => void;
   confirmActionModal?: any;
   setConfirmActionModal?: (modal: any) => void;
 }
@@ -93,13 +92,11 @@ export const ManagerCashierTab: React.FC<ManagerCashierTabProps> = (props) => {
     onEditReservation, onDeleteReservation, onDeleteTable,
     onUpdateOrderItems, onPayOrder, onBulkPayOrders,
     getPanelWidthClass, localTablePositions,
-    selectedPendingRes: _selectedPendingRes, setSelectedPendingRes: _setSelectedPendingRes,
     setCheckoutSuccessData, staffPin,
     confirmActionModal: _confirmActionModal, setConfirmActionModal
   } = props;
 
   
-  const cashierState = useCashierState();
   const { 
     selectedCashierOrderId, setSelectedCashierOrderId, 
     cashierListFilter, setCashierListFilter,
@@ -132,7 +129,7 @@ export const ManagerCashierTab: React.FC<ManagerCashierTabProps> = (props) => {
     simulatedElapsedOrders, copiedTakeoutPhone, copiedGoogleLinkNotice,
     batchSuccessMessage, isBatchProcessing, selectedResIds,
     selectedCalendarStatusFilter, selectedFineTuneTableId
-  } = cashierState;
+  } = useDashboardStore();
 
   const [isCheckoutSubmitting, setIsCheckoutSubmitting] = useState(false);
   const posBridgeUrl = "http://127.0.0.1:8060";
@@ -460,19 +457,10 @@ export const ManagerCashierTab: React.FC<ManagerCashierTabProps> = (props) => {
     }
 
     if (cashierPaymentMethod === 'member') {
-      let vipEmail = '';
-      const dbStr = localStorage.getItem('google-members-database');
-      if (dbStr) {
-        try {
-          const db = JSON.parse(dbStr);
-          if (cashierSelectedOrder?.customerName) {
-            const matched = db.find((m: any) => m.name === cashierSelectedOrder.customerName);
-            if (matched) vipEmail = matched.email;
-          }
-        } catch (e) {
-          console.error(e);
-        }
-      }
+      const member = cashierSelectedOrder?.customerName
+        ? memberService.getMemberByName(cashierSelectedOrder.customerName)
+        : null;
+      const vipEmail = member?.email || '';
 
       if (!vipEmail) {
         alert('⚠️ 找不到匹配此結帳單的會員帳戶，無法使用會員餘額付款！');
@@ -492,19 +480,10 @@ export const ManagerCashierTab: React.FC<ManagerCashierTabProps> = (props) => {
           return;
         }
 
-        // Sync back to localStorage cache
-        if (dbStr) {
-          try {
-            const db = JSON.parse(dbStr);
-            const userIndex = db.findIndex((m: any) => m.email === vipEmail);
-            if (userIndex >= 0) {
-              db[userIndex].balance = deductData.member.balance;
-              db[userIndex].points = deductData.member.points;
-              localStorage.setItem('google-members-database', JSON.stringify(db));
-            }
-          } catch (_ignore) {}
-        }
-        window.dispatchEvent(new Event('local-points-updated'));
+        memberService.updateMember(vipEmail, {
+          balance: deductData.member.balance,
+          points: deductData.member.points,
+        });
       } catch (err) {
         alert(`⚠️ 連線伺服器失敗，無法完成會員餘額扣抵：${err}`);
         return;
@@ -680,34 +659,31 @@ export const ManagerCashierTab: React.FC<ManagerCashierTabProps> = (props) => {
 
   const fetchMemberData = React.useCallback(async (customerName: string) => {
     try {
-      const dbStr = localStorage.getItem('google-members-database');
-      if (dbStr) {
-        const db = JSON.parse(dbStr);
-        const cached = db.find((m: any) => m.name === customerName);
-        if (cached?.email) {
-          setCashierMemberLoading(true);
-          try {
-            const res = await fetch(`/api/members/${encodeURIComponent(cached.email)}`);
-            if (res.ok) {
-              const data = await res.json();
-              setCashierMemberData(data);
-              const idx = db.findIndex((m: any) => m.email === cached.email);
-              if (idx >= 0) { db[idx].balance = data.balance; db[idx].points = data.points; }
-              localStorage.setItem('google-members-database', JSON.stringify(db));
-              return;
-            }
-          } finally {
-            setCashierMemberLoading(false);
+      const cached = memberService.getMemberByName(customerName);
+      if (cached?.email) {
+        setCashierMemberLoading(true);
+        try {
+          const res = await fetch(`/api/members/${encodeURIComponent(cached.email)}`);
+          if (res.ok) {
+            const data = await res.json();
+            setCashierMemberData(data);
+            memberService.updateMember(cached.email, {
+              balance: data.balance,
+              points: data.points,
+            });
+            return;
           }
-          setCashierMemberData(cached);
-          await fetch('/api/members', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: cached.email, name: cached.name, avatar: cached.avatar,
-              balance: cached.balance || 0, points: cached.points || 0 }),
-          });
-          return;
+        } finally {
+          setCashierMemberLoading(false);
         }
+        setCashierMemberData(cached);
+        await fetch('/api/members', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: cached.email, name: cached.name, avatar: cached.avatar,
+            balance: cached.balance || 0, points: cached.points || 0 }),
+        });
+        return;
       }
     } catch (e) { console.error('[Members] fetchMemberData error:', e); }
     setCashierMemberData(null);
@@ -2223,13 +2199,7 @@ export const ManagerCashierTab: React.FC<ManagerCashierTabProps> = (props) => {
                           {(() => {
                             let matchedMember: any = cashierMemberData;
                             if (!matchedMember && cashierSelectedOrder?.customerName) {
-                              try {
-                                const lsStr = localStorage.getItem('google-members-database');
-                                if (lsStr) {
-                                  const lsDb = JSON.parse(lsStr);
-                                  matchedMember = lsDb.find((m: any) => m.name === cashierSelectedOrder.customerName) || null;
-                                }
-                              } catch (_e) { /* ignore */ }
+                              matchedMember = memberService.getMemberByName(cashierSelectedOrder.customerName);
                             }
 
                             if (cashierMemberLoading) {
@@ -2323,15 +2293,9 @@ export const ManagerCashierTab: React.FC<ManagerCashierTabProps> = (props) => {
                                             const result = await r.json();
                                             if (r.ok && result.member) {
                                               setCashierMemberData(result.member);
-                                              try {
-                                                const cStr = localStorage.getItem('google-members-database');
-                                                if (cStr) {
-                                                  const cDb = JSON.parse(cStr);
-                                                  const ci = cDb.findIndex((mx: any) => mx.email === member.email);
-                                                  if (ci >= 0) { cDb[ci].balance = result.member.balance; localStorage.setItem('google-members-database', JSON.stringify(cDb)); }
-                                                }
-                                              } catch (_ce) { /* ignore */ }
-                                              window.dispatchEvent(new Event('local-points-updated'));
+                                              if (member.email) {
+                                                memberService.updateMember(member.email, { balance: result.member.balance });
+                                              }
                                               setCashierCashReceived(prev => prev + 1);
                                               setTimeout(() => setCashierCashReceived(prev => prev - 1), 50);
                                             } else {

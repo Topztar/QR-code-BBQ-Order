@@ -7,6 +7,7 @@ import { sanitizePhoneDigits, isValidTaiwanPhone, TAIWAN_PHONE_ERROR_MSG } from 
 import { calculateReservationAvailability, autoSelectOptimalTables, validateCapacity } from '../utils/reservationValidator';
 import { db, isFirebaseSyncEnabled } from '../lib/firebase';
 import { safeStorage } from '../lib/safeStorage';
+import { useDashboardStore } from '../stores/dashboard/useDashboardStore';
 import {
   checkPOSBridgeHealth,
   openCashDrawerViaBridge,
@@ -47,6 +48,7 @@ import {
   isOrderOnLocalDate,
   generateReservationNo,
 } from './manager/ManagerDashboardUtils';
+import { memberService } from '../services/memberService';
 
 
 interface ManagerDashboardProps {
@@ -216,22 +218,17 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   onUpdateMemberConfig,
 }) => {
   // Navigation Tabs
-  const [activeSubTab, setActiveSubTab] = useState<'stats' | 'orders' | 'inventory' | 'menu' | 'members' | 'cashier' | 'printer' | 'options' | 'notifications' | 'eod' | 'terminal'>(defaultSubTab || 'stats');
-  const [eodSelectedDate, setEodSelectedDate] = useState<string>(() => getLocalDateString());
+  const activeSubTab = defaultSubTab || 'stats';
+  const { eodSelectedDate, setEodSelectedDate } = useDashboardStore();
 
   const prevMemberPointsRatioRef = React.useRef<number>(memberPointsRatio);
   const prevMemberRewardsRef = React.useRef<string>(JSON.stringify(memberRewards));
 
-  const [terminalCart, setTerminalCart] = useState<any[]>([]);
-  const [terminalTable, setTerminalTable] = useState("1");
-  const [terminalCategory, setTerminalCategory] = useState<string>("all");
-  const [isTerminalFullScreen, setIsTerminalFullScreen] = useState(false);
-  const [terminalPage, setTerminalPage] = useState(1);
-  const [terminalCartPage, setTerminalCartPage] = useState(1);
+  const { terminalCart, terminalTable, terminalCategory, isTerminalFullScreen, terminalPage, terminalCartPage, setTerminalPage, setTerminalCartPage } = useDashboardStore();
 
   useEffect(() => {
     setTerminalPage(1);
-  }, [terminalCategory]);
+  }, [terminalCategory, setTerminalPage]);
 
   const getPanelWidthClass = (widthVal?: number) => {
     switch (widthVal) {
@@ -250,12 +247,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     if (terminalCartPage > totalCartPages) {
       setTerminalCartPage(totalCartPages);
     }
-  }, [terminalCart.length, terminalCartPage]);
-  useEffect(() => {
-    if (defaultSubTab) {
-      setActiveSubTab(defaultSubTab);
-    }
-  }, [defaultSubTab]);
+  }, [terminalCart.length, terminalCartPage, setTerminalCartPage]);
 
   useEffect(() => {
     if (memberPointsRatio !== prevMemberPointsRatioRef.current) {
@@ -291,32 +283,21 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   }, [memberRewards]);
 
   // Table Config States
-  const [isTableFormOpen, setIsTableFormOpen] = useState(false);
-  const [editingTableObj, setEditingTableObj] = useState<TableConfig | null>(null);
-  const [tableIdInput, setTableIdInput] = useState('');
-  const [tableQrUrlInput, setTableQrUrlInput] = useState('');
-  const [tableMaxCapacityInput, setTableMaxCapacityInput] = useState('');
-  const [tableError, setTableError] = useState<string | null>(null);
-  const [tableSuccess, setTableSuccess] = useState<string | null>(null);
+  const { isTableFormOpen, setIsTableFormOpen, editingTableObj, setEditingTableObj, tableIdInput, setTableIdInput, tableQrUrlInput, setTableQrUrlInput, tableMaxCapacityInput, setTableMaxCapacityInput, tableError, setTableError, tableSuccess, setTableSuccess } = useDashboardStore();
   const [takeoutStatus, setTakeoutStatus] = useState({ sequence: 0, lastResetDate: '' });
   const [selectedQrPreviewId, setSelectedQrPreviewId] = useState<string>('1');
   const [copiedTableId, setCopiedTableId] = useState<string | null>(null);
-  const [showBulkDeleteOrdersModal, setShowBulkDeleteOrdersModal] = useState(false);
+  const { showBulkDeleteOrdersModal, setShowBulkDeleteOrdersModal } = useDashboardStore();
   const [bulkDeleteThresholdDate, setBulkDeleteThresholdDate] = useState<string>('');
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
 
   // Table Layout and Floor Map States
-  const [localTablePositions, setLocalTablePositions] = useState<Record<string, { x: number; y: number }>>({});
+  const { localTablePositions, setLocalTablePositions } = useDashboardStore();
   const snapToGrid = true;
   const gridSize = 5; // Default grid size is 5%
 
   // Local reordering states with confirmation buttons to prevent accidental clicks
-  const [localCategoryOrder, setLocalCategoryOrder] = useState<Category[]>([]);
-  const [localMenuItemOrder, setLocalMenuItemOrder] = useState<any[]>([]);
-  const [hasUnsavedCategoryOrder, setHasUnsavedCategoryOrder] = useState(false);
-  const [hasUnsavedMenuItemOrder, setHasUnsavedMenuItemOrder] = useState(false);
-  const [isCategorySortingMode, setIsCategorySortingMode] = useState(false);
-  const [isMenuItemSortingMode, setIsMenuItemSortingMode] = useState(false);
+  const { localCategoryOrder, setLocalCategoryOrder, localMenuItemOrder, setLocalMenuItemOrder, hasUnsavedCategoryOrder, setHasUnsavedCategoryOrder, hasUnsavedMenuItemOrder, setHasUnsavedMenuItemOrder, isCategorySortingMode, setIsCategorySortingMode, isMenuItemSortingMode, setIsMenuItemSortingMode } = useDashboardStore();
 
   useEffect(() => {
     if (!hasUnsavedCategoryOrder) {
@@ -331,13 +312,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   }, [menuItems, hasUnsavedMenuItemOrder]);
 
   // Custom reusable confirmation dialog modal state
-  const [confirmActionModal, setConfirmActionModal] = useState<{
-    isOpen: boolean;
-    title: string;
-    message: string;
-    actionLabel?: string;
-    onConfirm: () => void | Promise<void>;
-  } | null>(null);
+  const { confirmActionModal, setConfirmActionModal } = useDashboardStore();
 
   const [isCheckoutSubmitting, setIsCheckoutSubmitting] = useState<boolean>(false);
 
@@ -358,7 +333,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   });
 
   // Tablet selection for map drag helper
-  const [selectedFineTuneTableId, _setSelectedFineTuneTableId] = useState<string | null>(null);
+  const { selectedFineTuneTableId } = useDashboardStore();
   const fineTuneTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
 
   // Drag and drop mouse event handler
@@ -516,75 +491,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   };
 
   // Reorder sorting action handlers
-  const handleMoveMenuItem = (id: string, direction: 'up' | 'down') => {
-    const index = localMenuItemOrder.findIndex(m => m.id === id);
-    if (index === -1) return;
-    
-    const newItems = [...localMenuItemOrder];
-    if (direction === 'up' && index > 0) {
-      const temp = newItems[index];
-      newItems[index] = newItems[index - 1];
-      newItems[index - 1] = temp;
-    } else if (direction === 'down' && index < newItems.length - 1) {
-      const temp = newItems[index];
-      newItems[index] = newItems[index + 1];
-      newItems[index + 1] = temp;
-    } else {
-      return;
-    }
-    
-    setLocalMenuItemOrder(newItems);
-    setHasUnsavedMenuItemOrder(true);
-  };
 
-  const handleSaveMenuItemOrder = async () => {
-    if (!onReorderMenuItems) return;
-    const orderIds = localMenuItemOrder.map(item => item.id);
-    await onReorderMenuItems(orderIds);
-    setHasUnsavedMenuItemOrder(false);
-    setIsMenuItemSortingMode(false);
-  };
-
-  const handleCancelMenuItemOrder = () => {
-    setLocalMenuItemOrder(menuItems);
-    setHasUnsavedMenuItemOrder(false);
-    setIsMenuItemSortingMode(false);
-  };
-
-  const handleMoveCategory = (id: string, direction: 'up' | 'down') => {
-    const index = localCategoryOrder.findIndex(c => c.id === id);
-    if (index === -1) return;
-    
-    const newCategories = [...localCategoryOrder];
-    if (direction === 'up' && index > 0) {
-      const temp = newCategories[index];
-      newCategories[index] = newCategories[index - 1];
-      newCategories[index - 1] = temp;
-    } else if (direction === 'down' && index < newCategories.length - 1) {
-      const temp = newCategories[index];
-      newCategories[index] = newCategories[index + 1];
-      newCategories[index + 1] = temp;
-    } else {
-      return;
-    }
-    
-    setLocalCategoryOrder(newCategories);
-    setHasUnsavedCategoryOrder(true);
-  };
-
-  const handleSaveCategoryOrder = async () => {
-    if (!onReorderCategories) return;
-    const orderIds = localCategoryOrder.map(cat => cat.id);
-    await onReorderCategories(orderIds);
-    setHasUnsavedCategoryOrder(false);
-    setIsCategorySortingMode(false);
-  };
-
-  const handleCancelCategoryOrder = () => {
-    setLocalCategoryOrder(categories);
-    setHasUnsavedCategoryOrder(false);
-    setIsCategorySortingMode(false);
-  };
 
   // Reservation Config States
   const [isResFormOpen, setIsResFormOpen] = useState(false);
@@ -727,8 +634,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   const prevMinSpendRef = React.useRef<number>(minSpend);
 
   // Active Order Table/Takeout editing states
-  const [editingOrderTableId, setEditingOrderTableId] = useState<string | null>(null);
-  const [editingOrderTableValue, setEditingOrderTableValue] = useState<string>('');
+  const { editingOrderTableId, setEditingOrderTableId, editingOrderTableValue, setEditingOrderTableValue } = useDashboardStore();
 
   // Promo combo staging states
   const [, setTempPromoCombo] = useState<any>(promoCombo);
@@ -1078,7 +984,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
       }
 
       if (clearLocalMembers) {
-        localStorage.removeItem('google-members-database');
+        memberService.clearAllMembers();
       }
 
       setSanitizeSuccess('🎯 ' + (resData.message || '已成功清除系統內所有測試用歷史單據及暫存日誌！'));
@@ -1196,9 +1102,14 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     }
 
     // Recompute total & diff
-    let subtotal = computeOrderItemsSubtotal(updatedItems, menuItems);
-    const serviceCharge = (selectedOrder.paymentMethod === 'credit' || selectedOrder.paymentMethod === 'twqr') ? Math.round(subtotal * 0.1) : 0;
-    const total = subtotal + serviceCharge;
+    const pricing = calculateOrderTotalWithPayment({
+      ...selectedOrder,
+      items: updatedItems,
+      discount: selectedOrder.discount || 0
+    }, menuItems);
+    const subtotal = pricing.subtotal;
+    const serviceCharge = pricing.serviceCharge;
+    const total = pricing.total;
     const totalDiff = total - originalPrice;
 
     // Create unique log item
@@ -1227,30 +1138,16 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
 
     // If payment method is member, sync membership database
     if (selectedOrder.paymentMethod === 'member') {
-      const dbStr = localStorage.getItem('google-members-database');
-      if (dbStr) {
-        try {
-          const db = JSON.parse(dbStr);
-          let vipEmail = '';
-          if (selectedOrder.customerName) {
-            const matched = db.find((m: any) => m.name === selectedOrder.customerName);
-            if (matched) vipEmail = matched.email;
-          }
-          const userIndex = vipEmail ? db.findIndex((m: any) => m.email === vipEmail) : -1;
-          if (userIndex !== -1) {
-            const currentBal = db[userIndex].balance || 0;
-            const finalBal = currentBal - totalDiff; // Negative totalDiff means refund, which increases balance (+ absolute totalDiff)
-            
-            if (finalBal < 0) {
-              alert(`⚠️ 警告：此會員儲值卡餘額不足（剩餘: NT$ ${currentBal}）！自動扣減使餘額透支，請現場向顧客索取差額 ${Math.abs(finalBal)} 元！`);
-            }
-            db[userIndex].balance = Math.max(0, finalBal);
-            localStorage.setItem('google-members-database', JSON.stringify(db));
-            alert(`💳 因應本次退貨/加點核銷：會員額度已自動變更，原額: NT$ ${currentBal} ➔ 現額: NT$ ${db[userIndex].balance}`);
-          }
-        } catch (e) {
-          console.error(e);
+      const member = selectedOrder.customerName ? memberService.getMemberByName(selectedOrder.customerName) : null;
+      if (member) {
+        const currentBal = member.balance || 0;
+        const finalBal = currentBal - totalDiff; // Negative totalDiff means refund, which increases balance (+ absolute totalDiff)
+        if (finalBal < 0) {
+          alert(`⚠️ 警告：此會員儲值卡餘額不足（剩餘: NT$ ${currentBal}）！自動扣減使餘額透支，請現場向顧客索取差額 ${Math.abs(finalBal)} 元！`);
         }
+        memberService.updateMemberBalance(member.email, -totalDiff);
+        const updatedMember = memberService.getMemberByEmail(member.email);
+        alert(`💳 因應本次退貨/加點核銷：會員額度已自動變更，原額: NT$ ${currentBal} ➔ 現額: NT$ ${updatedMember?.balance ?? Math.max(0, finalBal)}`);
       }
     } else if (selectedOrder.paymentMethod === 'cash') {
       if (totalDiff < 0) {
@@ -1351,17 +1248,18 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     await onUpdateOrderItems(selectedOrder.id, updatedItems);
     
     // Also update selectedOrder local modal state to prevent lag
-    let subtotal = computeOrderItemsSubtotal(updatedItems, menuItems);
-    const discount = selectedOrder.discount || 0;
-    const serviceCharge = (selectedOrder.paymentMethod === 'credit' || selectedOrder.paymentMethod === 'twqr') ? Math.round(subtotal * 0.1) : 0;
-    const total = Math.max(0, subtotal - discount + serviceCharge);
+    const pricing = calculateOrderTotalWithPayment({
+      ...selectedOrder,
+      items: updatedItems,
+      discount: selectedOrder.discount || 0
+    }, menuItems);
 
     setSelectedOrder({
       ...selectedOrder,
       items: updatedItems,
-      subtotal,
-      serviceCharge,
-      total,
+      subtotal: pricing.subtotal,
+      serviceCharge: pricing.serviceCharge,
+      total: pricing.total,
     });
   };
 
@@ -1397,17 +1295,18 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     // Sync with backend
     await onUpdateOrderItems(selectedOrder.id, updatedItems);
 
-    let subtotal = computeOrderItemsSubtotal(updatedItems, menuItems);
-    const discount = selectedOrder.discount || 0;
-    const serviceCharge = (selectedOrder.paymentMethod === 'credit' || selectedOrder.paymentMethod === 'twqr') ? Math.round(subtotal * 0.1) : 0;
-    const total = Math.max(0, subtotal - discount + serviceCharge);
+    const pricing = calculateOrderTotalWithPayment({
+      ...selectedOrder,
+      items: updatedItems,
+      discount: selectedOrder.discount || 0
+    }, menuItems);
 
     setSelectedOrder({
       ...selectedOrder,
       items: updatedItems,
-      subtotal,
-      serviceCharge,
-      total,
+      subtotal: pricing.subtotal,
+      serviceCharge: pricing.serviceCharge,
+      total: pricing.total,
     });
   };
 
@@ -1421,39 +1320,18 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     }
 
     if (selectedOrder.paymentMethod === 'member') {
-      const dbStr = localStorage.getItem('google-members-database');
-      if (dbStr) {
-        try {
-          const db = JSON.parse(dbStr);
-          let vipEmail = '';
-          if (selectedOrder.customerName) {
-            const matched = db.find((m: any) => m.name === selectedOrder.customerName);
-            if (matched) {
-              vipEmail = matched.email;
-            }
-          }
-          const userIndex = vipEmail ? db.findIndex((m: any) => m.email === vipEmail) : -1;
-          if (userIndex >= 0) {
-            const currentBal = db[userIndex].balance || 0;
-            if (currentBal < selectedOrder.total) {
-              alert(`⚠️ 會員餘額不足 (剩餘: NT$ ${currentBal})！無法進行扣抵結帳，請先至收銀台點選【儲值增額】。`);
-              return;
-            }
-            // Deduct
-            db[userIndex].balance = currentBal - selectedOrder.total;
-            localStorage.setItem('google-members-database', JSON.stringify(db));
-            window.dispatchEvent(new Event('local-points-updated'));
-          } else {
-            alert(`⚠️ 找不到匹配此結帳單的會員，無法使用會員餘額付款！`);
-            return;
-          }
-        } catch (e) {
-          console.error(e);
-        }
-      } else {
-        alert(`⚠️ 未能獲取會員資料庫，請確認會員數據已初始化。`);
+      const member = selectedOrder.customerName ? memberService.getMemberByName(selectedOrder.customerName) : null;
+      if (!member) {
+        alert('⚠️ 找不到匹配此結帳單的會員，無法使用會員餘額付款！');
         return;
       }
+      const currentBal = Number(member.balance) || 0;
+      if (currentBal < selectedOrder.total) {
+        alert(`⚠️ 會員餘額不足 (剩餘: NT$ ${currentBal})！無法進行扣抵結帳，請先至收銀台點選【儲值增額】。`);
+        return;
+      }
+      // Deduct balance via memberService
+      memberService.updateMemberBalance(member.email, -selectedOrder.total);
     }
 
     setIsCheckoutSubmitting(true);
@@ -1470,7 +1348,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
         amountPaid: selectedOrder.paymentMethod === 'cash' ? cashReceivedInput : selectedOrder.total,
         changeProvided: change,
         paymentMethod: selectedOrder.paymentMethod,
-        staffPin: staffPin || '070718',
+        staffPin: staffPin || '',
         checkoutTime: new Date().toISOString()
       };
 
@@ -1520,7 +1398,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   const [inventoryLogSearch, setInventoryLogSearch] = useState('');
   const [restockAmount, setRestockAmount] = useState<{ [key: string]: number }>({});
   const [quickRestockItem, setQuickRestockItem] = useState<Ingredient | null>(null);
-  const [_quickRestockQty, setQuickRestockQty] = useState('');
+  const [, setQuickRestockQty] = useState('');
 
   // Add Ingredient states
   const [newIngId, setNewIngId] = useState('');
@@ -1536,7 +1414,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   const [popularItemToRemoveId, setPopularItemToRemoveId] = useState<string | null>(null);
   const [showClearAllPopularConfirm, setShowClearAllPopularConfirm] = useState(false);
   const [popularSaveStatus, setPopularSaveStatus] = useState<{ type: 'success' | 'error' | null; message: string }>({ type: null, message: '' });
-  const [_printConfirmData, setPrintConfirmData] = useState<{ title: string; ip: string; onConfirm: () => void; receiptType?: string; receiptBody?: string } | null>(null);
+  const [, setPrintConfirmData] = useState<any>(null);
 
   // Synchronized Print Logs for Manager Exporting
   const [printLogs, setPrintLogs] = useState<any[]>([]);
@@ -1552,15 +1430,11 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     }
   };
 
-  const prevPopularItemIdsRef = React.useRef<string>(JSON.stringify(popularItemIds));
-
+  const popularItemIdsStr = JSON.stringify(popularItemIds);
   useEffect(() => {
-    const currentSerialized = JSON.stringify(popularItemIds);
-    if (currentSerialized !== prevPopularItemIdsRef.current) {
-      setLocalPopularIds(popularItemIds);
-      prevPopularItemIdsRef.current = currentSerialized;
-    }
-  }, [popularItemIds]);
+    setLocalPopularIds(popularItemIds);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [popularItemIdsStr]);
 
   // Menu Creation/Editing states
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -1816,9 +1690,14 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     }
   };
 
+  // Fetch global rules and printer settings once on initial mount
   useEffect(() => {
     fetchGlobalRules();
     fetchPrinterSettings();
+  }, []);
+
+  // Fetch print logs only when entering printer or stats tabs
+  useEffect(() => {
     if (activeSubTab === 'printer' || activeSubTab === 'stats') {
       fetchPrintLogs();
     }
@@ -1863,33 +1742,8 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
 
   // Load Google members statistics
   const loadMembers = () => {
-    const dbStr = localStorage.getItem('google-members-database');
-    if (dbStr) {
-      try {
-        let db = JSON.parse(dbStr);
-        if (!Array.isArray(db)) {
-          db = [];
-        }
-        // Filter out the built-in test members
-        const filtered = db.filter((m: any) => {
-          const emailLower = m && m.email ? m.email.toLowerCase().trim() : '';
-          return emailLower !== 'topztar@gmail.com' && 
-                 emailLower !== 'thai_foodie@gmail.com' && 
-                 emailLower !== 'vegan_sabay@gmail.com' && 
-                 emailLower !== 'bbq_lover@gmail.com';
-        });
-        if (filtered.length !== db.length) {
-          localStorage.setItem('google-members-database', JSON.stringify(filtered));
-        }
-        setMembersList(filtered);
-      } catch (_e) {
-        setMembersList([]);
-      }
-    } else {
-      const defaultMembers: any[] = [];
-      localStorage.setItem('google-members-database', JSON.stringify(defaultMembers));
-      setMembersList(defaultMembers);
-    }
+    const list = memberService.getMembers();
+    setMembersList(list);
   };
 
   useEffect(() => {
@@ -1916,34 +1770,12 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
 
   const handleSavePointsAdjustment = (amount: number) => {
     if (!adjustPointsModal) return { success: false, error: '未選擇會員！' };
-    if (isNaN(amount)) {
-      return { success: false, error: '❌ 請輸入有效的整數點數！' };
+    const res = memberService.updateMemberPoints(adjustPointsModal.email, amount);
+    if (res.success) {
+      setAdjustPointsModal(null);
+      return { success: true };
     }
-    const { email } = adjustPointsModal;
-    const dbStr = localStorage.getItem('google-members-database');
-    if (dbStr) {
-      try {
-        const db = JSON.parse(dbStr);
-        const updated = db.map((m: any) => {
-          if (m.email === email) {
-            const finalPoints = Math.max(0, (m.points || 0) + amount);
-            localStorage.setItem(`google-points-${email}`, String(finalPoints));
-            return { ...m, points: finalPoints };
-          }
-          return m;
-        });
-        localStorage.setItem('google-members-database', JSON.stringify(updated));
-        setMembersList(updated);
-        window.dispatchEvent(new Event('local-points-updated'));
-        setAdjustPointsModal(null);
-        return { success: true };
-      } catch (e) {
-        console.error(e);
-        return { success: false, error: '儲存點數時發生資料處理錯誤！' };
-      }
-    } else {
-      return { success: false, error: '找不到會員資料庫！' };
-    }
+    return { success: false, error: res.error || '儲存點數時發生資料處理錯誤！' };
   };
 
   const handleDeleteMember = (email: string) => {
@@ -1954,19 +1786,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
       message: `您確定要永久刪除會員帳戶 [${masked}] 嗎？此操作將同時清空其全部點數與儲值紀錄，且無法復原。`,
       actionLabel: '確定刪除 Delete',
       onConfirm: () => {
-        const dbStr = localStorage.getItem('google-members-database');
-        if (dbStr) {
-          try {
-            const db = JSON.parse(dbStr);
-            const updated = db.filter((m: any) => m.email !== email);
-            localStorage.setItem('google-members-database', JSON.stringify(updated));
-            setMembersList(updated);
-            localStorage.removeItem(`google-points-${email}`);
-            window.dispatchEvent(new Event('local-points-updated'));
-          } catch (e) {
-            console.error(e);
-          }
-        }
+        memberService.deleteMember(email);
       },
     });
   };
@@ -2721,7 +2541,6 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
               key={tab.id}
               id={`tab-btn-${tab.id}`}
               onClick={() => {
-                setActiveSubTab(tab.id as any);
                 if (onSubTabChange) {
                   onSubTabChange(tab.id as any);
                 }
@@ -2799,8 +2618,6 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
             localTablePositions={localTablePositions}
             staffPin={staffPin}
             setCheckoutSuccessData={setCheckoutSuccessData}
-            selectedPendingRes={null}
-            setSelectedPendingRes={() => {}}
             confirmActionModal={confirmActionModal}
             setConfirmActionModal={setConfirmActionModal}
           />
@@ -2873,30 +2690,17 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
           currentLang={currentLang}
           menuItems={menuItems}
           categories={categories}
-          localMenuItemOrder={localMenuItemOrder}
-          isMenuItemSortingMode={isMenuItemSortingMode}
-          setIsMenuItemSortingMode={setIsMenuItemSortingMode}
-          handleSaveMenuItemOrder={handleSaveMenuItemOrder}
-          handleCancelMenuItemOrder={handleCancelMenuItemOrder}
-          handleMoveMenuItem={handleMoveMenuItem}
           triggerAddMenuItemMode={triggerAddMenuItemMode}
           triggerEditMenuItemMode={triggerEditMenuItemMode}
           onToggleMenuItemAvailability={onToggleMenuItemAvailability}
           onDeleteMenuItem={onDeleteMenuItem}
           onReorderMenuItems={onReorderMenuItems}
-          localCategoryOrder={localCategoryOrder}
-          isCategorySortingMode={isCategorySortingMode}
-          setIsCategorySortingMode={setIsCategorySortingMode}
-          handleSaveCategoryOrder={handleSaveCategoryOrder}
-          handleCancelCategoryOrder={handleCancelCategoryOrder}
-          handleMoveCategory={handleMoveCategory}
           triggerAddCatMode={triggerAddCatMode}
           triggerEditCatMode={triggerEditCatMode}
           onAddCategory={onAddCategory}
           onEditCategory={onEditCategory}
           onDeleteCategory={onDeleteCategory}
           onReorderCategories={onReorderCategories}
-          setConfirmActionModal={setConfirmActionModal}
         />
       )}
 
@@ -3063,18 +2867,6 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
           menuItems={menuItems}
           categories={categories}
           tables={tables}
-          terminalCategory={terminalCategory}
-          setTerminalCategory={setTerminalCategory}
-          terminalTable={terminalTable}
-          setTerminalTable={setTerminalTable}
-          terminalCart={terminalCart}
-          setTerminalCart={setTerminalCart}
-          terminalPage={terminalPage}
-          setTerminalPage={setTerminalPage}
-          terminalCartPage={terminalCartPage}
-          setTerminalCartPage={setTerminalCartPage}
-          isTerminalFullScreen={isTerminalFullScreen}
-          setIsTerminalFullScreen={setIsTerminalFullScreen}
           onPlaceOrder={onPlaceOrder}
         />
       )}

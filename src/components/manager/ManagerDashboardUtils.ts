@@ -4,15 +4,6 @@ import { orderCalculationService } from '../../services/orderCalculationService'
 export const getMaskedEmail = (email: string | null | undefined): string => {
   if (!email) return '';
   const emailLower = email.toLowerCase().trim();
-  if (emailLower === 'topztar@gmail.com') {
-    return 'VIP-001 (topz****@gmail.com)';
-  }
-  if (emailLower === 'thai_foodie@gmail.com') {
-    return 'VIP-002 (thai_****@gmail.com)';
-  }
-  if (emailLower === 'vegan_sabay@gmail.com') {
-    return 'VIP-003 (vega_****@gmail.com)';
-  }
   const parts = emailLower.split('@');
   const user = parts[0] || '';
   const domain = parts[1] || 'gmail.com';

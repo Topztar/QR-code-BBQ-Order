@@ -55,7 +55,7 @@ export const orderCalculationService = {
   computeOrderItemsSubtotal: (items: any[], menuItemsList: any[] = []): number => {
     if (!items || !Array.isArray(items)) return 0;
     return items.reduce((sum: number, it: any) => {
-      return sum + orderCalculationService.computeOrderItemUnitPrice(it, menuItemsList) * (Number(it.qty) || 1);
+      return sum + orderCalculationService.computeOrderItemUnitPrice(it, menuItemsList) * (Number(it.qty || it.quantity) || 1);
     }, 0);
   },
 

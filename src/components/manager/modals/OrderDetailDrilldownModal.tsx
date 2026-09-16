@@ -4,6 +4,7 @@ import { Order, OrderStatus, Language, TableConfig } from '../../../types';
 import { getLocalizedText } from '../../../utils/i18n';
 import { ConfirmActionModalConfig } from './ConfirmActionModal';
 import { PaidModDetails } from './PaidOrderModificationModal';
+import { memberService } from '../../../services/memberService';
 import { getMaskedEmail, computeOrderItemUnitPrice, computeOrderItemsSubtotal } from '../ManagerDashboardUtils';
 
 export interface OrderDetailDrilldownModalProps {
@@ -591,42 +592,29 @@ ${customerDetails}
                           <div className="bg-[#121824]/80 border border-blue-500/20 p-3 rounded-lg font-sans space-y-2.5 text-left">
                             <span className="text-[10px] text-blue-400 font-extrabold block uppercase tracking-wider">👤 會員餘額扣扣狀態 (Member Status)</span>
                             {(() => {
-                              const dbStr = localStorage.getItem('google-members-database');
-                              if (dbStr) {
-                                try {
-                                  const db = JSON.parse(dbStr);
-                                  let vipEmail = '';
-                                  if (selectedOrder.customerName) {
-                                    const matched = db.find((m: any) => m.name === selectedOrder.customerName);
-                                    if (matched) {
-                                      vipEmail = matched.email;
-                                    }
-                                  }
-                                  const member = vipEmail ? db.find((m: any) => m.email === vipEmail) : null;
-                                  if (member) {
-                                    const hasEnough = member.balance >= selectedOrder.total;
-                                    return (
-                                      <div className="space-y-2 text-xs">
-                                        <div className="flex items-center space-x-2 bg-white/5 p-2 rounded border border-white/5">
-                                          <img referrerPolicy="no-referrer" src={member.avatar || 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=150'} className="w-6 h-6 rounded-full object-cover" alt="" />
-                                          <div>
-                                            <p className="text-[11px] font-bold text-white leading-none">{member.name}</p>
-                                            <p className="text-[8px] text-zinc-500 font-mono leading-none mt-0.5">{getMaskedEmail(member.email)}</p>
-                                          </div>
-                                        </div>
-                                        <div className="flex justify-between font-mono bg-zinc-950 p-1.5 rounded">
-                                          <span className="text-zinc-500 text-[10px]">儲值餘額 Balance:</span>
-                                          <span className="text-emerald-400 font-black">NT$ {member.balance || 0}</span>
-                                        </div>
-                                        {!hasEnough && (
-                                          <p className="text-[9px] text-red-400">⚠️ 餘額不足，請先往收銀台為會員儲值再回到這裡或改為其他付費方式。</p>
-                                        )}
+                              const member = selectedOrder.customerName
+                                ? memberService.getMemberByName(selectedOrder.customerName)
+                                : null;
+                              if (member) {
+                                const hasEnough = member.balance >= selectedOrder.total;
+                                return (
+                                  <div className="space-y-2 text-xs">
+                                    <div className="flex items-center space-x-2 bg-white/5 p-2 rounded border border-white/5">
+                                      <img referrerPolicy="no-referrer" src={member.avatar || 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=150'} className="w-6 h-6 rounded-full object-cover" alt="" />
+                                      <div>
+                                        <p className="text-[11px] font-bold text-white leading-none">{member.name}</p>
+                                        <p className="text-[8px] text-zinc-500 font-mono leading-none mt-0.5">{getMaskedEmail(member.email)}</p>
                                       </div>
-                                    );
-                                  }
-                                } catch (e) {
-                                  console.error(e);
-                                }
+                                    </div>
+                                    <div className="flex justify-between font-mono bg-zinc-950 p-1.5 rounded">
+                                      <span className="text-zinc-500 text-[10px]">儲值餘額 Balance:</span>
+                                      <span className="text-emerald-400 font-black">NT$ {member.balance || 0}</span>
+                                    </div>
+                                    {!hasEnough && (
+                                      <p className="text-[9px] text-red-400">⚠️ 餘額不足，請先往收銀台為會員儲值再回到這裡或改為其他付費方式。</p>
+                                    )}
+                                  </div>
+                                );
                               }
                               return <p className="text-[10px] text-zinc-500">查無對應 Google 會員</p>;
                             })()}

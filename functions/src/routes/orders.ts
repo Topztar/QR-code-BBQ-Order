@@ -35,17 +35,21 @@ get('/orders', requireStaffAuth, async (_req, res) => {
   try {
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     let snapshot;
+    let needsManualSort = false;
     try {
       snapshot = await db.collection('orders')
         .select('id', 'tableNumber', 'items', 'subtotal', 'serviceCharge', 'total', 'status', 'createdAt', 'customerName', 'customerPhone', 'customerAvatar', 'paymentMethod', 'isMember', 'isPaid', 'guestCount', 'discount', 'quickNotes', 'isFlagged', 'flagReason', 'takeoutInfo', 'pickupTime', 'clientOrderId')
         .orderBy('createdAt', 'desc').limit(200).get();
     } catch (_idxErr) {
+      needsManualSort = true;
       snapshot = await db.collection('orders')
         .select('id', 'tableNumber', 'items', 'subtotal', 'serviceCharge', 'total', 'status', 'createdAt', 'customerName', 'customerPhone', 'customerAvatar', 'paymentMethod', 'isMember', 'isPaid', 'guestCount', 'discount', 'quickNotes', 'isFlagged', 'flagReason', 'takeoutInfo', 'pickupTime', 'clientOrderId')
         .limit(200).get();
     }
     const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    orders.sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+    if (needsManualSort) {
+      orders.sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+    }
     res.json(orders);
   } catch (error) {
     console.error('Error fetching orders:', error);
@@ -318,30 +322,38 @@ put('/orders/:id/items', requireStaffAuth, async (req, res) => {
   const { items, refundLogs } = req.body;
   try {
     const orderRef = db.collection('orders').doc(id);
-    const orderSnap = await orderRef.get();
-    if (!orderSnap.exists) {
+    let updatePayload: Record<string, any> = {};
+
+    await db.runTransaction(async (t) => {
+      const orderSnap = await t.get(orderRef);
+      if (!orderSnap.exists) {
+        throw new Error('Order not found');
+      }
+      const orderData = orderSnap.data() || {};
+      const pricing = orderCalculationService.calculateOrderPricing({
+        ...orderData,
+        items
+      });
+      updatePayload = {
+        items,
+        subtotal: pricing.subtotal,
+        serviceCharge: pricing.serviceCharge,
+        discount: pricing.discount,
+        total: pricing.total,
+        totalAmount: pricing.total,
+        updatedAt: new Date().toISOString()
+      };
+      if (refundLogs) {
+        updatePayload.refundLogs = refundLogs;
+      }
+      t.update(orderRef, updatePayload);
+    });
+
+    res.json({ id, ...updatePayload });
+  } catch (error: any) {
+    if (error.message === 'Order not found') {
       return res.status(404).json({ error: 'Order not found' });
     }
-    const orderData = orderSnap.data() || {};
-    const pricing = orderCalculationService.calculateOrderPricing({
-      ...orderData,
-      items
-    });
-    const updatePayload: Record<string, any> = {
-      items,
-      subtotal: pricing.subtotal,
-      serviceCharge: pricing.serviceCharge,
-      discount: pricing.discount,
-      total: pricing.total,
-      totalAmount: pricing.total,
-      updatedAt: new Date().toISOString()
-    };
-    if (refundLogs) {
-      updatePayload.refundLogs = refundLogs;
-    }
-    await orderRef.update(updatePayload);
-    res.json({ id, ...updatePayload });
-  } catch (error) {
     res.status(500).send(error);
   }
 });
@@ -582,7 +594,11 @@ put('/orders/:id/items/:itemId/complete', requireStaffAuth, async (req, res) => 
         order.status = 'preparing';
       }
 
-      t.set(docRef, order, { merge: true });
+      t.update(docRef, {
+        items: order.items,
+        status: order.status,
+        updatedAt: new Date().toISOString()
+      });
       return order;
     });
     return res.json(updatedOrder);
@@ -632,7 +648,7 @@ post('/orders/bulk-delete', requireStaffAuth, async (req, res) => {
   }
 });
 
-// 25. Adjust Inventory Stock
+// --- Print Logs API ---
 
 post('/print-logs/clear', requireStaffAuth, async (_req, res) => {
   try {
@@ -645,42 +661,7 @@ post('/print-logs/clear', requireStaffAuth, async (_req, res) => {
 
 // --- Write Settings APIs ---
 
-// 28. Save Service Pause State
-
-put('/orders/:id/pay', requireStaffAuth, async (req, res) => {
-  const id = req.params.id as string;
-  const { isPaid } = req.body;
-  try {
-    let orderDataToUse: any = null;
-
-    await db.runTransaction(async (t) => {
-      const orderRef = db.collection('orders').doc(id);
-      const orderDoc = await t.get(orderRef);
-      if (!orderDoc.exists) throw new Error('Order not found');
-      
-      orderDataToUse = orderDoc.data();
-      t.update(orderRef, { isPaid });
-    });
-
-    if (isPaid && orderDataToUse && orderDataToUse.tableNumber && !String(orderDataToUse.tableNumber).includes('外帶') && String(orderDataToUse.tableNumber).toLowerCase() !== 'takeout') {
-      const tblId = String(orderDataToUse.tableNumber).trim();
-      const tableRef = db.collection('tables').doc(tblId);
-      const tableSnap = await tableRef.get();
-      if (tableSnap.exists) {
-        await tableRef.update({
-          status: 'cleaning',
-          preservedFor: '',
-          cleaningStartedAt: new Date().toISOString()
-        });
-      }
-    }
-
-    res.json({ success: true });
-  } catch (error) {
-    res.status(500).send(error);
-  }
-});
-
+// --- Order Rating APIs ---
 
 put('/orders/:id/rate', async (req, res) => {
   const id = req.params.id as string;

@@ -16,18 +16,22 @@ function registerOrdersRoutes(app, ctx) {
         try {
             res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
             let snapshot;
+            let needsManualSort = false;
             try {
                 snapshot = await db.collection('orders')
                     .select('id', 'tableNumber', 'items', 'subtotal', 'serviceCharge', 'total', 'status', 'createdAt', 'customerName', 'customerPhone', 'customerAvatar', 'paymentMethod', 'isMember', 'isPaid', 'guestCount', 'discount', 'quickNotes', 'isFlagged', 'flagReason', 'takeoutInfo', 'pickupTime', 'clientOrderId')
                     .orderBy('createdAt', 'desc').limit(200).get();
             }
             catch (_idxErr) {
+                needsManualSort = true;
                 snapshot = await db.collection('orders')
                     .select('id', 'tableNumber', 'items', 'subtotal', 'serviceCharge', 'total', 'status', 'createdAt', 'customerName', 'customerPhone', 'customerAvatar', 'paymentMethod', 'isMember', 'isPaid', 'guestCount', 'discount', 'quickNotes', 'isFlagged', 'flagReason', 'takeoutInfo', 'pickupTime', 'clientOrderId')
                     .limit(200).get();
             }
             const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            orders.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+            if (needsManualSort) {
+                orders.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+            }
             res.json(orders);
         }
         catch (error) {
@@ -247,31 +251,37 @@ function registerOrdersRoutes(app, ctx) {
         const { items, refundLogs } = req.body;
         try {
             const orderRef = db.collection('orders').doc(id);
-            const orderSnap = await orderRef.get();
-            if (!orderSnap.exists) {
-                return res.status(404).json({ error: 'Order not found' });
-            }
-            const orderData = orderSnap.data() || {};
-            const pricing = orderCalculationService_1.orderCalculationService.calculateOrderPricing({
-                ...orderData,
-                items
+            let updatePayload = {};
+            await db.runTransaction(async (t) => {
+                const orderSnap = await t.get(orderRef);
+                if (!orderSnap.exists) {
+                    throw new Error('Order not found');
+                }
+                const orderData = orderSnap.data() || {};
+                const pricing = orderCalculationService_1.orderCalculationService.calculateOrderPricing({
+                    ...orderData,
+                    items
+                });
+                updatePayload = {
+                    items,
+                    subtotal: pricing.subtotal,
+                    serviceCharge: pricing.serviceCharge,
+                    discount: pricing.discount,
+                    total: pricing.total,
+                    totalAmount: pricing.total,
+                    updatedAt: new Date().toISOString()
+                };
+                if (refundLogs) {
+                    updatePayload.refundLogs = refundLogs;
+                }
+                t.update(orderRef, updatePayload);
             });
-            const updatePayload = {
-                items,
-                subtotal: pricing.subtotal,
-                serviceCharge: pricing.serviceCharge,
-                discount: pricing.discount,
-                total: pricing.total,
-                totalAmount: pricing.total,
-                updatedAt: new Date().toISOString()
-            };
-            if (refundLogs) {
-                updatePayload.refundLogs = refundLogs;
-            }
-            await orderRef.update(updatePayload);
             res.json({ id, ...updatePayload });
         }
         catch (error) {
+            if (error.message === 'Order not found') {
+                return res.status(404).json({ error: 'Order not found' });
+            }
             res.status(500).send(error);
         }
     });
@@ -482,7 +492,11 @@ function registerOrdersRoutes(app, ctx) {
                 else if (!allCompleted && order.status === 'completed') {
                     order.status = 'preparing';
                 }
-                t.set(docRef, order, { merge: true });
+                t.update(docRef, {
+                    items: order.items,
+                    status: order.status,
+                    updatedAt: new Date().toISOString()
+                });
                 return order;
             });
             return res.json(updatedOrder);
@@ -529,37 +543,6 @@ function registerOrdersRoutes(app, ctx) {
     post('/print-logs/clear', requireStaffAuth, async (_req, res) => {
         try {
             await db.collection('settings').doc('logs').set({ printLogs: [] }, { merge: true });
-            res.json({ success: true });
-        }
-        catch (error) {
-            res.status(500).send(error);
-        }
-    });
-    put('/orders/:id/pay', requireStaffAuth, async (req, res) => {
-        const id = req.params.id;
-        const { isPaid } = req.body;
-        try {
-            let orderDataToUse = null;
-            await db.runTransaction(async (t) => {
-                const orderRef = db.collection('orders').doc(id);
-                const orderDoc = await t.get(orderRef);
-                if (!orderDoc.exists)
-                    throw new Error('Order not found');
-                orderDataToUse = orderDoc.data();
-                t.update(orderRef, { isPaid });
-            });
-            if (isPaid && orderDataToUse && orderDataToUse.tableNumber && !String(orderDataToUse.tableNumber).includes('外帶') && String(orderDataToUse.tableNumber).toLowerCase() !== 'takeout') {
-                const tblId = String(orderDataToUse.tableNumber).trim();
-                const tableRef = db.collection('tables').doc(tblId);
-                const tableSnap = await tableRef.get();
-                if (tableSnap.exists) {
-                    await tableRef.update({
-                        status: 'cleaning',
-                        preservedFor: '',
-                        cleaningStartedAt: new Date().toISOString()
-                    });
-                }
-            }
             res.json({ success: true });
         }
         catch (error) {
