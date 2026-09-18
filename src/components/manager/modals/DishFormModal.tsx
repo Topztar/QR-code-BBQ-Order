@@ -1,4 +1,4 @@
-import React, { Component, useState } from 'react';
+import React, { Component, useState, useEffect } from 'react';
 import { Category, Ingredient, Language } from '../../../types';
 import { getLocalizedText, translateTextToLanguage } from '../../../utils/i18n';
 import { getAuthHeader } from '../../../lib/api';
@@ -116,87 +116,89 @@ export interface DishFormModalProps {
   isOpen: boolean;
   onClose: () => void;
   editingItem: any | null;
-  onSave: (e: React.FormEvent) => void | Promise<void>;
-  itemImage: string;
-  setItemImage: (val: string) => void;
-  setItemThumbnailUrl: (val: string) => void;
-  setItemAvifUrl: (val: string) => void;
-  setItemAvifThumbnailUrl: (val: string) => void;
-  itemNames?: Record<Language, string>;
-  setItemNames?: React.Dispatch<React.SetStateAction<Record<Language, string>>>;
-  itemDescs?: Record<Language, string>;
-  setItemDescs?: React.Dispatch<React.SetStateAction<Record<Language, string>>>;
-  itemNameZh?: string;
-  setItemNameZh?: (val: string) => void;
-  itemNameEn?: string;
-  setItemNameEn?: (val: string) => void;
-  itemCategory: string;
-  setItemCategory: (val: string) => void;
-  itemPrice: number | '';
-  setItemPrice: React.Dispatch<React.SetStateAction<number | ''>>;
-  itemDescZh?: string;
-  setItemDescZh?: (val: string) => void;
-  itemDescEn?: string;
-  setItemDescEn?: (val: string) => void;
-  isNotSpicy: boolean;
-  setIsNotSpicy: (val: boolean) => void;
-  isTakeoutAvailable: boolean;
-  setIsTakeoutAvailable: (val: boolean) => void;
-  customAddOns: any[];
-  setCustomAddOns: React.Dispatch<React.SetStateAction<any[]>>;
+  onSave: (formData: any) => Promise<void>;
   globalRules: any[];
   categories: Category[];
-  itemRecipe: { ingredientId: string; amount: number }[];
-  setItemRecipe: React.Dispatch<React.SetStateAction<{ ingredientId: string; amount: number }[]>>;
   ingredients: Ingredient[];
-  newRecipeIngId: string;
-  setNewRecipeIngId: (val: string) => void;
-  newRecipeAmount: string;
-  setNewRecipeAmount: (val: string) => void;
 }
+
+
 
 export const DishFormModal: React.FC<DishFormModalProps> = ({
   isOpen,
   onClose,
   editingItem,
   onSave,
-  itemImage,
-  setItemImage,
-  setItemThumbnailUrl,
-  setItemAvifUrl,
-  setItemAvifThumbnailUrl,
-  itemNames,
-  setItemNames,
-  itemDescs,
-  setItemDescs,
-  itemNameZh,
-  setItemNameZh,
-  itemNameEn,
-  setItemNameEn,
-  itemCategory,
-  setItemCategory,
-  itemPrice,
-  setItemPrice,
-  itemDescZh,
-  setItemDescZh,
-  itemDescEn,
-  setItemDescEn,
-  isNotSpicy,
-  setIsNotSpicy,
-  isTakeoutAvailable,
-  setIsTakeoutAvailable,
-  customAddOns,
-  setCustomAddOns,
   globalRules,
   categories,
-  itemRecipe,
-  setItemRecipe,
   ingredients,
-  newRecipeIngId,
-  setNewRecipeIngId,
-  newRecipeAmount,
-  setNewRecipeAmount,
 }) => {
+  const [itemNames, setItemNames] = useState<Record<Language, string>>({ zh: '', en: '', th: '', ja: '', ko: '', vi: '', ru: '', es: '' });
+  const [itemDescs, setItemDescs] = useState<Record<Language, string>>({ zh: '', en: '', th: '', ja: '', ko: '', vi: '', ru: '', es: '' });
+  const [itemCategory, setItemCategory] = useState('skewers');
+  const [itemPrice, setItemPrice] = useState<number | ''>(100);
+  const [itemImage, setItemImage] = useState('');
+  const [itemThumbnailUrl, setItemThumbnailUrl] = useState('');
+  const [itemAvifUrl, setItemAvifUrl] = useState('');
+  const [itemAvifThumbnailUrl, setItemAvifThumbnailUrl] = useState('');
+  const [isNotSpicy, setIsNotSpicy] = useState(false);
+  const [isTakeoutAvailable, setIsTakeoutAvailable] = useState(false);
+  const [customAddOns, setCustomAddOns] = useState<any[]>([]);
+  const [itemRecipe, setItemRecipe] = useState<{ ingredientId: string; amount: number }[]>([]);
+  const [newRecipeIngId, setNewRecipeIngId] = useState('');
+  const [newRecipeAmount, setNewRecipeAmount] = useState('1');
+
+  useEffect(() => {
+    if (isOpen) {
+      if (editingItem) {
+        setItemNames(editingItem.names || { zh: editingItem.name?.zh || editingItem.name || '', en: editingItem.name?.en || '', th: '', ja: '', ko: '', vi: '', ru: '', es: '' });
+        setItemDescs(editingItem.descriptions || { zh: editingItem.description?.zh || editingItem.description || '', en: editingItem.description?.en || '', th: '', ja: '', ko: '', vi: '', ru: '', es: '' });
+        setItemCategory(editingItem.category || 'skewers');
+        setItemPrice(editingItem.price || 100);
+        setItemImage(editingItem.image || '');
+        setItemThumbnailUrl(editingItem.thumbnailUrl || '');
+        setItemAvifUrl(editingItem.avifUrl || '');
+        setItemAvifThumbnailUrl(editingItem.avifThumbnailUrl || '');
+        setIsNotSpicy(editingItem.isNotSpicy || false);
+        setIsTakeoutAvailable(editingItem.isTakeoutAvailable || false);
+        setCustomAddOns(editingItem.customAddOns || []);
+        setItemRecipe(editingItem.recipe || []);
+      } else {
+        setItemNames({ zh: '', en: '', th: '', ja: '', ko: '', vi: '', ru: '', es: '' });
+        setItemDescs({ zh: '', en: '', th: '', ja: '', ko: '', vi: '', ru: '', es: '' });
+        setItemCategory('skewers');
+        setItemPrice(100);
+        setItemImage('');
+        setItemThumbnailUrl('');
+        setItemAvifUrl('');
+        setItemAvifThumbnailUrl('');
+        setIsNotSpicy(false);
+        setIsTakeoutAvailable(false);
+        setCustomAddOns([]);
+        setItemRecipe([]);
+      }
+      setNewRecipeIngId('');
+      setNewRecipeAmount('1');
+    }
+  }, [isOpen, editingItem]);
+
+  const handleFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await onSave({
+      names: itemNames,
+      descriptions: itemDescs,
+      category: itemCategory,
+      price: itemPrice,
+      image: itemImage,
+      thumbnailUrl: itemThumbnailUrl,
+      avifUrl: itemAvifUrl,
+      avifThumbnailUrl: itemAvifThumbnailUrl,
+      isNotSpicy,
+      isTakeoutAvailable,
+      customAddOns,
+      recipe: itemRecipe
+    });
+  };
   const [activeLangTab, setActiveLangTab] = useState<Language>('zh');
   const [viewMode, setViewMode] = useState<'tabs' | 'all'>('tabs');
   const [isTranslatingAll, setIsTranslatingAll] = useState(false);
@@ -204,8 +206,8 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
 
   // Fallback internal state if not passed from props
   const [localNames, setLocalNames] = useState<Record<Language, string>>({
-    zh: itemNameZh || '',
-    en: itemNameEn || '',
+    zh: '',
+    en: '',
     th: '',
     ja: '',
     ko: '',
@@ -214,8 +216,8 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
     es: '',
   });
   const [localDescs, setLocalDescs] = useState<Record<Language, string>>({
-    zh: itemDescZh || '',
-    en: itemDescEn || '',
+    zh: '',
+    en: '',
     th: '',
     ja: '',
     ko: '',
@@ -233,8 +235,6 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
     } else {
       setLocalNames((prev) => ({ ...prev, [lang]: value }));
     }
-    if (lang === 'zh' && setItemNameZh) setItemNameZh(value);
-    if (lang === 'en' && setItemNameEn) setItemNameEn(value);
   };
 
   const handleDescChange = (lang: Language, value: string) => {
@@ -243,8 +243,6 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
     } else {
       setLocalDescs((prev) => ({ ...prev, [lang]: value }));
     }
-    if (lang === 'zh' && setItemDescZh) setItemDescZh(value);
-    if (lang === 'en' && setItemDescEn) setItemDescEn(value);
   };
 
   const handleAutoTranslateAll = async () => {
@@ -285,10 +283,7 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
       if (setItemDescs) setItemDescs(updatedDescs);
       else setLocalDescs(updatedDescs);
 
-      if (setItemNameZh && updatedNames.zh) setItemNameZh(updatedNames.zh);
-      if (setItemNameEn && updatedNames.en) setItemNameEn(updatedNames.en);
-      if (setItemDescZh && updatedDescs.zh) setItemDescZh(updatedDescs.zh);
-      if (setItemDescEn && updatedDescs.en) setItemDescEn(updatedDescs.en);
+
     } catch (err) {
       console.error('Auto translate error:', err);
     } finally {
@@ -328,7 +323,7 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
   return (
     <ModalErrorBoundary onClose={onClose}>
       <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 text-xs font-sans" onClick={onClose}>
-        <form onSubmit={onSave} className="bg-[#121212] border border-white/10 rounded-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        <form onSubmit={handleFormSubmit} className="bg-[#121212] border border-white/10 rounded-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
           {/* Modal Header */}
           <div className="p-5 pb-3 border-b border-white/5 flex-shrink-0">
             <h3 className="font-bold text-sm text-amber-400">

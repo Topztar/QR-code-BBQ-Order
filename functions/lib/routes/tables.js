@@ -4,7 +4,6 @@ exports.invalidateTablesCache = invalidateTablesCache;
 exports.registerTablesRoutes = registerTablesRoutes;
 const validators_1 = require("../validators");
 const helpers_1 = require("../helpers");
-const notification_1 = require("../services/notification");
 const bootstrap_1 = require("./bootstrap");
 let cachedTablesData = null;
 const TABLES_CACHE_TTL_MS = 10 * 1000;
@@ -14,7 +13,6 @@ function invalidateTablesCache() {
 function registerTablesRoutes(app, ctx) {
     const { db, requireStaffAuth, createRateLimiter, sendErrorResponse } = ctx;
     const getCachedSettings = (0, helpers_1.createGetCachedSettings)(db);
-    const getCachedNotificationSettings = (0, helpers_1.createGetCachedNotificationSettings)(db);
     const reservationRateLimiter = createRateLimiter(15, 60 * 1000, '預約提交');
     const get = (routePath, ...handlers) => app.get([`/api${routePath}`, routePath], ...handlers);
     const post = (routePath, ...handlers) => app.post([`/api${routePath}`, routePath], ...handlers);
@@ -206,15 +204,6 @@ function registerTablesRoutes(app, ctx) {
                     }
                 }
             });
-            (async () => {
-                try {
-                    const notifConfig = await getCachedNotificationSettings();
-                    await (0, notification_1.sendReservationNotifications)(newReservation, { notificationConfig: notifConfig });
-                }
-                catch (err) {
-                    console.error('[Notification] Background dispatch error:', err);
-                }
-            })();
             res.status(201).json(newReservation);
         }
         catch (error) {

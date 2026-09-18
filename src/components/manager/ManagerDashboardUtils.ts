@@ -42,3 +42,35 @@ export const generateReservationNo = (dateStr: string, existingRes: Reservation[
   const seq = String(count + 1).padStart(3, '0');
   return `RES-${cleanDate}-${seq}`;
 };
+
+// Helper utility to write out an Excel-friendly CSV with UTF-8 BOM
+export const exportToCSV = (data: any[], headersMap: { [key: string]: string }, filename: string) => {
+  if (!data || data.length === 0) {
+    alert('❌ 無明細數據可供匯出！');
+    return;
+  }
+  const rawKeys = Object.keys(data[0]);
+  const headersLine = rawKeys.map(k => headersMap[k] || k).join(',');
+  const rows = data.map(item => {
+    return rawKeys.map(k => {
+      const val = item[k];
+      const str = typeof val === 'object' ? JSON.stringify(val) : String(val === undefined || val === null ? '' : val);
+      const escaped = str.replace(/"/g, '""');
+      if (escaped.includes(',') || escaped.includes('\n') || escaped.includes('"')) {
+        return `"${escaped}"`;
+      }
+      return `"${escaped}"`;
+    }).join(',');
+  });
+  const csvContent = "\uFEFF" + [headersLine, ...rows].join('\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.setAttribute('href', url);
+  link.setAttribute('download', filename);
+  link.style.display = 'none';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};

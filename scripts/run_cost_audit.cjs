@@ -98,6 +98,14 @@ try {
   const dataHeader = headers.find(h => h.source === '/data.json');
   const hasStaleWhileRevalidate = dataHeader && dataHeader.headers.some(h => h.key === 'Cache-Control' && h.value.includes('stale-while-revalidate'));
   assert(!!hasStaleWhileRevalidate, "靜態初始資料 (/data.json) 配置 stale-while-revalidate 減少 CDN 回源");
+
+  const swHeader = headers.find(h => h.source === '/sw.js');
+  const hasFreshSw = swHeader && swHeader.headers.some(h => h.key === 'Cache-Control' && h.value.includes('no-cache'));
+  assert(!!hasFreshSw, "Service Worker (/sw.js) 配置 no-cache 避免客戶端 PWA 緩存鎖死");
+
+  const ignoreList = firebaseJson.hosting?.ignore || [];
+  const hasServerIgnore = ignoreList.includes('server.cjs*') && ignoreList.includes('**/*.map');
+  assert(hasServerIgnore, "firebase.json ignore 規則隔離後端執行檔 (server.cjs*) 與 Source Map (**/*.map)");
 } catch (err) {
   assert(false, `無法讀取或解析 firebase.json: ${err.message}`);
 }

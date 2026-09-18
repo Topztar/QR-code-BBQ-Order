@@ -36,10 +36,12 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.reconcileDailySoldOut = exports.onMenuItemWritten = exports.api = exports.requireAppCheck = exports.sendErrorResponse = exports.requireStaffAuth = void 0;
+exports.onReservationCreated = exports.reconcileDailySoldOut = exports.onMenuItemWritten = exports.api = exports.requireAppCheck = exports.sendErrorResponse = exports.requireStaffAuth = void 0;
 exports.createRateLimiter = createRateLimiter;
 const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-functions/v2/firestore");
+const notification_1 = require("./services/notification");
+const helpers_1 = require("./helpers");
 const scheduler_1 = require("firebase-functions/v2/scheduler");
 const v2_1 = require("firebase-functions/v2");
 const admin = __importStar(require("firebase-admin"));
@@ -155,7 +157,7 @@ const orders_1 = require("./routes/orders");
 const settings_1 = require("./routes/settings");
 const printer_1 = require("./routes/printer");
 const staff_1 = require("./routes/staff");
-const helpers_1 = require("./helpers");
+const helpers_2 = require("./helpers");
 const routeCtx = {
     db,
     storageBucket,
@@ -187,19 +189,19 @@ exports.onMenuItemWritten = (0, firestore_1.onDocumentWritten)({
         if (beforeData && !afterData) {
             if (beforeData.image) {
                 console.log(`[Firestore Trigger] Menu deleted (${event.params.menuId}), cleaning image: ${beforeData.image}`);
-                await (0, helpers_1.cleanupStorageImage)(beforeData.image, storageBucket);
+                await (0, helpers_2.cleanupStorageImage)(beforeData.image, storageBucket);
             }
             if (beforeData.thumbnailUrl) {
                 console.log(`[Firestore Trigger] Menu deleted (${event.params.menuId}), cleaning thumbnail: ${beforeData.thumbnailUrl}`);
-                await (0, helpers_1.cleanupStorageImage)(beforeData.thumbnailUrl, storageBucket);
+                await (0, helpers_2.cleanupStorageImage)(beforeData.thumbnailUrl, storageBucket);
             }
             if (beforeData.avifUrl) {
                 console.log(`[Firestore Trigger] Menu deleted (${event.params.menuId}), cleaning avif: ${beforeData.avifUrl}`);
-                await (0, helpers_1.cleanupStorageImage)(beforeData.avifUrl, storageBucket);
+                await (0, helpers_2.cleanupStorageImage)(beforeData.avifUrl, storageBucket);
             }
             if (beforeData.avifThumbnailUrl) {
                 console.log(`[Firestore Trigger] Menu deleted (${event.params.menuId}), cleaning avif thumbnail: ${beforeData.avifThumbnailUrl}`);
-                await (0, helpers_1.cleanupStorageImage)(beforeData.avifThumbnailUrl, storageBucket);
+                await (0, helpers_2.cleanupStorageImage)(beforeData.avifThumbnailUrl, storageBucket);
             }
             return;
         }
@@ -208,25 +210,25 @@ exports.onMenuItemWritten = (0, firestore_1.onDocumentWritten)({
             const newImage = afterData.image;
             if (oldImage && oldImage !== newImage) {
                 console.log(`[Firestore Trigger] Menu updated (${event.params.menuId}) with new image, cleaning old image: ${oldImage}`);
-                await (0, helpers_1.cleanupStorageImage)(oldImage, storageBucket);
+                await (0, helpers_2.cleanupStorageImage)(oldImage, storageBucket);
             }
             const oldThumb = beforeData.thumbnailUrl;
             const newThumb = afterData.thumbnailUrl;
             if (oldThumb && oldThumb !== newThumb) {
                 console.log(`[Firestore Trigger] Menu updated (${event.params.menuId}) with new thumbnail, cleaning old thumb: ${oldThumb}`);
-                await (0, helpers_1.cleanupStorageImage)(oldThumb, storageBucket);
+                await (0, helpers_2.cleanupStorageImage)(oldThumb, storageBucket);
             }
             const oldAvif = beforeData.avifUrl;
             const newAvif = afterData.avifUrl;
             if (oldAvif && oldAvif !== newAvif) {
                 console.log(`[Firestore Trigger] Menu updated (${event.params.menuId}) with new avif, cleaning old avif: ${oldAvif}`);
-                await (0, helpers_1.cleanupStorageImage)(oldAvif, storageBucket);
+                await (0, helpers_2.cleanupStorageImage)(oldAvif, storageBucket);
             }
             const oldAvifThumb = beforeData.avifThumbnailUrl;
             const newAvifThumb = afterData.avifThumbnailUrl;
             if (oldAvifThumb && oldAvifThumb !== newAvifThumb) {
                 console.log(`[Firestore Trigger] Menu updated (${event.params.menuId}) with new avif thumb, cleaning old avif thumb: ${oldAvifThumb}`);
-                await (0, helpers_1.cleanupStorageImage)(oldAvifThumb, storageBucket);
+                await (0, helpers_2.cleanupStorageImage)(oldAvifThumb, storageBucket);
             }
             return;
         }
@@ -270,6 +272,37 @@ exports.reconcileDailySoldOut = (0, scheduler_1.onSchedule)({
     }
     catch (err) {
         console.error('[Reconciler] Failed to reset daily sold-out items:', err);
+    }
+});
+const getCachedNotificationSettings = (0, helpers_1.createGetCachedNotificationSettings)(db);
+exports.onReservationCreated = (0, firestore_1.onDocumentCreated)({
+    document: 'reservations/{reservationId}',
+    database: 'ai-studio-sabaythaibbqtabl-84418196-9d0c-459c-bced-ddc424dfba07',
+    region: 'asia-east1',
+}, async (event) => {
+    const resSnapshot = event.data;
+    if (!resSnapshot || !resSnapshot.exists) {
+        return;
+    }
+    const reservation = resSnapshot.data();
+    if (!reservation) {
+        return;
+    }
+    if (reservation.notifiedAt) {
+        console.log(`[onReservationCreated] Reservation ${event.params.reservationId} already notified at ${reservation.notifiedAt}. Skipping.`);
+        return;
+    }
+    try {
+        const notifConfig = await getCachedNotificationSettings();
+        await (0, notification_1.sendReservationNotifications)(reservation, { notificationConfig: notifConfig });
+        await resSnapshot.ref.update({
+            notifiedAt: firestore_2.FieldValue.serverTimestamp(),
+            notificationStatus: 'dispatched'
+        });
+        console.log(`[onReservationCreated] Dispatched notifications for reservation: ${event.params.reservationId}`);
+    }
+    catch (error) {
+        console.error(`[onReservationCreated Error] Failed to process reservation notifications for ${event.params.reservationId}:`, error);
     }
 });
 //# sourceMappingURL=index.js.map

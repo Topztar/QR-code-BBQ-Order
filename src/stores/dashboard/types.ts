@@ -1,4 +1,4 @@
-import { Order, TableConfig, Category } from '../../types';
+import { Order, TableConfig, Category, Reservation } from '../../types';
 
 // ==========================================
 // Slice Interfaces
@@ -118,15 +118,6 @@ export interface TableSlice {
   editingTableObj: TableConfig | null;
   setEditingTableObj: (obj: TableConfig | null) => void;
   
-  tableIdInput: string;
-  setTableIdInput: (val: string) => void;
-  
-  tableQrUrlInput: string;
-  setTableQrUrlInput: (val: string) => void;
-  
-  tableMaxCapacityInput: string;
-  setTableMaxCapacityInput: (val: string) => void;
-  
   tableError: string | null;
   setTableError: (val: string | null) => void;
   
@@ -187,6 +178,36 @@ export interface UISlice {
     onConfirm: () => void | Promise<void>;
   } | null;
   setConfirmActionModal: (modal: any | null) => void;
+  // Modal States
+  isDishFormOpen: boolean;
+  setIsDishFormOpen: (open: boolean) => void;
+  editingItem: any | null;
+  setEditingItem: (item: any | null) => void;
+
+  isCatFormOpen: boolean;
+  setIsCatFormOpen: (open: boolean) => void;
+  editingCategory: Category | null;
+  setEditingCategory: (cat: Category | null) => void;
+
+  isTableFormOpen: boolean;
+  setIsTableFormOpen: (open: boolean) => void;
+  editingTableObj: TableConfig | null;
+  setEditingTableObj: (table: TableConfig | null) => void;
+
+  isResFormOpen: boolean;
+  setIsResFormOpen: (open: boolean) => void;
+  editingResObj: Reservation | null;
+  setEditingResObj: (res: Reservation | null) => void;
+
+  quickRestockItem: any | null;
+  setQuickRestockItem: (item: any | null) => void;
+
+  adjustPointsModal: any | null;
+  setAdjustPointsModal: (modal: any | null) => void;
+
+  addMemberModalOpen: boolean;
+  setAddMemberModalOpen: (open: boolean) => void;
+
 }
 
 export type DashboardStore = CashierSlice & TerminalSlice & TableSlice & MenuSlice & UISlice;

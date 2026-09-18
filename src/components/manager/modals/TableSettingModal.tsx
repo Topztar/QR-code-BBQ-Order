@@ -1,35 +1,51 @@
-import React from 'react';
+
 import { TableConfig } from '../../../types';
 
 export interface TableSettingModalProps {
   isOpen: boolean;
   onClose: () => void;
   editingTableObj: TableConfig | null;
-  onSave: (e: React.FormEvent) => void | Promise<void>;
-  tableIdInput: string;
-  setTableIdInput: (val: string) => void;
-  tableQrUrlInput: string;
-  setTableQrUrlInput: (val: string) => void;
-  tableMaxCapacityInput: string;
-  setTableMaxCapacityInput: (val: string) => void;
+  onSave: (formData: any) => Promise<void>;
   tableError: string | null;
   tableSuccess: string | null;
 }
+
+import React, { useState, useEffect } from 'react';
 
 export const TableSettingModal: React.FC<TableSettingModalProps> = ({
   isOpen,
   onClose,
   editingTableObj,
   onSave,
-  tableIdInput,
-  setTableIdInput,
-  tableQrUrlInput,
-  setTableQrUrlInput,
-  tableMaxCapacityInput,
-  setTableMaxCapacityInput,
   tableError,
   tableSuccess,
 }) => {
+  const [tableIdInput, setTableIdInput] = useState('');
+  const [tableQrUrlInput, setTableQrUrlInput] = useState('');
+  const [tableMaxCapacityInput, setTableMaxCapacityInput] = useState('');
+
+  useEffect(() => {
+    if (isOpen) {
+      if (editingTableObj) {
+        setTableIdInput(editingTableObj.id);
+        setTableQrUrlInput(editingTableObj.qrCodeUrl || '');
+        setTableMaxCapacityInput(String(editingTableObj.maxCapacity || 4));
+      } else {
+        setTableIdInput('');
+        setTableQrUrlInput('');
+        setTableMaxCapacityInput('4');
+      }
+    }
+  }, [isOpen, editingTableObj]);
+
+  const handleFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await onSave({
+      id: tableIdInput,
+      qrCodeUrl: tableQrUrlInput,
+      maxCapacity: tableMaxCapacityInput
+    });
+  };
   if (!isOpen) return null;
 
   return (
@@ -38,7 +54,7 @@ export const TableSettingModal: React.FC<TableSettingModalProps> = ({
       onClick={onClose}
     >
       <form
-        onSubmit={onSave}
+        onSubmit={handleFormSubmit}
         className="bg-[#121212] border-t border-white/10 w-full h-full md:h-full lg:h-full flex flex-col overflow-hidden animate-scaleUp"
         onClick={(e) => e.stopPropagation()}
       >

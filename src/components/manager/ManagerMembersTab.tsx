@@ -1,9 +1,11 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Coins, Plus, Trash2, QrCode, ShoppingBag, Copy, Check, ExternalLink } from 'lucide-react';
 import { TableConfig } from '../../types';
 import { getLocalizedText } from '../../utils/i18n';
 import { getMaskedEmail } from './ManagerDashboardUtils';
 import VersionInput from './VersionInput';
+import { apiFetch } from '../../lib/api';
+import { memberService } from '../../services/memberService';
 
 interface ManagerMembersTabProps {
   membersList: any[];
@@ -15,65 +17,86 @@ interface ManagerMembersTabProps {
   setAddMemberModalOpen: (open: boolean) => void;
   handleAdjustPoints: (email: string) => void;
   handleDeleteMember: (email: string) => void;
-  pinChangeError: string | null;
-  pinChangeSuccess: string | null;
-  currentPinInput: string;
-  setCurrentPinInput: (pin: string) => void;
-  newPinInput: string;
-  setNewPinInput: (pin: string) => void;
-  confirmPinInput: string;
-  setConfirmPinInput: (pin: string) => void;
-  pinChangeLoading: boolean;
-  handlePinChangeSubmit: (e: React.FormEvent) => Promise<void>;
-  minSpendSaveError: string | null;
-  minSpendSaveSuccess: string | null;
-  tempMinSpend: number;
-  setTempMinSpend: (spend: number) => void;
-  handleSaveMinSpend: () => void;
-  memberConfigSaveError: string | null;
-  memberConfigSaveSuccess: string | null;
-  tempPointsRatio: number;
-  setTempPointsRatio: (ratio: number) => void;
-  tempVipThreshold: number;
-  setTempVipThreshold: (val: number) => void;
-  tempVipDiscountRate: number;
-  setTempVipDiscountRate: (val: number) => void;
-  tempEnablePointsDiscount: boolean;
-  setTempEnablePointsDiscount: (val: boolean) => void;
-  tempPointsRedeemRate: number;
-  setTempPointsRedeemRate: (val: number) => void;
-  tempRewards: any[];
-  setTempRewards: React.Dispatch<React.SetStateAction<any[]>>;
+  // Optional PIN change props with internal fallbacks
+  pinChangeError?: string | null;
+  pinChangeSuccess?: string | null;
+  currentPinInput?: string;
+  setCurrentPinInput?: (pin: string) => void;
+  newPinInput?: string;
+  setNewPinInput?: (pin: string) => void;
+  confirmPinInput?: string;
+  setConfirmPinInput?: (pin: string) => void;
+  pinChangeLoading?: boolean;
+  handlePinChangeSubmit?: (e: React.FormEvent) => Promise<void>;
+  // Optional Min Spend props with internal fallbacks
+  minSpend?: number;
+  onUpdateMinSpend?: (spend: number) => Promise<{ success: boolean; error?: string }>;
+  minSpendSaveError?: string | null;
+  minSpendSaveSuccess?: string | null;
+  tempMinSpend?: number;
+  setTempMinSpend?: (spend: number) => void;
+  handleSaveMinSpend?: () => void;
+  // Optional Member Config props with internal fallbacks
+  memberPointsRatio?: number;
+  memberVipThreshold?: number;
+  memberVipDiscountRate?: number;
+  memberEnablePointsDiscount?: boolean;
+  memberPointsRedeemRate?: number;
+  memberRewards?: any[];
+  onUpdateMemberConfig?: () => Promise<void>;
+  memberConfigSaveError?: string | null;
+  memberConfigSaveSuccess?: string | null;
+  tempPointsRatio?: number;
+  setTempPointsRatio?: (ratio: number) => void;
+  tempVipThreshold?: number;
+  setTempVipThreshold?: (val: number) => void;
+  tempVipDiscountRate?: number;
+  setTempVipDiscountRate?: (val: number) => void;
+  tempEnablePointsDiscount?: boolean;
+  setTempEnablePointsDiscount?: (val: boolean) => void;
+  tempPointsRedeemRate?: number;
+  setTempPointsRedeemRate?: (val: number) => void;
+  tempRewards?: any[];
+  setTempRewards?: React.Dispatch<React.SetStateAction<any[]>>;
   menuItems: any[];
-  isSavingMemberConfig: boolean;
-  handleSaveMemberConfig: () => void;
-  noticeError: string | null;
-  noticeSuccess: string | null;
-  tempCustomerNotice: string;
-  setTempCustomerNotice: (notice: string) => void;
-  handleSaveCustomerNotice: () => void;
-  sanitizePin: string;
-  setSanitizePin: (pin: string) => void;
-  clearLocalMembers: boolean;
-  setClearLocalMembers: (clear: boolean) => void;
-  sanitizeError: string | null;
-  sanitizeSuccess: string | null;
-  sanitizeLoading: boolean;
-  handleSanitizeSystemData: () => Promise<void>;
-  opHoursError: string | null;
-  opHoursSuccess: string | null;
-  tempOperatingHours: any[];
-  setTempOperatingHours: React.Dispatch<React.SetStateAction<any[]>>;
-  tempRestDays: string[];
-  setTempRestDays: React.Dispatch<React.SetStateAction<string[]>>;
-  handleSaveOperatingHoursLocal: (hours: any[], days: string[]) => void;
+  isSavingMemberConfig?: boolean;
+  handleSaveMemberConfig?: () => void;
+  // Optional Customer Notice props with internal fallbacks
+  customerNotice?: string;
+  onUpdateCustomerNotice?: (notice: string) => Promise<{ success: boolean; error?: string }>;
+  noticeError?: string | null;
+  noticeSuccess?: string | null;
+  tempCustomerNotice?: string;
+  setTempCustomerNotice?: (notice: string) => void;
+  handleSaveCustomerNotice?: () => void;
+  // Optional Sanitize props with internal fallbacks
+  sanitizePin?: string;
+  setSanitizePin?: (pin: string) => void;
+  clearLocalMembers?: boolean;
+  setClearLocalMembers?: (clear: boolean) => void;
+  sanitizeError?: string | null;
+  sanitizeSuccess?: string | null;
+  sanitizeLoading?: boolean;
+  handleSanitizeSystemData?: () => Promise<void>;
+  // Optional Operating Hours props with internal fallbacks
+  operatingHours?: any[];
+  restDays?: string[];
+  onUpdateOperatingHours?: (hours: any[], days: string[]) => Promise<{ success: boolean; error?: string }>;
+  opHoursError?: string | null;
+  opHoursSuccess?: string | null;
+  tempOperatingHours?: any[];
+  setTempOperatingHours?: React.Dispatch<React.SetStateAction<any[]>>;
+  tempRestDays?: string[];
+  setTempRestDays?: React.Dispatch<React.SetStateAction<string[]>>;
+  handleSaveOperatingHoursLocal?: (hours: any[], days: string[]) => void;
+  // Tables & QR
   tables: TableConfig[];
-  selectedQrPreviewId: string;
-  setSelectedQrPreviewId: (id: string) => void;
-  setTableError: (err: string | null) => void;
-  setTableSuccess: (succ: string | null) => void;
-  copiedTableId: string | null;
-  setCopiedTableId: (id: string | null) => void;
+  selectedQrPreviewId?: string;
+  setSelectedQrPreviewId?: (id: string) => void;
+  setTableError?: (err: string | null) => void;
+  setTableSuccess?: (succ: string | null) => void;
+  copiedTableId?: string | null;
+  setCopiedTableId?: (id: string | null) => void;
 }
 
 export const ManagerMembersTab: React.FC<ManagerMembersTabProps> = ({
@@ -86,66 +109,417 @@ export const ManagerMembersTab: React.FC<ManagerMembersTabProps> = ({
   setAddMemberModalOpen,
   handleAdjustPoints,
   handleDeleteMember,
-  pinChangeError,
-  pinChangeSuccess,
-  currentPinInput,
-  setCurrentPinInput,
-  newPinInput,
-  setNewPinInput,
-  confirmPinInput,
-  setConfirmPinInput,
-  pinChangeLoading,
-  handlePinChangeSubmit,
-  minSpendSaveError,
-  minSpendSaveSuccess,
-  tempMinSpend,
-  setTempMinSpend,
-  handleSaveMinSpend,
-  memberConfigSaveError,
-  memberConfigSaveSuccess,
-  tempPointsRatio,
-  setTempPointsRatio,
-  tempVipThreshold,
-  setTempVipThreshold,
-  tempVipDiscountRate,
-  setTempVipDiscountRate,
-  tempEnablePointsDiscount,
-  setTempEnablePointsDiscount,
-  tempPointsRedeemRate,
-  setTempPointsRedeemRate,
-  tempRewards,
-  setTempRewards,
+  // PIN change
+  pinChangeError: extPinChangeError,
+  pinChangeSuccess: extPinChangeSuccess,
+  currentPinInput: extCurrentPinInput,
+  setCurrentPinInput: extSetCurrentPinInput,
+  newPinInput: extNewPinInput,
+  setNewPinInput: extSetNewPinInput,
+  confirmPinInput: extConfirmPinInput,
+  setConfirmPinInput: extSetConfirmPinInput,
+  pinChangeLoading: extPinChangeLoading,
+  handlePinChangeSubmit: extHandlePinChangeSubmit,
+  // Min spend
+  minSpend = 200,
+  onUpdateMinSpend,
+  minSpendSaveError: extMinSpendSaveError,
+  minSpendSaveSuccess: extMinSpendSaveSuccess,
+  tempMinSpend: extTempMinSpend,
+  setTempMinSpend: extSetTempMinSpend,
+  handleSaveMinSpend: extHandleSaveMinSpend,
+  // Member config
+  memberPointsRatio = 20,
+  memberVipThreshold = 1000,
+  memberVipDiscountRate = 0.9,
+  memberEnablePointsDiscount = true,
+  memberPointsRedeemRate = 1,
+  memberRewards = [],
+  onUpdateMemberConfig,
+  memberConfigSaveError: extMemberConfigSaveError,
+  memberConfigSaveSuccess: extMemberConfigSaveSuccess,
+  tempPointsRatio: extTempPointsRatio,
+  setTempPointsRatio: extSetTempPointsRatio,
+  tempVipThreshold: extTempVipThreshold,
+  setTempVipThreshold: extSetTempVipThreshold,
+  tempVipDiscountRate: extTempVipDiscountRate,
+  setTempVipDiscountRate: extSetTempVipDiscountRate,
+  tempEnablePointsDiscount: extTempEnablePointsDiscount,
+  setTempEnablePointsDiscount: extSetTempEnablePointsDiscount,
+  tempPointsRedeemRate: extTempPointsRedeemRate,
+  setTempPointsRedeemRate: extSetTempPointsRedeemRate,
+  tempRewards: extTempRewards,
+  setTempRewards: extSetTempRewards,
   menuItems,
-  isSavingMemberConfig,
-  handleSaveMemberConfig,
-  noticeError,
-  noticeSuccess,
-  tempCustomerNotice,
-  setTempCustomerNotice,
-  handleSaveCustomerNotice,
-  sanitizePin,
-  setSanitizePin,
-  clearLocalMembers,
-  setClearLocalMembers,
-  sanitizeError,
-  sanitizeSuccess,
-  sanitizeLoading,
-  handleSanitizeSystemData,
-  opHoursError,
-  opHoursSuccess,
-  tempOperatingHours,
-  setTempOperatingHours,
-  tempRestDays,
-  setTempRestDays,
-  handleSaveOperatingHoursLocal,
+  isSavingMemberConfig: extIsSavingMemberConfig,
+  handleSaveMemberConfig: extHandleSaveMemberConfig,
+  // Customer notice
+  customerNotice = '',
+  onUpdateCustomerNotice,
+  noticeError: extNoticeError,
+  noticeSuccess: extNoticeSuccess,
+  tempCustomerNotice: extTempCustomerNotice,
+  setTempCustomerNotice: extSetTempCustomerNotice,
+  handleSaveCustomerNotice: extHandleSaveCustomerNotice,
+  // Sanitize
+  sanitizePin: extSanitizePin,
+  setSanitizePin: extSetSanitizePin,
+  clearLocalMembers: extClearLocalMembers,
+  setClearLocalMembers: extSetClearLocalMembers,
+  sanitizeError: extSanitizeError,
+  sanitizeSuccess: extSanitizeSuccess,
+  sanitizeLoading: extSanitizeLoading,
+  handleSanitizeSystemData: extHandleSanitizeSystemData,
+  // Operating hours
+  operatingHours = [],
+  restDays = [],
+  onUpdateOperatingHours,
+  opHoursError: extOpHoursError,
+  opHoursSuccess: extOpHoursSuccess,
+  tempOperatingHours: extTempOperatingHours,
+  setTempOperatingHours: extSetTempOperatingHours,
+  tempRestDays: extTempRestDays,
+  setTempRestDays: extSetTempRestDays,
+  handleSaveOperatingHoursLocal: extHandleSaveOperatingHoursLocal,
+  // Tables & QR
   tables,
-  selectedQrPreviewId,
-  setSelectedQrPreviewId,
-  setTableError,
-  setTableSuccess,
-  copiedTableId,
-  setCopiedTableId,
+  selectedQrPreviewId: extSelectedQrPreviewId,
+  setSelectedQrPreviewId: extSetSelectedQrPreviewId,
+  setTableError: extSetTableError,
+  setTableSuccess: extSetTableSuccess,
+  copiedTableId: extCopiedTableId,
+  setCopiedTableId: extSetCopiedTableId,
 }) => {
+  // -------------------------------------------------------------
+  // Internal State Fallbacks
+  // -------------------------------------------------------------
+  // PIN change states
+  const [internalCurrentPinInput, setInternalCurrentPinInput] = useState('');
+  const [internalNewPinInput, setInternalNewPinInput] = useState('');
+  const [internalConfirmPinInput, setInternalConfirmPinInput] = useState('');
+  const [internalPinChangeError, setInternalPinChangeError] = useState<string | null>(null);
+  const [internalPinChangeSuccess, setInternalPinChangeSuccess] = useState<string | null>(null);
+  const [internalPinChangeLoading, setInternalPinChangeLoading] = useState(false);
+
+  const currentPinInput = extCurrentPinInput !== undefined ? extCurrentPinInput : internalCurrentPinInput;
+  const setCurrentPinInput = extSetCurrentPinInput || setInternalCurrentPinInput;
+  const newPinInput = extNewPinInput !== undefined ? extNewPinInput : internalNewPinInput;
+  const setNewPinInput = extSetNewPinInput || setInternalNewPinInput;
+  const confirmPinInput = extConfirmPinInput !== undefined ? extConfirmPinInput : internalConfirmPinInput;
+  const setConfirmPinInput = extSetConfirmPinInput || setInternalConfirmPinInput;
+  const pinChangeError = extPinChangeError !== undefined ? extPinChangeError : internalPinChangeError;
+  const setPinChangeError = setInternalPinChangeError;
+  const pinChangeSuccess = extPinChangeSuccess !== undefined ? extPinChangeSuccess : internalPinChangeSuccess;
+  const setPinChangeSuccess = setInternalPinChangeSuccess;
+  const pinChangeLoading = extPinChangeLoading !== undefined ? extPinChangeLoading : internalPinChangeLoading;
+  const setPinChangeLoading = setInternalPinChangeLoading;
+
+  // Min spend states
+  const [internalTempMinSpend, setInternalTempMinSpend] = useState<number>(minSpend);
+  const [internalMinSpendSaveError, setInternalMinSpendSaveError] = useState<string | null>(null);
+  const [internalMinSpendSaveSuccess, setInternalMinSpendSaveSuccess] = useState<string | null>(null);
+  const prevMinSpendRef = useRef<number>(minSpend);
+
+  useEffect(() => {
+    if (minSpend !== prevMinSpendRef.current) {
+      setInternalTempMinSpend(minSpend);
+      prevMinSpendRef.current = minSpend;
+    }
+  }, [minSpend]);
+
+  const tempMinSpend = extTempMinSpend !== undefined ? extTempMinSpend : internalTempMinSpend;
+  const setTempMinSpend = extSetTempMinSpend || setInternalTempMinSpend;
+  const minSpendSaveError = extMinSpendSaveError !== undefined ? extMinSpendSaveError : internalMinSpendSaveError;
+  const minSpendSaveSuccess = extMinSpendSaveSuccess !== undefined ? extMinSpendSaveSuccess : internalMinSpendSaveSuccess;
+
+  // Member config states
+  const [internalTempPointsRatio, setInternalTempPointsRatio] = useState<number>(memberPointsRatio);
+  const [internalTempVipThreshold, setInternalTempVipThreshold] = useState<number>(memberVipThreshold);
+  const [internalTempVipDiscountRate, setInternalTempVipDiscountRate] = useState<number>(memberVipDiscountRate);
+  const [internalTempEnablePointsDiscount, setInternalTempEnablePointsDiscount] = useState<boolean>(memberEnablePointsDiscount);
+  const [internalTempPointsRedeemRate, setInternalTempPointsRedeemRate] = useState<number>(memberPointsRedeemRate);
+  const [internalTempRewards, setInternalTempRewards] = useState<any[]>(() => {
+    return (memberRewards && memberRewards.length > 0) ? memberRewards : [
+      { id: 'rew-01', menuItemId: 'sk-02', cost: 900, enabled: true },
+      { id: 'rew-02', menuItemId: 'vg-01', cost: 800, enabled: true },
+      { id: 'rew-03', menuItemId: 'dr-01', cost: 1800, enabled: true },
+      { id: 'rew-04', menuItemId: 'sw-01', cost: 900, enabled: true },
+      { id: 'rew-05', menuItemId: 'ty-01', cost: 2600, enabled: true }
+    ];
+  });
+  const [internalMemberConfigSaveError, setInternalMemberConfigSaveError] = useState<string | null>(null);
+  const [internalMemberConfigSaveSuccess, setInternalMemberConfigSaveSuccess] = useState<string | null>(null);
+  const [internalIsSavingMemberConfig, setInternalIsSavingMemberConfig] = useState<boolean>(false);
+
+  useEffect(() => {
+    setInternalTempPointsRatio(memberPointsRatio);
+  }, [memberPointsRatio]);
+  useEffect(() => {
+    setInternalTempVipThreshold(memberVipThreshold);
+  }, [memberVipThreshold]);
+  useEffect(() => {
+    setInternalTempVipDiscountRate(memberVipDiscountRate);
+  }, [memberVipDiscountRate]);
+  useEffect(() => {
+    setInternalTempEnablePointsDiscount(memberEnablePointsDiscount);
+  }, [memberEnablePointsDiscount]);
+  useEffect(() => {
+    setInternalTempPointsRedeemRate(memberPointsRedeemRate);
+  }, [memberPointsRedeemRate]);
+  useEffect(() => {
+    if (memberRewards && memberRewards.length > 0) {
+      setInternalTempRewards(memberRewards);
+    }
+  }, [memberRewards]);
+
+  const tempPointsRatio = extTempPointsRatio !== undefined ? extTempPointsRatio : internalTempPointsRatio;
+  const setTempPointsRatio = extSetTempPointsRatio || setInternalTempPointsRatio;
+  const tempVipThreshold = extTempVipThreshold !== undefined ? extTempVipThreshold : internalTempVipThreshold;
+  const setTempVipThreshold = extSetTempVipThreshold || setInternalTempVipThreshold;
+  const tempVipDiscountRate = extTempVipDiscountRate !== undefined ? extTempVipDiscountRate : internalTempVipDiscountRate;
+  const setTempVipDiscountRate = extSetTempVipDiscountRate || setInternalTempVipDiscountRate;
+  const tempEnablePointsDiscount = extTempEnablePointsDiscount !== undefined ? extTempEnablePointsDiscount : internalTempEnablePointsDiscount;
+  const setTempEnablePointsDiscount = extSetTempEnablePointsDiscount || setInternalTempEnablePointsDiscount;
+  const tempPointsRedeemRate = extTempPointsRedeemRate !== undefined ? extTempPointsRedeemRate : internalTempPointsRedeemRate;
+  const setTempPointsRedeemRate = extSetTempPointsRedeemRate || setInternalTempPointsRedeemRate;
+  const tempRewards = extTempRewards !== undefined ? extTempRewards : internalTempRewards;
+  const setTempRewards = extSetTempRewards || setInternalTempRewards;
+  const memberConfigSaveError = extMemberConfigSaveError !== undefined ? extMemberConfigSaveError : internalMemberConfigSaveError;
+  const memberConfigSaveSuccess = extMemberConfigSaveSuccess !== undefined ? extMemberConfigSaveSuccess : internalMemberConfigSaveSuccess;
+  const isSavingMemberConfig = extIsSavingMemberConfig !== undefined ? extIsSavingMemberConfig : internalIsSavingMemberConfig;
+
+  // Customer notice states
+  const [internalTempCustomerNotice, setInternalTempCustomerNotice] = useState<string>(customerNotice);
+  const [internalNoticeError, setInternalNoticeError] = useState<string | null>(null);
+  const [internalNoticeSuccess, setInternalNoticeSuccess] = useState<string | null>(null);
+  const prevCustomerNoticeRef = useRef<string>(customerNotice);
+
+  useEffect(() => {
+    if (customerNotice !== prevCustomerNoticeRef.current) {
+      setInternalTempCustomerNotice(customerNotice);
+      prevCustomerNoticeRef.current = customerNotice;
+    }
+  }, [customerNotice]);
+
+  const tempCustomerNotice = extTempCustomerNotice !== undefined ? extTempCustomerNotice : internalTempCustomerNotice;
+  const setTempCustomerNotice = extSetTempCustomerNotice || setInternalTempCustomerNotice;
+  const noticeError = extNoticeError !== undefined ? extNoticeError : internalNoticeError;
+  const noticeSuccess = extNoticeSuccess !== undefined ? extNoticeSuccess : internalNoticeSuccess;
+
+  // Sanitize states
+  const [internalSanitizePin, setInternalSanitizePin] = useState('');
+  const [internalClearLocalMembers, setInternalClearLocalMembers] = useState(false);
+  const [internalSanitizeError, setInternalSanitizeError] = useState<string | null>(null);
+  const [internalSanitizeSuccess, setInternalSanitizeSuccess] = useState<string | null>(null);
+  const [internalSanitizeLoading, setInternalSanitizeLoading] = useState(false);
+
+  const sanitizePin = extSanitizePin !== undefined ? extSanitizePin : internalSanitizePin;
+  const setSanitizePin = extSetSanitizePin || setInternalSanitizePin;
+  const clearLocalMembers = extClearLocalMembers !== undefined ? extClearLocalMembers : internalClearLocalMembers;
+  const setClearLocalMembers = extSetClearLocalMembers || setInternalClearLocalMembers;
+  const sanitizeError = extSanitizeError !== undefined ? extSanitizeError : internalSanitizeError;
+  const sanitizeSuccess = extSanitizeSuccess !== undefined ? extSanitizeSuccess : internalSanitizeSuccess;
+  const sanitizeLoading = extSanitizeLoading !== undefined ? extSanitizeLoading : internalSanitizeLoading;
+
+  // Operating hours states
+  const [internalTempOperatingHours, setInternalTempOperatingHours] = useState<any[]>(operatingHours);
+  const [internalTempRestDays, setInternalTempRestDays] = useState<string[]>(restDays);
+  const [internalOpHoursError, setInternalOpHoursError] = useState<string | null>(null);
+  const [internalOpHoursSuccess, setInternalOpHoursSuccess] = useState<string | null>(null);
+  const prevOperatingHoursRef = useRef<string>(JSON.stringify(operatingHours));
+  const prevRestDaysRef = useRef<string>(JSON.stringify(restDays));
+
+  useEffect(() => {
+    const currentStr = JSON.stringify(operatingHours);
+    if (currentStr !== prevOperatingHoursRef.current) {
+      setInternalTempOperatingHours(operatingHours);
+      prevOperatingHoursRef.current = currentStr;
+    }
+  }, [operatingHours]);
+
+  useEffect(() => {
+    const currentStr = JSON.stringify(restDays);
+    if (currentStr !== prevRestDaysRef.current) {
+      setInternalTempRestDays(restDays);
+      prevRestDaysRef.current = currentStr;
+    }
+  }, [restDays]);
+
+  const tempOperatingHours = extTempOperatingHours !== undefined ? extTempOperatingHours : internalTempOperatingHours;
+  const setTempOperatingHours = extSetTempOperatingHours || setInternalTempOperatingHours;
+  const tempRestDays = extTempRestDays !== undefined ? extTempRestDays : internalTempRestDays;
+  const setTempRestDays = extSetTempRestDays || setInternalTempRestDays;
+  const opHoursError = extOpHoursError !== undefined ? extOpHoursError : internalOpHoursError;
+  const opHoursSuccess = extOpHoursSuccess !== undefined ? extOpHoursSuccess : internalOpHoursSuccess;
+
+  // QR preview & clipboard states
+  const [internalSelectedQrPreviewId, setInternalSelectedQrPreviewId] = useState<string>('1');
+  const [internalCopiedTableId, setInternalCopiedTableId] = useState<string | null>(null);
+
+  const selectedQrPreviewId = extSelectedQrPreviewId !== undefined ? extSelectedQrPreviewId : internalSelectedQrPreviewId;
+  const setSelectedQrPreviewId = extSetSelectedQrPreviewId || setInternalSelectedQrPreviewId;
+  const copiedTableId = extCopiedTableId !== undefined ? extCopiedTableId : internalCopiedTableId;
+  const setCopiedTableId = extSetCopiedTableId || setInternalCopiedTableId;
+  const setTableError = extSetTableError || (() => {});
+  const setTableSuccess = extSetTableSuccess || (() => {});
+
+  // -------------------------------------------------------------
+  // Default Internal Handlers
+  // -------------------------------------------------------------
+  const handlePinChangeSubmit = extHandlePinChangeSubmit || (async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPinChangeError(null);
+    setPinChangeSuccess(null);
+    if (newPinInput !== confirmPinInput) {
+      setPinChangeError('兩次輸入的新金鑰不一致！');
+      return;
+    }
+    if (!/^\d{6}$/.test(newPinInput)) {
+      setPinChangeError('新金鑰必須為 6 位半形數字！');
+      return;
+    }
+    setPinChangeLoading(true);
+    try {
+      const res = await apiFetch('/api/staff/pin', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentPin: currentPinInput, newPin: newPinInput }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setPinChangeSuccess('🎉 員工解鎖金鑰變更成功！');
+        setCurrentPinInput('');
+        setNewPinInput('');
+        setConfirmPinInput('');
+      } else {
+        setPinChangeError(data.error || '金鑰更新失敗');
+      }
+    } catch (_err) {
+      setPinChangeError('與伺服器連線或程序異常！');
+    } finally {
+      setPinChangeLoading(false);
+    }
+  });
+
+  const handleSaveMinSpend = extHandleSaveMinSpend || (async () => {
+    setInternalMinSpendSaveError(null);
+    setInternalMinSpendSaveSuccess(null);
+    if (onUpdateMinSpend) {
+      const res = await onUpdateMinSpend(tempMinSpend);
+      if (res.success) {
+        setInternalMinSpendSaveSuccess('低消門檻已成功更新！');
+        prevMinSpendRef.current = tempMinSpend;
+      } else {
+        setInternalMinSpendSaveError(res.error || '無法更新狀態');
+      }
+    }
+  });
+
+  const handleSaveMemberConfig = extHandleSaveMemberConfig || (async () => {
+    setInternalIsSavingMemberConfig(true);
+    setInternalMemberConfigSaveError(null);
+    setInternalMemberConfigSaveSuccess(null);
+    try {
+      const response = await apiFetch('/api/settings/members-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pointsRatio: tempPointsRatio,
+          vipThreshold: tempVipThreshold,
+          vipDiscountRate: tempVipDiscountRate,
+          enablePointsDiscount: tempEnablePointsDiscount,
+          pointsRedeemRate: tempPointsRedeemRate,
+          rewards: tempRewards,
+        }),
+      });
+      if (response.ok) {
+        setInternalMemberConfigSaveSuccess('成功儲存會員點數級距與贈送品項設定！');
+        if (onUpdateMemberConfig) {
+          await onUpdateMemberConfig();
+        }
+      } else {
+        const errText = await response.text();
+        setInternalMemberConfigSaveError(`儲存失敗: ${errText}`);
+      }
+    } catch (err: any) {
+      setInternalMemberConfigSaveError(`發生錯誤: ${err?.message || err}`);
+    } finally {
+      setInternalIsSavingMemberConfig(false);
+    }
+  });
+
+  const handleSaveCustomerNotice = extHandleSaveCustomerNotice || (async () => {
+    setInternalNoticeError(null);
+    setInternalNoticeSuccess(null);
+    if (onUpdateCustomerNotice) {
+      const res = await onUpdateCustomerNotice(tempCustomerNotice);
+      if (res.success) {
+        setInternalNoticeSuccess('顧客注意事項已成功更新！');
+        prevCustomerNoticeRef.current = tempCustomerNotice;
+      } else {
+        setInternalNoticeError(res.error || '更新注意事項失敗');
+      }
+    }
+  });
+
+  const handleSanitizeSystemData = extHandleSanitizeSystemData || (async () => {
+    setInternalSanitizeError(null);
+    setInternalSanitizeSuccess(null);
+    setInternalSanitizeLoading(true);
+    try {
+      const pinToVerify = sanitizePin.trim();
+      if (!pinToVerify) {
+        setInternalSanitizeError('請輸入員工解鎖 PIN 碼以確認執行安全簽核。');
+        setInternalSanitizeLoading(false);
+        return;
+      }
+
+      const response = await apiFetch('/api/admin/clear-test-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin: pinToVerify })
+      });
+
+      const resData = await response.json();
+      if (!response.ok) {
+        setInternalSanitizeError(resData.error || '清除測試數據失敗，請檢查安全 PIN 碼是否正確。');
+        setInternalSanitizeLoading(false);
+        return;
+      }
+
+      if (clearLocalMembers) {
+        memberService.clearAllMembers();
+      }
+
+      setInternalSanitizeSuccess('🎯 ' + (resData.message || '已成功清除系統內所有測試用歷史單據及暫存日誌！'));
+      setSanitizePin('');
+      
+      setTimeout(() => {
+        if (typeof window !== 'undefined') {
+          window.location.reload();
+        }
+      }, 1500);
+    } catch (err: any) {
+      setInternalSanitizeError('系統清洗失敗: ' + (err.message || err));
+    } finally {
+      setInternalSanitizeLoading(false);
+    }
+  });
+
+  const handleSaveOperatingHoursLocal = extHandleSaveOperatingHoursLocal || (async (updatedSlots: any[], updatedRestDays: string[]) => {
+    setInternalOpHoursError(null);
+    setInternalOpHoursSuccess(null);
+    if (onUpdateOperatingHours) {
+      const res = await onUpdateOperatingHours(updatedSlots, updatedRestDays);
+      if (res.success) {
+        setInternalOpHoursSuccess('營業時間與公休日排程配置已成功儲存！');
+        prevOperatingHoursRef.current = JSON.stringify(updatedSlots);
+        prevRestDaysRef.current = JSON.stringify(updatedRestDays);
+      } else {
+        setInternalOpHoursError(res.error || '儲存營業時間及公休設定失敗');
+      }
+    }
+  });
   return (
     <div className="space-y-6 animate-fadeIn text-left" id="subtab-section-members">
       {/* Members Stats & Controls */}

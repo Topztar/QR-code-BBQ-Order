@@ -1,12 +1,14 @@
 import { initializeApp } from 'firebase/app';
-import { getFunctions } from "firebase/functions";
-import { getAuth, signInWithCustomToken } from 'firebase/auth';
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, getFirestore, Firestore, enableNetwork } from 'firebase/firestore';
+import { getFunctions, connectFunctionsEmulator } from "firebase/functions";
+import { getAuth, signInWithCustomToken, connectAuthEmulator } from 'firebase/auth';
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, memoryLocalCache, connectFirestoreEmulator, getFirestore, Firestore, enableNetwork } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
 
 export const FIRESTORE_DATABASE_ID = firebaseConfig.firestoreDatabaseId || 'ai-studio-sabaythaibbqtabl-84418196-9d0c-459c-bced-ddc424dfba07';
+
+const isEmulatorMode = (import.meta as any).env?.VITE_USE_FIREBASE_EMULATOR === 'true';
 
 let firestoreInstance: Firestore;
 
@@ -20,7 +22,15 @@ const checkIndexedDB = (): boolean => {
 };
 
 try {
-  if (checkIndexedDB()) {
+  if (isEmulatorMode) {
+    // 🛡️ 模擬器環境強制使用記憶體快取，隔離生產環境 IndexedDB 髒資料與 Mutation Queue 衝突
+    firestoreInstance = initializeFirestore(app, {
+      localCache: memoryLocalCache()
+    }, FIRESTORE_DATABASE_ID);
+
+    connectFirestoreEmulator(firestoreInstance, 'localhost', 8080);
+    console.log('[Firebase] Connected to Local Firestore Emulator (Port 8080) with memoryLocalCache.');
+  } else if (checkIndexedDB()) {
     // Configure persistent local cache with multi-tab manager for sub-millisecond cache speed and optimal quota conservation
     firestoreInstance = initializeFirestore(app, {
       localCache: persistentLocalCache({
@@ -41,7 +51,18 @@ try {
 }
 
 export const db = firestoreInstance;
-export const auth = getAuth();
+export const auth = getAuth(app);
+export const functions = getFunctions(app, 'asia-east1');
+
+if (isEmulatorMode) {
+  try {
+    connectAuthEmulator(auth, 'http://localhost:9099', { disableWarnings: true });
+    connectFunctionsEmulator(functions, 'localhost', 5001);
+    console.log('[Firebase] Connected to Local Auth (9099) & Functions (5001) Emulators.');
+  } catch (emuErr) {
+    console.warn('[Firebase] Emulator connection warning:', emuErr);
+  }
+}
 
 export const authenticateFirebaseCustomToken = async (token: string) => {
   if (!token || !auth) return;
@@ -54,8 +75,8 @@ export const authenticateFirebaseCustomToken = async (token: string) => {
   }
 };
 
-// Default state: Default to false (local Express server first), dynamically activated if bootstrap indicates backend enables Firebase sync
-let syncEnabled = false;
+// 🛡️ 模擬器模式下預設主動解鎖即時同步，使 onSnapshot 於前端初始化時能順利向模擬器註冊
+let syncEnabled = isEmulatorMode;
 
 export const isFirebaseSyncEnabled = () => syncEnabled;
 
@@ -82,8 +103,6 @@ export const startFirebaseSync = async () => {
 
 import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
 
-export const functions = getFunctions(app);
-
 // 🤖 Firebase App Check (Bot & Abuse Protection)
 let appCheckInstance: any = null;
 if (typeof window !== 'undefined') {
@@ -101,5 +120,3 @@ if (typeof window !== 'undefined') {
   }
 }
 export const appCheck = appCheckInstance;
-
-

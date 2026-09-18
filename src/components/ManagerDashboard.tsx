@@ -2,12 +2,10 @@ import { apiFetch } from "../lib/api";
 import { ErrorBoundary } from './ErrorBoundary';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Ingredient, Language, Category, TableConfig, Order, OrderStatus, Reservation, SoldOutType } from '../types';
-import { getLocalizedText, TRANSLATION_DICTIONARY, translateTextToLanguage } from '../utils/i18n';
-import { sanitizePhoneDigits, isValidTaiwanPhone, TAIWAN_PHONE_ERROR_MSG } from '../utils/phoneValidator';
-import { calculateReservationAvailability, autoSelectOptimalTables, validateCapacity } from '../utils/reservationValidator';
-import { db, isFirebaseSyncEnabled } from '../lib/firebase';
+import { getLocalizedText } from '../utils/i18n';
 import { safeStorage } from '../lib/safeStorage';
 import { useDashboardStore } from '../stores/dashboard/useDashboardStore';
+import { useShallow } from 'zustand/react/shallow';
 import {
   checkPOSBridgeHealth,
   openCashDrawerViaBridge,
@@ -25,28 +23,16 @@ import { ManagerEodTab } from './manager/ManagerEodTab';
 import { ManagerTerminalTab } from './manager/ManagerTerminalTab';
 import { ManagerCashierTab } from './manager/ManagerCashierTab';
 import { ManagerNotificationsTab } from './manager/ManagerNotificationsTab';
-import { ConfirmActionModal } from './manager/modals/ConfirmActionModal';
-import { AdjustPointsModal } from './manager/modals/AdjustPointsModal';
-import { AddMemberModal } from './manager/modals/AddMemberModal';
-import { BulkDeleteOrdersModal } from './manager/modals/BulkDeleteOrdersModal';
-import { QuickRestockModal } from './manager/modals/QuickRestockModal';
-import { CategoryFormModal } from './manager/modals/CategoryFormModal';
-import { TableSettingModal } from './manager/modals/TableSettingModal';
-import { ReservationSettingModal } from './manager/modals/ReservationSettingModal';
+import { ManagerModalContainer } from './manager/ManagerModalContainer';
 import { PaidOrderModificationModal } from './manager/modals/PaidOrderModificationModal';
-import { DishFormModal } from './manager/modals/DishFormModal';
 import { OrderDetailDrilldownModal } from './manager/modals/OrderDetailDrilldownModal';
 
 const localStorage = safeStorage;
 
 import {
   getMaskedEmail,
-  computeOrderItemUnitPrice,
-  computeOrderItemsSubtotal,
   calculateOrderTotalWithPayment,
-  getLocalDateString,
-  isOrderOnLocalDate,
-  generateReservationNo,
+  exportToCSV,
 } from './manager/ManagerDashboardUtils';
 import { memberService } from '../services/memberService';
 
@@ -156,6 +142,15 @@ interface ManagerDashboardProps {
   onUpdateMemberConfig?: () => Promise<void>;
 }
 
+// Ingredient Recipe Maps definition for local recipe cards auditing 
+const RECIPE_COMPOSITION_MAP: { [key: string]: { name: string; qty: string }[] } = {
+  'ty-01': [{ name: '大鮮蝦', qty: '3 只 / pcs' }, { name: '頂級椰奶罐', qty: '0.1 罐 / can' }],
+  'ty-02': [{ name: '大鮮蝦', qty: '2 只 / pcs' }, { name: '頂級牛肉串面料', qty: '1 串 / skewer' }, { name: '頂級椰奶罐', qty: '0.1 罐' }],
+  'nd-01': [{ name: '大鮮蝦', qty: '4 只' }, { name: '冬蔭功泡麵 / 米線', qty: '1 包 / pack' }],
+  'nd-02': [{ name: '大鮮蝦', qty: '2 只' }, { name: '冬蔭功泡麵 / 米線', qty: '1 包' }],
+  'cb-01': [{ name: '頂級牛肉串', qty: '1 串' }, { name: '爆香豬五花 / 金針', qty: '1 份' }, { name: '泰手標紅茶原料', qty: '0.35 升' }]
+};
+
 export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   currentLang,
   analytics,
@@ -219,12 +214,29 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
 }) => {
   // Navigation Tabs
   const activeSubTab = defaultSubTab || 'stats';
-  const { eodSelectedDate, setEodSelectedDate } = useDashboardStore();
+  const { eodSelectedDate, setEodSelectedDate } = useDashboardStore(
+    useShallow(state => ({
+      eodSelectedDate: state.eodSelectedDate,
+      setEodSelectedDate: state.setEodSelectedDate
+    }))
+  );
 
-  const prevMemberPointsRatioRef = React.useRef<number>(memberPointsRatio);
-  const prevMemberRewardsRef = React.useRef<string>(JSON.stringify(memberRewards));
-
-  const { terminalCart, terminalTable, terminalCategory, isTerminalFullScreen, terminalPage, terminalCartPage, setTerminalPage, setTerminalCartPage } = useDashboardStore();
+  const {
+    terminalCart, terminalTable, terminalCategory,
+    isTerminalFullScreen, terminalPage, terminalCartPage,
+    setTerminalPage, setTerminalCartPage
+  } = useDashboardStore(
+    useShallow(state => ({
+      terminalCart: state.terminalCart,
+      terminalTable: state.terminalTable,
+      terminalCategory: state.terminalCategory,
+      isTerminalFullScreen: state.isTerminalFullScreen,
+      terminalPage: state.terminalPage,
+      terminalCartPage: state.terminalCartPage,
+      setTerminalPage: state.setTerminalPage,
+      setTerminalCartPage: state.setTerminalCartPage
+    }))
+  );
 
   useEffect(() => {
     setTerminalPage(1);
@@ -249,55 +261,55 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     }
   }, [terminalCart.length, terminalCartPage, setTerminalCartPage]);
 
-  useEffect(() => {
-    if (memberPointsRatio !== prevMemberPointsRatioRef.current) {
-      setTempPointsRatio(memberPointsRatio);
-      prevMemberPointsRatioRef.current = memberPointsRatio;
-    }
-  }, [memberPointsRatio]);
-
-  useEffect(() => {
-    setTempVipThreshold(memberVipThreshold);
-  }, [memberVipThreshold]);
-
-  useEffect(() => {
-    setTempVipDiscountRate(memberVipDiscountRate);
-  }, [memberVipDiscountRate]);
-
-  useEffect(() => {
-    setTempEnablePointsDiscount(memberEnablePointsDiscount);
-  }, [memberEnablePointsDiscount]);
-
-  useEffect(() => {
-    setTempPointsRedeemRate(memberPointsRedeemRate);
-  }, [memberPointsRedeemRate]);
-
-  useEffect(() => {
-    const rewardsStr = JSON.stringify(memberRewards);
-    if (rewardsStr !== prevMemberRewardsRef.current) {
-      if (memberRewards && memberRewards.length > 0) {
-        setTempRewards(memberRewards);
-      }
-      prevMemberRewardsRef.current = rewardsStr;
-    }
-  }, [memberRewards]);
-
   // Table Config States
-  const { isTableFormOpen, setIsTableFormOpen, editingTableObj, setEditingTableObj, tableIdInput, setTableIdInput, tableQrUrlInput, setTableQrUrlInput, tableMaxCapacityInput, setTableMaxCapacityInput, tableError, setTableError, tableSuccess, setTableSuccess } = useDashboardStore();
+  const {
+    isTableFormOpen, setIsTableFormOpen, editingTableObj, setEditingTableObj,
+    tableError, setTableError, tableSuccess, setTableSuccess
+  } = useDashboardStore(
+    useShallow(state => ({
+      isTableFormOpen: state.isTableFormOpen,
+      setIsTableFormOpen: state.setIsTableFormOpen,
+      editingTableObj: state.editingTableObj,
+      setEditingTableObj: state.setEditingTableObj,
+      tableError: state.tableError,
+      setTableError: state.setTableError,
+      tableSuccess: state.tableSuccess,
+      setTableSuccess: state.setTableSuccess
+    }))
+  );
   const [takeoutStatus, setTakeoutStatus] = useState({ sequence: 0, lastResetDate: '' });
   const [selectedQrPreviewId, setSelectedQrPreviewId] = useState<string>('1');
   const [copiedTableId, setCopiedTableId] = useState<string | null>(null);
-  const { showBulkDeleteOrdersModal, setShowBulkDeleteOrdersModal } = useDashboardStore();
+  const { showBulkDeleteOrdersModal, setShowBulkDeleteOrdersModal } = useDashboardStore(
+    useShallow(state => ({
+      showBulkDeleteOrdersModal: state.showBulkDeleteOrdersModal,
+      setShowBulkDeleteOrdersModal: state.setShowBulkDeleteOrdersModal
+    }))
+  );
   const [bulkDeleteThresholdDate, setBulkDeleteThresholdDate] = useState<string>('');
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
 
-  // Table Layout and Floor Map States
-  const { localTablePositions, setLocalTablePositions } = useDashboardStore();
-  const snapToGrid = true;
-  const gridSize = 5; // Default grid size is 5%
-
   // Local reordering states with confirmation buttons to prevent accidental clicks
-  const { localCategoryOrder, setLocalCategoryOrder, localMenuItemOrder, setLocalMenuItemOrder, hasUnsavedCategoryOrder, setHasUnsavedCategoryOrder, hasUnsavedMenuItemOrder, setHasUnsavedMenuItemOrder, isCategorySortingMode, setIsCategorySortingMode, isMenuItemSortingMode, setIsMenuItemSortingMode } = useDashboardStore();
+  const {
+    localCategoryOrder, setLocalCategoryOrder, localMenuItemOrder, setLocalMenuItemOrder,
+    hasUnsavedCategoryOrder, setHasUnsavedCategoryOrder, hasUnsavedMenuItemOrder, setHasUnsavedMenuItemOrder,
+    isCategorySortingMode, setIsCategorySortingMode, isMenuItemSortingMode, setIsMenuItemSortingMode
+  } = useDashboardStore(
+    useShallow(state => ({
+      localCategoryOrder: state.localCategoryOrder,
+      setLocalCategoryOrder: state.setLocalCategoryOrder,
+      localMenuItemOrder: state.localMenuItemOrder,
+      setLocalMenuItemOrder: state.setLocalMenuItemOrder,
+      hasUnsavedCategoryOrder: state.hasUnsavedCategoryOrder,
+      setHasUnsavedCategoryOrder: state.setHasUnsavedCategoryOrder,
+      hasUnsavedMenuItemOrder: state.hasUnsavedMenuItemOrder,
+      setHasUnsavedMenuItemOrder: state.setHasUnsavedMenuItemOrder,
+      isCategorySortingMode: state.isCategorySortingMode,
+      setIsCategorySortingMode: state.setIsCategorySortingMode,
+      isMenuItemSortingMode: state.isMenuItemSortingMode,
+      setIsMenuItemSortingMode: state.setIsMenuItemSortingMode
+    }))
+  );
 
   useEffect(() => {
     if (!hasUnsavedCategoryOrder) {
@@ -311,330 +323,35 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     }
   }, [menuItems, hasUnsavedMenuItemOrder]);
 
-  // Custom reusable confirmation dialog modal state
-  const { confirmActionModal, setConfirmActionModal } = useDashboardStore();
+  // Custom reusable confirmation dialog modal state & Member modal trigger
+  const { confirmActionModal, setConfirmActionModal, setAddMemberModalOpen } = useDashboardStore(
+    useShallow(state => ({
+      confirmActionModal: state.confirmActionModal,
+      setConfirmActionModal: state.setConfirmActionModal,
+      setAddMemberModalOpen: state.setAddMemberModalOpen
+    }))
+  );
 
   const [isCheckoutSubmitting, setIsCheckoutSubmitting] = useState<boolean>(false);
-
-  // Points Adjustment Modal details
-  const [adjustPointsModal, setAdjustPointsModal] = useState<{
-    isOpen: boolean;
-    email: string;
-    name: string;
-    currentPoints: number;
-  } | null>(null);
-
-  // Add Member Modal State
-  const [addMemberModalOpen, setAddMemberModalOpen] = useState<boolean>(false);
-
-  // Lock state for guest table slots positioning to prevent unintentional mouse drags / touch moves
-  const [isTableLayoutLocked] = useState<boolean>(() => {
-    return localStorage.getItem('table-layout-locked') !== 'false'; // Default to true (locked) for safety
-  });
-
-  // Tablet selection for map drag helper
-  const { selectedFineTuneTableId } = useDashboardStore();
-  const fineTuneTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
-
-  // Drag and drop mouse event handler
-  const handleTableMouseDown = (e: React.MouseEvent, tableId: string) => {
-    if (isTableLayoutLocked) return;
-    e.preventDefault();
-    const mapElement = document.getElementById('floor-map-container');
-    if (!mapElement) return;
-    
-    const handleMouseMove = (moveEvent: MouseEvent) => {
-      // Query bounding rect dynamically on move for precise coordinates even during/after tablet orientation/rotation flips
-      const currentRect = mapElement.getBoundingClientRect();
-      const rawX = moveEvent.clientX - currentRect.left;
-      const rawY = moveEvent.clientY - currentRect.top;
-      
-      let xPercent = Math.max(0, Math.min(100, Math.round((rawX / currentRect.width) * 100)));
-      let yPercent = Math.max(0, Math.min(100, Math.round((rawY / currentRect.height) * 100)));
-      
-      if (snapToGrid) {
-        xPercent = Math.round(xPercent / gridSize) * gridSize;
-        yPercent = Math.round(yPercent / gridSize) * gridSize;
-        xPercent = Math.max(0, Math.min(100, xPercent));
-        yPercent = Math.max(0, Math.min(100, yPercent));
-      }
-      
-      setLocalTablePositions(prev => ({
-        ...prev,
-        [tableId]: { x: xPercent, y: yPercent }
-      }));
-    };
-    
-    const handleMouseUp = async (upEvent: MouseEvent) => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-      
-      const currentRect = mapElement.getBoundingClientRect();
-      const rawX = upEvent.clientX - currentRect.left;
-      const rawY = upEvent.clientY - currentRect.top;
-      let finalX = Math.max(0, Math.min(100, Math.round((rawX / currentRect.width) * 100)));
-      let finalY = Math.max(0, Math.min(100, Math.round((rawY / currentRect.height) * 100)));
-      
-      if (snapToGrid) {
-        finalX = Math.round(finalX / gridSize) * gridSize;
-        finalY = Math.round(finalY / gridSize) * gridSize;
-        finalX = Math.max(0, Math.min(100, finalX));
-        finalY = Math.max(0, Math.min(100, finalY));
-      }
-      
-      if (onUpdateTableStatus) {
-        await onUpdateTableStatus(tableId, { positionX: finalX, positionY: finalY } as any);
-      }
-    };
-    
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-  };
-
-  // Drag and drop touch event handler for tablet/mobile devices
-  const handleTableTouchStart = (e: React.TouchEvent, tableId: string) => {
-    if (isTableLayoutLocked) return;
-    e.stopPropagation();
-    const mapElement = document.getElementById('floor-map-container');
-    if (!mapElement) return;
-
-    const handleTouchMove = (moveEvent: TouchEvent) => {
-      if (moveEvent.touches.length === 0) return;
-      const touch = moveEvent.touches[0];
-      
-      // Query bounding rect dynamically on move for precise coordinates even during/after tablet orientation/rotation flips
-      const currentRect = mapElement.getBoundingClientRect();
-      const rawX = touch.clientX - currentRect.left;
-      const rawY = touch.clientY - currentRect.top;
-      
-      let xPercent = Math.max(0, Math.min(100, Math.round((rawX / currentRect.width) * 100)));
-      let yPercent = Math.max(0, Math.min(100, Math.round((rawY / currentRect.height) * 100)));
-      
-      if (snapToGrid) {
-        xPercent = Math.round(xPercent / gridSize) * gridSize;
-        yPercent = Math.round(yPercent / gridSize) * gridSize;
-        xPercent = Math.max(0, Math.min(100, xPercent));
-        yPercent = Math.max(0, Math.min(100, yPercent));
-      }
-      
-      setLocalTablePositions(prev => ({
-        ...prev,
-        [tableId]: { x: xPercent, y: yPercent }
-      }));
-    };
-    
-    const handleTouchEnd = async (endEvent: TouchEvent) => {
-      document.removeEventListener('touchmove', handleTouchMove);
-      document.removeEventListener('touchend', handleTouchEnd);
-      
-      const endedTouch = endEvent.changedTouches[0];
-      if (!endedTouch) return;
-
-      const currentRect = mapElement.getBoundingClientRect();
-      const rawX = endedTouch.clientX - currentRect.left;
-      const rawY = endedTouch.clientY - currentRect.top;
-      let finalX = Math.max(0, Math.min(100, Math.round((rawX / currentRect.width) * 100)));
-      let finalY = Math.max(0, Math.min(100, Math.round((rawY / currentRect.height) * 100)));
-      
-      if (snapToGrid) {
-        finalX = Math.round(finalX / gridSize) * gridSize;
-        finalY = Math.round(finalY / gridSize) * gridSize;
-        finalX = Math.max(0, Math.min(100, finalX));
-        finalY = Math.max(0, Math.min(100, finalY));
-      }
-      
-      if (onUpdateTableStatus) {
-        await onUpdateTableStatus(tableId, { positionX: finalX, positionY: finalY } as any);
-      }
-    };
-    
-    document.addEventListener('touchmove', handleTouchMove, { passive: false });
-    document.addEventListener('touchend', handleTouchEnd);
-  };
-
-  // Fine tune coordinate modifier
-  const handleFineTunePosition = async (dx: number, dy: number) => {
-    if (isTableLayoutLocked) return;
-    if (!selectedFineTuneTableId) return;
-    const tbl = tables.find(t => t.id === selectedFineTuneTableId);
-    if (!tbl) return;
-
-    const currentX = localTablePositions[tbl.id]?.x !== undefined ? localTablePositions[tbl.id].x : (tbl.positionX || 10);
-    const currentY = localTablePositions[tbl.id]?.y !== undefined ? localTablePositions[tbl.id].y : (tbl.positionY || 10);
-
-    const stepX = snapToGrid ? (dx > 0 ? gridSize : dx < 0 ? -gridSize : 0) : dx;
-    const stepY = snapToGrid ? (dy > 0 ? gridSize : dy < 0 ? -gridSize : 0) : dy;
-
-    let nextX = Math.max(0, Math.min(100, currentX + stepX));
-    let nextY = Math.max(0, Math.min(100, currentY + stepY));
-
-    if (snapToGrid) {
-      nextX = Math.round(nextX / gridSize) * gridSize;
-      nextY = Math.round(nextY / gridSize) * gridSize;
-      nextX = Math.max(0, Math.min(100, nextX));
-      nextY = Math.max(0, Math.min(100, nextY));
-    }
-
-    setLocalTablePositions(prev => ({
-      ...prev,
-      [tbl.id]: { x: nextX, y: nextY }
-    }));
-
-    if (fineTuneTimeoutRef.current) {
-      clearTimeout(fineTuneTimeoutRef.current);
-    }
-    fineTuneTimeoutRef.current = setTimeout(async () => {
-      if (onUpdateTableStatus) {
-        await onUpdateTableStatus(tbl.id, { positionX: nextX, positionY: nextY } as any);
-      }
-    }, 500);
-  };
 
   // Reorder sorting action handlers
 
 
-  // Reservation Config States
-  const [isResFormOpen, setIsResFormOpen] = useState(false);
-  const [editingResObj, setEditingResObj] = useState<Reservation | null>(null);
-  const [resNameInput, setResNameInput] = useState('');
-  const [resPhoneInput, setResPhoneInput] = useState('');
-  const [resPhoneError, setResPhoneError] = useState(false);
-  const [resGuestsInput, setResGuestsInput] = useState(2);
-  const [resTableInputs, setResTableInputs] = useState<string[]>([]);
-  const [resDateInput, setResDateInput] = useState('');
-  const [resTimeInput, setResTimeInput] = useState('');
-  const [resNotesInput, setResNotesInput] = useState('');
-  const [resNoInput, setResNoInput] = useState('');
-  const [generatedResLink, setGeneratedResLink] = useState('');
-  const [copiedLinkNotice, setCopiedLinkNotice] = useState(false);
-  const [resError, setResError] = useState<string | null>(null);
-  const [resSuccess, setResSuccess] = useState<string | null>(null);
 
-  const todayDateStr = useMemo(() => {
-    const now = new Date();
-    const yr = now.getFullYear();
-    const mo = String(now.getMonth() + 1).padStart(2, '0');
-    const dy = String(now.getDate()).padStart(2, '0');
-    return `${yr}-${mo}-${dy}`;
-  }, []);
 
-  const maxThreeMonthsDateStr = useMemo(() => {
-    const now = new Date();
-    now.setMonth(now.getMonth() + 3);
-    const yr = now.getFullYear();
-    const mo = String(now.getMonth() + 1).padStart(2, '0');
-    const dy = String(now.getDate()).padStart(2, '0');
-    return `${yr}-${mo}-${dy}`;
-  }, []);
-
-  const isResDateValid = useMemo(() => {
-    if (!resDateInput) return true;
-    if (restDays && restDays.includes(resDateInput)) return false;
-    return resDateInput <= maxThreeMonthsDateStr;
-  }, [resDateInput, maxThreeMonthsDateStr, restDays]);
-
-  const generateCandidateSlots = useCallback((dateStr: string) => {
-    const slots: string[] = [];
-    if (!dateStr) return slots;
-    if (restDays && restDays.includes(dateStr)) return slots;
-    if (!operatingHours || operatingHours.length === 0) {
-      return ['11:00', '11:30', '12:00', '12:30', '13:00', '13:30', '14:00', '17:00', '17:30', '18:00', '18:30', '19:00', '19:30', '20:00', '20:30', '21:00', '21:30'];
-    }
-
-    const [y, m, d] = dateStr.split('-').map(Number);
-    if (!y || !m || !d) return slots;
-    const localDate = new Date(y, m - 1, d);
-    const dayOfWeek = localDate.getDay();
-
-    const activeSlots = operatingHours.filter(s => s && s.isActive);
-    activeSlots.forEach(slot => {
-      if (slot.days && Array.isArray(slot.days) && !slot.days.includes(dayOfWeek)) return;
-      const [startH, startM] = (slot.start || '00:00').split(':').map(Number);
-      let [endH, endM] = (slot.end || '23:59').split(':').map(Number);
-      const startTotal = startH * 60 + startM;
-      let endTotal = endH * 60 + endM;
-
-      if (endTotal < startTotal) {
-        endTotal += 24 * 60;
-      }
-
-      for (let mins = startTotal; mins <= endTotal; mins += 30) {
-        const h = Math.floor(mins / 60) % 24;
-        const min = mins % 60;
-        const timeStr = `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
-        if (!slots.includes(timeStr)) slots.push(timeStr);
-      }
-    });
-
-    return slots.sort();
-  }, [operatingHours, restDays]);
-
-  const isResTimeValid = useMemo(() => {
-    if (restDays && restDays.includes(resDateInput)) return false;
-    const slots = generateCandidateSlots(resDateInput);
-    if (slots.length === 0) return false;
-    if (!operatingHours || operatingHours.length === 0) return true;
-    return slots.includes(resTimeInput);
-  }, [resDateInput, resTimeInput, generateCandidateSlots, restDays, operatingHours]);
-
-  // PIN security states
-  const [currentPinInput, setCurrentPinInput] = useState('');
-  const [newPinInput, setNewPinInput] = useState('');
-  const [confirmPinInput, setConfirmPinInput] = useState('');
-  const [pinChangeError, setPinChangeError] = useState<string | null>(null);
-  const [pinChangeSuccess, setPinChangeSuccess] = useState<string | null>(null);
-  const [pinChangeLoading, setPinChangeLoading] = useState(false);
-
-  // Min spend states
-  const [tempMinSpend, setTempMinSpend] = useState<number>(minSpend);
-  const [minSpendSaveError, setMinSpendSaveError] = useState<string | null>(null);
-  const [minSpendSaveSuccess, setMinSpendSaveSuccess] = useState<string | null>(null);
-
-  // Member system state variables
-  const [tempPointsRatio, setTempPointsRatio] = useState<number>(memberPointsRatio);
-  const [tempVipThreshold, setTempVipThreshold] = useState<number>(memberVipThreshold);
-  const [tempVipDiscountRate, setTempVipDiscountRate] = useState<number>(memberVipDiscountRate);
-  const [tempEnablePointsDiscount, setTempEnablePointsDiscount] = useState<boolean>(memberEnablePointsDiscount);
-  const [tempPointsRedeemRate, setTempPointsRedeemRate] = useState<number>(memberPointsRedeemRate);
-  const [tempRewards, setTempRewards] = useState<any[]>(() => {
-    return (memberRewards && memberRewards.length > 0) ? memberRewards : [
-      { id: 'rew-01', menuItemId: 'sk-02', cost: 900, enabled: true },
-      { id: 'rew-02', menuItemId: 'vg-01', cost: 800, enabled: true },
-      { id: 'rew-03', menuItemId: 'dr-01', cost: 1800, enabled: true },
-      { id: 'rew-04', menuItemId: 'sw-01', cost: 900, enabled: true },
-      { id: 'rew-05', menuItemId: 'ty-01', cost: 2600, enabled: true }
-    ];
-  });
-  const [memberConfigSaveError, setMemberConfigSaveError] = useState<string | null>(null);
-  const [memberConfigSaveSuccess, setMemberConfigSaveSuccess] = useState<string | null>(null);
-  const [isSavingMemberConfig, setIsSavingMemberConfig] = useState<boolean>(false);
-
-  // Operating hours states
-  const [tempOperatingHours, setTempOperatingHours] = useState<any[]>(operatingHours);
-  const [tempRestDays, setTempRestDays] = useState<string[]>(restDays);
-  const [opHoursError, setOpHoursError] = useState<string | null>(null);
-  const [opHoursSuccess, setOpHoursSuccess] = useState<string | null>(null);
-
-  // Customer notice states
-  const [tempCustomerNotice, setTempCustomerNotice] = useState<string>(customerNotice);
-  const [noticeError, setNoticeError] = useState<string | null>(null);
-  const [noticeSuccess, setNoticeSuccess] = useState<string | null>(null);
-
-  // Sanitize states
-  const [sanitizePin, setSanitizePin] = useState('');
-  const [clearLocalMembers, setClearLocalMembers] = useState(false);
-  const [sanitizeError, setSanitizeError] = useState<string | null>(null);
-  const [sanitizeSuccess, setSanitizeSuccess] = useState<string | null>(null);
-  const [sanitizeLoading, setSanitizeLoading] = useState(false);
-
-  // Refs to prevent periodic polling from disrupting active inputs
-  const prevOperatingHoursRef = React.useRef<string>(JSON.stringify(operatingHours));
-  const prevRestDaysRef = React.useRef<string>(JSON.stringify(restDays));
-  const prevCustomerNoticeRef = React.useRef<string>(customerNotice);
-  const prevMinSpendRef = React.useRef<number>(minSpend);
 
   // Active Order Table/Takeout editing states
-  const { editingOrderTableId, setEditingOrderTableId, editingOrderTableValue, setEditingOrderTableValue } = useDashboardStore();
+  const {
+    editingOrderTableId, setEditingOrderTableId,
+    editingOrderTableValue, setEditingOrderTableValue
+  } = useDashboardStore(
+    useShallow(state => ({
+      editingOrderTableId: state.editingOrderTableId,
+      setEditingOrderTableId: state.setEditingOrderTableId,
+      editingOrderTableValue: state.editingOrderTableValue,
+      setEditingOrderTableValue: state.setEditingOrderTableValue
+    }))
+  );
 
   // Promo combo staging states
   const [, setTempPromoCombo] = useState<any>(promoCombo);
@@ -690,89 +407,60 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
         (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
       );
 
-      // Define CSV columns & header
-      const headers = [
-        'Order ID / 訂單編號',
-        'Table Number / 桌號外帶號',
-        'Order Status / 訂單狀態',
-        'Is Paid / 是否已結帳',
-        'Payment Method / 付款方式',
-        'Subtotal / 小計',
-        'Service Charge (10%) / 服務費',
-        'Discount / 折扣',
-        'Total Revenue / 總計金額',
-        'Created Time / 成立時間',
-        'Items Detail / 餐點客製明細'
-      ];
-
-      // Format a helper to escape and quote values for safety
-      const escapeCSVField = (val: string | number | boolean | null | undefined) => {
-        if (val === undefined || val === null) return '""';
-        const str = String(val);
-        const escaped = str.replace(/"/g, '""');
-        return `"${escaped}"`;
-      };
-
-      // Formulate rows
-      const rows = sortedOrders.map((order) => {
+      const flatData = sortedOrders.map(order => {
         const itemSummaries = order.items.map((it) => {
           const customizationDetails: string[] = [];
-
-          // Spiciness
           if (it.customization?.spiciness !== undefined) {
-            const spice = it.customization.spiciness === 1 ? '辣味' : '不辣';
-            customizationDetails.push(`辣：${spice}`);
+            customizationDetails.push(`辣：${it.customization.spiciness === 1 ? '辣味' : '不辣'}`);
           }
-          // Noodle Type
           if (it.customization?.noodleType) {
             const noodle = it.customization.noodleType === 'rice-noodle' ? '河粉' : (it.customization.noodleType === 'vermicelli' ? '米線' : '無');
             customizationDetails.push(`麵：${noodle}`);
           }
-          // Soup Base
           if (it.customization?.soupBase === 'coconut-milk') {
             customizationDetails.push('湯：椰奶');
           }
-          // Add-ons
           if (it.customization?.selectedAddOns && it.customization.selectedAddOns.length > 0) {
             const addOnsText = it.customization.selectedAddOns.map((addon: any) => `+${getLocalizedText(addon.name, 'zh')} x${addon.qty || 1}`).join(',');
             customizationDetails.push(`加購配料：${addOnsText}`);
           }
-          // Notes
           if (it.customization?.notes) {
             customizationDetails.push(`備註：${it.customization.notes}`);
           }
-
           const customizationStr = customizationDetails.length > 0 ? ` [${customizationDetails.join('; ')}]` : '';
           return `${getLocalizedText(it.name, 'zh')} x${it.qty}${customizationStr}`;
         }).join(' | ');
 
-        return [
-          escapeCSVField(order.id),
-          escapeCSVField(order.tableNumber),
-          escapeCSVField(order.status),
-          escapeCSVField(order.isPaid ? 'YES' : 'NO'),
-          escapeCSVField(order.paymentMethod || '未填/未指定'),
-          escapeCSVField(order.subtotal),
-          escapeCSVField(order.serviceCharge),
-          escapeCSVField(order.discount || 0),
-          escapeCSVField(order.total),
-          escapeCSVField(new Date(order.createdAt).toISOString()),
-          escapeCSVField(itemSummaries)
-        ];
+        return {
+          id: order.id,
+          tableNumber: order.tableNumber,
+          status: order.status,
+          isPaid: order.isPaid ? 'YES' : 'NO',
+          paymentMethod: order.paymentMethod || '未填/未指定',
+          subtotal: order.subtotal,
+          serviceCharge: order.serviceCharge,
+          discount: order.discount || 0,
+          total: order.total,
+          createdAt: new Date(order.createdAt).toISOString(),
+          itemsSummary: itemSummaries
+        };
       });
 
-      // Prepare file contents (with BOM for Excel compatibility)
-      const csvContent = "\uFEFF" + [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
+      const headersMap: Record<string, string> = {
+        id: 'Order ID / 訂單編號',
+        tableNumber: 'Table Number / 桌號外帶號',
+        status: 'Order Status / 訂單狀態',
+        isPaid: 'Is Paid / 是否已結帳',
+        paymentMethod: 'Payment Method / 付款方式',
+        subtotal: 'Subtotal / 小計',
+        serviceCharge: 'Service Charge (10%) / 服務費',
+        discount: 'Discount / 折扣',
+        total: 'Total Revenue / 總計金額',
+        createdAt: 'Created Time / 成立時間',
+        itemsSummary: 'Items Detail / 餐點客製明細'
+      };
 
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.setAttribute('href', url);
-      link.setAttribute('download', `Sabay_Accounting_Orders_30Days_${new Date().toISOString().split('T')[0]}.csv`);
-      link.style.visibility = 'hidden';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      exportToCSV(flatData, headersMap, `Sabay_Accounting_Orders_30Days_${new Date().toISOString().split('T')[0]}.csv`);
 
       setCsvExportSuccess(`已成功儲存 30 天內已完成餐點對帳明細 (共 ${sortedOrders.length} 筆)！`);
       setTimeout(() => {
@@ -781,58 +469,6 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     } catch (err: any) {
       console.error('CSV Export Error:', err);
       setCsvExportError(`匯出 CSV 失敗: ${err.message || '未知錯誤'}`);
-    }
-  };
-
-  useEffect(() => {
-    const currentStr = JSON.stringify(operatingHours);
-    if (currentStr !== prevOperatingHoursRef.current) {
-      setTempOperatingHours(operatingHours);
-      prevOperatingHoursRef.current = currentStr;
-    }
-  }, [operatingHours]);
-
-  useEffect(() => {
-    const currentStr = JSON.stringify(restDays);
-    if (currentStr !== prevRestDaysRef.current) {
-      setTempRestDays(restDays);
-      prevRestDaysRef.current = currentStr;
-    }
-  }, [restDays]);
-
-  useEffect(() => {
-    if (customerNotice !== prevCustomerNoticeRef.current) {
-      setTempCustomerNotice(customerNotice);
-      prevCustomerNoticeRef.current = customerNotice;
-    }
-  }, [customerNotice]);
-
-  const handleSaveOperatingHoursLocal = async (updatedSlots: any[], updatedRestDays: string[]) => {
-    setOpHoursError(null);
-    setOpHoursSuccess(null);
-    if (onUpdateOperatingHours) {
-      const res = await onUpdateOperatingHours(updatedSlots, updatedRestDays);
-      if (res.success) {
-        setOpHoursSuccess('營業時間與公休日排程配置已成功儲存！');
-        prevOperatingHoursRef.current = JSON.stringify(updatedSlots);
-        prevRestDaysRef.current = JSON.stringify(updatedRestDays);
-      } else {
-        setOpHoursError(res.error || '儲存營業時間及公休設定失敗');
-      }
-    }
-  };
-
-  const handleSaveCustomerNotice = async () => {
-    setNoticeError(null);
-    setNoticeSuccess(null);
-    if (onUpdateCustomerNotice) {
-      const res = await onUpdateCustomerNotice(tempCustomerNotice);
-      if (res.success) {
-        setNoticeSuccess('顧客注意事項已成功更新！');
-        prevCustomerNoticeRef.current = tempCustomerNotice;
-      } else {
-        setNoticeError(res.error || '更新注意事項失敗');
-      }
     }
   };
 
@@ -902,106 +538,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     }
   };
 
-  useEffect(() => {
-    if (minSpend !== prevMinSpendRef.current) {
-      setTempMinSpend(minSpend);
-      prevMinSpendRef.current = minSpend;
-    }
-  }, [minSpend]);
 
-  const handleSaveMinSpend = async () => {
-    setMinSpendSaveError(null);
-    setMinSpendSaveSuccess(null);
-    if (onUpdateMinSpend) {
-      const res = await onUpdateMinSpend(tempMinSpend);
-      if (res.success) {
-        setMinSpendSaveSuccess('低消門檻已成功更新！');
-        prevMinSpendRef.current = tempMinSpend;
-      } else {
-        setMinSpendSaveError(res.error || '無法更新狀態');
-      }
-    }
-  };
-
-  const handleSaveMemberConfig = async () => {
-    setIsSavingMemberConfig(true);
-    setMemberConfigSaveError(null);
-    setMemberConfigSaveSuccess(null);
-    try {
-      const response = await apiFetch('/api/settings/members-config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          pointsRatio: tempPointsRatio,
-          vipThreshold: tempVipThreshold,
-          vipDiscountRate: tempVipDiscountRate,
-          enablePointsDiscount: tempEnablePointsDiscount,
-          pointsRedeemRate: tempPointsRedeemRate,
-          rewards: tempRewards,
-        }),
-      });
-      if (response.ok) {
-        setMemberConfigSaveSuccess('成功儲存會員點數級距與贈送品項設定！');
-        prevMemberPointsRatioRef.current = tempPointsRatio;
-        prevMemberRewardsRef.current = JSON.stringify(tempRewards);
-        if (onUpdateMemberConfig) {
-          await onUpdateMemberConfig();
-        }
-      } else {
-        const errText = await response.text();
-        setMemberConfigSaveError(`儲存失敗: ${errText}`);
-      }
-    } catch (err: any) {
-      setMemberConfigSaveError(`發生錯誤: ${err?.message || err}`);
-    } finally {
-      setIsSavingMemberConfig(false);
-    }
-  };
-
-  const handleSanitizeSystemData = async () => {
-    setSanitizeError(null);
-    setSanitizeSuccess(null);
-    setSanitizeLoading(true);
-    try {
-      const pinToVerify = sanitizePin.trim();
-      if (!pinToVerify) {
-        setSanitizeError('請輸入員工解鎖 PIN 碼以確認執行安全簽核。');
-        setSanitizeLoading(false);
-        return;
-      }
-
-      const response = await apiFetch('/api/admin/clear-test-data', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pin: pinToVerify })
-      });
-
-      const resData = await response.json();
-      if (!response.ok) {
-        setSanitizeError(resData.error || '清除測試數據失敗，請檢查安全 PIN 碼是否正確。');
-        setSanitizeLoading(false);
-        return;
-      }
-
-      if (clearLocalMembers) {
-        memberService.clearAllMembers();
-      }
-
-      setSanitizeSuccess('🎯 ' + (resData.message || '已成功清除系統內所有測試用歷史單據及暫存日誌！'));
-      setSanitizePin('');
-      
-      setTimeout(() => {
-        if (typeof window !== 'undefined') {
-          window.location.reload();
-        }
-      }, 1500);
-
-    } catch (err: any) {
-      setSanitizeError('系統清洗失敗: ' + (err.message || err));
-    } finally {
-      setSanitizeLoading(false);
-    }
-  };
 
   // Sales Query states
   const [dateRangeFilter, setDateRangeFilter] = useState<'all' | 'today' | 'week' | 'month' | 'custom'>('all');
@@ -1436,57 +973,6 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [popularItemIdsStr]);
 
-  // Menu Creation/Editing states
-  const [isFormOpen, setIsFormOpen] = useState(false);
-  const [editingItem, setEditingItem] = useState<any | null>(null);
-  const [itemNames, setItemNames] = useState<Record<Language, string>>({
-    zh: '',
-    en: '',
-    th: '',
-    ja: '',
-    ko: '',
-    vi: '',
-    ru: '',
-    es: '',
-  });
-  const [itemDescs, setItemDescs] = useState<Record<Language, string>>({
-    zh: '',
-    en: '',
-    th: '',
-    ja: '',
-    ko: '',
-    vi: '',
-    ru: '',
-    es: '',
-  });
-  const [itemCategory, setItemCategory] = useState('skewers');
-  const [itemPrice, setItemPrice] = useState<number | ''>(100);
-  const [itemImage, setItemImage] = useState('https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=400');
-  const [itemThumbnailUrl, setItemThumbnailUrl] = useState('');
-  const [itemAvifUrl, setItemAvifUrl] = useState('');
-  const [itemAvifThumbnailUrl, setItemAvifThumbnailUrl] = useState('');
-  const [hasNoodles, setHasNoodles] = useState(false);
-  const [isNotSpicy, setIsNotSpicy] = useState(false);
-  const [isTakeoutAvailable, setIsTakeoutAvailable] = useState(false);
-  const [customAddOns, setCustomAddOns] = useState<any[]>([]);
-  const [itemRecipe, setItemRecipe] = useState<{ ingredientId: string; amount: number }[]>([]);
-  const [newRecipeIngId, setNewRecipeIngId] = useState('');
-  const [newRecipeAmount, setNewRecipeAmount] = useState('1');
-
-  // Category Creation/Editing states
-  const [isCatFormOpen, setIsCatFormOpen] = useState(false);
-  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
-  const [catId, setCatId] = useState('');
-  const [catNameZh, setCatNameZh] = useState('');
-  const [catNameEn, setCatNameEn] = useState('');
-  const [catNameTh, setCatNameTh] = useState('');
-  const [catNameJa, setCatNameJa] = useState('');
-  const [catNameKo, setCatNameKo] = useState('');
-  const [catNameVi, setCatNameVi] = useState('');
-  const [catNameRu, setCatNameRu] = useState('');
-  const [catNameEs, setCatNameEs] = useState('');
-  const [catError, setCatError] = useState<string | null>(null);
-  const [catShowOnCustomer, setCatShowOnCustomer] = useState<boolean>(true);
 
   // Google Members state and points database
   const [membersList, setMembersList] = useState<any[]>([]);
@@ -1558,10 +1044,11 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   }, [posBridgeUrl]);
 
   useEffect(() => {
+    if (activeSubTab !== 'printer' && activeSubTab !== 'terminal') return;
     checkBridgeStatus();
     const interval = setInterval(checkBridgeStatus, 15000);
     return () => clearInterval(interval);
-  }, [checkBridgeStatus]);
+  }, [checkBridgeStatus, activeSubTab]);
 
   const handleTestBridgeOpenDrawer = async () => {
     setPosBridgeTesting(true);
@@ -1760,7 +1247,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   const handleAdjustPoints = (email: string) => {
     const member = membersList.find(m => m.email === email);
     if (!member) return;
-    setAdjustPointsModal({
+    useDashboardStore.getState().setAdjustPointsModal({
       isOpen: true,
       email: member.email,
       name: member.name,
@@ -1769,10 +1256,11 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   };
 
   const handleSavePointsAdjustment = (amount: number) => {
-    if (!adjustPointsModal) return { success: false, error: '未選擇會員！' };
-    const res = memberService.updateMemberPoints(adjustPointsModal.email, amount);
+    const currentAdjustModal = useDashboardStore.getState().adjustPointsModal;
+    if (!currentAdjustModal) return { success: false, error: '未選擇會員！' };
+    const res = memberService.updateMemberPoints(currentAdjustModal.email, amount);
     if (res.success) {
-      setAdjustPointsModal(null);
+      useDashboardStore.getState().setAdjustPointsModal(null);
       return { success: true };
     }
     return { success: false, error: res.error || '儲存點數時發生資料處理錯誤！' };
@@ -1791,41 +1279,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     });
   };
 
-  // Change PIN Security Rule
-  const handlePinChangeSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setPinChangeError(null);
-    setPinChangeSuccess(null);
-    if (newPinInput !== confirmPinInput) {
-      setPinChangeError('兩次輸入的新金鑰不一致！');
-      return;
-    }
-    if (!/^\d{6}$/.test(newPinInput)) {
-      setPinChangeError('新金鑰必須為 6 位半形數字！');
-      return;
-    }
-    setPinChangeLoading(true);
-    try {
-      const res = await apiFetch('/api/printer/pin', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ currentPin: currentPinInput, newPin: newPinInput }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setPinChangeSuccess('🎉 員工解鎖金鑰變更成功！');
-        setCurrentPinInput('');
-        setNewPinInput('');
-        setConfirmPinInput('');
-      } else {
-        setPinChangeError(data.error || '金鑰更新失敗');
-      }
-    } catch (_err) {
-      setPinChangeError('與伺服器連線或程序異常！');
-    } finally {
-      setPinChangeLoading(false);
-    }
-  };
+
 
   // Restock trigger
   const handleRestockClick = async (id: string) => {
@@ -2092,435 +1546,20 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     }));
   }, [analytics.hourlyDistribution]);
 
-  // Categories forms triggers
-  const triggerAddCatMode = () => {
-    setEditingCategory(null);
-    setCatId('');
-    setCatNameZh('');
-    setCatNameEn('');
-    setCatNameTh('');
-    setCatNameJa('');
-    setCatNameKo('');
-    setCatNameVi('');
-    setCatNameRu('');
-    setCatNameEs('');
-    setCatError(null);
-    setCatShowOnCustomer(true);
-    setIsCatFormOpen(true);
-  };
-
-  const triggerEditCatMode = (cat: Category) => {
-    setEditingCategory(cat);
-    setCatId(cat.id);
-    setCatNameZh(getLocalizedText(cat.name, 'zh') || '');
-    setCatNameEn(cat.name?.en || '');
-    setCatNameTh(cat.name?.th || '');
-    setCatNameJa(cat.name?.ja || '');
-    setCatNameKo(cat.name?.ko || '');
-    setCatNameVi(cat.name?.vi || '');
-    setCatNameRu(cat.name?.ru || '');
-    setCatNameEs(cat.name?.es || '');
-    setCatError(null);
-    setCatShowOnCustomer(cat.showOnCustomerPage !== false);
-    setIsCatFormOpen(true);
-  };
-
-  const handleSaveCatSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setCatError(null);
-    let cleanId = catId.toLowerCase().trim().replace(/[^a-z0-9_-]/g, '');
-    if (!cleanId && !editingCategory) {
-      cleanId = 'cat-' + Math.random().toString(36).substring(2, 8);
-    }
-    if (!cleanId || !catNameZh) {
-      setCatError('中文正體標題為必選填寫欄位！');
-      return;
-    }
-    const payloadName = {
-      zh: catNameZh,
-      en: catNameEn || catNameZh,
-      th: catNameTh || catNameZh,
-      ja: catNameJa || catNameZh,
-      ko: catNameKo || catNameZh,
-      vi: catNameVi || catNameZh,
-      ru: catNameRu || catNameZh,
-      es: catNameEs || catNameZh,
-    };
-    if (editingCategory) {
-      if (onEditCategory) {
-        const r = await onEditCategory(editingCategory.id, payloadName, catShowOnCustomer);
-        if (r.success) setIsCatFormOpen(false);
-        else setCatError(r.error || '保存出錯');
-      }
-    } else {
-      if (onAddCategory) {
-        const r = await onAddCategory(cleanId, payloadName, catShowOnCustomer);
-        if (r.success) setIsCatFormOpen(false);
-        else setCatError(r.error || '新增出錯');
-      }
-    }
-  };
-
-  // Table form triggers
-  const triggerEditTableMode = (tb: TableConfig) => {
-    setEditingTableObj(tb);
-    setTableIdInput(tb.id);
-    setTableQrUrlInput(tb.qrCodeUrl);
-    setTableMaxCapacityInput(tb.maxCapacity ? tb.maxCapacity.toString() : '');
-    setTableError(null);
-    setTableSuccess(null);
-    setIsTableFormOpen(true);
-  };
-
-  const handleTableSaveSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setTableError(null);
-    setTableSuccess(null);
-    const cleanId = tableIdInput.trim();
-    if (!cleanId) {
-      setTableError('請填載桌位號碼！');
-      return;
-    }
-    const maxCapacity = tableMaxCapacityInput.trim() ? parseInt(tableMaxCapacityInput) : undefined;
-    if (editingTableObj) {
-      const r = await onEditTable(editingTableObj.id, tableQrUrlInput, maxCapacity);
-      if (r.success) {
-        setTableSuccess('桌次資訊儲存更新成功！');
-        setTimeout(() => setIsTableFormOpen(false), 1200);
-      } else {
-        setTableError(r.error || '儲存更新失敗');
-      }
-    } else {
-      const r = await onAddTable(cleanId, tableQrUrlInput, maxCapacity);
-      if (r.success) {
-        setTableSuccess('成功新增全店桌席與 QR 點餐定位元件！');
-        setTableIdInput('');
-        setTableQrUrlInput('');
-        setTableMaxCapacityInput('');
-        setTimeout(() => setIsTableFormOpen(false), 1500);
-      } else {
-        setTableError(r.error || '此桌號已存在');
-      }
-    }
-  };
-
-  // Reservation form triggers & helpers
-  const triggerAddReservationMode = () => {
-    setEditingResObj(null);
-    setResNameInput('');
-    setResPhoneInput('');
-    setResPhoneError(false);
-    setResGuestsInput(2);
-    setResTableInputs([]);
-    const d = new Date();
-    d.setDate(d.getDate() + 1); // Default to tomorrow
-    const yr = d.getFullYear();
-    const mo = String(d.getMonth() + 1).padStart(2, '0');
-    const dy = String(d.getDate()).padStart(2, '0');
-    const tomorrowStr = `${yr}-${mo}-${dy}`;
-    
-    setResDateInput(tomorrowStr);
-    
-    if (restDays && restDays.includes(tomorrowStr)) {
-      setTimeout(() => window.alert('⚠️ 預設預定日期 (明日) 為公休日無法訂位，請重新選擇日期！'), 100);
-    }
-
-    const hr = String(new Date().getHours() + 1).padStart(2, '0');
-    setResTimeInput(`${hr}:00`);
-    setResNotesInput('');
-    const autoNo = generateReservationNo(tomorrowStr, reservations);
-    setResNoInput(autoNo);
-    setGeneratedResLink('');
-    setCopiedLinkNotice(false);
-    setResError(null);
-    setResSuccess(null);
-    setIsResFormOpen(true);
-  };
-
-  const triggerEditReservationMode = (res: Reservation) => {
-    setEditingResObj(res);
-    setResNameInput(res.customerName);
-    setResPhoneInput(res.phone || '');
-    setResPhoneError(false);
-    setResGuestsInput(res.guestCount || 2);
-    setResTableInputs(res.tableNumber ? res.tableNumber.split(',').map(t => t.trim()).filter(Boolean) : []);
-    setResDateInput(res.date);
-    setResTimeInput(res.time);
-    setResNotesInput(res.notes || '');
-    setResNoInput(res.reservationNo || generateReservationNo(res.date, reservations));
-    setGeneratedResLink('');
-    setCopiedLinkNotice(false);
-    setResError(null);
-    setResSuccess(null);
-    setIsResFormOpen(true);
-  };
-
-  // 3-Hour Overlapping Window Capacity Calculation for Manager Reservation Form
-  const managerResAvailability = useMemo(() => {
-    return calculateReservationAvailability(resDateInput, resTimeInput, tables, reservations, {
-      excludeReservationId: editingResObj ? editingResObj.id : undefined,
-    });
-  }, [resDateInput, resTimeInput, tables, reservations, editingResObj]);
-
-  const managerDesignatedCapacity = useMemo(() => {
-    if (!tables || tables.length === 0 || resTableInputs.length === 0) return 0;
-    return tables
-      .filter(t => resTableInputs.includes(t.id))
-      .reduce((sum, t) => sum + (t.maxCapacity || 4), 0);
-  }, [tables, resTableInputs]);
-
-  // Auto-assign tables based on guest count and availability
-  useEffect(() => {
-    if (!isResFormOpen || !resDateInput || !resTimeInput || tables.length === 0 || editingResObj) return;
-    const selected = autoSelectOptimalTables(managerResAvailability.availableTables, resGuestsInput);
-    setResTableInputs(selected);
-  }, [resGuestsInput, resDateInput, resTimeInput, tables, isResFormOpen, editingResObj, managerResAvailability.availableTables]);
-
-  const handleReservationSaveSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setResError(null);
-    setResSuccess(null);
-    if (!resNameInput.trim()) {
-      setResError('請填寫預約顧客姓名！');
-      return;
-    }
-    const rawPhone = resPhoneInput.trim();
-    if (!rawPhone) {
-      setResError('請填寫連絡電話！');
-      setResPhoneError(true);
-      return;
-    }
-    const cleanDigits = sanitizePhoneDigits(rawPhone, 10);
-    if (!isValidTaiwanPhone(cleanDigits)) {
-      setResPhoneError(true);
-      const errMsg = `聯絡電話格式不正確！${TAIWAN_PHONE_ERROR_MSG}例如：0912345678 或 0223456789。`;
-      setResError(errMsg);
-      window.alert(`⚠️ 格式錯誤 / Invalid Format\n\n${errMsg}`);
-      return;
-    }
-    setResPhoneError(false);
-
-    if (!isResDateValid) {
-      setResError(`⚠️ 預約日期最多只能提前 3 個月 (最晚至 ${maxThreeMonthsDateStr})！`);
-      return;
-    }
-
-    if (!isResTimeValid) {
-      setResError('⚠️ 預訂時間不在營業時間內，請重新選擇！');
-      return;
-    }
-
-    if (resTableInputs.length === 0) {
-      setResError('請指定預約桌號或確認該時段是否有足夠空桌！');
-      return;
-    }
-
-    const capacityValidation = validateCapacity(resGuestsInput, managerResAvailability.availableWindowCapacity, managerDesignatedCapacity);
-    if (!capacityValidation.valid) {
-      setResError(capacityValidation.error!);
-      return;
-    }
-
-    const currentResNo = resNoInput || generateReservationNo(resDateInput, reservations);
-    const payload = {
-      customerName: resNameInput.trim(),
-      phone: rawPhone,
-      guestCount: Number(resGuestsInput) || 1,
-      tableNumber: resTableInputs.join(', '),
-      date: resDateInput,
-      time: resTimeInput,
-      notes: resNotesInput.trim(),
-      reservationNo: currentResNo,
-      status: editingResObj ? editingResObj.status : ('pending' as any)
-    };
-    if (editingResObj) {
-      if (onEditReservation) {
-        const r = await onEditReservation(editingResObj.id, payload);
-        if (r.success) {
-          setResSuccess('預約資訊儲存更新成功！');
-          setTimeout(() => setIsResFormOpen(false), 1200);
-        } else {
-          setResError(r.error || '儲存更新失敗');
-        }
-      }
-    } else {
-      if (onAddReservation) {
-        const r = await onAddReservation(payload);
-        if (r.success) {
-          setResSuccess('成功新增預約定位！');
-          setTimeout(() => setIsResFormOpen(false), 1200);
-        } else {
-          setResError(r.error || '新增預約失敗');
-        }
-      }
-    }
-  };
-
-  // Menu Items form triggers
-  const triggerAddMenuItemMode = () => {
-    setEditingItem(null);
-    setItemNames({ zh: '', en: '', th: '', ja: '', ko: '', vi: '', ru: '', es: '' });
-    setItemDescs({ zh: '', en: '', th: '', ja: '', ko: '', vi: '', ru: '', es: '' });
-    setItemCategory(categories[0]?.id || 'skewers');
-    setItemPrice(100);
-    setItemImage('https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=400');
-    setItemThumbnailUrl('');
-    setItemAvifUrl('');
-    setItemAvifThumbnailUrl('');
-    setHasNoodles(false);
-    setIsNotSpicy(false);
-    setIsTakeoutAvailable(true);
-    setCustomAddOns([]);
-    setItemRecipe([]);
-    setNewRecipeIngId('');
-    setNewRecipeAmount('1');
-    setIsFormOpen(true);
-  };
-
-  const triggerEditMenuItemMode = (item: any) => {
-    if (!item) return;
-    setEditingItem(item);
-    const n = typeof item.name === 'object' && item.name !== null ? item.name : {};
-    const d = typeof item.description === 'object' && item.description !== null ? item.description : {};
-    setItemNames({
-      zh: n.zh || (typeof item.name === 'string' ? item.name : '') || '',
-      en: n.en || '',
-      th: n.th || '',
-      ja: n.ja || '',
-      ko: n.ko || '',
-      vi: n.vi || '',
-      ru: n.ru || '',
-      es: n.es || '',
-    });
-    setItemDescs({
-      zh: d.zh || (typeof item.description === 'string' ? item.description : '') || '',
-      en: d.en || '',
-      th: d.th || '',
-      ja: d.ja || '',
-      ko: d.ko || '',
-      vi: d.vi || '',
-      ru: d.ru || '',
-      es: d.es || '',
-    });
-    setItemCategory(typeof item.category === 'string' && item.category ? item.category : (categories?.[0]?.id || 'skewers'));
-    const priceNum = typeof item.price === 'number' ? item.price : (typeof item.price === 'string' ? (parseFloat(item.price) || 0) : 100);
-    setItemPrice(priceNum);
-    setItemImage(typeof item.image === 'string' ? item.image : '');
-    setItemThumbnailUrl(typeof item.thumbnailUrl === 'string' ? item.thumbnailUrl : '');
-    setItemAvifUrl(typeof item.avifUrl === 'string' ? item.avifUrl : '');
-    setItemAvifThumbnailUrl(typeof item.avifThumbnailUrl === 'string' ? item.avifThumbnailUrl : '');
-    setHasNoodles(!!item.hasNoodlesOption);
-    setIsNotSpicy(!!item.isNotSpicy);
-    setIsTakeoutAvailable(item.isTakeoutAvailable !== false);
-    setCustomAddOns(Array.isArray(item.customAddOns) ? item.customAddOns.filter(Boolean) : []);
-    setItemRecipe(Array.isArray(item.recipe) ? item.recipe.filter(Boolean) : []);
-    setNewRecipeIngId('');
-    setNewRecipeAmount('1');
-    setIsFormOpen(true);
-  };
-
-  const handleSaveItemSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const cleanZhName = itemNames.zh?.trim();
-    if (!cleanZhName || isNaN(Number(itemPrice))) {
-      alert('請填載正體中文餐點名稱及有效金額！');
-      return;
-    }
-    const cleanImage = typeof itemImage === 'string' ? itemImage.trim() : (itemImage || '');
-    const cleanThumb = typeof itemThumbnailUrl === 'string' ? itemThumbnailUrl.trim() : (itemThumbnailUrl || '');
-    const cleanAvif = typeof itemAvifUrl === 'string' ? itemAvifUrl.trim() : (itemAvifUrl || '');
-    const cleanAvifThumb = typeof itemAvifThumbnailUrl === 'string' ? itemAvifThumbnailUrl.trim() : (itemAvifThumbnailUrl || '');
-
-    // Construct full 8-language name map aligned with Firestore format
-    const targetLangs: Language[] = ['en', 'th', 'ja', 'ko', 'vi', 'ru', 'es'];
-    const nameMap: Record<Language, string> = {
-      zh: cleanZhName,
-      en: itemNames.en?.trim() || (TRANSLATION_DICTIONARY[cleanZhName]?.en) || '',
-      th: itemNames.th?.trim() || (TRANSLATION_DICTIONARY[cleanZhName]?.th) || '',
-      ja: itemNames.ja?.trim() || (TRANSLATION_DICTIONARY[cleanZhName]?.ja) || '',
-      ko: itemNames.ko?.trim() || (TRANSLATION_DICTIONARY[cleanZhName]?.ko) || '',
-      vi: itemNames.vi?.trim() || (TRANSLATION_DICTIONARY[cleanZhName]?.vi) || '',
-      ru: itemNames.ru?.trim() || (TRANSLATION_DICTIONARY[cleanZhName]?.ru) || '',
-      es: itemNames.es?.trim() || (TRANSLATION_DICTIONARY[cleanZhName]?.es) || '',
-    };
-
-    const cleanZhDesc = itemDescs.zh?.trim() || '';
-    // Construct full 8-language description map aligned with Firestore format
-    const descMap: Record<Language, string> = {
-      zh: cleanZhDesc,
-      en: itemDescs.en?.trim() || (cleanZhDesc ? TRANSLATION_DICTIONARY[cleanZhDesc]?.en || '' : ''),
-      th: itemDescs.th?.trim() || (cleanZhDesc ? TRANSLATION_DICTIONARY[cleanZhDesc]?.th || '' : ''),
-      ja: itemDescs.ja?.trim() || (cleanZhDesc ? TRANSLATION_DICTIONARY[cleanZhDesc]?.ja || '' : ''),
-      ko: itemDescs.ko?.trim() || (cleanZhDesc ? TRANSLATION_DICTIONARY[cleanZhDesc]?.ko || '' : ''),
-      vi: itemDescs.vi?.trim() || (cleanZhDesc ? TRANSLATION_DICTIONARY[cleanZhDesc]?.vi || '' : ''),
-      ru: itemDescs.ru?.trim() || (cleanZhDesc ? TRANSLATION_DICTIONARY[cleanZhDesc]?.ru || '' : ''),
-      es: itemDescs.es?.trim() || (cleanZhDesc ? TRANSLATION_DICTIONARY[cleanZhDesc]?.es || '' : ''),
-    };
-
-    // 若未填或等於中文原文，嘗試非同步調用 Google Translate 補齊，確保各語系內容完整
-    await Promise.all(
-      targetLangs.map(async (lang) => {
-        if (!nameMap[lang] || nameMap[lang] === cleanZhName) {
-          try {
-            const trans = await translateTextToLanguage(cleanZhName, lang, 'zh');
-            if (trans) nameMap[lang] = trans;
-            else if (!nameMap[lang]) nameMap[lang] = cleanZhName;
-          } catch {
-            if (!nameMap[lang]) nameMap[lang] = cleanZhName;
-          }
-        }
-        if (cleanZhDesc && (!descMap[lang] || descMap[lang] === cleanZhDesc)) {
-          try {
-            const trans = await translateTextToLanguage(cleanZhDesc, lang, 'zh');
-            if (trans) descMap[lang] = trans;
-            else if (!descMap[lang]) descMap[lang] = cleanZhDesc;
-          } catch {
-            if (!descMap[lang]) descMap[lang] = cleanZhDesc;
-          }
-        }
-      })
-    );
-
-    const payload = {
-      name: nameMap,
-      price: Number(itemPrice),
-      image: cleanImage,
-      thumbnailUrl: cleanThumb,
-      avifUrl: cleanAvif,
-      avifThumbnailUrl: cleanAvifThumb,
-      description: descMap,
-      category: itemCategory,
-      available: editingItem ? (editingItem.available !== undefined ? editingItem.available : true) : true,
-      hasNoodlesOption: hasNoodles,
-      isNotSpicy: isNotSpicy,
-      isTakeoutAvailable: isTakeoutAvailable,
-      customAddOns: customAddOns,
-      recipe: itemRecipe,
-    };
-    if (editingItem) {
-      if (onEditMenuItem) {
-        await onEditMenuItem(editingItem.id, payload);
-      }
-    } else {
-      if (onAddMenuItem) {
-        await onAddMenuItem(payload);
-      }
-    }
-    setIsFormOpen(false);
-    setEditingItem(null);
-    alert('🎉 餐點設定資訊儲存成功！');
-  };
+  // Modals triggers utilizing useDashboardStore
+  const triggerAddMenuItemMode = () => { useDashboardStore.getState().setEditingItem(null); useDashboardStore.getState().setIsDishFormOpen(true); };
+  const triggerEditMenuItemMode = (item: any) => { useDashboardStore.getState().setEditingItem(item); useDashboardStore.getState().setIsDishFormOpen(true); };
+  const triggerAddCatMode = () => { useDashboardStore.getState().setEditingCategory(null); useDashboardStore.getState().setIsCatFormOpen(true); };
+  const triggerEditCatMode = (cat: Category) => { useDashboardStore.getState().setEditingCategory(cat); useDashboardStore.getState().setIsCatFormOpen(true); };
+  const triggerAddTableMode = () => { useDashboardStore.getState().setEditingTableObj(null); useDashboardStore.getState().setIsTableFormOpen(true); };
+  const triggerEditTableMode = (tb: TableConfig) => { useDashboardStore.getState().setEditingTableObj(tb); useDashboardStore.getState().setIsTableFormOpen(true); };
+  const triggerAddReservationMode = () => { useDashboardStore.getState().setEditingResObj(null); useDashboardStore.getState().setIsResFormOpen(true); };
+  const triggerEditReservationMode = (res: Reservation) => { useDashboardStore.getState().setEditingResObj(res); useDashboardStore.getState().setIsResFormOpen(true); };
 
 
 
   // Ingredient Recipe Maps definition for local recipe cards auditing 
-  const recipeCompositionMap: { [key: string]: { name: string; qty: string }[] } = {
-    'ty-01': [{ name: '大鮮蝦', qty: '3 只 / pcs' }, { name: '頂級椰奶罐', qty: '0.1 罐 / can' }],
-    'ty-02': [{ name: '大鮮蝦', qty: '2 只 / pcs' }, { name: '頂級牛肉串面料', qty: '1 串 / skewer' }, { name: '頂級椰奶罐', qty: '0.1 罐' }],
-    'nd-01': [{ name: '大鮮蝦', qty: '4 只' }, { name: '冬蔭功泡麵 / 米線', qty: '1 包 / pack' }],
-    'nd-02': [{ name: '大鮮蝦', qty: '2 只' }, { name: '冬蔭功泡麵 / 米線', qty: '1 包' }],
-    'cb-01': [{ name: '頂級牛肉串', qty: '1 串' }, { name: '爆香豬五花 / 金針', qty: '1 份' }, { name: '泰手標紅茶原料', qty: '0.35 升' }]
-  };
+  const recipeCompositionMap = RECIPE_COMPOSITION_MAP;
 
   return (
     <div className="space-y-6 text-white" id="manager-dashboard-container">
@@ -2599,9 +1638,6 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
             minSpend={minSpend}
             isOpen={isOpen}
             handleManualOpenDrawer={handleManualOpenDrawer}
-            handleTableMouseDown={handleTableMouseDown}
-            handleTableTouchStart={handleTableTouchStart}
-            handleFineTunePosition={handleFineTunePosition}
             triggerEditTableMode={triggerEditTableMode}
             triggerAddReservationMode={triggerAddReservationMode}
             triggerEditReservationMode={triggerEditReservationMode}
@@ -2615,11 +1651,12 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
             onPayOrder={onPayOrder}
             onBulkPayOrders={onBulkPayOrders}
             getPanelWidthClass={getPanelWidthClass}
-            localTablePositions={localTablePositions}
             staffPin={staffPin}
             setCheckoutSuccessData={setCheckoutSuccessData}
             confirmActionModal={confirmActionModal}
             setConfirmActionModal={setConfirmActionModal}
+            billPrinter={billPrinter}
+            posBridgeUrl={posBridgeUrl}
           />
         </ErrorBoundary>
       )}
@@ -2711,58 +1748,21 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
           setAddMemberModalOpen={setAddMemberModalOpen}
           handleAdjustPoints={handleAdjustPoints}
           handleDeleteMember={handleDeleteMember}
-          pinChangeError={pinChangeError}
-          pinChangeSuccess={pinChangeSuccess}
-          currentPinInput={currentPinInput}
-          setCurrentPinInput={setCurrentPinInput}
-          newPinInput={newPinInput}
-          setNewPinInput={setNewPinInput}
-          confirmPinInput={confirmPinInput}
-          setConfirmPinInput={setConfirmPinInput}
-          pinChangeLoading={pinChangeLoading}
-          handlePinChangeSubmit={handlePinChangeSubmit}
-          minSpendSaveError={minSpendSaveError}
-          minSpendSaveSuccess={minSpendSaveSuccess}
-          tempMinSpend={tempMinSpend}
-          setTempMinSpend={setTempMinSpend}
-          handleSaveMinSpend={handleSaveMinSpend}
-          memberConfigSaveError={memberConfigSaveError}
-          memberConfigSaveSuccess={memberConfigSaveSuccess}
-          tempPointsRatio={tempPointsRatio}
-          setTempPointsRatio={setTempPointsRatio}
-          tempVipThreshold={tempVipThreshold}
-          setTempVipThreshold={setTempVipThreshold}
-          tempVipDiscountRate={tempVipDiscountRate}
-          setTempVipDiscountRate={setTempVipDiscountRate}
-          tempEnablePointsDiscount={tempEnablePointsDiscount}
-          setTempEnablePointsDiscount={setTempEnablePointsDiscount}
-          tempPointsRedeemRate={tempPointsRedeemRate}
-          setTempPointsRedeemRate={setTempPointsRedeemRate}
-          tempRewards={tempRewards}
-          setTempRewards={setTempRewards}
+          minSpend={minSpend}
+          onUpdateMinSpend={onUpdateMinSpend}
+          memberPointsRatio={memberPointsRatio}
+          memberVipThreshold={memberVipThreshold}
+          memberVipDiscountRate={memberVipDiscountRate}
+          memberEnablePointsDiscount={memberEnablePointsDiscount}
+          memberPointsRedeemRate={memberPointsRedeemRate}
+          memberRewards={memberRewards}
+          onUpdateMemberConfig={onUpdateMemberConfig}
           menuItems={menuItems}
-          isSavingMemberConfig={isSavingMemberConfig}
-          handleSaveMemberConfig={handleSaveMemberConfig}
-          noticeError={noticeError}
-          noticeSuccess={noticeSuccess}
-          tempCustomerNotice={tempCustomerNotice}
-          setTempCustomerNotice={setTempCustomerNotice}
-          handleSaveCustomerNotice={handleSaveCustomerNotice}
-          sanitizePin={sanitizePin}
-          setSanitizePin={setSanitizePin}
-          clearLocalMembers={clearLocalMembers}
-          setClearLocalMembers={setClearLocalMembers}
-          sanitizeError={sanitizeError}
-          sanitizeSuccess={sanitizeSuccess}
-          sanitizeLoading={sanitizeLoading}
-          handleSanitizeSystemData={handleSanitizeSystemData}
-          opHoursError={opHoursError}
-          opHoursSuccess={opHoursSuccess}
-          tempOperatingHours={tempOperatingHours}
-          setTempOperatingHours={setTempOperatingHours}
-          tempRestDays={tempRestDays}
-          setTempRestDays={setTempRestDays}
-          handleSaveOperatingHoursLocal={handleSaveOperatingHoursLocal}
+          customerNotice={customerNotice}
+          onUpdateCustomerNotice={onUpdateCustomerNotice}
+          operatingHours={operatingHours}
+          restDays={restDays}
+          onUpdateOperatingHours={onUpdateOperatingHours}
           tables={tables}
           selectedQrPreviewId={selectedQrPreviewId}
           setSelectedQrPreviewId={setSelectedQrPreviewId}
@@ -2920,175 +1920,27 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
         setModPin={setModPin}
       />
 
-      {/* DISH CREATION/EDITING MODAL FORM */}
-      <DishFormModal
-        isOpen={isFormOpen}
-        onClose={() => setIsFormOpen(false)}
-        editingItem={editingItem}
-        onSave={handleSaveItemSubmit}
-        itemImage={itemImage}
-        setItemImage={setItemImage}
-        setItemThumbnailUrl={setItemThumbnailUrl}
-        setItemAvifUrl={setItemAvifUrl}
-        setItemAvifThumbnailUrl={setItemAvifThumbnailUrl}
-        itemNames={itemNames}
-        setItemNames={setItemNames}
-        itemDescs={itemDescs}
-        setItemDescs={setItemDescs}
-        itemNameZh={itemNames.zh}
-        setItemNameZh={(val) => setItemNames(prev => ({ ...prev, zh: val }))}
-        itemNameEn={itemNames.en}
-        setItemNameEn={(val) => setItemNames(prev => ({ ...prev, en: val }))}
-        itemCategory={itemCategory}
-        setItemCategory={setItemCategory}
-        itemPrice={itemPrice}
-        setItemPrice={setItemPrice}
-        itemDescZh={itemDescs.zh}
-        setItemDescZh={(val) => setItemDescs(prev => ({ ...prev, zh: val }))}
-        itemDescEn={itemDescs.en}
-        setItemDescEn={(val) => setItemDescs(prev => ({ ...prev, en: val }))}
-        isNotSpicy={isNotSpicy}
-        setIsNotSpicy={setIsNotSpicy}
-        isTakeoutAvailable={isTakeoutAvailable}
-        setIsTakeoutAvailable={setIsTakeoutAvailable}
-        customAddOns={customAddOns}
-        setCustomAddOns={setCustomAddOns}
+      {/* MODALS CONTAINER */}
+      <ManagerModalContainer
         globalRules={globalRules}
         categories={categories}
-        itemRecipe={itemRecipe}
-        setItemRecipe={setItemRecipe}
         ingredients={ingredients}
-        newRecipeIngId={newRecipeIngId}
-        setNewRecipeIngId={setNewRecipeIngId}
-        newRecipeAmount={newRecipeAmount}
-        setNewRecipeAmount={setNewRecipeAmount}
-      />
-
-{/* CATEGORY ADDITION/EDITING MODAL FORM */}
-      <CategoryFormModal
-        isOpen={isCatFormOpen}
-        onClose={() => setIsCatFormOpen(false)}
-        editingCategory={editingCategory}
-        onSave={handleSaveCatSubmit}
-        catId={catId}
-        setCatId={setCatId}
-        catNameZh={catNameZh}
-        setCatNameZh={setCatNameZh}
-        catNameEn={catNameEn}
-        setCatNameEn={setCatNameEn}
-        catNameTh={catNameTh}
-        setCatNameTh={setCatNameTh}
-        catNameJa={catNameJa}
-        setCatNameJa={setCatNameJa}
-        catNameKo={catNameKo}
-        setCatNameKo={setCatNameKo}
-        catNameVi={catNameVi}
-        setCatNameVi={setCatNameVi}
-        catNameRu={catNameRu}
-        setCatNameRu={setCatNameRu}
-        catNameEs={catNameEs}
-        setCatNameEs={setCatNameEs}
-        catShowOnCustomer={catShowOnCustomer}
-        setCatShowOnCustomer={setCatShowOnCustomer}
-        catError={catError}
-      />
-
-
-      {/* TABLE SETTING MODAL FORM */}
-      <TableSettingModal
-        isOpen={isTableFormOpen}
-        onClose={() => setIsTableFormOpen(false)}
-        editingTableObj={editingTableObj}
-        onSave={handleTableSaveSubmit}
-        tableIdInput={tableIdInput}
-        setTableIdInput={setTableIdInput}
-        tableQrUrlInput={tableQrUrlInput}
-        setTableQrUrlInput={setTableQrUrlInput}
-        tableMaxCapacityInput={tableMaxCapacityInput}
-        setTableMaxCapacityInput={setTableMaxCapacityInput}
-        tableError={tableError}
-        tableSuccess={tableSuccess}
-      />
-
-
-            {/* RESERVATION SETTING MODAL FORM */}
-      <ReservationSettingModal
-        isOpen={isResFormOpen}
-        onClose={() => setIsResFormOpen(false)}
-        editingResObj={editingResObj}
-        onSave={handleReservationSaveSubmit}
-        resNameInput={resNameInput}
-        setResNameInput={setResNameInput}
-        resPhoneInput={resPhoneInput}
-        setResPhoneInput={setResPhoneInput}
-        resPhoneError={resPhoneError}
-        setResPhoneError={setResPhoneError}
-        resDateInput={resDateInput}
-        setResDateInput={setResDateInput}
-        resTimeInput={resTimeInput}
-        setResTimeInput={setResTimeInput}
-        resGuestsInput={resGuestsInput}
-        setResGuestsInput={setResGuestsInput}
-        resTableInputs={resTableInputs}
-        setResTableInputs={setResTableInputs}
-        resNotesInput={resNotesInput}
-        setResNotesInput={setResNotesInput}
-        resNoInput={resNoInput}
-        setResNoInput={setResNoInput}
-        generatedResLink={generatedResLink}
-        setGeneratedResLink={setGeneratedResLink}
-        copiedLinkNotice={copiedLinkNotice}
-        setCopiedLinkNotice={setCopiedLinkNotice}
-        resError={resError}
-        resSuccess={resSuccess}
-        todayDateStr={todayDateStr}
-        maxThreeMonthsDateStr={maxThreeMonthsDateStr}
-        restDays={restDays}
-        isResDateValid={isResDateValid}
-        isResTimeValid={isResTimeValid}
-        generateCandidateSlots={generateCandidateSlots}
-        managerResAvailability={managerResAvailability}
-        managerDesignatedCapacity={managerDesignatedCapacity}
         tables={tables}
         reservations={reservations}
-        generateReservationNo={generateReservationNo}
-      />
-
-      {/* ⚡ 快速補貨或調整庫位微調彈出視窗 Quick Restock Modal */}
-      <QuickRestockModal
-        item={quickRestockItem}
-        onClose={() => setQuickRestockItem(null)}
-        onRestock={onRestock}
+        onAddMenuItem={onAddMenuItem}
+        onEditMenuItem={onEditMenuItem}
+        onAddCategory={onAddCategory}
+        onEditCategory={onEditCategory}
+        onAddTable={onAddTable}
+        onEditTable={onEditTable}
+        onAddReservation={onAddReservation}
+        onEditReservation={onEditReservation}
+        onRestock={onRestock!}
         checkoutSuccessData={checkoutSuccessData}
-      />
-
-
-{/* Reusable Action Confirmation Dialog */}
-      <ConfirmActionModal 
-        config={confirmActionModal} 
-        onClose={() => setConfirmActionModal(null)} 
-      />
-      
-      {/* Custom Member Points Adjustment Modal */}
-      <AdjustPointsModal
-        config={adjustPointsModal}
-        onClose={() => setAdjustPointsModal(null)}
-        onConfirm={handleSavePointsAdjustment}
-      />
-
-      {/* Custom Add Member Modal */}
-      <AddMemberModal
-        isOpen={addMemberModalOpen}
-        onClose={() => setAddMemberModalOpen(false)}
-        onSuccess={loadMembers}
-      />
-
-      {/* Bulk Delete Historical Orders Modal */}
-      <BulkDeleteOrdersModal
-        isOpen={showBulkDeleteOrdersModal}
-        onClose={() => setShowBulkDeleteOrdersModal(false)}
-        onConfirmDelete={handleBulkDeleteOrders}
-        onExportReport={handleExportOrdersReport}
+        handleSavePointsAdjustment={handleSavePointsAdjustment}
+        loadMembers={loadMembers}
+        handleBulkDeleteOrders={handleBulkDeleteOrders}
+        handleExportOrdersReport={handleExportOrdersReport}
         isBulkDeleting={isBulkDeleting}
       />
 </div>

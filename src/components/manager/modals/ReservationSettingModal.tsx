@@ -6,91 +6,89 @@ export interface ReservationSettingModalProps {
   isOpen: boolean;
   onClose: () => void;
   editingResObj: Reservation | null;
-  onSave: (e: React.FormEvent) => void | Promise<void>;
-  resNameInput: string;
-  setResNameInput: (val: string) => void;
-  resPhoneInput: string;
-  setResPhoneInput: (val: string) => void;
-  resPhoneError: boolean;
-  setResPhoneError: (val: boolean) => void;
-  resDateInput: string;
-  setResDateInput: (val: string) => void;
-  resTimeInput: string;
-  setResTimeInput: (val: string) => void;
-  resGuestsInput: number;
-  setResGuestsInput: React.Dispatch<React.SetStateAction<number>>;
-  resTableInputs: string[];
-  setResTableInputs: React.Dispatch<React.SetStateAction<string[]>>;
-  resNotesInput: string;
-  setResNotesInput: (val: string) => void;
-  resNoInput: string;
-  setResNoInput: (val: string) => void;
-  generatedResLink: string;
-  setGeneratedResLink: (val: string) => void;
-  copiedLinkNotice: boolean;
-  setCopiedLinkNotice: (val: boolean) => void;
-  resError: string | null;
-  resSuccess: string | null;
-  todayDateStr: string;
-  maxThreeMonthsDateStr: string;
-  restDays?: string[];
-  isResDateValid: boolean;
-  isResTimeValid: boolean;
-  generateCandidateSlots: (date: string) => string[];
-  managerResAvailability: {
-    totalStoreCapacity: number;
-    bookedGuestsInWindow: number;
-    availableWindowCapacity: number;
-    availableTables: TableConfig[];
-    isFullyBooked: boolean;
-  };
-  managerDesignatedCapacity: number;
   tables: TableConfig[];
   reservations: Reservation[];
-  generateReservationNo: (date: string, reservations: Reservation[]) => string;
+  onAddReservation?: (res: any) => Promise<{ success: boolean; error?: string }>;
+  onEditReservation?: (id: string, updates: Partial<Reservation>) => Promise<{ success: boolean; error?: string }>;
 }
+
+import { useReservationForm } from '../../../hooks/useReservationForm';
+import { useRestaurantData } from '../../../context/RestaurantDataContext';
+import { getAvailableReservationSlots } from '../../../utils/reservationValidator';
+import { generateReservationNo } from '../ManagerDashboardUtils';
+import { useMemo, useCallback } from 'react';
 
 export const ReservationSettingModal: React.FC<ReservationSettingModalProps> = ({
   isOpen,
   onClose,
   editingResObj,
-  onSave,
-  resNameInput,
-  setResNameInput,
-  resPhoneInput,
-  setResPhoneInput,
-  resPhoneError,
-  setResPhoneError,
-  resDateInput,
-  setResDateInput,
-  resTimeInput,
-  setResTimeInput,
-  resGuestsInput,
-  setResGuestsInput,
-  resTableInputs,
-  setResTableInputs,
-  resNotesInput,
-  setResNotesInput,
-  resNoInput,
-  setResNoInput,
-  generatedResLink,
-  setGeneratedResLink,
-  copiedLinkNotice,
-  setCopiedLinkNotice,
-  resError,
-  resSuccess,
-  todayDateStr,
-  maxThreeMonthsDateStr,
-  restDays,
-  isResDateValid,
-  isResTimeValid,
-  generateCandidateSlots,
-  managerResAvailability,
-  managerDesignatedCapacity,
   tables,
   reservations,
-  generateReservationNo,
+  onAddReservation,
+  onEditReservation,
 }) => {
+  const { operatingHours, restDays } = useRestaurantData();
+
+  const todayDateStr = useMemo(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
+      d.getDate()
+    ).padStart(2, '0')}`;
+  }, []);
+
+  const maxThreeMonthsDateStr = useMemo(() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() + 3);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
+      d.getDate()
+    ).padStart(2, '0')}`;
+  }, []);
+
+  const generateCandidateSlots = useCallback(
+    (targetDate: string) => {
+      return getAvailableReservationSlots(targetDate, operatingHours, restDays);
+    },
+    [operatingHours, restDays]
+  );
+  const {
+    resNameInput, setResNameInput,
+    resPhoneInput, setResPhoneInput,
+    resPhoneError, setResPhoneError,
+    resGuestsInput, setResGuestsInput,
+    resTableInputs, setResTableInputs,
+    resDateInput, setResDateInput,
+    resTimeInput, setResTimeInput,
+    resNotesInput, setResNotesInput,
+    resNoInput, setResNoInput,
+    generatedResLink, setGeneratedResLink,
+    copiedLinkNotice, setCopiedLinkNotice,
+    resError, setResError,
+    resSuccess, setResSuccess,
+    managerResAvailability,
+    managerDesignatedCapacity,
+    handleReservationSaveSubmit
+  } = useReservationForm({
+    isOpen,
+    editingResObj,
+    tables,
+    reservations,
+    onAddReservation,
+    onEditReservation
+  });
+  const isResDateValid = useMemo(() => {
+    if (!resDateInput) return true;
+    if (resDateInput < todayDateStr) return false;
+    if (resDateInput > maxThreeMonthsDateStr) return false;
+    if (restDays?.includes(resDateInput)) return false;
+    return true;
+  }, [resDateInput, todayDateStr, maxThreeMonthsDateStr, restDays]);
+
+  const isResTimeValid = useMemo(() => {
+    if (!resDateInput || !resTimeInput) return true;
+    const slots = generateCandidateSlots(resDateInput);
+    return slots.includes(resTimeInput);
+  }, [resDateInput, resTimeInput, generateCandidateSlots]);
+
   if (!isOpen) return null;
 
   return (
@@ -99,7 +97,7 @@ export const ReservationSettingModal: React.FC<ReservationSettingModalProps> = (
       onClick={onClose}
     >
       <form
-        onSubmit={onSave}
+        onSubmit={(e) => handleReservationSaveSubmit(e, onClose)}
         className="bg-[#121212] border border-white/10 rounded-2xl w-full max-w-xl max-h-[90vh] flex flex-col overflow-hidden animate-scaleUp"
         onClick={(e) => e.stopPropagation()}
       >

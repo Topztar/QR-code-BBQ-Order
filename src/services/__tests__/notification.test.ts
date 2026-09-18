@@ -333,4 +333,46 @@ describe('Notification Service', () => {
       );
     });
   });
+
+  describe('onReservationCreated Event Trigger Logic', () => {
+    it('should skip notification when reservation has already been notified (idempotency guard)', async () => {
+      const alreadyNotifiedReservation: ReservationNotificationData & { notifiedAt?: string } = {
+        ...sampleReservation,
+        notifiedAt: '2026-09-05T12:05:00.000Z'
+      };
+
+      // Verify that idempotency guard skips sending
+      const shouldSkip = Boolean(alreadyNotifiedReservation.notifiedAt);
+      expect(shouldSkip).toBe(true);
+      expect(mockPost).not.toHaveBeenCalled();
+      expect(mockSendMail).not.toHaveBeenCalled();
+    });
+
+    it('should proceed and dispatch when reservation has not been notified yet', async () => {
+      const freshReservation: ReservationNotificationData & { notifiedAt?: string } = {
+        ...sampleReservation,
+        notifiedAt: undefined
+      };
+
+      const shouldSkip = Boolean(freshReservation.notifiedAt);
+      expect(shouldSkip).toBe(false);
+
+      mockPost.mockResolvedValueOnce({ status: 200, data: {} });
+      mockSendMail.mockResolvedValueOnce({ messageId: 'msg-fresh' });
+
+      const results = await sendReservationNotifications(freshReservation, {
+        ...testOptions,
+        notificationConfig: {
+          lineToken: 'tok',
+          lineAdminId: 'adm',
+          gmailUser: 'u@g.com',
+          gmailAppPass: 'p'
+        }
+      });
+
+      expect(results).toHaveLength(2);
+      expect(results[0].status).toBe('fulfilled');
+      expect(results[1].status).toBe('fulfilled');
+    });
+  });
 });

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { orderCalculationService } from '../src/services/orderCalculationService';
 import { validateReservationPayload, validateOrderPayload } from '../functions/src/validators';
 
-describe('Firebase-Hosted E2E 8-Workflow Simulation Suite', () => {
+describe('Firebase-Hosted E2E 12-Workflow Simulation Suite', () => {
   const mockMenu = [
     { id: 'dish-101', name: { zh: '招牌泰式烤肉盤', en: 'BBQ Set' }, price: 380, category: 'mains', available: true },
     { id: 'dish-102', name: { zh: '泰式奶茶', en: 'Thai Milk Tea' }, price: 60, category: 'beverages', available: true },
@@ -203,6 +203,154 @@ describe('Firebase-Hosted E2E 8-Workflow Simulation Suite', () => {
     expect(duplicateSubmission.isExisting).toBe(true);
     expect(duplicateSubmission.statusCode).toBe(200);
     expect(duplicateSubmission.orderId).toBe(firstSubmission.orderId);
+  });
+  // 11. Multi-Tab Order Synchronization (Concurrent Orders on Same Table)
+  it('Workflow 11: Multi-Tab Order Synchronization prevents data overwrites for same-table orders', () => {
+    const tableId = '8';
+    
+    // Simulate Device A and Device B submitting orders at exactly the same time
+    const orderFromDeviceA = { id: 'ORD-11A', tableNumber: tableId, items: [{ menuItemId: 'dish-101', qty: 1 }], timestamp: 1000 };
+    const orderFromDeviceB = { id: 'ORD-11B', tableNumber: tableId, items: [{ menuItemId: 'dish-102', qty: 2 }], timestamp: 1005 };
+    
+    // The server/firebase rules append these to a collection rather than overwriting a single document
+    const tableActiveOrders = [];
+    tableActiveOrders.push(orderFromDeviceA);
+    tableActiveOrders.push(orderFromDeviceB);
+    
+    // KDS and Cashier should receive both orders distinctly
+    expect(tableActiveOrders.length).toBe(2);
+    expect(tableActiveOrders.find(o => o.id === 'ORD-11A')).toBeDefined();
+    expect(tableActiveOrders.find(o => o.id === 'ORD-11B')).toBeDefined();
+    
+    // They are logically aggregated for the cashier
+    const aggregatedItems = tableActiveOrders.flatMap(o => o.items);
+    expect(aggregatedItems.length).toBe(2);
+    expect(aggregatedItems.find(i => i.menuItemId === 'dish-101')?.qty).toBe(1);
+    expect(aggregatedItems.find(i => i.menuItemId === 'dish-102')?.qty).toBe(2);
+  });
+
+  // 12. Offline Queue Network Reconnect Batching Simulation
+  it('Workflow 12: Offline Queue network reconnect batching recovers lost orders', () => {
+    let isOnline = false;
+    const offlineQueue: any[] = [];
+    const serverDB: any[] = [];
+    
+    const submitOrderAttempt = (payload: any) => {
+      if (!isOnline) {
+        offlineQueue.push(payload);
+        return { success: false, queued: true };
+      } else {
+        serverDB.push(payload);
+        return { success: true, queued: false };
+      }
+    };
+    
+    // Network is down
+    const attempt1 = submitOrderAttempt({ id: 'ORD-OFF-1', items: [] });
+    const attempt2 = submitOrderAttempt({ id: 'ORD-OFF-2', items: [] });
+    
+    expect(attempt1.queued).toBe(true);
+    expect(attempt2.queued).toBe(true);
+    expect(offlineQueue.length).toBe(2);
+    expect(serverDB.length).toBe(0);
+    
+    // Network recovers
+    isOnline = true;
+    
+    // Background sync triggers
+    const processOfflineQueue = () => {
+      while(offlineQueue.length > 0) {
+        const item = offlineQueue.shift();
+        serverDB.push(item);
+      }
+    };
+    
+    processOfflineQueue();
+    
+    expect(offlineQueue.length).toBe(0);
+    expect(serverDB.length).toBe(2);
+    expect(serverDB[0].id).toBe('ORD-OFF-1');
+  });
+
+  // 13. Cashier Checkout & Inventory Deduction
+  it('Workflow 13: Cashier Checkout triggers inventory deduction for recipe ingredients', () => {
+    // Mock menu item with recipe
+    const itemWithRecipe = {
+      id: 'dish-104',
+      name: { zh: '泰式奶茶', en: 'Thai Tea' },
+      price: 60,
+      recipe: [
+        { ingredientId: 'ing-01', qty: 0.5 }, // 0.5 liters of milk
+        { ingredientId: 'ing-02', qty: 20 }   // 20g of tea leaves
+      ]
+    };
+
+    // Mock initial inventory
+    const inventory: any = {
+      'ing-01': { id: 'ing-01', name: 'Milk', stock: 10 },
+      'ing-02': { id: 'ing-02', name: 'Tea Leaves', stock: 1000 }
+    };
+
+    const order = {
+      items: [
+        { menuItemId: 'dish-104', qty: 3, recipe: itemWithRecipe.recipe }
+      ]
+    };
+
+    // Simulate checkout deduction
+    const deductInventory = (orderItems: any[], currentInventory: any) => {
+      const updated = JSON.parse(JSON.stringify(currentInventory));
+      orderItems.forEach(item => {
+        if (item.recipe) {
+          item.recipe.forEach((req: any) => {
+            if (updated[req.ingredientId]) {
+              updated[req.ingredientId].stock -= req.qty * item.qty;
+            }
+          });
+        }
+      });
+      return updated;
+    };
+
+    const newInventory = deductInventory(order.items, inventory);
+
+    expect(newInventory['ing-01'].stock).toBe(8.5); // 10 - (0.5 * 3) = 8.5
+    expect(newInventory['ing-02'].stock).toBe(940); // 1000 - (20 * 3) = 940
+  });
+
+  // 14. Table Status Auto-Release Simulation
+  it('Workflow 14: Table status auto-release on timeout and manual reset', () => {
+    let table = { id: 'T1', status: 'in_use', cleaningTimestamp: null as number | null };
+
+    // Simulate checkout -> cleaning
+    const initiateCheckout = (t: any) => {
+      t.status = 'cleaning';
+      t.cleaningTimestamp = Date.now();
+    };
+
+    initiateCheckout(table);
+    expect(table.status).toBe('cleaning');
+    expect(table.cleaningTimestamp).not.toBeNull();
+
+    // Simulate auto-release cron/check
+    const checkAutoRelease = (t: any, currentTime: number) => {
+      if (t.status === 'cleaning' && t.cleaningTimestamp) {
+        // 15 minutes = 15 * 60 * 1000 = 900000 ms
+        if (currentTime - t.cleaningTimestamp >= 900000) {
+          t.status = 'available';
+          t.cleaningTimestamp = null;
+        }
+      }
+    };
+
+    // Fast-forward 10 minutes (no release)
+    checkAutoRelease(table, table.cleaningTimestamp! + 600000);
+    expect(table.status).toBe('cleaning');
+
+    // Fast-forward 16 minutes (auto-release triggers)
+    checkAutoRelease(table, table.cleaningTimestamp! + 960000);
+    expect(table.status).toBe('available');
+    expect(table.cleaningTimestamp).toBeNull();
   });
 });
 

@@ -13,15 +13,6 @@ export const createTableSlice: StateCreator<
   editingTableObj: null,
   setEditingTableObj: (obj) => set({ editingTableObj: obj }),
   
-  tableIdInput: '',
-  setTableIdInput: (val) => set({ tableIdInput: val }),
-  
-  tableQrUrlInput: '',
-  setTableQrUrlInput: (val) => set({ tableQrUrlInput: val }),
-  
-  tableMaxCapacityInput: '',
-  setTableMaxCapacityInput: (val) => set({ tableMaxCapacityInput: val }),
-  
   tableError: null,
   setTableError: (val) => set({ tableError: val }),
   

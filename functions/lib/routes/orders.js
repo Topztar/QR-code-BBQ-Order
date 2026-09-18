@@ -156,7 +156,8 @@ function registerOrdersRoutes(app, ctx) {
                 if (idempotencyRef) {
                     t.set(idempotencyRef, {
                         orderId,
-                        createdAt: new Date().toISOString()
+                        createdAt: new Date().toISOString(),
+                        expireAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
                     });
                 }
                 t.set(db.collection('orders').doc(orderId), orderToSave);
@@ -172,9 +173,6 @@ function registerOrdersRoutes(app, ctx) {
         }
         catch (error) {
             console.error('Error submitting order:', error);
-            if (error instanceof Error && error.message.startsWith('CLOSED:')) {
-                return res.status(403).json({ error: error.message.replace('CLOSED:', '') });
-            }
             if (error instanceof Error && error.message.startsWith('SOLDOUT:')) {
                 return res.status(409).json({ error: error.message.replace('SOLDOUT:', '') });
             }
@@ -258,6 +256,11 @@ function registerOrdersRoutes(app, ctx) {
                     throw new Error('Order not found');
                 }
                 const orderData = orderSnap.data() || {};
+                const isPaidOrCancelled = orderData.status === 'paid' || orderData.status === 'cancelled' || orderData.isPaid;
+                const hasValidRefundLogs = Array.isArray(refundLogs) && refundLogs.length > 0;
+                if (isPaidOrCancelled && !hasValidRefundLogs) {
+                    throw new Error('ORDER_LOCKED:訂單已結帳或已取消，未附帶退換核銷紀錄不可修改餐點內容！');
+                }
                 const pricing = orderCalculationService_1.orderCalculationService.calculateOrderPricing({
                     ...orderData,
                     items
@@ -279,6 +282,9 @@ function registerOrdersRoutes(app, ctx) {
             res.json({ id, ...updatePayload });
         }
         catch (error) {
+            if (error?.message?.startsWith('ORDER_LOCKED:')) {
+                return res.status(409).json({ error: error.message.replace('ORDER_LOCKED:', '') });
+            }
             if (error.message === 'Order not found') {
                 return res.status(404).json({ error: 'Order not found' });
             }

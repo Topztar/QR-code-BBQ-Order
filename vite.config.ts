@@ -4,8 +4,13 @@ import tailwindcss from '@tailwindcss/vite';
 import viteCompression from 'vite-plugin-compression';
 import { VitePWA } from 'vite-plugin-pwa';
 
-export default defineConfig({
-  plugins: [
+export default defineConfig(({ mode }) => {
+  const isEmulator = mode === 'emulator' || process.env.VITE_USE_FIREBASE_EMULATOR === 'true';
+  const projectId = 'sabay-bbq-order';
+  const region = 'asia-east1';
+
+  return {
+    plugins: [
     react(),
     tailwindcss(),
     // gzip 預壓縮（CDN 邊緣節點回退支援）
@@ -15,7 +20,7 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       injectRegister: false,
-      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
+      includeAssets: [],
       manifest: {
         name: 'SABAY BBQ Order System',
         short_name: 'SABAY BBQ',
@@ -37,21 +42,17 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2,json}'],
+        globIgnores: [
+          '**/ManagerDashboard*',
+          '**/vendor-charts*',
+          '**/KitchenDisplaySystem*',
+          '**/StaffLoginGate*',
+          '**/data.json'
+        ],
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5MB limits for firebase SDK chunks
         runtimeCaching: [
-          {
-            urlPattern: /\/api\/orders/, // 攔截訂單 API
-            handler: 'NetworkOnly',
-            method: 'POST',
-            options: {
-              backgroundSync: {
-                name: 'order-queue', // 背景佇列名稱
-                options: {
-                  maxRetentionTime: 24 * 60 // 保留 24 小時重試
-                }
-              }
-            }
-          },
+          // 🛡️ 離線點單統一由 src/lib/offlineQueue.ts (搭配 safeStorage 與指數退避) 進行管理與 UI 狀態回饋，
+          // 移除 Workbox BackgroundSync 避免雙軌佇列競爭與重試碰撞 (Race Condition)。
           {
             urlPattern: /\.(?:png|jpg|jpeg|svg|gif)$/,
             handler: 'StaleWhileRevalidate',
@@ -67,16 +68,22 @@ export default defineConfig({
       }
     }),
   ],
-  server: {
-    port: 3000,
-    proxy: {
-      '/api': 'http://localhost:3001',
-      '/ws': {
-        target: 'ws://localhost:3001',
-        ws: true,
+    server: {
+      port: 3000,
+      proxy: {
+        '/api': {
+          target: isEmulator
+            ? `http://127.0.0.1:5001/${projectId}/${region}/api`
+            : 'http://localhost:3001',
+          changeOrigin: true,
+          rewrite: isEmulator ? (path) => path.replace(/^\/api/, '') : undefined,
+        },
+        '/ws': {
+          target: 'ws://localhost:3001',
+          ws: true,
+        }
       }
-    }
-  },
+    },
   build: {
     // 指定目標為現代瀏覽器，啟用最佳化 Tree-shaking
     target: 'es2020',
@@ -110,4 +117,5 @@ export default defineConfig({
       }
     }
   }
+};
 });

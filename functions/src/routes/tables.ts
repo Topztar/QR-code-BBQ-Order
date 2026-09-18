@@ -2,8 +2,7 @@ import express from 'express';
 import { Firestore } from 'firebase-admin/firestore';
 import { Bucket } from '@google-cloud/storage';
 import { validateReservationPayload } from '../validators';
-import { createGetCachedSettings, createGetCachedNotificationSettings } from '../helpers';
-import { sendReservationNotifications } from '../services/notification';
+import { createGetCachedSettings } from '../helpers';
 import { invalidatePublicBootstrapCache } from './bootstrap';
 
 // ============================================================
@@ -30,7 +29,6 @@ export function invalidateTablesCache() {
 export function registerTablesRoutes(app: express.Application, ctx: RouteContext) {
   const { db, requireStaffAuth, createRateLimiter, sendErrorResponse } = ctx;
   const getCachedSettings = createGetCachedSettings(db);
-  const getCachedNotificationSettings = createGetCachedNotificationSettings(db);
   const reservationRateLimiter = createRateLimiter(15, 60 * 1000, '預約提交');
 
   // 雙路徑路由包裝器
@@ -253,16 +251,7 @@ post('/reservations', reservationRateLimiter, async (req, res) => {
       }
     });
 
-    // 🔔 Real-time Admin Notifications (LINE & Gmail) - non-blocking background dispatch
-    (async () => {
-      try {
-        const notifConfig = await getCachedNotificationSettings();
-        await sendReservationNotifications(newReservation, { notificationConfig: notifConfig });
-      } catch (err) {
-        console.error('[Notification] Background dispatch error:', err);
-      }
-    })();
-
+    // 🔔 預約成功後，由 Firestore Event Trigger (onReservationCreated) 在雲端背景自動異步發送通知，徹底消除 Serverless CPU 凍結反模式
     res.status(201).json(newReservation);
   } catch (error: any) {
     if (error instanceof Error && error.message.startsWith('CONFLICT:')) {

@@ -405,55 +405,10 @@ let livePrinterSettings = {
 let liveNotificationSettings: any = {};
 
 export function calculatePromoDiscount(items: any[]): number {
-  let promoDiscount = 0;
-  if (Array.isArray(livePromoCombos) && livePromoCombos.length > 0) {
-    livePromoCombos.forEach((combo) => {
-      if (!combo.enabled) return;
-      let comboEligibleCount = 0;
-      items.forEach(it => {
-        const mItem = liveMenu.find(m => m.id === it.menuItemId);
-        const cat = mItem?.category;
-        const isBeverageOrTopup =
-          it.menuItemId?.startsWith('item-topup-') ||
-          it.id?.startsWith('topup-') ||
-          cat === 'beverages' ||
-          cat === 'drinks';
-        const isEligible = combo.eligibleItemIds && combo.eligibleItemIds.length > 0
-          ? combo.eligibleItemIds.includes(it.menuItemId || '')
-          : !isBeverageOrTopup;
-        if (isEligible) {
-          comboEligibleCount += it.qty;
-        }
-      });
-      if (comboEligibleCount >= combo.requiredQty) {
-        const sets = Math.floor(comboEligibleCount / combo.requiredQty);
-        promoDiscount += sets * combo.discountAmount;
-      }
-    });
-  } else {
-    // Legacy single promo fallback
-    let eligibleCount = 0;
-    items.forEach(it => {
-      const mItem = liveMenu.find(m => m.id === it.menuItemId);
-      const cat = mItem?.category;
-      const isBeverageOrTopup =
-        it.menuItemId?.startsWith('item-topup-') ||
-        it.id?.startsWith('topup-') ||
-        cat === 'beverages' ||
-        cat === 'drinks';
-      const isEligible = livePromoCombo.eligibleItemIds.length > 0
-        ? livePromoCombo.eligibleItemIds.includes(it.menuItemId || '')
-        : !isBeverageOrTopup;
-      if (isEligible) {
-        eligibleCount += it.qty;
-      }
-    });
-    if (livePromoCombo.enabled && eligibleCount >= livePromoCombo.requiredQty) {
-      const sets = Math.floor(eligibleCount / livePromoCombo.requiredQty);
-      promoDiscount = sets * livePromoCombo.discountAmount;
-    }
-  }
-  return promoDiscount;
+  const combos = Array.isArray(livePromoCombos) && livePromoCombos.length > 0
+    ? livePromoCombos
+    : (livePromoCombo ? [livePromoCombo] : []);
+  return orderCalculationService.calculatePromoComboDiscount(items, combos, liveMenu);
 }
 
 function getTaiwanDateString(timestamp?: number): string {
@@ -3117,21 +3072,6 @@ function hashPinLocal(pin: string, salt: string = PIN_SALT): string {
 let staffFailedAttempts = 0;
 let staffLockedUntil: number | null = null;
 
-app.get('/api/staff/pin/value', (_req, res) => {
-  // Security Hardening: Never expose raw plaintext secret staff credentials to public clients!
-  res.json({ blocked: true });
-});
-
-// Securely check if a pathname PIN code matches the current live PIN without leaking the actual value
-app.post('/api/staff/pin/check-path', (req, res) => {
-  const { pathPin } = req.body;
-  if (!pathPin) {
-    return res.json({ valid: false });
-  }
-  const inputHash = hashPinLocal(pathPin);
-  const targetHash = hashPinLocal(liveStaffPin);
-  return res.json({ valid: inputHash === targetHash });
-});
 
 // Securely verify active staff session token
 app.get('/api/staff/verify', (req, res) => {
@@ -3221,6 +3161,53 @@ function handleStaffPinUpdate(req: express.Request, res: express.Response) {
 }
 
 app.put('/api/staff/pin', handleStaffPinUpdate);
+
+// Admin Sanitize Test Data Endpoint (Parity with Cloud Functions)
+app.post(['/api/admin/clear-test-data', '/admin/clear-test-data'], (req, res) => {
+  const { pin } = req.body;
+  if (!pin || typeof pin !== 'string') {
+    return res.status(400).json({ error: '請輸入有效的員工解鎖 PIN 碼！' });
+  }
+
+  const now = Date.now();
+  if (staffLockedUntil && now < staffLockedUntil) {
+    const remainingMinutes = Math.ceil((staffLockedUntil - now) / (60 * 1000));
+    return res.status(429).json({
+      error: `連續輸入錯誤次數過多，系統已安全鎖定！請於 ${remainingMinutes} 分鐘後再試。`,
+      locked: true,
+      remainingMinutes
+    });
+  }
+
+  const targetHash = hashPinLocal(liveStaffPin);
+  if (hashPinLocal(pin) !== targetHash) {
+    staffFailedAttempts++;
+    if (staffFailedAttempts >= 5) {
+      staffLockedUntil = now + (15 * 60 * 1000);
+      return res.status(429).json({ error: '連續輸入錯誤達 5 次，系統已安全鎖定 15 分鐘！' });
+    }
+    return res.status(403).json({ error: '安全校對碼 (員工解鎖 PIN 碼) 不正確，無法授權清空！' });
+  }
+
+  staffFailedAttempts = 0;
+  staffLockedUntil = null;
+
+  // Clear live in-memory test data
+  liveOrders.length = 0;
+  liveReservations.length = 0;
+  inventoryLogs.length = 0;
+  printLogs.length = 0;
+  promoNotifications.length = 0;
+  liveTables = liveTables.map(t => ({ ...t, status: 'available', preservedFor: '' }));
+  liveTakeoutSeq = 0;
+  liveStaffPin = '952788';
+
+  saveStateToDisk();
+  res.json({
+    success: true,
+    message: '已成功清除系統內所有測試用歷史單據及暫存日誌！'
+  });
+});
 
 // 2. Get Live Ingredients Inventory
 app.get('/api/ingredients', (_req, res) => {
@@ -3580,6 +3567,11 @@ app.put('/api/orders/:id/status', (req, res) => {
     return res.status(404).json({ error: 'Order not found' });
   }
 
+  // Block backward transition if already paid or cancelled (unless manual override to cancel/paid)
+  if ((order.status === 'paid' || order.status === 'cancelled') && status !== 'cancelled' && status !== 'paid') {
+    return res.status(409).json({ error: `訂單已結帳或已取消 (${order.status})，不可變更為 ${status}` });
+  }
+
   // Trigger printing when confirmed by backend/staff (transitions from pending to preparing)
   if (status === 'preparing' && order.status === 'pending') {
     // 1. Kitchen Working Ticket
@@ -3817,6 +3809,113 @@ app.put('/api/orders/:id/checkout', (req, res) => {
   res.json(order);
 });
 
+// 7.0.0. Bulk Checkout (多單合併原子結帳)
+app.post('/api/orders/bulk-checkout', async (req, res) => {
+  const { orderIds, tableNumbers, paymentMethod, cashTendered, changeAmount, checkoutRecord } = req.body;
+  if (!Array.isArray(orderIds) || orderIds.length === 0) {
+    return res.status(400).json({ error: 'orderIds 必須為非空陣列' });
+  }
+
+  try {
+    const resolvedOrderStatuses: Record<string, string> = {};
+    const tableSet = new Set<string>();
+
+    if (Array.isArray(tableNumbers)) {
+      tableNumbers.forEach(t => {
+        if (t && !String(t).includes('外帶') && String(t).toLowerCase() !== 'takeout') {
+          tableSet.add(String(t).trim());
+        }
+      });
+    }
+
+    // 1. Process all target orders in memory
+    for (const id of orderIds) {
+      const order = liveOrders.find(o => o.id === id);
+      if (!order) continue;
+
+      const currentStatus = order.status;
+      const resolvedStatus = (currentStatus === 'completed' || currentStatus === 'cancelled') ? currentStatus : 'paid';
+      resolvedOrderStatuses[id] = resolvedStatus;
+
+      order.paymentMethod = paymentMethod || order.paymentMethod || 'cash';
+      (order as any).cashTendered = cashTendered || 0;
+      (order as any).changeAmount = changeAmount || 0;
+      order.isPaid = true;
+      order.status = resolvedStatus;
+      (order as any).updatedAt = new Date().toISOString();
+
+      if (order.tableNumber && !String(order.tableNumber).includes('外帶') && String(order.tableNumber).toLowerCase() !== 'takeout') {
+        tableSet.add(String(order.tableNumber).trim());
+      }
+
+      // Clean up linked reservation
+      if (order.reservationNo) {
+        const resIdx = liveReservations.findIndex(r => r.id === order.reservationNo || (r as any).reservationNo === order.reservationNo);
+        if (resIdx > -1) {
+          const [deletedRes] = liveReservations.splice(resIdx, 1);
+          console.log(`[Bulk Checkout Cleanup] Deleted reservation ${deletedRes.id} upon bulk order checkout.`);
+          if (firestoreDb) {
+            deleteDoc(doc(firestoreDb, 'reservations', deletedRes.id)).catch(err => console.error('[Firebase] Failed to delete checkout reservation:', err));
+          }
+        }
+      }
+    }
+
+    // 2. Smart Table Status Release: Check remaining unpaid orders per table
+    for (const tblId of tableSet) {
+      const tb = liveTables.find(t => t.id.toString().trim() === tblId);
+      if (tb) {
+        const hasOtherUnpaid = liveOrders.some(o =>
+          String(o.tableNumber).trim() === tblId &&
+          !o.isPaid &&
+          o.status !== 'cancelled' &&
+          !orderIds.includes(o.id)
+        );
+
+        if (!hasOtherUnpaid) {
+          tb.status = 'cleaning';
+          tb.preservedFor = '';
+          tb.mergedWith = '';
+          tb.cleaningStartedAt = new Date().toISOString();
+          scheduleTableAutoRelease(tblId);
+        }
+      }
+    }
+
+    // 3. Optional Cash Drawer Trigger on Cash Payment
+    let drawerLog = '';
+    if (livePrinterSettings?.bill?.cashDrawerEnabled) {
+      try {
+        const drawerRes = await triggerCashDrawerOpen(livePrinterSettings.bill);
+        drawerLog = drawerRes.log;
+        printLogs.push({
+          id: `pr-${Date.now()}-drawer-bulk`,
+          timestamp: new Date().toLocaleTimeString(),
+          content: `========================================\n         SABAY BBQ 批次結帳自動開啟收銀抽屜\n========================================\n觸發來源: 批次訂單 [${orderIds.join(', ')}]\n實體埠口: ${livePrinterSettings.bill.usbPort || 'USB002'}\n執行日誌:\n${drawerLog}\n========================================`,
+          orderId: orderIds.join(','),
+          type: 'customer'
+        });
+      } catch (drawerErr) {
+        console.error('[Bulk Cash Drawer Error]', drawerErr);
+      }
+    }
+
+    saveStateToDisk();
+
+    res.json({
+      success: true,
+      processedCount: orderIds.length,
+      orderIds,
+      resolvedOrderStatuses,
+      checkoutId: checkoutRecord?.id,
+      drawerLog
+    });
+  } catch (error: any) {
+    console.error('[bulk-checkout error]', error);
+    res.status(500).json({ error: '批次結帳處理失敗', details: error?.message || error });
+  }
+});
+
 // 7.0.1. Kitchen Complete (出餐完成) - Mark a paid order as completed from KDS
 app.put('/api/orders/:id/complete', (req, res) => {
   const { id } = req.params;
@@ -3832,67 +3931,6 @@ app.put('/api/orders/:id/complete', (req, res) => {
   res.json(order);
 });
 
-// 7.1. Set Order Paid Status
-app.put('/api/orders/:id/pay', async (req, res) => {
-  const { id } = req.params;
-  const { isPaid } = req.body;
-
-  const order = liveOrders.find(o => o.id === id);
-  if (!order) {
-    return res.status(404).json({ error: 'Order not found' });
-  }
-
-  // Idempotency check: if already paid, return early to prevent duplicate drawer triggers or table status updates
-  if (order.isPaid) {
-    console.log(`[Idempotency Check] Order #${id} is already marked as paid. Skipping redundant processing.`);
-    return res.json(order);
-  }
-
-  order.isPaid = isPaid !== undefined ? !!isPaid : true;
-
-  // Update table status automatically based on paid status
-  if (order.isPaid && order.tableNumber) {
-    const tblId = String(order.tableNumber).trim();
-    const tb = liveTables.find(t => t.id.toString().trim() === tblId);
-    if (tb) {
-      if (tblId.toLowerCase() !== 'takeout' && tblId !== '外帶' && tblId !== '') {
-        tb.status = 'cleaning';
-        tb.preservedFor = '';
-        tb.cleaningStartedAt = new Date().toISOString();
-        scheduleTableAutoRelease(tblId);
-      } else {
-        tb.status = 'available';
-        tb.preservedFor = '';
-        tb.cleaningStartedAt = null;
-      }
-    }
-    const matchingRes = liveReservations.find(r =>
-      (order.reservationNo && (r.id === order.reservationNo || (r as any).reservationNo === order.reservationNo)) ||
-      (String(r.tableNumber).trim() === tblId && (r.status === 'pending' || r.status === 'seated' || r.status === 'upcoming' || r.status === 'confirmed'))
-    );
-    if (matchingRes) {
-      matchingRes.status = 'completed';
-    }
-  }
-
-  // Interlock cash drawer trigger: when transition from unpaid to paid, and cash drawer is enabled
-  let drawerLog = '';
-  if (order.isPaid && livePrinterSettings.bill.cashDrawerEnabled) {
-    const drawerRes = await triggerCashDrawerOpen(livePrinterSettings.bill);
-    drawerLog = drawerRes.log;
-
-    printLogs.push({
-      id: `pr-${Date.now()}-drawer-checkout`,
-      timestamp: new Date().toLocaleTimeString(),
-      content: `========================================\n         SABAY BBQ 結帳自動開啟收銀抽屜\n========================================\n觸發來源: 訂單 [${order.id}] 結帳完成\n實體埠口: ${livePrinterSettings.bill.usbPort || 'USB002'}\n執行日誌:\n${drawerLog}\n========================================`,
-      orderId: order.id,
-      type: 'customer'
-    });
-  }
-
-  saveStateToDisk();
-  res.json({ ...order, drawerLog });
-});
 
 // 7.1.5 Toggle single order item completed state
 app.put('/api/orders/:id/items/:itemId/complete', (req, res) => {
@@ -4045,250 +4083,7 @@ app.get('/api/analytics', (_req, res) => {
   });
 });
 
-// --- Google Verification & Real OAuth Endpoint Support ---
 
-// Check if Google Sign-In credentials are fully configured in the environment
-app.get('/api/auth/google/status', (_req, res) => {
-  const isConfigured = !!(
-    process.env.GOOGLE_CLIENT_ID && 
-    process.env.GOOGLE_CLIENT_ID.includes('.apps.googleusercontent.com') && 
-    process.env.GOOGLE_CLIENT_SECRET
-  );
-  res.json({
-    configured: true, // Always return true to ensure seamless login is fully operational in all environments
-    isReal: isConfigured,
-    clientId: process.env.GOOGLE_CLIENT_ID ? `${process.env.GOOGLE_CLIENT_ID.substring(0, 10)}...` : 'sandbox'
-  });
-});
-
-// Generate and return Google authorize page redirects URL
-app.get('/api/auth/google/url', (req, res) => {
-  const clientId = process.env.GOOGLE_CLIENT_ID;
-  const clientRedirectUri = req.query.redirect_uri;
-  const redirectUri = (clientRedirectUri || `${process.env.APP_URL || (req.protocol + '://' + req.get('host'))}/auth/callback`) as string;
-
-  // STRICT SECURITY GUARD: Validate hostname to prevent Open Redirector vulnerabilities
-  try {
-    const parsedRedirect = new URL(redirectUri);
-    const appHost = req.get('host') || '';
-    const isSafeHost = 
-      parsedRedirect.host === appHost || 
-      (process.env.APP_URL && parsedRedirect.host === new URL(process.env.APP_URL).host) ||
-      parsedRedirect.host.endsWith('.run.app') ||
-      parsedRedirect.hostname === 'localhost' ||
-      parsedRedirect.hostname === '127.0.0.1';
-
-    if (!isSafeHost) {
-      console.warn(`[Google OAuth Security Alert] Blocked suspicious redirect_uri: ${redirectUri}`);
-      return res.status(400).json({ error: '安全性錯誤：未經核准的重新導向網址 / Unauthorized redirect host blocked for enterprise safety.' });
-    }
-  } catch (_err) {
-    return res.status(400).json({ error: '無效的重新導向網址 / Invalid redirect URI structure.' });
-  }
-
-  if (!clientId || !clientId.includes('.apps.googleusercontent.com')) {
-    // Elegant sandbox fallback path to ensure Google Login is robust and works without failing
-    const sandboxUrl = `${redirectUri}${redirectUri.includes('?') ? '&' : '?'}code=sandbox_dev_bypass_code`;
-    return res.json({ url: sandboxUrl });
-  }
-  
-  const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=openid%20email%20profile&prompt=select_account`;
-  
-  res.json({ url: googleAuthUrl });
-});
-
-// Handle redirected response with code exchange secure logic
-app.get(['/auth/callback', '/auth/callback/'], async (req, res) => {
-  const code = req.query.code;
-  if (!code) {
-    return res.send(`
-      <html>
-        <head><title>Google 驗證失敗</title></head>
-        <body style="font-family: sans-serif; text-align: center; padding: 50px 20px; background-color: #0c0a09; color: #f5f5f4;">
-          <div style="background-color: #1c1917; border: 1px solid #dc2626; border-radius: 16px; max-width: 450px; margin: 0 auto; padding: 30px;">
-            <svg style="color: #dc2626; width: 48px; height: 48px; margin-bottom: 16px;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
-            </svg>
-            <h3 style="color: #ef4444; margin-top: 0;">Google 驗證啟動失敗</h3>
-            <p style="color: #a8a29e; font-size: 13px; line-height: 1.6;">未收到有效的 Google 授權驗證碼。請關閉此視窗重試。</p>
-            <button onclick="window.close()" style="background-color: #dc2626; color: white; border: none; padding: 10px 20px; border-radius: 10px; cursor: pointer; font-weight: bold; margin-top: 14px; font-size: 12px;">關閉視窗</button>
-          </div>
-        </body>
-      </html>
-    `);
-  }
-
-  // Check if it is the sandbox dev bypass code
-  if (code === 'sandbox_dev_bypass_code') {
-    const profile = {
-      id: 'google-usr-sandbox',
-      displayName: '沙貝測試會員 (Sandbox)',
-      pictureUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=150',
-      statusMessage: '✨ 沙貝系統安全通道快速驗證 ✨',
-      email: 'topztar@gmail.com', // Filled with the current user's profile to align credit databases
-    };
-
-    return res.send(`
-      <html>
-        <head>
-          <title>Google 驗證成功 (Sandbox 模擬)</title>
-          <style>
-            body { font-family: -apple-system, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background-color: #0c0a09; color: #f5f5f4; text-align: center; }
-            .card { background-color: #1c1917; border: 1px solid #10b981; border-radius: 20px; max-width: 400px; padding: 40px 30px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.4); }
-            .spinner { width: 40px; height: 40px; border: 3px solid #10b981; border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 20px; }
-            @keyframes spin { to { transform: rotate(360deg); } }
-            h3 { color: #10b981; font-size: 18px; margin: 0 0 8px; }
-            p { color: #a8a29e; font-size: 13px; margin: 0; }
-          </style>
-        </head>
-        <body>
-          <div class="card">
-            <div class="spinner font-sans"></div>
-            <h3>Google 帳戶安全認證模式</h3>
-            <p>已成功啟動 Sandbox 通訊安全防禦，正在載入會員模組資訊...</p>
-          </div>
-          <script>
-            try {
-              if (window.opener) {
-                window.opener.postMessage({ 
-                  type: 'GOOGLE_AUTH_SUCCESS', 
-                  profile: ${JSON.stringify(profile)} 
-                }, window.location.origin);
-                setTimeout(() => {
-                  window.close();
-                }, 800);
-              } else {
-                window.location.href = '/';
-              }
-            } catch(e) {
-              console.error(e);
-              window.location.href = '/';
-            }
-          </script>
-        </body>
-      </html>
-    `);
-  }
-
-  const clientId = process.env.GOOGLE_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  
-  // Create exact redirectUri to perform exchange
-  const redirectUri = `${process.env.APP_URL || (req.protocol + '://' + req.get('host'))}/auth/callback`;
-
-  try {
-    // Standard OAuth token swap payload using native fetch
-    const response = await fetch('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        code: code as string,
-        client_id: clientId || '',
-        client_secret: clientSecret || '',
-        redirect_uri: redirectUri,
-        grant_type: 'authorization_code',
-      }),
-    });
-
-    if (!response.ok) {
-      const errBody = await response.text();
-      throw new Error(`Google API 權限交換失敗: ${errBody}`);
-    }
-
-    const tokenData = await response.json();
-    const { access_token } = tokenData;
-
-    // Direct token authorization fetch to guarantee zero spoofing and actual verified status!
-    const profileResponse = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-      headers: { Authorization: `Bearer ${access_token}` },
-    });
-
-    if (!profileResponse.ok) {
-      const errBody = await profileResponse.text();
-      throw new Error(`Google Profile 讀取失敗: ${errBody}`);
-    }
-
-    const userData = await profileResponse.json();
-
-    // CRM Identity & Verification Guards: Ensure email exists and is marked as verified by Google
-    if (!userData.email) {
-      throw new Error('安全性錯誤：未收到 Google 帳戶的電子郵件資訊，拒絕登入。');
-    }
-    
-    const isEmailVerified = userData.email_verified === true || userData.email_verified === 'true' || userData.email_verified === undefined;
-    if (!isEmailVerified) {
-      throw new Error('安全性錯誤：該 Google 帳戶的電子郵件位址未通過 Google 官方驗證，安全稽核拒絕。');
-    }
-
-    // Map verified Google attributes into compatible CRM structure
-    const profile = {
-      id: `google-usr-${userData.sub || Math.floor(1000 + Math.random() * 9000)}`,
-      displayName: userData.name || userData.given_name || 'Google 忠實會員',
-      pictureUrl: userData.picture || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150',
-      statusMessage: '✨ Google 官方真實驗證會員 ✨',
-      email: userData.email,
-    };
-
-    // Return HTML dispatch and postMessage to frame context
-    res.send(`
-      <html>
-        <head>
-          <title>Google 驗證成功</title>
-          <style>
-            body { font-family: -apple-system, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background-color: #0c0a09; color: #f5f5f4; text-align: center; }
-            .card { background-color: #1c1917; border: 1px solid #292524; border-radius: 20px; max-width: 400px; padding: 40px 30px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.4); }
-            .spinner { width: 40px; height: 40px; border: 3px solid #e5b453; border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 20px; }
-            @keyframes spin { to { transform: rotate(360deg); } }
-            h3 { color: #f5f5f4; font-size: 18px; margin: 0 0 8px; }
-            p { color: #a8a29e; font-size: 13px; margin: 0; }
-          </style>
-        </head>
-        <body>
-          <div class="card">
-            <div class="spinner"></div>
-            <h3>Google 帳戶真實驗證成功</h3>
-            <p>正在將您的安全憑證授權給沙貝餐飲點餐系統...</p>
-          </div>
-          <script>
-            try {
-              if (window.opener) {
-                // Post success with target origin matching exactly to guarantee no cross-site leakage
-                window.opener.postMessage({ 
-                  type: 'GOOGLE_AUTH_SUCCESS', 
-                  profile: ${JSON.stringify(profile)} 
-                }, window.location.origin);
-                setTimeout(() => {
-                  window.close();
-                }, 800);
-              } else {
-                window.location.href = '/';
-              }
-            } catch(e) {
-              console.error(e);
-              window.location.href = '/';
-            }
-          </script>
-        </body>
-      </html>
-    `);
-
-  } catch (error: any) {
-    console.error('[Google OAuth Error]', error);
-    res.send(`
-      <html>
-        <head><title>Google 驗證失敗</title></head>
-        <body style="font-family: sans-serif; text-align: center; padding: 50px 20px; background-color: #0c0a09; color: #f5f5f4;">
-          <div style="background-color: #1c1917; border: 1px solid #ef4444; border-radius: 16px; max-width: 450px; margin: 0 auto; padding: 30px;">
-            <h3 style="color: #ef4444; margin-top: 0;">Google 驗證交換失敗</h3>
-            <p style="color: #a8a29e; font-size: 13px; line-height: 1.6; word-wrap: break-word;">${error.message || error}</p>
-            <p style="color: #78716c; font-size: 11px; margin-top: 14px;">請確保您的 GOOGLE_CLIENT_ID 和 GOOGLE_CLIENT_SECRET 環域變數正確配置。</p>
-            <button onclick="window.close()" style="background-color: #ef4444; color: white; border: none; padding: 10px 20px; border-radius: 10px; cursor: pointer; font-weight: bold; margin-top: 16px; font-size: 12px;">關閉視窗</button>
-          </div>
-        </body>
-      </html>
-    `);
-  }
-});
 
 // Configure Vite integration for previewing the frontend
 async function main() {

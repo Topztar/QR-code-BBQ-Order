@@ -1,61 +1,79 @@
-import React from 'react';
+
 import { Category } from '../../../types';
 
 export interface CategoryFormModalProps {
   isOpen: boolean;
   onClose: () => void;
   editingCategory: Category | null;
-  onSave: (e: React.FormEvent) => void | Promise<void>;
-  catId: string;
-  setCatId: (val: string) => void;
-  catNameZh: string;
-  setCatNameZh: (val: string) => void;
-  catNameEn: string;
-  setCatNameEn: (val: string) => void;
-  catNameTh: string;
-  setCatNameTh: (val: string) => void;
-  catNameJa: string;
-  setCatNameJa: (val: string) => void;
-  catNameKo: string;
-  setCatNameKo: (val: string) => void;
-  catNameVi: string;
-  setCatNameVi: (val: string) => void;
-  catNameRu: string;
-  setCatNameRu: (val: string) => void;
-  catNameEs: string;
-  setCatNameEs: (val: string) => void;
-  catShowOnCustomer: boolean;
-  setCatShowOnCustomer: (val: boolean) => void;
+  onSave: (formData: any) => Promise<void>;
   catError: string | null;
 }
+
+import React, { useState, useEffect } from 'react';
 
 export const CategoryFormModal: React.FC<CategoryFormModalProps> = ({
   isOpen,
   onClose,
   editingCategory,
   onSave,
-  catId,
-  setCatId,
-  catNameZh,
-  setCatNameZh,
-  catNameEn,
-  setCatNameEn,
-  catNameTh,
-  setCatNameTh,
-  catNameJa,
-  setCatNameJa,
-  catNameKo,
-  setCatNameKo,
-  catNameVi,
-  setCatNameVi,
-  catNameRu,
-  setCatNameRu,
-  catNameEs,
-  setCatNameEs,
-  catShowOnCustomer,
-  setCatShowOnCustomer,
   catError,
 }) => {
+  const [catId, setCatId] = useState('');
+  const [catNameZh, setCatNameZh] = useState('');
+  const [catNameEn, setCatNameEn] = useState('');
+  const [catNameTh, setCatNameTh] = useState('');
+  const [catNameJa, setCatNameJa] = useState('');
+  const [catNameKo, setCatNameKo] = useState('');
+  const [catNameVi, setCatNameVi] = useState('');
+  const [catNameRu, setCatNameRu] = useState('');
+  const [catNameEs, setCatNameEs] = useState('');
+  const [catShowOnCustomer, setCatShowOnCustomer] = useState(true);
+
+  useEffect(() => {
+    if (isOpen) {
+      if (editingCategory) {
+        setCatId(editingCategory.id);
+        setCatNameZh(editingCategory.name.zh || '');
+        setCatNameEn(editingCategory.name.en || '');
+        setCatNameTh(editingCategory.name.th || '');
+        setCatNameJa(editingCategory.name.ja || '');
+        setCatNameKo(editingCategory.name.ko || '');
+        setCatNameVi(editingCategory.name.vi || '');
+        setCatNameRu(editingCategory.name.ru || '');
+        setCatNameEs(editingCategory.name.es || '');
+        setCatShowOnCustomer(editingCategory.showOnCustomerPage !== false);
+      } else {
+        setCatId('');
+        setCatNameZh('');
+        setCatNameEn('');
+        setCatNameTh('');
+        setCatNameJa('');
+        setCatNameKo('');
+        setCatNameVi('');
+        setCatNameRu('');
+        setCatNameEs('');
+        setCatShowOnCustomer(true);
+      }
+    }
+  }, [isOpen, editingCategory]);
+
+  const handleFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await onSave({
+      id: catId,
+      name: {
+        zh: catNameZh,
+        en: catNameEn,
+        th: catNameTh,
+        ja: catNameJa,
+        ko: catNameKo,
+        vi: catNameVi,
+        ru: catNameRu,
+        es: catNameEs,
+      },
+      showOnCustomer: catShowOnCustomer
+    });
+  };
   if (!isOpen) return null;
 
   return (
@@ -64,7 +82,7 @@ export const CategoryFormModal: React.FC<CategoryFormModalProps> = ({
       onClick={onClose}
     >
       <form
-        onSubmit={onSave}
+        onSubmit={handleFormSubmit}
         className="bg-[#121212] border border-white/10 rounded-2xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden animate-scaleUp"
         onClick={(e) => e.stopPropagation()}
       >

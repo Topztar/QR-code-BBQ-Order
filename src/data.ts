@@ -14,10 +14,10 @@ export async function loadData() {
     const response = await fetch('/data.json');
     if (!response.ok) return;
     const data = await response.json();
-    if (data.TRANSLATIONS) {
+    if (data.TRANSLATIONS && Object.keys(data.TRANSLATIONS).length > 0) {
       Object.assign(TRANSLATIONS, data.TRANSLATIONS);
     }
-    if (data.CAT_NAMES) {
+    if (data.CAT_NAMES && Object.keys(data.CAT_NAMES).length > 0) {
       Object.assign(CAT_NAMES, data.CAT_NAMES);
     }
     if (data.INITIAL_CATEGORIES) INITIAL_CATEGORIES = data.INITIAL_CATEGORIES;
