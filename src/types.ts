@@ -152,6 +152,9 @@ export interface Order {
   reservationNo?: string;
   reservationDate?: string;
   reservationTime?: string;
+  source?: 'google_business' | 'direct' | string;
+  utm_medium?: string;
+  notificationSent?: boolean;
 }
 
 export interface Ingredient {
@@ -204,6 +207,9 @@ export interface Reservation {
   notes?: string;
   createdAt: string;
   reservationNo?: string;
+  source?: 'google_business' | 'direct' | string;
+  utm_medium?: string;
+  notificationSent?: boolean;
 }
 
 export interface OperatingHourSlot {

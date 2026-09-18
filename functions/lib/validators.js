@@ -58,7 +58,10 @@ function validateOrderPayload(body) {
         items: sanitizedItems,
         customerName: sanitizeString(body.customerName || '', 50),
         customerPhone: sanitizeString(body.customerPhone || body.phone || '', 30),
-        notes: sanitizeString(body.notes || '', 500)
+        notes: sanitizeString(body.notes || '', 500),
+        source: sanitizeString(body.source || 'direct', 50),
+        utm_medium: sanitizeString(body.utm_medium || '', 50),
+        notificationSent: false
     };
     return { isValid: true, sanitizedData: sanitizedOrder };
 }
@@ -108,7 +111,10 @@ function validateReservationPayload(body) {
         guestCount,
         date,
         time,
-        notes: sanitizeString(body.notes || '', 300)
+        notes: sanitizeString(body.notes || '', 300),
+        source: sanitizeString(body.source || 'direct', 50),
+        utm_medium: sanitizeString(body.utm_medium || '', 50),
+        notificationSent: false
     };
     return { isValid: true, sanitizedData: sanitizedReservation };
 }

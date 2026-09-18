@@ -1,6 +1,6 @@
 import { onRequest } from 'firebase-functions/v2/https';
 import { onDocumentWritten, onDocumentCreated } from 'firebase-functions/v2/firestore';
-import { sendReservationNotifications } from './services/notification';
+import { sendReservationNotifications, sendOrderNotification } from './services/notification';
 import { createGetCachedNotificationSettings } from './helpers';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { setGlobalOptions } from 'firebase-functions/v2';
@@ -335,8 +335,8 @@ export const onReservationCreated = onDocumentCreated(
 
     // 🛡️ 冪等性防護 (At-least-once Deduplication Guard)
     // 若該筆預約已標註通知發送時戳，則跳過避免重試機制重複發送
-    if (reservation.notifiedAt) {
-      console.log(`[onReservationCreated] Reservation ${event.params.reservationId} already notified at ${reservation.notifiedAt}. Skipping.`);
+    if (reservation.notifiedAt || reservation.notificationSent) {
+      console.log(`[onReservationCreated] Reservation ${event.params.reservationId} already notified. Skipping.`);
       return;
     }
 
@@ -347,11 +347,57 @@ export const onReservationCreated = onDocumentCreated(
       // 成功分發後，記錄發送時戳與狀態回 Firestore (onDocumentCreated 不會因更新而觸發自身)
       await resSnapshot.ref.update({
         notifiedAt: FieldValue.serverTimestamp(),
-        notificationStatus: 'dispatched'
+        notificationStatus: 'dispatched',
+        notificationSent: true
       });
       console.log(`[onReservationCreated] Dispatched notifications for reservation: ${event.params.reservationId}`);
     } catch (error: any) {
       console.error(`[onReservationCreated Error] Failed to process reservation notifications for ${event.params.reservationId}:`, error);
+    }
+  }
+);
+
+// ============================================================
+// 🔔 Firestore Event Trigger — 訂單非同步推播通知 (Google 商家 & 外帶)
+// ============================================================
+export const onOrderCreated = onDocumentCreated(
+  {
+    document: 'orders/{orderId}',
+    database: 'ai-studio-sabaythaibbqtabl-84418196-9d0c-459c-bced-ddc424dfba07',
+    region: 'asia-east1',
+  },
+  async (event) => {
+    const orderSnapshot = event.data;
+    if (!orderSnapshot || !orderSnapshot.exists) {
+      return;
+    }
+
+    const order = orderSnapshot.data() as any;
+    if (!order) {
+      return;
+    }
+
+    // 🛡️ 冪等性防護 (At-least-once Deduplication Guard)
+    if (order.notifiedAt || order.notificationSent) {
+      console.log(`[onOrderCreated] Order ${event.params.orderId} already notified. Skipping.`);
+      return;
+    }
+
+    try {
+      const notifConfig = await getCachedNotificationSettings();
+      // 推播過濾：優先針對 Google 商家線上訂單與線上外帶訂單發送即時推播
+      if (order.source === 'google_business' || String(order.tableNumber || '').includes('外帶') || order.takeoutInfo) {
+        await sendOrderNotification(order, { notificationConfig: notifConfig });
+      }
+
+      await orderSnapshot.ref.update({
+        notifiedAt: FieldValue.serverTimestamp(),
+        notificationStatus: 'dispatched',
+        notificationSent: true
+      });
+      console.log(`[onOrderCreated] Dispatched notifications for order: ${event.params.orderId}`);
+    } catch (error: any) {
+      console.error(`[onOrderCreated Error] Failed to process order notifications for ${event.params.orderId}:`, error);
     }
   }
 );

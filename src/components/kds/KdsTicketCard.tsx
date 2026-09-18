@@ -283,6 +283,11 @@ export const KdsTicketCard: React.FC<KdsTicketCardProps> = React.memo(({
               <span className="bg-white/5 border border-white/10 text-[#E5B453] font-mono font-bold text-xs px-2.5 py-0.5 rounded shrink-0">
                 {order.id}
               </span>
+              {order.source === 'google_business' && (
+                <span className="bg-sky-500/20 text-sky-400 border border-sky-500/40 text-[10px] font-black px-2 py-0.5 rounded shadow-[0_0_10px_rgba(14,165,233,0.3)] shrink-0 flex items-center gap-1">
+                  <span>🌐 Google 商家</span>
+                </span>
+              )}
               <span className="bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 font-bold text-xs px-2 py-0.5 rounded shrink-0 shadow-[0_0_8px_rgba(99,102,241,0.15)] flex items-center gap-1">
                 <span>{currentLang === 'zh' ? '共' : 'Total'}</span>
                 <span className="text-sm font-black">{totalQty}</span>

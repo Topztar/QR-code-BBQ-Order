@@ -13,7 +13,7 @@ interface ManagerInventoryTabProps {
   setRestockAmount: React.Dispatch<React.SetStateAction<{ [id: string]: number }>>;
   handleRestockClick: (id: string) => void;
   setQuickRestockItem: (item: Ingredient | null) => void;
-  setQuickRestockQty: (qty: string) => void;
+
   manualAdjustId: string;
   setManualAdjustId: (id: string) => void;
   manualAdjustQty: string;
@@ -49,7 +49,7 @@ export const ManagerInventoryTab: React.FC<ManagerInventoryTabProps> = ({
   setRestockAmount,
   handleRestockClick,
   setQuickRestockItem,
-  setQuickRestockQty,
+
   manualAdjustId,
   setManualAdjustId,
   manualAdjustQty,
@@ -144,7 +144,6 @@ export const ManagerInventoryTab: React.FC<ManagerInventoryTabProps> = ({
                             type="button"
                             onClick={() => {
                               setQuickRestockItem(ig);
-                              setQuickRestockQty('');
                             }}
                             className="p-1 inline-flex items-center justify-center rounded bg-amber-500/10 hover:bg-amber-500/20 text-[#E5B453] border border-amber-500/25 transition active:scale-90 cursor-pointer shadow-sm"
                             title="快速補貨 Restock"
@@ -233,7 +232,6 @@ export const ManagerInventoryTab: React.FC<ManagerInventoryTabProps> = ({
                         type="button"
                         onClick={() => {
                           setQuickRestockItem(ig);
-                          setQuickRestockQty('');
                         }}
                         className="h-8 w-8 inline-flex items-center justify-center rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-[#E5B453] border border-amber-500/25 transition active:scale-90 cursor-pointer shadow-sm"
                         title="快速特定值補貨"

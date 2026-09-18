@@ -36,7 +36,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.onReservationCreated = exports.reconcileDailySoldOut = exports.onMenuItemWritten = exports.api = exports.requireAppCheck = exports.sendErrorResponse = exports.requireStaffAuth = void 0;
+exports.onOrderCreated = exports.onReservationCreated = exports.reconcileDailySoldOut = exports.onMenuItemWritten = exports.api = exports.requireAppCheck = exports.sendErrorResponse = exports.requireStaffAuth = void 0;
 exports.createRateLimiter = createRateLimiter;
 const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-functions/v2/firestore");
@@ -288,8 +288,8 @@ exports.onReservationCreated = (0, firestore_1.onDocumentCreated)({
     if (!reservation) {
         return;
     }
-    if (reservation.notifiedAt) {
-        console.log(`[onReservationCreated] Reservation ${event.params.reservationId} already notified at ${reservation.notifiedAt}. Skipping.`);
+    if (reservation.notifiedAt || reservation.notificationSent) {
+        console.log(`[onReservationCreated] Reservation ${event.params.reservationId} already notified. Skipping.`);
         return;
     }
     try {
@@ -297,12 +297,46 @@ exports.onReservationCreated = (0, firestore_1.onDocumentCreated)({
         await (0, notification_1.sendReservationNotifications)(reservation, { notificationConfig: notifConfig });
         await resSnapshot.ref.update({
             notifiedAt: firestore_2.FieldValue.serverTimestamp(),
-            notificationStatus: 'dispatched'
+            notificationStatus: 'dispatched',
+            notificationSent: true
         });
         console.log(`[onReservationCreated] Dispatched notifications for reservation: ${event.params.reservationId}`);
     }
     catch (error) {
         console.error(`[onReservationCreated Error] Failed to process reservation notifications for ${event.params.reservationId}:`, error);
+    }
+});
+exports.onOrderCreated = (0, firestore_1.onDocumentCreated)({
+    document: 'orders/{orderId}',
+    database: 'ai-studio-sabaythaibbqtabl-84418196-9d0c-459c-bced-ddc424dfba07',
+    region: 'asia-east1',
+}, async (event) => {
+    const orderSnapshot = event.data;
+    if (!orderSnapshot || !orderSnapshot.exists) {
+        return;
+    }
+    const order = orderSnapshot.data();
+    if (!order) {
+        return;
+    }
+    if (order.notifiedAt || order.notificationSent) {
+        console.log(`[onOrderCreated] Order ${event.params.orderId} already notified. Skipping.`);
+        return;
+    }
+    try {
+        const notifConfig = await getCachedNotificationSettings();
+        if (order.source === 'google_business' || String(order.tableNumber || '').includes('外帶') || order.takeoutInfo) {
+            await (0, notification_1.sendOrderNotification)(order, { notificationConfig: notifConfig });
+        }
+        await orderSnapshot.ref.update({
+            notifiedAt: firestore_2.FieldValue.serverTimestamp(),
+            notificationStatus: 'dispatched',
+            notificationSent: true
+        });
+        console.log(`[onOrderCreated] Dispatched notifications for order: ${event.params.orderId}`);
+    }
+    catch (error) {
+        console.error(`[onOrderCreated Error] Failed to process order notifications for ${event.params.orderId}:`, error);
     }
 });
 //# sourceMappingURL=index.js.map

@@ -85,6 +85,11 @@ export const CashierOrderCard: React.FC<CashierOrderCardProps> = React.memo(({
               }`}>
                 {(order.tableNumber && String(order.tableNumber || '').includes('外帶')) ? '🛍️ 外帶' : `🪑 客出席`}
               </span>
+              {order.source === 'google_business' && (
+                <span className="text-[10px] font-bold px-1.5 py-0.2 rounded font-mono bg-sky-500/10 text-sky-400 border border-sky-500/30">
+                  🌐 Google
+                </span>
+              )}
             </div>
             <h6 className="font-bold text-sm text-white/95 mt-1 flex items-center flex-wrap gap-1">
               <span>桌次: {order.tableNumber || 'N/A'} 桌 {isDineIn && <span className="text-zinc-400 font-normal text-xs">({orderGuests} 人)</span>}</span>

@@ -10,6 +10,8 @@ exports.sendLineReservationNotification = sendLineReservationNotification;
 exports.sendGmailReservationNotification = sendGmailReservationNotification;
 exports.sendReservationNotifications = sendReservationNotifications;
 exports.sendTestNotification = sendTestNotification;
+exports.formatLineOrderMessage = formatLineOrderMessage;
+exports.sendOrderNotification = sendOrderNotification;
 const axios_1 = __importDefault(require("axios"));
 const nodemailer_1 = __importDefault(require("nodemailer"));
 function escapeHtml(str) {
@@ -27,8 +29,15 @@ function formatLineReservationMessage(reservation) {
     const notes = reservation.notes?.trim() ? reservation.notes.trim() : '無特殊備註';
     const orderId = reservation.reservationNo || reservation.id || 'N/A';
     const createdTime = reservation.createdAt || new Date().toISOString();
+    const isGoogle = reservation.source === 'google_business';
+    const header = isGoogle
+        ? '🔔 【Google 商家新預約訂位】SABAY BBQ 沙貝燒烤'
+        : '🔔 【新預約訂位通知】SABAY BBQ 沙貝燒烤';
+    const originLine = isGoogle
+        ? '🌐 渠道來源：Google 商家檔案 (Google Business Profile)'
+        : '📱 渠道來源：現場/官方系統登記';
     return [
-        '🔔 【新預約訂位通知】SABAY BBQ 沙貝燒烤',
+        header,
         '━━━━━━━━━━━━━━━━━━━━',
         `👤 顧客姓名：${reservation.customerName}`,
         `📞 聯絡電話：${reservation.phone}`,
@@ -37,6 +46,7 @@ function formatLineReservationMessage(reservation) {
         `👥 用餐人數：${reservation.guestCount} 位`,
         `🪑 預約桌號：${table}`,
         `📝 特殊備註：${notes}`,
+        originLine,
         `🆔 預約編號：${orderId}`,
         `⏱️ 登記時間：${createdTime}`,
         '━━━━━━━━━━━━━━━━━━━━',
@@ -308,6 +318,79 @@ async function sendTestNotification(channel, config, options) {
     }
     else {
         return sendGmailReservationNotification(testReservation, opts);
+    }
+}
+function formatLineOrderMessage(order) {
+    const isGoogle = order.source === 'google_business';
+    const header = isGoogle
+        ? '🔔 【Google 商家新訂單通知】SABAY BBQ 沙貝燒烤'
+        : '🔔 【新點餐訂單通知】SABAY BBQ 沙貝燒烤';
+    const isTakeout = Boolean((order.tableNumber && (String(order.tableNumber).includes('外帶') || order.tableNumber.toLowerCase() === 'takeout')) ||
+        order.takeoutInfo);
+    const tableStr = isTakeout ? `🛍️ 外帶訂單 (${order.tableNumber || '外帶'})` : `🪑 桌號：${order.tableNumber} 桌`;
+    const originStr = isGoogle ? '🌐 渠道來源：Google 商家檔案 (Online Ordering)' : '📱 渠道來源：現場/官方掃碼';
+    const customerStr = order.customerName ? `👤 顧客姓名：${order.customerName} (${order.customerPhone || '未留電話'})` : '';
+    const itemsList = (order.items || [])
+        .map((i) => {
+        const name = typeof i.name === 'object' ? (i.name.zh || i.name.en || JSON.stringify(i.name)) : i.name;
+        const q = i.quantity || i.qty || 1;
+        return `• ${name} x${q} ($${i.price * q})`;
+    })
+        .slice(0, 15)
+        .join('\n');
+    const moreItems = (order.items || []).length > 15 ? `\n...其餘 ${(order.items || []).length - 15} 項餐點` : '';
+    const lines = [
+        header,
+        '━━━━━━━━━━━━━━━━━━━━',
+        tableStr,
+        `💰 訂單金額：$${order.total} 元`,
+        originStr,
+        customerStr,
+        `🆔 訂單編號：${order.id}`,
+        `⏱️ 下單時間：${order.createdAt || new Date().toISOString()}`,
+        '📋 餐點明細：',
+        itemsList + moreItems,
+        '━━━━━━━━━━━━━━━━━━━━',
+        '🍳 廚房 KDS 與收銀終端已即時同步，請現場確認接單！'
+    ].filter(Boolean);
+    return lines.join('\n');
+}
+async function sendOrderNotification(order, options) {
+    const config = options?.notificationConfig;
+    if (config?.lineEnabled === false) {
+        return { success: false, channel: 'LINE', reason: 'disabled' };
+    }
+    const token = (config?.lineToken || process.env.LINE_CHANNEL_ACCESS_TOKEN || '').trim();
+    const adminId = (config?.lineAdminId || process.env.LINE_ADMIN_USER_ID || '').trim();
+    if (!token || !adminId) {
+        console.warn('[Notification:LINE:Order] Skipped: LINE channel token or admin user ID is not configured.');
+        return { success: false, channel: 'LINE', reason: 'unconfigured' };
+    }
+    const messageText = formatLineOrderMessage(order);
+    const client = options?.axiosClient || axios_1.default;
+    try {
+        await client.post('https://api.line.me/v2/bot/message/push', {
+            to: adminId,
+            messages: [
+                {
+                    type: 'text',
+                    text: messageText
+                }
+            ]
+        }, {
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`
+            },
+            timeout: 8000
+        });
+        console.log(`[Notification:LINE:Order] Push sent successfully for order #${order.id}`);
+        return { success: true, channel: 'LINE' };
+    }
+    catch (err) {
+        const errorDetails = err?.response?.data ? JSON.stringify(err.response.data) : err.message || String(err);
+        console.error(`[Notification:LINE:Order] Failed to send push message: ${errorDetails}`);
+        return { success: false, channel: 'LINE', error: errorDetails };
     }
 }
 //# sourceMappingURL=notification.js.map

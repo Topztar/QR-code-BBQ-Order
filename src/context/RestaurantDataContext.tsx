@@ -888,10 +888,15 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
     }
 
     try {
+      const reservationPayload = {
+        ...reservation,
+        source: reservation.source || 'direct',
+        notificationSent: false,
+      };
       const res = await apiFetch('/api/reservations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(reservation),
+        body: JSON.stringify(reservationPayload),
       });
       if (res.ok) {
         await fetchData();

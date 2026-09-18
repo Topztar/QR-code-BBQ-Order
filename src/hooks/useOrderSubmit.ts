@@ -25,6 +25,9 @@ export interface OrderDataPayload {
     phone: string;
     pickupTime: string;
   };
+  source?: string;
+  utm_medium?: string;
+  notificationSent?: boolean;
 }
 
 export function useOrderSubmit(
@@ -47,6 +50,9 @@ export function useOrderSubmit(
     const orderPayload = {
       ...orderData,
       clientOrderId,
+      source: orderData.source || 'direct',
+      utm_medium: orderData.utm_medium,
+      notificationSent: false,
     };
     const pricing = orderCalculationService.calculateOrderPricing({
       items: orderData.items,
@@ -79,6 +85,9 @@ export function useOrderSubmit(
       pickupTime: orderPayload.pickupTime,
       takeoutInfo: orderPayload.takeoutInfo,
       isOfflinePending: false,
+      source: orderPayload.source || 'direct',
+      utm_medium: orderPayload.utm_medium,
+      notificationSent: false,
     };
 
     // 🚀 本地跨分頁 0 成本廣播 (同設備 KDS / 收銀立即 0ms 更新)

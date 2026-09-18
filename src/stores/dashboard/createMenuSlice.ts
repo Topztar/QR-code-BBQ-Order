@@ -24,4 +24,7 @@ export const createMenuSlice: StateCreator<
   
   isMenuItemSortingMode: false,
   setIsMenuItemSortingMode: (val) => set({ isMenuItemSortingMode: val }),
+  
+  stagingPromoCombos: [],
+  setStagingPromoCombos: (combos) => set({ stagingPromoCombos: combos }),
 });

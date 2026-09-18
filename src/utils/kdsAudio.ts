@@ -363,6 +363,7 @@ export function formatOrderAnnouncementText(orders: Order[]): string {
   if (!orders || orders.length === 0) return '';
 
   const orderDescriptions = orders.map(order => {
+    const isGoogle = order.source === 'google_business';
     const isTakeout = Boolean(
       (order.tableNumber && (String(order.tableNumber || '').includes('外帶') || order.tableNumber.toLowerCase() === 'takeout')) ||
       order.takeoutInfo
@@ -379,11 +380,12 @@ export function formatOrderAnnouncementText(orders: Order[]): string {
         const digits = order.id.replace(/\D/g, '');
         shortNum = digits.length >= 3 ? digits.slice(-3) : order.id.slice(-4);
       }
-      return shortNum ? `外帶訂單，單號 ${shortNum}` : '外帶訂單';
+      const label = isGoogle ? 'Google 商家外帶訂單' : '外帶訂單';
+      return shortNum ? `${label}，單號 ${shortNum}` : label;
     } else {
       const rawTable = order.tableNumber || '1';
       const cleanTableNum = String(rawTable).replace(/^第/, '').replace(/桌$/, '').replace(/號$/, '').trim();
-      return `桌號 ${cleanTableNum || '1'} 號`;
+      return isGoogle ? `Google 商家桌號 ${cleanTableNum || '1'} 號` : `桌號 ${cleanTableNum || '1'} 號`;
     }
   });
 

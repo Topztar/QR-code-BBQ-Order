@@ -293,7 +293,8 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   const {
     localCategoryOrder, setLocalCategoryOrder, localMenuItemOrder, setLocalMenuItemOrder,
     hasUnsavedCategoryOrder, setHasUnsavedCategoryOrder, hasUnsavedMenuItemOrder, setHasUnsavedMenuItemOrder,
-    isCategorySortingMode, setIsCategorySortingMode, isMenuItemSortingMode, setIsMenuItemSortingMode
+    isCategorySortingMode, setIsCategorySortingMode, isMenuItemSortingMode, setIsMenuItemSortingMode,
+    stagingPromoCombos, setStagingPromoCombos
   } = useDashboardStore(
     useShallow(state => ({
       localCategoryOrder: state.localCategoryOrder,
@@ -307,7 +308,9 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
       isCategorySortingMode: state.isCategorySortingMode,
       setIsCategorySortingMode: state.setIsCategorySortingMode,
       isMenuItemSortingMode: state.isMenuItemSortingMode,
-      setIsMenuItemSortingMode: state.setIsMenuItemSortingMode
+      setIsMenuItemSortingMode: state.setIsMenuItemSortingMode,
+      stagingPromoCombos: state.stagingPromoCombos,
+      setStagingPromoCombos: state.setStagingPromoCombos
     }))
   );
 
@@ -334,12 +337,6 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
 
   const [isCheckoutSubmitting, setIsCheckoutSubmitting] = useState<boolean>(false);
 
-  // Reorder sorting action handlers
-
-
-
-
-
   // Active Order Table/Takeout editing states
   const {
     editingOrderTableId, setEditingOrderTableId,
@@ -354,8 +351,6 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   );
 
   // Promo combo staging states
-  const [, setTempPromoCombo] = useState<any>(promoCombo);
-  const [tempPromoCombos, setTempPromoCombos] = useState<any[]>([]);
   const [promoComboSaveError, setPromoComboSaveError] = useState<string | null>(null);
   const [promoComboSaveSuccess, setPromoComboSaveSuccess] = useState<string | null>(null);
   const prevPromoComboRef = React.useRef<string>(JSON.stringify(promoCombo));
@@ -475,9 +470,8 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   useEffect(() => {
     const promoStr = JSON.stringify(promoCombo);
     if (promoStr !== prevPromoComboRef.current) {
-      setTempPromoCombo(promoCombo);
       if (promoCombo) {
-        setTempPromoCombos(promoCombo.combos || []);
+        setStagingPromoCombos(promoCombo.combos || []);
       }
       prevPromoComboRef.current = promoStr;
     }
@@ -488,8 +482,8 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     setPromoComboSaveSuccess(null);
     if (onSavePromoCombo) {
       const payload = {
-        enabled: tempPromoCombos.some(c => c.enabled),
-        combos: tempPromoCombos
+        enabled: stagingPromoCombos.some(c => c.enabled),
+        combos: stagingPromoCombos
       };
       const res = await onSavePromoCombo(payload);
       if (res.success || (res as any).success !== false) {
@@ -673,7 +667,28 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
       authorizedByPin: `Staff PIN: ****${modPin.slice(-2)}`,
     };
 
-    // If payment method is member, sync membership database
+    if (selectedOrder.paymentMethod === 'cash') {
+      if (totalDiff < 0) {
+        alert(`💵 現金退款核銷通知：本更動完成後，請現場從收銀機退還顧客現金 NT$ ${Math.abs(totalDiff)} 元！`);
+      } else if (totalDiff > 0) {
+        alert(`💵 現金補款稽核通知：本更動完成後，請向顧客加收額外現金 NT$ ${totalDiff} 元，並確認投入收銀機中！`);
+      }
+    } else if (selectedOrder.paymentMethod !== 'member') {
+      // Credit/TWQR
+      alert(`💳 電子款項金流調帳通知：此單採線上電子支付。差額 NT$ ${totalDiff} 元，已對應記為店家記帳退補核對項。`);
+    }
+
+    // Save and sync with backend
+    const logs = selectedOrder.refundLogs ? [...selectedOrder.refundLogs, newLog] : [newLog];
+    
+    try {
+      await (onUpdateOrderItems as any)(selectedOrder.id, updatedItems, logs);
+    } catch (err: any) {
+      alert(`❌ 訂單資料庫更新失敗，交易異動取消：${err?.message || err}`);
+      return;
+    }
+
+    // Sync membership balance ONLY after backend write succeeds
     if (selectedOrder.paymentMethod === 'member') {
       const member = selectedOrder.customerName ? memberService.getMemberByName(selectedOrder.customerName) : null;
       if (member) {
@@ -686,20 +701,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
         const updatedMember = memberService.getMemberByEmail(member.email);
         alert(`💳 因應本次退貨/加點核銷：會員額度已自動變更，原額: NT$ ${currentBal} ➔ 現額: NT$ ${updatedMember?.balance ?? Math.max(0, finalBal)}`);
       }
-    } else if (selectedOrder.paymentMethod === 'cash') {
-      if (totalDiff < 0) {
-        alert(`💵 現金退款核銷通知：本更動完成後，請現場從收銀機退還顧客現金 NT$ ${Math.abs(totalDiff)} 元！`);
-      } else if (totalDiff > 0) {
-        alert(`💵 現金補款稽核通知：本更動完成後，請向顧客加收額外現金 NT$ ${totalDiff} 元，並確認投入收銀機中！`);
-      }
-    } else {
-      // Credit/TWQR
-      alert(`💳 電子款項金流調帳通知：此單採線上電子支付。差額 NT$ ${totalDiff} 元，已對應記為店家記帳退補核對項。`);
     }
-
-    // Save and sync with backend
-    const logs = selectedOrder.refundLogs ? [...selectedOrder.refundLogs, newLog] : [newLog];
-    await (onUpdateOrderItems as any)(selectedOrder.id, updatedItems, logs);
 
     // Update selectedOrder modal state to sync UI
     setSelectedOrder({
@@ -935,7 +937,6 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   const [inventoryLogSearch, setInventoryLogSearch] = useState('');
   const [restockAmount, setRestockAmount] = useState<{ [key: string]: number }>({});
   const [quickRestockItem, setQuickRestockItem] = useState<Ingredient | null>(null);
-  const [, setQuickRestockQty] = useState('');
 
   // Add Ingredient states
   const [newIngId, setNewIngId] = useState('');
@@ -1369,36 +1370,6 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     }
   };
 
-  // Helper utility to write out an Excel-friendly CSV with UTF-8 BOM
-  const exportToCSV = (data: any[], headersMap: { [key: string]: string }, filename: string) => {
-    if (!data || data.length === 0) {
-      alert('❌ 無明細數據可供匯出！');
-      return;
-    }
-    const rawKeys = Object.keys(data[0]);
-    const headersLine = rawKeys.map(k => headersMap[k] || k).join(',');
-    const rows = data.map(item => {
-      return rawKeys.map(k => {
-        let val = item[k];
-        let str = typeof val === 'object' ? JSON.stringify(val) : String(val === undefined || val === null ? '' : val);
-        str = str.replace(/"/g, '""');
-        if (str.includes(',') || str.includes('\n') || str.includes('"')) {
-          return `"${str}"`;
-        }
-        return str;
-      }).join(',');
-    });
-    const csvContent = "\uFEFF" + [headersLine, ...rows].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', filename);
-    link.style.display = 'none';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
 
   // Order Filtering Engine
   const filteredOrders = useMemo(() => {
@@ -1692,7 +1663,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
           setRestockAmount={setRestockAmount}
           handleRestockClick={handleRestockClick}
           setQuickRestockItem={setQuickRestockItem}
-          setQuickRestockQty={setQuickRestockQty}
+
           manualAdjustId={manualAdjustId}
           setManualAdjustId={setManualAdjustId}
           manualAdjustQty={manualAdjustQty}
@@ -1812,8 +1783,8 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
           handleAddGlobalRule={handleAddGlobalRule}
           globalRules={globalRules}
           handleDeleteGlobalRule={handleDeleteGlobalRule}
-          tempPromoCombos={tempPromoCombos}
-          setTempPromoCombos={setTempPromoCombos}
+          tempPromoCombos={stagingPromoCombos}
+          setTempPromoCombos={setStagingPromoCombos}
           deleteConfirmComboId={deleteConfirmComboId}
           setDeleteConfirmComboId={setDeleteConfirmComboId}
           menuItems={menuItems}

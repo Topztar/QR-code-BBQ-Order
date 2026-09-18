@@ -135,6 +135,8 @@ interface CustomerOrderViewProps {
       phone?: string;
       pickupTime?: string;
     };
+    source?: string;
+    utm_medium?: string;
   }) => Promise<Order | null>;
   activeOrders: Order[];
   pushNotifications: any[];
@@ -250,6 +252,17 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
       setIsTableFixed(true);
     }
   }, [isOrderRoute]);
+
+  const entrySourceInfo = useMemo(() => {
+    if (typeof window === 'undefined') return { source: 'direct', utm_medium: undefined };
+    const params = new URLSearchParams(window.location.search);
+    const src = params.get('source');
+    const utmMedium = params.get('utm_medium') || undefined;
+    return {
+      source: src === 'google_business' ? 'google_business' : (src || 'direct'),
+      utm_medium: utmMedium
+    };
+  }, []);
 
   useEffect(() => {
     if (autoOpenReservationModal) {
@@ -589,6 +602,8 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
         customerName: takeoutCustomerName || undefined,
         customerPhone: takeoutPhone || undefined,
         pickupTime: takeoutPickupTime || undefined,
+        source: entrySourceInfo.source,
+        utm_medium: entrySourceInfo.utm_medium,
         takeoutInfo: isTakeoutMode
           ? {
               customerName: takeoutCustomerName,
@@ -735,6 +750,8 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
         tableNumber: resTableNumbers.join(', '),
         notes: resNotes,
         status: 'pending',
+        source: entrySourceInfo.source,
+        utm_medium: entrySourceInfo.utm_medium,
       });
       if (res.success) {
         setResFeedback({ type: 'success', msg: '🎉 預約成功！已為您保留座席。' });

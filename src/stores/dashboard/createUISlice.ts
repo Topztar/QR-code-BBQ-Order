@@ -26,11 +26,6 @@ export const createUISlice: StateCreator<
   editingCategory: null,
   setEditingCategory: (val) => set({ editingCategory: val }),
 
-  isTableFormOpen: false,
-  setIsTableFormOpen: (val) => set({ isTableFormOpen: val }),
-  editingTableObj: null,
-  setEditingTableObj: (val) => set({ editingTableObj: val }),
-
   isResFormOpen: false,
   setIsResFormOpen: (val) => set({ isResFormOpen: val }),
   editingResObj: null,

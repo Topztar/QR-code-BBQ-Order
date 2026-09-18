@@ -161,6 +161,9 @@ export interface MenuSlice {
   
   isMenuItemSortingMode: boolean;
   setIsMenuItemSortingMode: (val: boolean) => void;
+  
+  stagingPromoCombos: any[];
+  setStagingPromoCombos: (combos: any[]) => void;
 }
 
 export interface UISlice {
@@ -188,11 +191,6 @@ export interface UISlice {
   setIsCatFormOpen: (open: boolean) => void;
   editingCategory: Category | null;
   setEditingCategory: (cat: Category | null) => void;
-
-  isTableFormOpen: boolean;
-  setIsTableFormOpen: (open: boolean) => void;
-  editingTableObj: TableConfig | null;
-  setEditingTableObj: (table: TableConfig | null) => void;
 
   isResFormOpen: boolean;
   setIsResFormOpen: (open: boolean) => void;
