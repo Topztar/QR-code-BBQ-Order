@@ -141,6 +141,8 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
   const [itemThumbnailUrl, setItemThumbnailUrl] = useState('');
   const [itemAvifUrl, setItemAvifUrl] = useState('');
   const [itemAvifThumbnailUrl, setItemAvifThumbnailUrl] = useState('');
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [isLocalPreviewOnly, setIsLocalPreviewOnly] = useState(false);
   const [isNotSpicy, setIsNotSpicy] = useState(false);
   const [isTakeoutAvailable, setIsTakeoutAvailable] = useState(false);
   const [customAddOns, setCustomAddOns] = useState<any[]>([]);
@@ -150,6 +152,8 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
+      setIsUploadingImage(false);
+      setIsLocalPreviewOnly(false);
       if (editingItem) {
         setItemNames(editingItem.names || { zh: editingItem.name?.zh || editingItem.name || '', en: editingItem.name?.en || '', th: '', ja: '', ko: '', vi: '', ru: '', es: '' });
         setItemDescs(editingItem.descriptions || { zh: editingItem.description?.zh || editingItem.description || '', en: editingItem.description?.en || '', th: '', ja: '', ko: '', vi: '', ru: '', es: '' });
@@ -184,6 +188,17 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
 
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (isUploadingImage) {
+      alert('圖片仍在處理並上傳中，請稍候再儲存！');
+      return;
+    }
+
+    if (isLocalPreviewOnly || (itemImage && itemImage.startsWith('data:image/') && itemImage.length > 2048)) {
+      alert('⚠️ 圖片尚未成功上傳至雲端儲存 (Firebase Storage)！\n為避免資料庫寫入過大字串，請確認網路正常並重新選擇圖片上傳，或填寫外部圖片網址。');
+      return;
+    }
+
     await onSave({
       names: itemNames,
       descriptions: itemDescs,
@@ -334,9 +349,19 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
           {/* Modal Scrollable Content Area */}
           <div className="flex-1 overflow-y-auto p-5 space-y-4">
             <div className="w-full h-36 rounded-xl overflow-hidden relative border border-white/10 [content-visibility:auto] bg-neutral-900/40">
-              {itemImage ? (
+              {isUploadingImage ? (
+                <div className="w-full h-full flex flex-col items-center justify-center bg-black/70 backdrop-blur-xs text-amber-400 space-y-2">
+                  <div className="w-6 h-6 border-2 border-amber-400 border-t-transparent rounded-full animate-spin"></div>
+                  <span className="text-[11px] font-bold">☁️ 正在處理並上傳至雲端儲存 (Cloud Storage)...</span>
+                </div>
+              ) : itemImage ? (
                 <>
                   <img key={itemImage} src={itemImage} alt="dish mockup preview" className="w-full h-full object-cover bg-neutral-950" referrerPolicy="no-referrer" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
+                  {isLocalPreviewOnly && (
+                    <div className="absolute top-2 left-2 bg-amber-600/90 text-white text-[9.5px] font-bold px-2 py-0.5 rounded shadow">
+                      ⚠️ 僅為本機預覽 (尚未成功儲存至雲端)
+                    </div>
+                  )}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent flex items-end justify-between p-2.5">
                     <span className="text-[10px] text-zinc-300 font-bold font-sans">🖼️ 菜品圖片預覽 Dish Photo Preview</span>
                     <button
@@ -346,6 +371,7 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
                         setItemThumbnailUrl('');
                         setItemAvifUrl('');
                         setItemAvifThumbnailUrl('');
+                        setIsLocalPreviewOnly(false);
                       }}
                       className="bg-red-650 bg-red-600 hover:bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded cursor-pointer transition active:scale-95"
                     >
@@ -396,6 +422,7 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
                   <input
                     type="file"
                     accept="image/*"
+                    disabled={isUploadingImage}
                     onChange={async (e) => {
                       const file = e.target.files?.[0];
                       if (file) {
@@ -412,6 +439,9 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
                         const cleanFilename = cleanStem
                           ? `${dishId}-${Date.now()}-${cleanStem}.${cleanExt}`
                           : `${dishId}-${Date.now()}.${cleanExt}`;
+
+                        setIsUploadingImage(true);
+                        setIsLocalPreviewOnly(false);
 
                         try {
                           const formData = new FormData();
@@ -436,24 +466,30 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
                               setItemThumbnailUrl(data.thumbnailUrl || '');
                               setItemAvifUrl(data.avifUrl || '');
                               setItemAvifThumbnailUrl(data.avifThumbnailUrl || '');
+                              setIsLocalPreviewOnly(false);
                               return;
                             }
                           }
+                          throw new Error(`上傳回應異常狀態碼: ${res.status}`);
                         } catch (uploadErr) {
-                          console.warn('Multipart storage upload fallback:', uploadErr);
-                        }
+                          console.warn('Multipart storage upload fallback to local preview:', uploadErr);
+                          setIsLocalPreviewOnly(true);
+                          alert('⚠️ 圖片上傳雲端儲存失敗，目前僅提供本機暫時預覽！\n請確認網路連線正常或稍後重新選取圖片。');
 
-                        // Fallback to local DataURL preview if upload fails
-                        const reader = new FileReader();
-                        reader.onloadend = () => {
-                          if (typeof reader.result === 'string') {
-                            setItemImage(reader.result);
-                          }
-                        };
-                        reader.readAsDataURL(file);
+                          // Fallback to local DataURL preview if upload fails
+                          const reader = new FileReader();
+                          reader.onloadend = () => {
+                            if (typeof reader.result === 'string') {
+                              setItemImage(reader.result);
+                            }
+                          };
+                          reader.readAsDataURL(file);
+                        } finally {
+                          setIsUploadingImage(false);
+                        }
                       }
                     }}
-                    className="w-full bg-[#1e1e1e] border border-white/10 rounded px-2 py-1 text-zinc-300 font-mono text-[10.5px] file:mr-2 file:py-0.5 file:px-2 file:rounded file:border-0 file:text-[10px] file:font-bold file:bg-[#E5B453] file:text-slate-900 file:cursor-pointer hover:file:bg-amber-400 file:transition"
+                    className="w-full bg-[#1e1e1e] border border-white/10 rounded px-2 py-1 text-zinc-300 font-mono text-[10.5px] file:mr-2 file:py-0.5 file:px-2 file:rounded file:border-0 file:text-[10px] file:font-bold file:bg-[#E5B453] file:text-slate-900 file:cursor-pointer hover:file:bg-amber-400 file:transition disabled:opacity-50"
                   />
                 </div>
 
@@ -464,7 +500,10 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
                     type="text"
                     placeholder="https://example.com/food.jpg 或 /api/images/dishes/..."
                     value={itemImage}
-                    onChange={(e) => setItemImage(e.target.value)}
+                    onChange={(e) => {
+                      setItemImage(e.target.value);
+                      setIsLocalPreviewOnly(false);
+                    }}
                     onBlur={(e) => setItemImage(e.target.value.trim())}
                     className="w-full bg-[#1e1e1e] border border-white/10 rounded px-2.5 py-1 text-white font-mono text-[10.5px]"
                   />
@@ -484,7 +523,10 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
                       <button
                         key={preset.name}
                         type="button"
-                        onClick={() => setItemImage(preset.url)}
+                        onClick={() => {
+                          setItemImage(preset.url);
+                          setIsLocalPreviewOnly(false);
+                        }}
                         className={`text-[9.5px] p-1.5 rounded border text-center transition truncate cursor-pointer ${
                           itemImage === preset.url
                             ? 'bg-amber-500/20 border-amber-500 text-[#E5B453] font-bold'
@@ -927,7 +969,17 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
           {/* Modal Fixed Footer */}
           <div className="flex justify-end space-x-2 p-5 border-t border-white/5 bg-zinc-900/40 flex-shrink-0">
             <button type="button" onClick={onClose} className="px-4 py-2 hover:bg-white/5 border border-white/10 rounded-lg font-bold transition active:scale-95 cursor-pointer text-white">取消</button>
-            <button type="submit" className="px-5 py-2 bg-[#E5B453] hover:bg-amber-400 text-slate-900 font-extrabold rounded-lg active:scale-95 transition cursor-pointer shadow-md">儲存餐點</button>
+            <button
+              type="submit"
+              disabled={isUploadingImage}
+              className={`px-5 py-2 font-extrabold rounded-lg active:scale-95 transition shadow-md ${
+                isUploadingImage
+                  ? 'bg-zinc-700 text-zinc-400 cursor-not-allowed opacity-60'
+                  : 'bg-[#E5B453] hover:bg-amber-400 text-slate-900 cursor-pointer'
+              }`}
+            >
+              {isUploadingImage ? '☁️ 圖片處理中...' : '儲存餐點'}
+            </button>
           </div>
         </form>
       </div>

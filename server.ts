@@ -12,6 +12,7 @@ import 'dotenv/config';
 import express from 'express';
 import crypto from 'crypto';
 import sharp from 'sharp';
+import busboy from 'busboy';
 import path from 'path';
 import net from 'net';
 import { initializeApp as initializeClientApp, getApps as getClientApps } from 'firebase/app';
@@ -31,6 +32,7 @@ import { orderCalculationService } from './src/services/orderCalculationService'
 
 import { initFirebaseStorage, gcsBucket, app, PORT } from './src/server/init';
 import { setupMiddleware, createRateLimiter } from './src/server/middleware';
+import { registerOrdersRoutes } from './src/server/routes/orders';
 initFirebaseStorage();
 
 const orderRateLimiter = createRateLimiter(15, 60 * 1000, '訂單提交');
@@ -1916,15 +1918,153 @@ app.get(['/api/images/:path(*)', '/api/images'], async (req, res) => {
   }
 });
 
-// Upload image to Google Cloud Storage
+// Helper to process and output WebP/AVIF multi-spec images in local server
+async function processLocalAndSaveImage(buffer: Buffer, targetFolder: string, rawFilename: string) {
+  if (buffer.length > 10 * 1024 * 1024) {
+    throw new Error('圖片大小超出 10MB 上限 (Max 10MB)');
+  }
+
+  const timestamp = Date.now();
+  const nameWithoutExt = rawFilename.replace(/[^a-zA-Z0-9._-]/g, '').replace(/\.[^/.]+$/, '') || `dish-${timestamp}`;
+  const cleanFolder = targetFolder.replace(/[^a-zA-Z0-9_-]/g, '') || 'dishes';
+
+  const versionedFilename = `${nameWithoutExt}-${timestamp}.webp`;
+  const thumbFilename = `${nameWithoutExt}-${timestamp}-thumb.webp`;
+  const avifFilename = `${nameWithoutExt}-${timestamp}.avif`;
+  const thumbAvifFilename = `${nameWithoutExt}-${timestamp}-thumb.avif`;
+
+  const targetPath = `${cleanFolder}/${versionedFilename}`;
+  const thumbTargetPath = `${cleanFolder}/${thumbFilename}`;
+  const avifTargetPath = `${cleanFolder}/${avifFilename}`;
+  const thumbAvifTargetPath = `${cleanFolder}/${thumbAvifFilename}`;
+
+  // 1. 並行生成 WebP (800px / 200px) 與 AVIF (800px / 200px) 四重規格
+  const [webpBuffer, thumbWebpBuffer, avifBuffer, thumbAvifBuffer] = await Promise.all([
+    sharp(buffer).resize(800, null, { withoutEnlargement: true }).webp({ quality: 80 }).toBuffer(),
+    sharp(buffer).resize(200, 200, { fit: 'cover' }).webp({ quality: 70 }).toBuffer(),
+    sharp(buffer).resize(800, null, { withoutEnlargement: true }).avif({ quality: 75, effort: 4 }).toBuffer(),
+    sharp(buffer).resize(200, 200, { fit: 'cover' }).avif({ quality: 65, effort: 4 }).toBuffer()
+  ]);
+
+  if (gcsBucket) {
+    const webpMetadata = { contentType: 'image/webp', cacheControl: 'public, max-age=86400, stale-while-revalidate=604800' };
+    const avifMetadata = { contentType: 'image/avif', cacheControl: 'public, max-age=86400, stale-while-revalidate=604800' };
+
+    await Promise.all([
+      gcsBucket.file(targetPath).save(webpBuffer, { metadata: webpMetadata, resumable: false }),
+      gcsBucket.file(thumbTargetPath).save(thumbWebpBuffer, { metadata: webpMetadata, resumable: false }),
+      gcsBucket.file(avifTargetPath).save(avifBuffer, { metadata: avifMetadata, resumable: false }),
+      gcsBucket.file(thumbAvifTargetPath).save(thumbAvifBuffer, { metadata: avifMetadata, resumable: false })
+    ]);
+
+    return {
+      success: true,
+      url: `/api/images/${targetPath}`,
+      thumbnailUrl: `/api/images/${thumbTargetPath}`,
+      avifUrl: `/api/images/${avifTargetPath}`,
+      avifThumbnailUrl: `/api/images/${thumbAvifTargetPath}`,
+      path: targetPath,
+      thumbPath: thumbTargetPath,
+      avifPath: avifTargetPath,
+      thumbAvifPath: thumbAvifTargetPath,
+      filename: versionedFilename,
+      size: webpBuffer.length,
+      thumbSize: thumbWebpBuffer.length,
+      avifSize: avifBuffer.length,
+      thumbAvifSize: thumbAvifBuffer.length,
+      contentType: 'image/webp'
+    };
+  } else {
+    // Local fallback when GCS is not configured
+    return {
+      success: true,
+      url: `data:image/webp;base64,${webpBuffer.toString('base64')}`,
+      thumbnailUrl: `data:image/webp;base64,${thumbWebpBuffer.toString('base64')}`,
+      avifUrl: `data:image/avif;base64,${avifBuffer.toString('base64')}`,
+      avifThumbnailUrl: `data:image/avif;base64,${thumbAvifBuffer.toString('base64')}`,
+      path: targetPath,
+      thumbPath: thumbTargetPath,
+      avifPath: avifTargetPath,
+      thumbAvifPath: thumbAvifTargetPath,
+      filename: versionedFilename,
+      size: webpBuffer.length,
+      thumbSize: thumbWebpBuffer.length,
+      avifSize: avifBuffer.length,
+      thumbAvifSize: thumbAvifBuffer.length,
+      contentType: 'image/webp'
+    };
+  }
+}
+
+// Upload image to Google Cloud Storage (雙模式：支援 multipart/form-data 二進位串流 與 JSON Base64 向下相容)
 app.post('/api/images/upload', async (req, res) => {
   try {
-    const { base64, data, filename, contentType, folder = 'dishes' } = req.body;
+    const contentType = req.headers['content-type'] || '';
+
+    // 🌟 模式 A：multipart/form-data (支援 busboy 二進位串流)
+    if (contentType.includes('multipart/form-data')) {
+      const bb = busboy({
+        headers: req.headers,
+        limits: { fileSize: 10 * 1024 * 1024, files: 1 }
+      });
+
+      let fileBuffer: Buffer | null = null;
+      let rawFilename = `dish-${Date.now()}.jpg`;
+      let targetFolder = 'dishes';
+      let fileExceededLimit = false;
+
+      bb.on('file', (_name, fileStream, info) => {
+        rawFilename = info.filename || rawFilename;
+        const chunks: Buffer[] = [];
+
+        fileStream.on('data', (data) => chunks.push(data));
+        fileStream.on('limit', () => { fileExceededLimit = true; });
+        fileStream.on('end', () => { fileBuffer = Buffer.concat(chunks); });
+      });
+
+      bb.on('field', (name, val) => {
+        if (name === 'folder') {
+          const clean = String(val).trim().replace(/[^a-zA-Z0-9_-]/g, '');
+          if (clean) targetFolder = clean;
+        }
+        if (name === 'filename') {
+          const clean = String(val).trim().replace(/[^a-zA-Z0-9._-]/g, '');
+          if (clean) rawFilename = clean;
+        }
+      });
+
+      bb.on('finish', async () => {
+        if (fileExceededLimit) {
+          return res.status(400).json({ error: '圖片大小超出 10MB 上限 (Max 10MB)' });
+        }
+        if (!fileBuffer || fileBuffer.length === 0) {
+          return res.status(400).json({ error: '未接收到有效圖片檔案 (Missing file)' });
+        }
+
+        try {
+          const result = await processLocalAndSaveImage(fileBuffer, targetFolder, rawFilename);
+          return res.json(result);
+        } catch (err: any) {
+          console.error('[Local Server Storage Upload Error]:', err);
+          return res.status(500).json({ error: 'Failed to upload image', details: err?.message });
+        }
+      });
+
+      bb.on('error', (err: any) => {
+        console.error('[Busboy Error]:', err);
+        return res.status(500).json({ error: 'Failed to parse multipart upload', details: err?.message });
+      });
+
+      req.pipe(bb);
+      return;
+    }
+
+    // 🌟 模式 B：JSON Base64 (向下相容備援)
+    const { base64, data, filename, folder = 'dishes' } = req.body;
     const rawData = base64 || data;
     if (!rawData) {
       return res.status(400).json({ error: 'Missing image data (base64) / 缺少圖片資料' });
     }
-
 
     let base64Clean = rawData;
     if (rawData.includes(';base64,')) {
@@ -1933,50 +2073,9 @@ app.post('/api/images/upload', async (req, res) => {
     }
 
     const buffer = Buffer.from(base64Clean, 'base64');
-    
-    // 🚀 使用 sharp 自動產生 WebP 縮圖並限制寬度為 800px
-    const webpBuffer = await sharp(buffer)
-      .resize(800, null, { withoutEnlargement: true })
-      .webp({ quality: 80 })
-      .toBuffer();
-
-    let targetFilename = filename ? filename.replace(/[^a-zA-Z0-9._-]/g, '') : `dish-${Date.now()}.webp`;
-    targetFilename = targetFilename.replace(/-+\./g, '.').replace(/\.+/g, '.').replace(/^-+|-+$/g, '');
-    const nameWithoutExt = targetFilename.replace(/\.[^/.]+$/, '');
-    targetFilename = `${nameWithoutExt}-${Date.now()}.webp`;
-    const targetPath = `${folder}/${targetFilename}`.replace(/^\/+/, '');
-
-    if (gcsBucket) {
-      const file = gcsBucket.file(targetPath);
-      await file.save(webpBuffer, {
-        metadata: {
-          contentType: 'image/webp',
-          cacheControl: 'public, max-age=86400, stale-while-revalidate=604800'
-        },
-        resumable: false
-      });
-
-      const publicUrl = `/api/images/${targetPath}`;
-      return res.json({
-        success: true,
-        url: publicUrl,
-        path: targetPath,
-        filename: targetFilename,
-        size: webpBuffer.length,
-        contentType: 'image/webp'
-      });
-    } else {
-      // Local development fallback
-      const finalBase64 = webpBuffer.toString('base64');
-      return res.json({
-        success: true,
-        url: `data:image/webp;base64,${finalBase64}`,
-        path: targetPath,
-        filename: targetFilename,
-        size: webpBuffer.length,
-        contentType: 'image/webp'
-      });
-    }
+    const targetFilename = filename ? filename.replace(/[^a-zA-Z0-9._-]/g, '') : `dish-${Date.now()}.webp`;
+    const result = await processLocalAndSaveImage(buffer, folder, targetFilename);
+    return res.json(result);
   } catch (error: any) {
     console.error('[Sabay Storage Upload Error]:', error);
     res.status(500).json({ error: 'Failed to upload image to storage', details: error?.message });
@@ -3314,703 +3413,25 @@ app.post('/api/inventory/adjust', (req, res) => {
   res.json({ success: true, ingredient, log: newLog });
 });
 
-// 3. Get Orders
-app.get('/api/orders/history-check', (req, res) => {
-  try {
-    const { tableNumber, memberName } = req.query;
-    const tableStr = tableNumber ? String(tableNumber).trim() : '';
-    const memberStr = memberName ? String(memberName).trim() : '';
-
-    const hasUnpaidBillOnTable = tableStr ? (Array.isArray(liveOrders) && liveOrders.some(o => o && o.tableNumber === tableStr && !o.isPaid)) : false;
-    
-    // A member is authenticated and has at least one previous or current order in the system (or simulated)
-    const hasPastOrders = memberStr ? (
-      (Array.isArray(liveOrders) && liveOrders.some(o => o && o.customerName === memberStr)) || memberStr === '沙貝泰烤老饕' || memberStr === 'VIP Member'
-    ) : false;
-
-    res.json({
-      hasUnpaidBillOnTable,
-      hasPastOrders
-    });
-  } catch (error) {
-    console.error('[Sabay Server] Error in /api/orders/history-check:', error);
-    res.status(500).json({
-      error: 'Internal Server Error',
-      hasUnpaidBillOnTable: false,
-      hasPastOrders: false
-    });
-  }
-});
-
-app.get('/api/orders', (_req, res) => {
-  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-  res.setHeader('Pragma', 'no-cache');
-  res.setHeader('Expires', '0');
-  res.setHeader('Surrogate-Control', 'no-store');
-  res.json(liveOrders);
-});
-
-function getMappedTableId(inputTableId: string, availableTables: Array<{id: string}>): string {
-  if (!availableTables || availableTables.length === 0) {
-    return inputTableId;
-  }
-  const cleanInput = String(inputTableId).trim();
-  if (availableTables.some(t => t.id.toString().trim() === cleanInput)) {
-    return cleanInput;
-  }
-  if (cleanInput.includes('外帶') || cleanInput.toLowerCase().includes('takeout')) {
-    return cleanInput;
-  }
-  
-  // Extract digits
-  const matchDigits = cleanInput.match(/\d+/);
-  if (matchDigits) {
-    const tableNum = parseInt(matchDigits[0], 10);
-    const numericTables = availableTables
-      .map(t => ({ id: t.id, num: parseInt(String(t.id).match(/\d+/)?.[0] || '', 10) }))
-      .filter(t => !isNaN(t.num));
-      
-    if (numericTables.length > 0) {
-      let closestTable = numericTables[0];
-      let minDiff = Math.abs(numericTables[0].num - tableNum);
-      for (const nt of numericTables) {
-        const diff = Math.abs(nt.num - tableNum);
-        if (diff < minDiff) {
-          minDiff = diff;
-          closestTable = nt;
-        }
-      }
-      return closestTable.id;
-    }
-  }
-  
-  // String hashing fallback
-  let hash = 0;
-  for (let i = 0; i < cleanInput.length; i++) {
-    hash = cleanInput.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  const idx = Math.abs(hash) % availableTables.length;
-  return availableTables[idx].id;
-}
-
-// 4. Place New Order
-app.post('/api/orders', orderRateLimiter, (req, res) => {
-  const { tableNumber, items, customerName, customerAvatar, paymentMethod, isMember, guestCount, clientOrderId, reservationNo, reservationDate, reservationTime, takeoutInfo } = req.body;
-
-  if (clientOrderId) {
-    const existing = liveOrders.find(o => o.clientOrderId === clientOrderId);
-    if (existing) {
-      console.log(`[Idempotency check] Duplicate order detected for clientOrderId ${clientOrderId}. Returning existing order #${existing.id}`);
-      return res.status(201).json(existing);
-    }
-  }
-
-  let mappedTableNumber = String(tableNumber || '1').trim();
-  if (liveTables && liveTables.length > 0) {
-    mappedTableNumber = getMappedTableId(mappedTableNumber, liveTables);
-  }
-
-  // Validate that the store is open (operating hours check)
-  // 預約專屬點餐 (reservationNo) 或 預約日期 (reservationDate) 或 外帶點餐 豁免營業時間限制
-  const isTakeoutOrder = !!(takeoutInfo || mappedTableNumber === '外帶' || mappedTableNumber === 'takeout');
-  const isReservationOrder = !!(reservationNo || reservationDate);
-  if (!isReservationOrder && !isTakeoutOrder && !isStoreOpen()) {
-    return res.status(403).json({ error: '目前不在營業時間內（店鋪休息中），系統不開放下單點餐！' });
-  }
-
-  if (!items || items.length === 0) {
-    return res.status(400).json({ error: 'Order must contain at least one item' });
-  }
-
-  // Validate that each ordered item's MenuItem is available (not sold out)
-  const todayStr = getTaiwanDateString();
-  const unavailableItems: string[] = [];
-  for (const orderItem of items as any[]) {
-    const dish = liveMenu.find(m => m.id === orderItem.menuItemId);
-    if (!dish) {
-      unavailableItems.push(orderItem.name.zh || '未知菜品');
-    } else {
-      let isAvailable = dish.available ?? true;
-      if (dish.soldOutType === 'permanent') {
-        isAvailable = false;
-      } else if (dish.soldOutType === 'daily') {
-        if (dish.soldOutDate === todayStr) {
-          isAvailable = false;
-        } else {
-          // Passed midnight Taiwan time
-          isAvailable = true;
-        }
-      } else if (dish.available === false) {
-        isAvailable = false;
-      }
-
-      if (!isAvailable) {
-        const dishName = typeof dish.name === 'object' ? (dish.name.zh || dish.name.en || dish.id) : dish.name;
-        unavailableItems.push(dishName);
-      }
-    }
-  }
-
-  if (unavailableItems.length > 0) {
-    return res.status(400).json({
-      error: '抱歉，以下餐點目前已售罄/暫不供應，請重新調整您的點餐內容：' + unavailableItems.join(', '),
-      itemUnavailable: true
-    });
-  }
-
-  // Calculation parameters
-  let subtotal = 0;
-  const processedItems = (items as OrderItem[]).map((item, index) => {
-    const finalItemPrice = orderCalculationService.computeOrderItemUnitPrice(item, liveMenu);
-    const itemCost = finalItemPrice * item.qty;
-    subtotal += itemCost;
-
-    return {
-      ...item,
-      id: `oi-${Date.now()}-${index}`,
-      price: finalItemPrice
-    };
-  });
-
-  const hasLineMemberDiscount = isMember === true;
-  // Google Member points program (no subtotal discount)
-  if (hasLineMemberDiscount) {
-    // subtotal remains unchanged as discount is deleted
-  }
-
-  // Auto promotional combo discount using helper function
-  const promoDiscount = calculatePromoDiscount(processedItems);
-
-  const netSubtotal = Math.max(0, subtotal - promoDiscount);
-  const serviceCharge = (paymentMethod === 'credit' || paymentMethod === 'twqr') ? Math.round(subtotal * 0.1) : 0;
-  const total = Math.max(0, netSubtotal + serviceCharge);
-
-  // Sequentially secure order ID auto-increment to prevent ID conflicts under concurrent multi-user workloads
-  let nextSeq = liveOrders.length + 1;
-  let proposedId = `LM-${1000 + nextSeq}`;
-  while (liveOrders.some(o => o.id === proposedId)) {
-    nextSeq++;
-    proposedId = `LM-${1000 + nextSeq}`;
-  }
-
-  const newOrder: Order = {
-    id: proposedId,
-    tableNumber: mappedTableNumber,
-    items: processedItems,
-    subtotal,
-    discount: promoDiscount,
-    serviceCharge,
-    total,
-    status: 'pending',
-    createdAt: new Date().toISOString(),
-    customerName: customerName || '顧客',
-    customerAvatar: customerAvatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150',
-    paymentMethod: paymentMethod || 'cash',
-    isMember: !!isMember,
-    isPaid: false,
-    guestCount: guestCount ? parseInt(guestCount, 10) : undefined,
-    clientOrderId: clientOrderId || undefined,
-    reservationNo: reservationNo || undefined,
-    reservationDate: reservationDate || undefined,
-    reservationTime: reservationTime || undefined,
-    takeoutInfo: takeoutInfo || undefined,
-  };
-
-  liveOrders.push(newOrder);
-
-  // Mark table status as in_use on order submittal
-  if (mappedTableNumber) {
-    const tblId = String(mappedTableNumber).trim();
-    const tb = liveTables.find(t => t.id.toString().trim() === tblId);
-    if (tb) {
-      if (tableCheckoutTimeouts.has(tblId)) {
-        clearTimeout(tableCheckoutTimeouts.get(tblId)!);
-        tableCheckoutTimeouts.delete(tblId);
-      }
-      tb.status = 'in_use';
-      tb.cleaningStartedAt = null;
-    }
-  }
-
-  saveStateToDisk();
-  res.status(201).json(newOrder);
-});
-
-// 4.5. Rate Completed Order (For Customer View)
-app.put('/api/orders/:id/rate', (req, res) => {
-  const { id } = req.params;
-  const { rating, feedback } = req.body;
-
-  if (rating === undefined || typeof rating !== 'number' || rating < 1 || rating > 5) {
-    return res.status(400).json({ error: 'Rating must be a number between 1 and 5' });
-  }
-
-  const order = liveOrders.find(o => o.id === id);
-  if (!order) {
-    return res.status(404).json({ error: 'Order not found' });
-  }
-
-  order.rating = rating;
-  order.feedback = feedback || '';
-
-  saveStateToDisk();
-  res.json({ success: true, order });
-});
-
-// 5. Update Order Status (For Kitchen Display and progress checking)
-app.put('/api/orders/:id/status', (req, res) => {
-  const { id } = req.params;
-  const { status } = req.body;
-
-  const order = liveOrders.find(o => o.id === id);
-  if (!order) {
-    return res.status(404).json({ error: 'Order not found' });
-  }
-
-  // Block backward transition if already paid or cancelled (unless manual override to cancel/paid)
-  if ((order.status === 'paid' || order.status === 'cancelled') && status !== 'cancelled' && status !== 'paid') {
-    return res.status(409).json({ error: `訂單已結帳或已取消 (${order.status})，不可變更為 ${status}` });
-  }
-
-  // Trigger printing when confirmed by backend/staff (transitions from pending to preparing)
-  if (status === 'preparing' && order.status === 'pending') {
-    // 1. Kitchen Working Ticket
-    const kitchenDetails = order.items.map(it => {
-      const spec = [
-        it.customization.spiciness === 0 ? '不辣' : (it.customization.spiciness === 1 ? '小辣' : (it.customization.spiciness === 2 ? '中辣' : '泰辣(+10)')),
-        it.customization.noodleType === 'rice-noodle' ? '河粉' : (it.customization.noodleType === 'vermicelli' ? '米線' : ''),
-        it.customization.soupBase === 'coconut-milk' ? '加椰奶(+50)' : '',
-        it.customization.notes ? `備註: ${it.customization.notes}` : ''
-      ].filter(Boolean).join('/');
-      const pName = it.name ? (typeof it.name === 'object' ? (it.name.zh || it.name.en || '未命名商品') : it.name) : '未命名商品';
-      return `[ ] ${pName} x ${it.qty}份\n    【 ${spec} 】`;
-    }).join('\n');
-
-    const kitchenTicket = `
-========================================
-       沙貝燒烤 (廚房工作單)
-       桌號: ${order.tableNumber} 桌
-========================================
-單號: ${order.id}
-出單位址: ${livePrinterIp} (TCP/3000)
-時間: ${new Date(order.createdAt).toLocaleTimeString()}
-----------------------------------------
-餐點菜單項目:
-${kitchenDetails}
-----------------------------------------
-*請依序出餐後更新平板進度
-========================================
-    `;
-
-    // 2. Customer Receipt Ticket
-    const customerDetails = order.items.map(it => {
-      const pName = it.name ? (typeof it.name === 'object' ? (it.name.zh || it.name.en || '未命名商品') : it.name) : '未命名商品';
-      return `  ${pName} x${it.qty}  $${it.price * it.qty}`;
-    }).join('\n');
-    const customerTicket = `
-========================================
-       沙貝燒烤 (顧客點餐菜單明細單)
-       桌號: ${order.tableNumber} 桌
-========================================
-單號: ${order.id}
-出單位址: ${livePrinterIp} (TCP/3000)
-付費方式: ${order.paymentMethod.toUpperCase()} (Google會員: ${order.isMember ? '是(累積點數)' : '否'})
-時間: ${new Date(order.createdAt).toLocaleTimeString()}
-----------------------------------------
-餐點明細:
-${customerDetails}
-----------------------------------------
-小計: $${order.subtotal}
-服務費(10%): $${order.serviceCharge}
-親享總計: $${order.total}
-========================================
-*感謝您的光臨，請至櫃檯完成買單。
-    `;
-
-    printLogs.push({
-      id: `pr-${Date.now()}-k`,
-      timestamp: new Date().toLocaleTimeString(),
-      content: kitchenTicket.trim(),
-      orderId: order.id,
-      type: 'kitchen'
-    });
-
-    printLogs.push({
-      id: `pr-${Date.now()}-c`,
-      timestamp: new Date().toLocaleTimeString(),
-      content: customerTicket.trim(),
-      orderId: order.id,
-      type: 'customer'
-    });
-  }
-
-  order.status = status;
-
-  // Interlock status: if order starts cooking (preparing), automatically set table status to in_use (用餐中)
-  if (status === 'preparing' && order.tableNumber) {
-    const tblId = String(order.tableNumber).trim();
-    const tb = liveTables.find(t => t.id.toString().trim() === tblId);
-    if (tb) {
-      tb.status = 'in_use';
-    }
-  }
-
-  saveStateToDisk();
-  res.json(order);
-});
-
-// Clear All Orders (Testing/Reset)
-app.delete('/api/orders', (req, res) => {
-  liveOrders = [];
-  saveStateToDisk();
-  res.json({ success: true, message: 'All orders cleared successfully' });
-});
-
-// Delete Order by ID
-app.delete('/api/orders/:id', (req, res) => {
-  const { id } = req.params;
-  const index = liveOrders.findIndex(o => o.id === id);
-  if (index === -1) {
-    return res.status(404).json({ error: 'Order not found' });
-  }
-  const deletedOrder = liveOrders.splice(index, 1)[0];
-  saveStateToDisk();
-  res.json({ success: true, message: `Successfully deleted order #${deletedOrder.id}`, order: deletedOrder });
-});
-
-// Update Order table number / takeout configuration
-app.put('/api/orders/:id/table-number', (req, res) => {
-  const { id } = req.params;
-  const { tableNumber } = req.body;
-
-  if (tableNumber === undefined || tableNumber === null) {
-    return res.status(400).json({ error: 'Table number is required / 桌號值不可為空' });
-  }
-
-  const order = liveOrders.find(o => o.id === id);
-  if (!order) {
-    return res.status(404).json({ error: 'Order not found / 找不到此訂單' });
-  }
-
-  let mappedTableNumber = String(tableNumber).trim();
-  if (liveTables && liveTables.length > 0) {
-    mappedTableNumber = getMappedTableId(mappedTableNumber, liveTables);
-  }
-  order.tableNumber = mappedTableNumber;
-  saveStateToDisk();
-  res.json({ success: true, order });
-});
-
-// Update Order Quick Notes (Microphone dictated or edited notes of clarifications)
-app.put('/api/orders/:id/quick-notes', (req, res) => {
-  const { id } = req.params;
-  const { quickNotes } = req.body;
-
-  const order = liveOrders.find(o => o.id === id);
-  if (!order) {
-    return res.status(404).json({ error: 'Order not found / 找不到此訂單' });
-  }
-
-  order.quickNotes = quickNotes !== undefined ? String(quickNotes).trim() : '';
-  saveStateToDisk();
-  res.json({ success: true, order });
-});
-
-// Flag order (staff attention requested) with optional reason
-app.put('/api/orders/:id/flag', (req, res) => {
-  const { id } = req.params;
-  const { isFlagged, flagReason } = req.body;
-
-  const order = liveOrders.find(o => o.id === id);
-  if (!order) {
-    return res.status(404).json({ error: 'Order not found / 找不到此訂單' });
-  }
-
-  order.isFlagged = isFlagged !== undefined ? !!isFlagged : false;
-  order.flagReason = flagReason !== undefined ? String(flagReason).trim() : '';
-  saveStateToDisk();
-  res.json({ success: true, order });
-});
-
-// 7.0. Checkout/Cashier Register Checkout Complete
-app.put('/api/orders/:id/checkout', (req, res) => {
-  const { id } = req.params;
-  const { paymentMethod, total, serviceCharge, subtotal, discount, isPaid } = req.body;
-
-  const order = liveOrders.find(o => o.id === id);
-  if (!order) {
-    return res.status(404).json({ error: 'Order not found' });
-  }
-
-  // Idempotency check: if already paid, return early to prevent duplicate processing/surcharges
-  if (order.isPaid) {
-    console.log(`[Idempotency Check] Order #${id} is already checked out/paid. Returning order without modifications.`);
-    return res.json(order);
-  }
-
-  if (paymentMethod !== undefined) {
-    order.paymentMethod = paymentMethod;
-  }
-  if (total !== undefined) {
-    order.total = total;
-  }
-  if (serviceCharge !== undefined) {
-    order.serviceCharge = serviceCharge;
-  }
-  if (subtotal !== undefined) {
-    order.subtotal = subtotal;
-  }
-  if (discount !== undefined) {
-    (order as any).discount = discount;
-  }
-  order.isPaid = isPaid !== undefined ? !!isPaid : true;
-
-  // Transition status to 'paid' so KDS keeps showing the order until kitchen marks it as completed
-  if (order.isPaid && order.status !== 'completed' && order.status !== 'cancelled') {
-    order.status = 'paid';
-  }
-
-  // Update table status and reservations automatically based on whether the order is checked out and paid
-  if (order.tableNumber) {
-    const tblId = String(order.tableNumber).trim();
-    const tb = liveTables.find(t => t.id.toString().trim() === tblId);
-    if (tb) {
-      if (order.isPaid) {
-        if (tblId.toLowerCase() !== 'takeout' && tblId !== '外帶' && tblId !== '') {
-          tb.status = 'cleaning';
-          tb.preservedFor = '';
-          tb.cleaningStartedAt = new Date().toISOString();
-          scheduleTableAutoRelease(tblId);
-        } else {
-          tb.status = 'available';
-          tb.preservedFor = '';
-          tb.cleaningStartedAt = null;
-        }
-      } else {
-        tb.status = 'pending_checkout';
-      }
-    }
-    if (order.isPaid) {
-      const resIdx = liveReservations.findIndex(r =>
-        (order.reservationNo && (r.id === order.reservationNo || (r as any).reservationNo === order.reservationNo)) ||
-        (String(r.tableNumber).trim() === tblId && (r.status === 'pending' || r.status === 'seated' || r.status === 'upcoming' || r.status === 'confirmed'))
-      );
-      if (resIdx > -1) {
-        const [deletedRes] = liveReservations.splice(resIdx, 1);
-        console.log(`[Checkout Cleanup] Deleted reservation ${deletedRes.id} upon order checkout.`);
-        if (firestoreDb) {
-          deleteDoc(doc(firestoreDb, 'reservations', deletedRes.id)).catch(err => console.error('[Firebase] Failed to delete checkout reservation:', err));
-        }
-      }
-    }
-  }
-
-  saveStateToDisk();
-  res.json(order);
-});
-
-// 7.0.0. Bulk Checkout (多單合併原子結帳)
-app.post('/api/orders/bulk-checkout', async (req, res) => {
-  const { orderIds, tableNumbers, paymentMethod, cashTendered, changeAmount, checkoutRecord } = req.body;
-  if (!Array.isArray(orderIds) || orderIds.length === 0) {
-    return res.status(400).json({ error: 'orderIds 必須為非空陣列' });
-  }
-
-  try {
-    const resolvedOrderStatuses: Record<string, string> = {};
-    const tableSet = new Set<string>();
-
-    if (Array.isArray(tableNumbers)) {
-      tableNumbers.forEach(t => {
-        if (t && !String(t).includes('外帶') && String(t).toLowerCase() !== 'takeout') {
-          tableSet.add(String(t).trim());
-        }
-      });
-    }
-
-    // 1. Process all target orders in memory
-    for (const id of orderIds) {
-      const order = liveOrders.find(o => o.id === id);
-      if (!order) continue;
-
-      const currentStatus = order.status;
-      const resolvedStatus = (currentStatus === 'completed' || currentStatus === 'cancelled') ? currentStatus : 'paid';
-      resolvedOrderStatuses[id] = resolvedStatus;
-
-      order.paymentMethod = paymentMethod || order.paymentMethod || 'cash';
-      (order as any).cashTendered = cashTendered || 0;
-      (order as any).changeAmount = changeAmount || 0;
-      order.isPaid = true;
-      order.status = resolvedStatus;
-      (order as any).updatedAt = new Date().toISOString();
-
-      if (order.tableNumber && !String(order.tableNumber).includes('外帶') && String(order.tableNumber).toLowerCase() !== 'takeout') {
-        tableSet.add(String(order.tableNumber).trim());
-      }
-
-      // Clean up linked reservation
-      if (order.reservationNo) {
-        const resIdx = liveReservations.findIndex(r => r.id === order.reservationNo || (r as any).reservationNo === order.reservationNo);
-        if (resIdx > -1) {
-          const [deletedRes] = liveReservations.splice(resIdx, 1);
-          console.log(`[Bulk Checkout Cleanup] Deleted reservation ${deletedRes.id} upon bulk order checkout.`);
-          if (firestoreDb) {
-            deleteDoc(doc(firestoreDb, 'reservations', deletedRes.id)).catch(err => console.error('[Firebase] Failed to delete checkout reservation:', err));
-          }
-        }
-      }
-    }
-
-    // 2. Smart Table Status Release: Check remaining unpaid orders per table
-    for (const tblId of tableSet) {
-      const tb = liveTables.find(t => t.id.toString().trim() === tblId);
-      if (tb) {
-        const hasOtherUnpaid = liveOrders.some(o =>
-          String(o.tableNumber).trim() === tblId &&
-          !o.isPaid &&
-          o.status !== 'cancelled' &&
-          !orderIds.includes(o.id)
-        );
-
-        if (!hasOtherUnpaid) {
-          tb.status = 'cleaning';
-          tb.preservedFor = '';
-          tb.mergedWith = '';
-          tb.cleaningStartedAt = new Date().toISOString();
-          scheduleTableAutoRelease(tblId);
-        }
-      }
-    }
-
-    // 3. Optional Cash Drawer Trigger on Cash Payment
-    let drawerLog = '';
-    if (livePrinterSettings?.bill?.cashDrawerEnabled) {
-      try {
-        const drawerRes = await triggerCashDrawerOpen(livePrinterSettings.bill);
-        drawerLog = drawerRes.log;
-        printLogs.push({
-          id: `pr-${Date.now()}-drawer-bulk`,
-          timestamp: new Date().toLocaleTimeString(),
-          content: `========================================\n         SABAY BBQ 批次結帳自動開啟收銀抽屜\n========================================\n觸發來源: 批次訂單 [${orderIds.join(', ')}]\n實體埠口: ${livePrinterSettings.bill.usbPort || 'USB002'}\n執行日誌:\n${drawerLog}\n========================================`,
-          orderId: orderIds.join(','),
-          type: 'customer'
-        });
-      } catch (drawerErr) {
-        console.error('[Bulk Cash Drawer Error]', drawerErr);
-      }
-    }
-
-    saveStateToDisk();
-
-    res.json({
-      success: true,
-      processedCount: orderIds.length,
-      orderIds,
-      resolvedOrderStatuses,
-      checkoutId: checkoutRecord?.id,
-      drawerLog
-    });
-  } catch (error: any) {
-    console.error('[bulk-checkout error]', error);
-    res.status(500).json({ error: '批次結帳處理失敗', details: error?.message || error });
-  }
-});
-
-// 7.0.1. Kitchen Complete (出餐完成) - Mark a paid order as completed from KDS
-app.put('/api/orders/:id/complete', (req, res) => {
-  const { id } = req.params;
-
-  const order = liveOrders.find(o => o.id === id);
-  if (!order) {
-    return res.status(404).json({ error: 'Order not found' });
-  }
-
-  order.status = 'completed';
-
-  saveStateToDisk();
-  res.json(order);
-});
-
-
-// 7.1.5 Toggle single order item completed state
-app.put('/api/orders/:id/items/:itemId/complete', (req, res) => {
-  const { id, itemId } = req.params;
-  const { isCompleted, isPrepared } = req.body;
-
-  const order = liveOrders.find(o => o.id === id);
-  if (!order) {
-    return res.status(404).json({ error: 'Order not found' });
-  }
-
-  const item = order.items.find(it => it.id === itemId);
-  if (!item) {
-    return res.status(404).json({ error: 'Item not found' });
-  }
-
-  if (typeof isCompleted !== 'undefined') {
-    item.isCompleted = !!isCompleted;
-    if (item.isCompleted) {
-      item.isPrepared = true;
-    }
-  }
-
-  if (typeof isPrepared !== 'undefined') {
-    item.isPrepared = !!isPrepared;
-  }
-
-  // If all items are completed and order is NOT in 'paid' status, auto set order status to completed
-  // Paid orders require explicit 出餐完成 button press from KDS
-  const allCompleted = order.items.every(it => it.isCompleted);
-  if (allCompleted && order.status !== 'paid') {
-    order.status = 'completed';
-  } else if (order.status === 'completed') {
-    // If it was completed but now an item is unmarked, we revert it to 'preparing'
-    order.status = 'preparing';
-  }
-
-  saveStateToDisk();
-  res.json(order);
-});
-
-// 7.2. Modify Order Items (Add/remove/reduce item inside active order)
-app.put('/api/orders/:id/items', (req, res) => {
-  const { id } = req.params;
-  const { items, refundLogs } = req.body;
-
-  const order = liveOrders.find(o => o.id === id);
-  if (!order) {
-    return res.status(404).json({ error: 'Order not found' });
-  }
-
-  order.items = items;
-  if (refundLogs) {
-    order.refundLogs = refundLogs;
-  }
-
-  // Recompute subtotal, service charge, and total
-  let subtotal = 0;
-  order.items.forEach(it => {
-    const origP = (it as any).originalPrice !== undefined ? Number((it as any).originalPrice) : null;
-    let basePrice = origP !== null ? origP : (Number(it.price) || 0);
-    
-    // Always calculate unit price from base price + customizations
-    const unitP = orderCalculationService.computeOrderItemUnitPrice(it, liveMenu);
-    it.price = unitP; // update price so it reflects total unit cost
-    (it as any).originalPrice = basePrice; // Ensure originalPrice is stored for future updates
-
-    subtotal += unitP * (Number(it.qty) || 1);
-  });
-
-  const promoDiscount = calculatePromoDiscount(order.items);
-
-  order.subtotal = subtotal;
-  (order as any).discount = promoDiscount;
-  const netSubtotal = Math.max(0, subtotal - promoDiscount);
-  order.serviceCharge = (order.paymentMethod === 'credit' || order.paymentMethod === 'twqr') ? Math.round(subtotal * 0.1) : 0;
-  order.total = netSubtotal + order.serviceCharge;
-
-  saveStateToDisk();
-  res.json(order);
+// 3. Register Modular Orders Routes
+registerOrdersRoutes(app, {
+  getLiveOrders: () => liveOrders,
+  setLiveOrders: (orders: Order[]) => {
+    liveOrders = orders;
+  },
+  getLiveTables: () => liveTables,
+  getLiveMenu: () => liveMenu,
+  getLiveReservations: () => liveReservations,
+  getLivePrinterIp: () => livePrinterIp,
+  getLivePrinterSettings: () => livePrinterSettings,
+  getPrintLogs: () => printLogs,
+  getFirestoreDb: () => firestoreDb,
+  isStoreOpen: () => isStoreOpen(),
+  getTaiwanDateString: () => getTaiwanDateString(),
+  calculatePromoDiscount: (items: any[]) => calculatePromoDiscount(items),
+  triggerCashDrawerOpen: (settings: any) => triggerRealCashDrawer(settings),
+  saveStateToDisk: () => saveStateToDisk(),
+  orderRateLimiter
 });
 
 // 8. Management Analytical Insights Data
