@@ -1,18 +1,20 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import express from 'express';
 import { registerOrdersRoutes, OrderRouteContext } from '../src/server/routes/orders';
-import { Order, MenuItem, TableConfig, Reservation } from '../types';
+import { Order, MenuItem, TableConfig, Reservation } from '../src/types';
 import { orderCalculationService } from '../src/services/orderCalculationService';
 
 // Simple mock framework for Express to simulate End-to-End logic without network
 describe('E2E Order Flow Simulation (Frontend -> KDS -> Cashier)', () => {
   let mockOrders: Order[] = [];
-  let mockTables: TableConfig[] = [{ id: '1', status: 'available', name: 'Table 1', capacity: 4 }];
+  let mockTables: TableConfig[] = [{ id: '1', status: 'available', qrCodeUrl: '' }];
   let mockMenu: MenuItem[] = [
     {
       id: 'm1',
       name: { zh: '泰式奶茶', en: 'Thai Tea' },
       price: 100,
+      image: '',
+      description: { zh: '', en: '' },
       available: true,
       category: 'drinks'
     }
@@ -81,7 +83,7 @@ describe('E2E Order Flow Simulation (Frontend -> KDS -> Cashier)', () => {
 
   beforeEach(() => {
     mockOrders = [];
-    mockTables = [{ id: '1', status: 'available', name: 'Table 1', capacity: 4 }];
+    mockTables = [{ id: '1', status: 'available', qrCodeUrl: '' }];
     printLogs = [];
   });
 
