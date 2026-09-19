@@ -1893,7 +1893,7 @@ app.get(['/api/images/:path(*)', '/api/images'], async (req, res) => {
     const contentType = metadata.contentType || getMimeTypeFromExt(cleanPath) || 'image/jpeg';
 
     res.setHeader('Content-Type', contentType);
-    res.setHeader('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
     if (metadata.size) {
       res.setHeader('Content-Length', metadata.size);
     }

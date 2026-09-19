@@ -972,13 +972,19 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
             <button
               type="submit"
               disabled={isUploadingImage}
-              className={`px-5 py-2 font-extrabold rounded-lg active:scale-95 transition shadow-md ${
+              className={`flex items-center space-x-2 px-5 py-2 font-extrabold rounded-lg active:scale-95 transition shadow-md ${
                 isUploadingImage
                   ? 'bg-zinc-700 text-zinc-400 cursor-not-allowed opacity-60'
                   : 'bg-[#E5B453] hover:bg-amber-400 text-slate-900 cursor-pointer'
               }`}
             >
-              {isUploadingImage ? '☁️ 圖片處理中...' : '儲存餐點'}
+              {isUploadingImage && (
+                <svg className="animate-spin -ml-1 mr-1.5 h-4 w-4 text-zinc-300" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                </svg>
+              )}
+              <span>{isUploadingImage ? '☁️ 圖片處理中...' : '儲存餐點'}</span>
             </button>
           </div>
         </form>
