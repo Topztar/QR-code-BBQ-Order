@@ -419,14 +419,11 @@ export function OrderDataProvider({
       }
     };
 
-    if (syncActive && isFirebaseSyncEnabled() && !forceApiFallback) {
+    let reconnectTimer: any = null;
+    let fallbackPollInterval: any = null;
+
+    const setupRealtimeListener = () => {
       try {
-        // 🍳 後台 (廚房 KDS / 櫃檯收銀 / 數據分析)：讀取活動中的在席與待處理訂單
-        // ⚡ 效能優化 (修正 2)：利用 firestore.indexes.json 中已部署的 (status ASC, createdAt DESC) 複合索引，
-        // 精確監聽 activeStatuses (pending, confirmed, preparing, delivering, paid)。
-        // 1. 徹底根除 24/7 平板因掛載時戳凍結 (Stale Closure) 導致的視窗老化問題。
-        // 2. 避免高翻桌率時期被 limit(200) 擠掉傍晚未結案/用餐中老單 (防止漏單)。
-        // 3. 已結案或取消的歷史訂單自動退出監聽，比載入 36 小時全量歷史訂單節省 80%~95% 讀取量。
         const activeStatuses = ['pending', 'confirmed', 'preparing', 'delivering', 'paid'];
         const ordersQuery = query(
           collection(db, "orders"),
@@ -450,19 +447,57 @@ export function OrderDataProvider({
 
           setOrders(reconcileOrdersWithRecentTransitions(normalizedOrders));
         }, (error) => {
-          console.warn('[Firebase Sync] Realtime listener error or paused (fallback to single API sync, polling disabled):', error);
+          console.warn('[Firebase Sync] Realtime listener error:', error);
+          
+          // 🛡️ 錯誤分類防護：
+          // 若為暫時性網絡中斷 (unavailable)，Firebase SDK 內部會持續使用離線快取並自動重試，不宣告監聽死亡
+          if ((error as any)?.code === 'unavailable') {
+            console.log('[Firebase Sync] Network unavailable, retaining persistent cache & waiting for SDK auto-reconnect.');
+            return;
+          }
+
+          // 其他異常 (如 permission-denied 或監聽失效)：執行單次 API 同步並安排自動重連，拒絕永久死亡
           fetchOrdersFromApi();
+          
+          if (!reconnectTimer) {
+            console.log('[Firebase Sync] Scheduling realtime listener re-attach in 10s...');
+            reconnectTimer = setTimeout(() => {
+              reconnectTimer = null;
+              try {
+                unsubscribeOrders();
+              } catch (_) {}
+              setupRealtimeListener();
+            }, 10000);
+          }
         });
       } catch (e) {
         console.warn('[Firebase Sync] Realtime listener initialization skipped:', e);
         fetchOrdersFromApi();
+        if (!reconnectTimer) {
+          reconnectTimer = setTimeout(() => {
+            reconnectTimer = null;
+            setupRealtimeListener();
+          }, 10000);
+        }
       }
+    };
+
+    if (syncActive && isFirebaseSyncEnabled() && !forceApiFallback) {
+      // 🍳 後台 (廚房 KDS / 櫃檯收銀 / 數據分析)：即時監聽在席與待處理訂單
+      setupRealtimeListener();
     } else {
-      // Initial fetch only when sync is inactive or forced API fallback
+      // Initial fetch when sync is inactive or forced API fallback
       fetchOrdersFromApi();
+
+      // 🛡️ 後台守護心跳：當 Firebase Sync 尚未就緒或被關閉時，後台以 15 秒溫和輪詢作為保底防線，避免畫面凍結
+      fallbackPollInterval = setInterval(() => {
+        fetchOrdersFromApi();
+      }, 15000);
     }
 
     return () => {
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (fallbackPollInterval) clearInterval(fallbackPollInterval);
       unsubscribeOrders();
     };
   }, [activeTab, currentPath, forceApiFallback, syncActive]);

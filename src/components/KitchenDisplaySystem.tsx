@@ -253,21 +253,63 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
   }, []);
 
   const seenOrderIdsRef = useRef<Set<string>>(new Set());
+  const watermarkRef = useRef<number>(() => {
+    try {
+      const saved = safeStorage.getItem('kds_order_watermark');
+      return saved ? parseInt(saved, 10) : 0;
+    } catch {
+      return 0;
+    }
+  });
 
   // Detect new pending orders and trigger high-frequency chime + TTS (桌號 / 外帶單號)
   useEffect(() => {
-    const isInitialMount = seenOrderIdsRef.current.size === 0;
+    if (!orders || orders.length === 0) return;
+
+    // 🛡️ 水位線初始化：初次掛載若尚未建立水位線，以當前歷史訂單最新時間為基準，防止開機轟鳴
+    let currentWatermark = typeof watermarkRef.current === 'function' ? (watermarkRef.current as any)() : watermarkRef.current;
+    if (!currentWatermark || currentWatermark <= 0) {
+      const latestOrderTime = orders.reduce((max, o) => {
+        const t = new Date(o.createdAt || 0).getTime();
+        return t > max ? t : max;
+      }, 0);
+      currentWatermark = latestOrderTime > 0 ? latestOrderTime : Date.now();
+      watermarkRef.current = currentWatermark;
+      try {
+        safeStorage.setItem('kds_order_watermark', String(currentWatermark));
+      } catch (_) {}
+
+      // 將現有所有訂單標記為已見
+      orders.forEach(o => seenOrderIdsRef.current.add(o.id));
+      return;
+    }
+
     const newPendingOrders: Order[] = [];
+    let updatedWatermark = currentWatermark;
 
     orders.forEach((order) => {
-      if (!seenOrderIdsRef.current.has(order.id)) {
+      const orderTime = new Date(order.createdAt || 0).getTime();
+      const isUnseen = !seenOrderIdsRef.current.has(order.id);
+
+      if (isUnseen) {
         seenOrderIdsRef.current.add(order.id);
 
-        if (!isInitialMount && order.status === 'pending') {
+        // 僅當訂單時間超越歷史水位線，且狀態為 pending 時，才判定為真正的新單
+        if (order.status === 'pending' && orderTime > currentWatermark) {
           newPendingOrders.push(order);
+          if (orderTime > updatedWatermark) {
+            updatedWatermark = orderTime;
+          }
         }
       }
     });
+
+    if (updatedWatermark > currentWatermark) {
+      watermarkRef.current = updatedWatermark;
+      try {
+        safeStorage.setItem('kds_order_watermark', String(updatedWatermark));
+      } catch (_) {}
+    }
 
     if (newPendingOrders.length > 0) {
       notifyNewOrders(newPendingOrders);

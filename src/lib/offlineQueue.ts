@@ -156,10 +156,26 @@ async function executeRequest(item: QueuedRequest): Promise<Response> {
   });
 }
 
+let isQueuePaused = false;
+
+export function isOfflineQueuePaused(): boolean {
+  return isQueuePaused;
+}
+
+export function resumeOfflineQueue(onProgress?: (msg: string) => void) {
+  isQueuePaused = false;
+  return processOfflineQueue(onProgress);
+}
+
 // Process all outstanding items in the queue in chronological order (FIFO)
 // Phase A: Implements exponential backoff so a 5xx or network failure no longer
 // halts the entire batch — subsequent items continue after a back-off delay.
 export async function processOfflineQueue(onProgress?: (msg: string) => void): Promise<{ successCount: number; failureCount: number }> {
+  if (isQueuePaused) {
+    console.warn('[OfflineQueue] Queue is currently paused due to auth expiration. Call resumeOfflineQueue() after re-authenticating.');
+    return { successCount: 0, failureCount: 0 };
+  }
+
   const queue = getOfflineQueue();
   if (queue.length === 0) {
     return { successCount: 0, failureCount: 0 };
@@ -179,6 +195,9 @@ export async function processOfflineQueue(onProgress?: (msg: string) => void): P
   } catch (_e) {}
 
   for (let i = 0; i < queue.length; i++) {
+    if (isQueuePaused) {
+      break;
+    }
     const item = queue[i];
 
     if (processedIds.includes(item.id)) {
@@ -236,8 +255,22 @@ export async function processOfflineQueue(onProgress?: (msg: string) => void): P
         console.error(`[OfflineQueue] Server rejected request for ${item.url}:`, response.status);
         failureCount++;
 
+        // 🛡️ 認證失效防護：401/403 絕不可丟棄店員已建立的單據與劃單
+        if (response.status === 401 || response.status === 403) {
+          console.warn(`[OfflineQueue] Authentication expired (status ${response.status}) on "${item.description}". Pausing queue.`);
+          isQueuePaused = true;
+          // Revert retryCount increment for this auth failure so it doesn't get discarded
+          item.retryCount = Math.max(0, (item.retryCount || 1) - 1);
+          const rIdx = remaining.findIndex(r => r.id === item.id);
+          if (rIdx > -1) remaining[rIdx] = { ...remaining[rIdx], retryCount: item.retryCount };
+          saveOfflineQueue([...remaining]);
+          window.dispatchEvent(new CustomEvent('sabay_auth_expired', { detail: { url: item.url, status: response.status } }));
+          if (onProgress) onProgress(`🔒 憑證過期，請重新驗證 PIN 碼...`);
+          break; // Pause and halt the batch without discarding
+        }
+
         if ((response.status >= 400 && response.status < 500) || item.retryCount >= 3) {
-          // Terminal client error (400–499) or retry cap reached — discard to prevent deadlock
+          // Terminal client error (400–499 except 401/403) or retry cap reached — discard to prevent deadlock
           console.warn(`[OfflineQueue] Discarding request (${item.id}) status: ${response.status}, retries: ${item.retryCount}`);
           const idx = remaining.findIndex(r => r.id === item.id);
           if (idx > -1) remaining.splice(idx, 1);
