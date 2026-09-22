@@ -365,8 +365,32 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
   }, [restDays]);
 
   const isCurrentSlotReservableOnly = useMemo(() => {
+    if (!operatingHours || operatingHours.length === 0) return false;
+    const now = new Date();
+    const utcTime = now.getTime() + now.getTimezoneOffset() * 60000;
+    const localDate = new Date(utcTime + 3600000 * 8);
+    const dayOfWeek = localDate.getDay();
+    const currentMins = localDate.getHours() * 60 + localDate.getMinutes();
+
+    // Find if the current moment matches an active slot that isReservableOnly
+    for (const slot of operatingHours) {
+      if (!slot || !slot.isActive) continue;
+      if (slot.days && Array.isArray(slot.days) && !slot.days.includes(dayOfWeek)) continue;
+      const [startH, startM] = (slot.start || '00:00').split(':').map(Number);
+      const [endH, endM] = (slot.end || '23:59').split(':').map(Number);
+      const startTotal = startH * 60 + startM;
+      const endTotal = endH * 60 + endM;
+
+      const isCurrent = startTotal <= endTotal
+        ? currentMins >= startTotal && currentMins <= endTotal
+        : currentMins >= startTotal || currentMins <= endTotal;
+
+      if (isCurrent && slot.isReservableOnly) {
+        return true;
+      }
+    }
     return false;
-  }, []);
+  }, [operatingHours]);
 
   const isHasReservation = !!activeCustomerReservation;
 
@@ -688,6 +712,8 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
   const handleResDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newDate = e.target.value;
     setResDate(newDate);
+    // Reset manual table selection so auto-select re-runs with the new date's availability
+    setIsManualTableSelection(false);
     const slots = getAvailableReservationSlots(newDate, operatingHours, restDays);
     if (!slots.includes(resTime)) {
       setResTime(slots[0] || '');
@@ -863,6 +889,8 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
         setToasts={setToasts}
         customerNotice={customerNotice}
         isStoreCurrentlyOpen={isStoreCurrentlyOpen}
+        effectiveIsStoreCurrentlyOpen={effectiveIsStoreCurrentlyOpen}
+        isTakeoutMode={isTakeoutMode}
         isTaiwanRestDay={isTaiwanRestDay}
         isCurrentSlotReservableOnly={isCurrentSlotReservableOnly}
         isHasReservation={isHasReservation}

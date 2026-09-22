@@ -20,6 +20,8 @@ export interface CustomerHeaderProps {
   setToasts: React.Dispatch<React.SetStateAction<any[]>>;
   customerNotice?: string;
   isStoreCurrentlyOpen: boolean;
+  effectiveIsStoreCurrentlyOpen?: boolean;
+  isTakeoutMode?: boolean;
   isTaiwanRestDay: boolean;
   isCurrentSlotReservableOnly: boolean;
   isHasReservation: boolean;
@@ -68,6 +70,8 @@ const CustomerHeaderBase: React.FC<CustomerHeaderProps> = ({
   setToasts,
   customerNotice,
   isStoreCurrentlyOpen,
+  effectiveIsStoreCurrentlyOpen,
+  isTakeoutMode = false,
   isTaiwanRestDay,
   isCurrentSlotReservableOnly,
   isHasReservation,
@@ -185,7 +189,7 @@ const CustomerHeaderBase: React.FC<CustomerHeaderProps> = ({
       )}
 
       {/* Store Closed Warning Board */}
-      {!isStoreCurrentlyOpen && (
+      {!isStoreCurrentlyOpen && !isTakeoutMode && (
         <div className="bg-rose-950/20 border border-rose-500/30 text-rose-300 rounded-3xl p-4 sm:p-5 flex flex-col md:flex-row items-center gap-3.5 shadow-lg select-none font-sans">
           <div className="w-12 h-12 bg-rose-500/15 border border-rose-500/25 rounded-2xl flex items-center justify-center text-rose-400 shrink-0">
             <AlertTriangle size={24} className="animate-bounce" />
@@ -214,6 +218,34 @@ const CustomerHeaderBase: React.FC<CustomerHeaderProps> = ({
                         `${s.name}${s.isReservableOnly ? ' [預約專用]' : ''} (${s.start} - ${s.end})`
                     )
                     .join('、')}
+                </span>
+              )}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Off-hours Takeout Pre-order Notice Board */}
+      {!isStoreCurrentlyOpen && isTakeoutMode && (
+        <div className="bg-blue-950/30 border border-blue-500/40 text-blue-200 rounded-3xl p-4 sm:p-5 flex flex-col md:flex-row items-center gap-3.5 shadow-lg select-none font-sans my-2">
+          <div className="w-12 h-12 bg-blue-500/15 border border-blue-500/25 rounded-2xl flex items-center justify-center text-blue-400 shrink-0">
+            <span className="text-2xl">🥡</span>
+          </div>
+          <div className="text-left flex-1 space-y-1">
+            <h5 className="font-extrabold text-sm sm:text-base text-blue-300">
+              {isTaiwanRestDay
+                ? '● 今日店休 - 線上預約自取開放中 (Rest Day Takeout Order)'
+                : '● 非營業時段 - 線上預訂自取開放中 (Off-Hours Takeout Order)'}
+            </h5>
+            <p className="text-[11px] sm:text-xs text-blue-300/80 leading-relaxed">
+              您目前處於線上外帶自取通道，可自由將餐點加入購物車並結帳。送單時請務必選擇<strong>餐廳營業時段內</strong>的預計取餐時間，廚房將準時為您現點現做！
+              {operatingHours && operatingHours.length > 0 && (
+                <span className="block mt-1 text-cyan-300 font-mono font-bold text-[10px] sm:text-[11px]">
+                  ⏰ 可供取餐之營業時段 Operating Hours:{' '}
+                  {operatingHours
+                    .filter((s: any) => s.isActive && !s.isReservableOnly)
+                    .map((s: any) => `${s.name} (${s.start} - ${s.end})`)
+                    .join('、') || '請洽現場公告'}
                 </span>
               )}
             </p>

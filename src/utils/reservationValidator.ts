@@ -174,13 +174,15 @@ export function calculateReservationAvailability(
   reservations: any[] = [],
   options?: { excludeReservationId?: string; windowMinutes?: number }
 ): ReservationAvailabilityResult {
-  const totalStoreCapacity = (tables || []).reduce((sum, t) => sum + (t.maxCapacity || 4), 0);
+  // Guard: exclude tables explicitly set to 0 capacity (avoids 0 || 4 default inflation)
+  const validTables = (tables || []).filter((t) => t.maxCapacity !== 0);
+  const totalStoreCapacity = validTables.reduce((sum, t) => sum + (t.maxCapacity || 4), 0);
   if (!resDate || !resTime || !tables || tables.length === 0) {
     return {
       totalStoreCapacity,
       bookedGuestsInWindow: 0,
       availableWindowCapacity: totalStoreCapacity,
-      availableTables: tables || [],
+      availableTables: validTables,
       isFullyBooked: false,
       suggestedTimes: [],
     };
@@ -206,7 +208,7 @@ export function calculateReservationAvailability(
     rTables.forEach((tId) => unavailableTableIds.add(tId));
   });
 
-  const availableTables = tables.filter((t) => !unavailableTableIds.has(t.id));
+  const availableTables = validTables.filter((t) => !unavailableTableIds.has(t.id));
   const availableWindowCapacity = availableTables.reduce((sum, t) => sum + (t.maxCapacity || 4), 0);
 
   return {
@@ -232,7 +234,9 @@ export function autoSelectOptimalTables(
     return [];
   }
 
-  const tablesCopy = [...availableTables];
+  // Guard: exclude tables explicitly set to 0 capacity (avoids 0 || 4 default inflation)
+  const tablesCopy = [...availableTables].filter((t) => t.maxCapacity !== 0);
+  if (tablesCopy.length === 0) return [];
 
   // 1. Prefer single table that satisfies guestCount
   const exactFit = tablesCopy
@@ -264,13 +268,15 @@ export function validateTableMonopoly(
   requestedTableObjs: any[] = [],
   guestCount: number
 ): { valid: boolean; error?: string } {
-  if (!requestedTableObjs || requestedTableObjs.length <= 1) {
+  // Guard: exclude tables explicitly set to 0 capacity before monopoly check
+  const validTables = (requestedTableObjs || []).filter((t) => t.maxCapacity !== 0);
+  if (validTables.length <= 1) {
     return { valid: true };
   }
 
-  const selectedTablesCapacity = requestedTableObjs.reduce((sum, t) => sum + (t.maxCapacity || 4), 0);
+  const selectedTablesCapacity = validTables.reduce((sum, t) => sum + (t.maxCapacity || 4), 0);
 
-  for (const tbl of requestedTableObjs) {
+  for (const tbl of validTables) {
     if (selectedTablesCapacity - (tbl.maxCapacity || 4) >= guestCount) {
       return {
         valid: false,

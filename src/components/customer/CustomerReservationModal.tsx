@@ -242,7 +242,7 @@ export const CustomerReservationModal: React.FC<CustomerReservationModalProps> =
                   <select
                     required
                     value={resTime}
-                    onChange={(e) => setResTime(e.target.value)}
+                    onChange={(e) => { setResTime(e.target.value); setIsManualTableSelection(false); }}
                     disabled={!resDate || (restDays && restDays.includes(resDate))}
                     className={`w-full bg-[#1c1c1c] border ${
                       !isResTimeValid
@@ -508,6 +508,7 @@ export const CustomerReservationModal: React.FC<CustomerReservationModalProps> =
                               type="button"
                               onClick={() => {
                                 setResTime(item.time);
+                                setIsManualTableSelection(false);
                                 if (item.firstFreeTableId) setResTableNumbers([item.firstFreeTableId]);
                               }}
                               className="px-2.5 py-1.5 bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-slate-950 border border-amber-500/40 rounded-xl text-xs font-mono font-extrabold transition cursor-pointer active:scale-95 flex items-center gap-1 shadow-sm"

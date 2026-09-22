@@ -95,8 +95,8 @@ export function registerOrdersRoutes(app: express.Express, ctx: OrderRouteContex
 
       const hasPastOrders = memberStr
         ? (Array.isArray(liveOrders) && liveOrders.some(o => o && o.customerName === memberStr)) ||
-          memberStr === '沙貝泰烤老饕' ||
-          memberStr === 'VIP Member'
+        memberStr === '沙貝泰烤老饕' ||
+        memberStr === 'VIP Member'
         : false;
 
       res.json({
@@ -162,6 +162,14 @@ export function registerOrdersRoutes(app: express.Express, ctx: OrderRouteContex
     const isReservationOrder = !!(reservationNo || reservationDate);
     if (!isReservationOrder && !isTakeoutOrder && !isStoreOpen()) {
       return res.status(403).json({ error: '目前不在營業時間內（店鋪休息中），系統不開放下單點餐！' });
+    }
+
+    // Defense-in-depth: Validate takeout pickup time format if provided
+    if (takeoutInfo?.pickupTime) {
+      const pTime = String(takeoutInfo.pickupTime).trim();
+      if (!/^\d{1,2}:\d{2}$/.test(pTime)) {
+        return res.status(400).json({ error: '預計取餐時間格式不正確，請使用 HH:mm (Invalid pickup time format)' });
+      }
     }
 
     if (!items || items.length === 0) {

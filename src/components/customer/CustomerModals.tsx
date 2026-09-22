@@ -187,6 +187,71 @@ export const CustomerTakeoutModal: React.FC<CustomerTakeoutModalProps> = ({
 }) => {
   if (!showTakeoutFormModal) return null;
 
+  // Helper to compute available pickup time slots based on general operating hours
+  const now = new Date();
+  const utcTime = now.getTime() + now.getTimezoneOffset() * 60000;
+  const localDate = new Date(utcTime + 3600000 * 8); // Taiwan Time
+  const dayOfWeek = localDate.getDay();
+  const currentMinutes = localDate.getHours() * 60 + localDate.getMinutes();
+
+  const generalSlots = (operatingHours || []).filter(
+    (s: any) => s && s.isActive && !s.isReservableOnly
+  );
+
+  // Generate 15-min pickup time options
+  const generatedTimeSlots: { value: string; label: string }[] = [];
+  const activeTodaySlots = generalSlots.filter((s: any) => !s.days || s.days.includes(dayOfWeek));
+
+  activeTodaySlots.forEach((slot: any) => {
+    const [startH, startM] = (slot.start || '00:00').split(':').map(Number);
+    const [endH, endM] = (slot.end || '23:59').split(':').map(Number);
+    const startTotal = startH * 60 + startM;
+    const endTotal = endH * 60 + endM;
+
+    // Determine if current time falls within this slot
+    const isNowInsideSlot = startTotal <= endTotal
+      ? currentMinutes >= startTotal && currentMinutes <= endTotal
+      : currentMinutes >= startTotal || currentMinutes <= endTotal;
+
+    // If current time is inside the slot, apply 20-minute prep buffer; otherwise allow starting from slot start
+    const earliestAllowedMinute = isNowInsideSlot ? currentMinutes + 20 : startTotal;
+
+    if (startTotal <= endTotal) {
+      for (let m = startTotal; m <= endTotal; m += 15) {
+        if (m >= earliestAllowedMinute) {
+          const hh = String(Math.floor(m / 60)).padStart(2, '0');
+          const mm = String(m % 60).padStart(2, '0');
+          const val = `${hh}:${mm}`;
+          if (!generatedTimeSlots.some(t => t.value === val)) {
+            generatedTimeSlots.push({ value: val, label: val });
+          }
+        }
+      }
+    } else {
+      // Overnight slot (e.g. 17:00 to 02:00)
+      for (let m = startTotal; m < 1440; m += 15) {
+        if (!isNowInsideSlot || m >= earliestAllowedMinute || (currentMinutes <= endTotal)) {
+          const hh = String(Math.floor(m / 60)).padStart(2, '0');
+          const mm = String(m % 60).padStart(2, '0');
+          const val = `${hh}:${mm}`;
+          if (!generatedTimeSlots.some(t => t.value === val)) {
+            generatedTimeSlots.push({ value: val, label: val });
+          }
+        }
+      }
+      for (let m = 0; m <= endTotal; m += 15) {
+        if (!isNowInsideSlot || currentMinutes > endTotal || m >= earliestAllowedMinute) {
+          const hh = String(Math.floor(m / 60)).padStart(2, '0');
+          const mm = String(m % 60).padStart(2, '0');
+          const val = `${hh}:${mm}`;
+          if (!generatedTimeSlots.some(t => t.value === val)) {
+            generatedTimeSlots.push({ value: val, label: `${val} (隔日凌晨)` });
+          }
+        }
+      }
+    }
+  });
+
   return (
     <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-[60] flex items-center justify-center p-4 overflow-y-auto animate-fadeIn">
       <div className="bg-[#121824] border border-blue-500/25 rounded-2xl w-full max-w-md shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]">
@@ -216,14 +281,6 @@ export const CustomerTakeoutModal: React.FC<CustomerTakeoutModalProps> = ({
             const [h, m] = takeoutPickupTime.split(':').map(Number);
             const pickupMinutes = h * 60 + m;
 
-            const now = new Date();
-            const utcTime = now.getTime() + now.getTimezoneOffset() * 60000;
-            const localDate = new Date(utcTime + 3600000 * 8); // Taiwan Time
-            const dayOfWeek = localDate.getDay();
-
-            const generalSlots = (operatingHours || []).filter(
-              (s: any) => s && s.isActive && !s.isReservableOnly
-            );
             if (generalSlots.length > 0) {
               let isValid = false;
               for (const slot of generalSlots) {
@@ -314,16 +371,37 @@ export const CustomerTakeoutModal: React.FC<CustomerTakeoutModalProps> = ({
               <label className="text-[11px] font-bold text-blue-300 block">
                 預計取餐時間 Pickup Time <span className="text-rose-400">*</span>
               </label>
-              <input
-                type="time"
-                required
-                value={takeoutPickupTime}
-                onChange={(e) => {
-                  setTakeoutPickupTime(e.target.value);
-                  setTakeoutTimeError(null);
-                }}
-                className="w-full bg-black/40 border border-blue-500/20 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/50 transition-colors font-mono"
-              />
+              {generatedTimeSlots.length > 0 ? (
+                <select
+                  required
+                  value={takeoutPickupTime}
+                  onChange={(e) => {
+                    setTakeoutPickupTime(e.target.value);
+                    setTakeoutTimeError(null);
+                  }}
+                  className="w-full bg-black/40 border border-blue-500/20 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/50 transition-colors font-mono"
+                >
+                  <option value="" disabled className="bg-zinc-900 text-zinc-400">
+                    請選擇預計取餐時間 (每 15 分鐘一班)
+                  </option>
+                  {generatedTimeSlots.map((slot) => (
+                    <option key={slot.value} value={slot.value} className="bg-zinc-900 text-white">
+                      {slot.label}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="time"
+                  required
+                  value={takeoutPickupTime}
+                  onChange={(e) => {
+                    setTakeoutPickupTime(e.target.value);
+                    setTakeoutTimeError(null);
+                  }}
+                  className="w-full bg-black/40 border border-blue-500/20 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/50 transition-colors font-mono"
+                />
+              )}
               {takeoutTimeError && (
                 <p className="text-[11px] text-rose-400 font-bold mt-1 animate-pulse">
                   {takeoutTimeError}
