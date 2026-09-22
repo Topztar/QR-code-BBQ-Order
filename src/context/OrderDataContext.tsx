@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useRef, useMemo,
 import { Order, OrderItem, TableConfig, Reservation, OrderStatus } from '../types';
 import { orderCalculationService } from '../services/orderCalculationService';
 import { apiFetch } from '../lib/api';
-import { db, isFirebaseSyncEnabled } from '../lib/firebase';
+import { db, isFirebaseSyncEnabled, ensureFirebaseAuthReady } from '../lib/firebase';
 import { collection, onSnapshot, query, limit, where, orderBy } from 'firebase/firestore';
 import { getOfflineQueue, addRequestToQueue, removeOrderRequestsFromQueue, processOfflineQueue, QueuedRequest } from '../lib/offlineQueue';
 import { safeStorage } from '../lib/safeStorage';
@@ -378,11 +378,13 @@ export function OrderDataProvider({
   // Firestore Realtime Orders listener & Fallback API Polling
   useEffect(() => {
     let unsubscribeOrders = () => {};
+    // 🛡️ 生命週期守衛：防止非同步 await 期間元件卸載產生死庲監聽器 (Zombie Listener)
+    let isCancelled = false;
 
     const isCustomerView = activeTab === 'customer';
 
-    // 🛡️ 顧客端防護：顧客端手機為匿名訪客，無 staff 權限。
-    // Firestore Rules 與後端 /api/orders 皆拒絕匿名存取全店訂單 (避免顧客資訊外流)。
+    // 🛡️ 顧客端防護：顧客端手機為匹名訪客，無 staff 權限。
+    // Firestore Rules 與後端 /api/orders 皆拒絕匹名存取全店訂單 (避免顧客資訊外流)。
     // 顧客訂單完全由提交時的本地狀態與 sabay-my-submitted-order-ids 維護，
     // 嚴禁顧客端發起 onSnapshot 或 /api/orders 請求，徹底消除 401/403 錯誤與失敗監聽風暴。
     if (isCustomerView) {
@@ -421,17 +423,58 @@ export function OrderDataProvider({
 
     let reconnectTimer: any = null;
     let fallbackPollInterval: any = null;
+    let retryCount = 0;
 
-    const setupRealtimeListener = () => {
+    const setupRealtimeListener = async () => {
       try {
-        const activeStatuses = ['pending', 'confirmed', 'preparing', 'delivering', 'paid'];
+        // 🛡️ Auth 連線守衛：等待 Firebase Auth 狀態從 IndexedDB 復原（F5 重載場景）
+        const user = await ensureFirebaseAuthReady();
+        if (isCancelled) return; // 防止非同步 await 期間元件已卸載
+
+        if (!user) {
+          console.warn('[Firebase Sync] Auth not ready after wait, deferring listener setup...');
+          fetchOrdersFromApi(); // 先用 API 取資料防止畫面凍結
+          if (!reconnectTimer && !isCancelled) {
+            reconnectTimer = setTimeout(() => {
+              reconnectTimer = null;
+              setupRealtimeListener();
+            }, 3000);
+          }
+          return;
+        }
+
+        const activeStatuses: OrderStatus[] = ['pending', 'confirmed', 'preparing', 'delivering', 'paid'];
         const ordersQuery = query(
           collection(db, "orders"),
           where("status", "in", activeStatuses),
           orderBy("createdAt", "desc")
         );
 
+        // 🛡️ 綁定於此監聽器實例，防止重連時將全店既有訂單誤判為新單引發音效轟鳴 (Reconnect Stampede)
+        let isFirstSnapshotOfThisListener = true;
+
         unsubscribeOrders = onSnapshot(ordersQuery, (snapshot) => {
+          // 🔊 增量新單偵測（利用 Firestore 原生差異 API，消除時鐘偏差）
+          if (!isFirstSnapshotOfThisListener) {
+            const newlyAdded: Order[] = [];
+            snapshot.docChanges().forEach(change => {
+              if (change.type === 'added') {
+                const ord = { id: change.doc.id, ...change.doc.data() } as Order;
+                if (ord.status === 'pending' || ord.status === 'confirmed') {
+                  newlyAdded.push(ord);
+                }
+              }
+            });
+            if (newlyAdded.length > 0 && typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('sabay_new_orders_detected', {
+                detail: { orders: newlyAdded }
+              }));
+            }
+          } else {
+            // 第一次快照：設定初始狀態，不觸發音效
+            isFirstSnapshotOfThisListener = false;
+          }
+
           const updatedOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
           // Client-side sort descending by createdAt
           updatedOrders.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
@@ -445,6 +488,7 @@ export function OrderDataProvider({
             })) || []
           }));
 
+          retryCount = 0; // 監聽器就緒後重置重試計數器
           setOrders(reconcileOrdersWithRecentTransitions(normalizedOrders));
         }, (error) => {
           console.warn('[Firebase Sync] Realtime listener error:', error);
@@ -456,34 +500,39 @@ export function OrderDataProvider({
             return;
           }
 
-          // 其他異常 (如 permission-denied 或監聽失效)：執行單次 API 同步並安排自動重連，拒絕永久死亡
+          // 其他異常 (如 permission-denied 或監聽失效)：執行單次 API 同步並安排指數退避自動重連拒絕永久死亡
           fetchOrdersFromApi();
           
-          if (!reconnectTimer) {
-            console.log('[Firebase Sync] Scheduling realtime listener re-attach in 10s...');
+          if (!reconnectTimer && !isCancelled) {
+            retryCount++;
+            // 指數退避：1s, 2s, 4s, 8s ... 上限 30s + 隨機亂數防雷群效應
+            const retryDelay = Math.min(1000 * Math.pow(2, retryCount - 1), 30000) + Math.floor(Math.random() * 500);
+            console.log(`[Firebase Sync] Scheduling realtime listener re-attach in ${retryDelay}ms (attempt #${retryCount})...`);
             reconnectTimer = setTimeout(() => {
               reconnectTimer = null;
               try {
                 unsubscribeOrders();
               } catch (_) {}
-              setupRealtimeListener();
-            }, 10000);
+              if (!isCancelled) setupRealtimeListener();
+            }, retryDelay);
           }
         });
       } catch (e) {
         console.warn('[Firebase Sync] Realtime listener initialization skipped:', e);
         fetchOrdersFromApi();
-        if (!reconnectTimer) {
+        if (!reconnectTimer && !isCancelled) {
+          retryCount++;
+          const retryDelay = Math.min(1000 * Math.pow(2, retryCount - 1), 30000) + Math.floor(Math.random() * 500);
           reconnectTimer = setTimeout(() => {
             reconnectTimer = null;
-            setupRealtimeListener();
-          }, 10000);
+            if (!isCancelled) setupRealtimeListener();
+          }, retryDelay);
         }
       }
     };
 
     if (syncActive && isFirebaseSyncEnabled() && !forceApiFallback) {
-      // 🍳 後台 (廚房 KDS / 櫃檯收銀 / 數據分析)：即時監聽在席與待處理訂單
+      // 🍳 後台 (廨房 KDS / 櫃台收銀 / 數據分析)：即時監聽在席與待處理訂單
       setupRealtimeListener();
     } else {
       // Initial fetch when sync is inactive or forced API fallback
@@ -496,6 +545,7 @@ export function OrderDataProvider({
     }
 
     return () => {
+      isCancelled = true; // 🛡️ 通知所有非同步操作：元件已卸載，停止一切重連試圖
       if (reconnectTimer) clearTimeout(reconnectTimer);
       if (fallbackPollInterval) clearInterval(fallbackPollInterval);
       unsubscribeOrders();

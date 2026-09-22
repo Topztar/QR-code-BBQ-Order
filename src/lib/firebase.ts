@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getFunctions, connectFunctionsEmulator } from "firebase/functions";
-import { getAuth, signInWithCustomToken, connectAuthEmulator } from 'firebase/auth';
+import { getAuth, signInWithCustomToken, connectAuthEmulator, type User } from 'firebase/auth';
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, memoryLocalCache, connectFirestoreEmulator, getFirestore, Firestore, enableNetwork } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
@@ -34,7 +34,8 @@ try {
     // Configure persistent local cache with multi-tab manager for sub-millisecond cache speed and optimal quota conservation
     firestoreInstance = initializeFirestore(app, {
       localCache: persistentLocalCache({
-        tabManager: persistentMultipleTabManager()
+        tabManager: persistentMultipleTabManager(),
+        cacheSizeBytes: 100 * 1024 * 1024 // 100MB — BBQ POS 尖峰營業充裕，保留 LRU GC
       })
     }, FIRESTORE_DATABASE_ID);
   } else {
@@ -43,9 +44,16 @@ try {
 } catch (error) {
   console.warn('[Firebase] Firestore initialization cache fallback or double-init check:', error);
   try {
-    firestoreInstance = getFirestore(app, FIRESTORE_DATABASE_ID);
-  } catch (err) {
-    console.error('[Firebase] Critical fallback initialization failed:', err);
+    // IndexedDB 鎖定或孤兒租約：安全降級至記憶體快取
+    firestoreInstance = initializeFirestore(app, {
+      localCache: memoryLocalCache()
+    }, FIRESTORE_DATABASE_ID);
+    console.warn('[Firebase] Downgraded to memoryLocalCache due to IndexedDB failure.');
+  } catch (err: any) {
+    // 若拋出 failed-precondition 代表 Firestore 內部已完成部分啟動，直接取回實例
+    if (err?.code !== 'failed-precondition') {
+      console.error('[Firebase] Critical fallback initialization failed:', err);
+    }
     firestoreInstance = getFirestore(app, FIRESTORE_DATABASE_ID);
   }
 }
@@ -67,7 +75,7 @@ if (isEmulatorMode) {
 export const authenticateFirebaseCustomToken = async (token: string) => {
   if (!token || !auth) return;
   try {
-    if (auth.currentUser) return;
+    // 🛡️ 不再早期返回：允許過期 Token 重新簽入，防止 F5 重載後 auth 過期導致 permission-denied 循環
     await signInWithCustomToken(auth, token);
     console.log('[Firebase Auth] Authenticated staff with Custom Token successfully!');
   } catch (err) {
@@ -75,8 +83,27 @@ export const authenticateFirebaseCustomToken = async (token: string) => {
   }
 };
 
-// 🛡️ 模擬器模式下預設主動解鎖即時同步，使 onSnapshot 於前端初始化時能順利向模擬器註冊
-let syncEnabled = isEmulatorMode;
+/**
+ * 等待 Firebase Auth 狀態恢復（F5 重載後 SDK 從 IndexedDB 自動恢復）
+ * 超時 3 秒保底，避免離線或 IndexedDB 損壞時永久阻塞
+ */
+export const ensureFirebaseAuthReady = async (timeoutMs = 3000): Promise<User | null> => {
+  if (!auth) return null;
+  if (auth.currentUser) return auth.currentUser;
+  try {
+    await Promise.race([
+      auth.authStateReady(),
+      new Promise((resolve) => setTimeout(resolve, timeoutMs))
+    ]);
+  } catch (e) {
+    console.warn('[Firebase Auth] authStateReady wait failed:', e);
+  }
+  return auth.currentUser;
+};
+
+// 🛡️ 生產環境預設啟用即時同步，Bootstrap API 仍可動態覆蓋此值
+// 注意：舊有 `isEmulatorMode` 判斷已移除，避免生產環境冷啟動時監聽器停擺長達 10-30s
+let syncEnabled = true;
 
 export const isFirebaseSyncEnabled = () => syncEnabled;
 

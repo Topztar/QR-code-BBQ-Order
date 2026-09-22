@@ -299,6 +299,12 @@ export function registerOrdersRoutes(app: express.Express, ctx: OrderRouteContex
     const printLogs = getPrintLogs();
     const livePrinterIp = getLivePrinterIp();
 
+    // 🛡️ 狀態值白名單驗證，防止任意字串注入
+    const VALID_ORDER_STATUSES = ['pending', 'confirmed', 'preparing', 'delivering', 'paid', 'completed', 'cancelled'];
+    if (!status || !VALID_ORDER_STATUSES.includes(status)) {
+      return res.status(400).json({ error: `無效的訂單狀態值: ${status}` });
+    }
+
     const order = liveOrders.find(o => o.id === id);
     if (!order) {
       return res.status(404).json({ error: 'Order not found' });
@@ -309,8 +315,8 @@ export function registerOrdersRoutes(app: express.Express, ctx: OrderRouteContex
       return res.status(409).json({ error: `訂單已結帳或已取消 (${order.status})，不可變更為 ${status}` });
     }
 
-    // Trigger printing when confirmed by backend/staff (transitions from pending to preparing)
-    if (status === 'preparing' && order.status === 'pending') {
+    // Trigger printing when confirmed by backend/staff (transitions from pending or confirmed to preparing)
+    if (status === 'preparing' && (order.status === 'pending' || order.status === 'confirmed')) {
       const kitchenDetails = order.items.map(it => {
         const spec = [
           it.customization?.spiciness === 0 ? '不辣' : (it.customization?.spiciness === 1 ? '小辣' : (it.customization?.spiciness === 2 ? '中辣' : '泰辣(+10)')),

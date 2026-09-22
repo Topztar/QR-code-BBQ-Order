@@ -253,14 +253,17 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
   }, []);
 
   const seenOrderIdsRef = useRef<Set<string>>(new Set());
-  const watermarkRef = useRef<number>(() => {
+  // 初始化 watermark 為 0，稍後在 effect 中載入持久化值
+  const watermarkRef = useRef<number>(0);
+  // 讀取本地儲存的水位線，僅在首次掛載時執行
+  useEffect(() => {
     try {
       const saved = safeStorage.getItem('kds_order_watermark');
-      return saved ? parseInt(saved, 10) : 0;
+      watermarkRef.current = saved ? parseInt(saved, 10) : 0;
     } catch {
-      return 0;
+      watermarkRef.current = 0;
     }
-  });
+  }, []);
 
   // Detect new pending orders and trigger high-frequency chime + TTS (桌號 / 外帶單號)
   useEffect(() => {
@@ -294,8 +297,8 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
       if (isUnseen) {
         seenOrderIdsRef.current.add(order.id);
 
-        // 僅當訂單時間超越歷史水位線，且狀態為 pending 時，才判定為真正的新單
-        if (order.status === 'pending' && orderTime > currentWatermark) {
+        // 僅當訂單時間超越歷史水位線，且狀態為 pending/confirmed 時，才判定為真正的新單
+        if ((order.status === 'pending' || order.status === 'confirmed') && orderTime > currentWatermark) {
           newPendingOrders.push(order);
           if (orderTime > updatedWatermark) {
             updatedWatermark = orderTime;
@@ -643,7 +646,7 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
     return orders
       .filter((o) => {
         if (filterStatus === 'active') {
-          return o.status === 'pending' || o.status === 'preparing' || o.status === 'paid';
+          return o.status === 'pending' || o.status === 'confirmed' || o.status === 'preparing' || o.status === 'delivering' || o.status === 'paid';
         }
         if (hideOlderCompleted && (o.status === 'completed' || o.status === 'cancelled')) {
           const diffMins = (Date.now() - new Date(o.createdAt).getTime()) / 60000;

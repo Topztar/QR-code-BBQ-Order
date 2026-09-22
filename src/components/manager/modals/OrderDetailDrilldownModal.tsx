@@ -206,7 +206,9 @@ export const OrderDetailDrilldownModal: React.FC<OrderDetailDrilldownModalProps>
                   <div className="grid grid-cols-2 gap-2 text-xs pt-1">
                     {[
                       { status: 'pending', label: '⏳ 待處理 Pending', color: 'hover:bg-amber-500/20 text-amber-400 border-amber-500/30' },
+                      { status: 'confirmed', label: '✅ 已確認 Confirmed', color: 'hover:bg-sky-500/20 text-sky-400 border-sky-500/30' },
                       { status: 'preparing', label: '🍳 準備中 Preparing', color: 'hover:bg-blue-500/20 text-blue-400 border-blue-500/30' },
+                      { status: 'delivering', label: '🚀 出餐上桌中 Delivering', color: 'hover:bg-violet-500/20 text-violet-400 border-violet-500/30' },
                       { status: 'paid', label: '💳 已結帳 Paid', color: 'hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
                       { status: 'completed', label: '✅ 已完成 Completed', color: 'hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
                       { status: 'cancelled', label: '❌ 已取消 Cancelled', color: 'hover:bg-rose-500/20 text-rose-400 border-rose-500/30' }

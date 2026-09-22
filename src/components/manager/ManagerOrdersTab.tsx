@@ -253,13 +253,17 @@ export const ManagerOrdersTab: React.FC<ManagerOrdersTabProps> = ({
                       <span className={`inline-block px-2.5 py-1 rounded text-[10px] font-extrabold ${
                         o.status === 'completed'
                           ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                          : o.status === 'confirmed'
+                          ? 'bg-sky-500/10 text-sky-400 border border-sky-500/20'
+                          : o.status === 'delivering'
+                          ? 'bg-violet-500/10 text-violet-400 border border-violet-500/20'
                           : o.status === 'preparing'
                           ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
                           : o.status === 'pending'
                           ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse'
                           : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
                       }`}>
-                        {o.status === 'completed' ? '已完成出餐' : (o.status === 'preparing' ? '廚房配餐中' : (o.status === 'pending' ? '新單待理' : '已取消復歸'))}
+                        {o.status === 'completed' ? '已完成出餐' : (o.status === 'confirmed' ? '已確認接單' : (o.status === 'delivering' ? '出餐上桌中' : (o.status === 'preparing' ? '廚房配餐中' : (o.status === 'pending' ? '新單待理' : '已取消復歸'))))}
                       </span>
                     </td>
                     <td className="py-3 px-4 text-center">

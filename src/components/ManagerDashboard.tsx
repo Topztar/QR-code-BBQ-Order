@@ -35,6 +35,7 @@ import {
   exportToCSV,
 } from './manager/ManagerDashboardUtils';
 import { memberService } from '../services/memberService';
+import { unlockAudio, playOrderChimeSound } from '../utils/kdsAudio';
 
 
 interface ManagerDashboardProps {
@@ -237,6 +238,31 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
       setTerminalCartPage: state.setTerminalCartPage
     }))
   );
+
+  // 🔔 收銀台音效：新訂單到達時發出蕃鳴聲，幫助收銀婔蒪掌握新單動態
+  useEffect(() => {
+    // 1. 手勢解鎖 AudioContext（對抗瀏覽器 Autoplay 限制）
+    const handleGesture = () => { unlockAudio(); };
+    window.addEventListener('click', handleGesture, { once: true });
+    window.addEventListener('touchstart', handleGesture, { once: true });
+    window.addEventListener('keydown', handleGesture, { once: true });
+
+    // 2. 監聽新訂單事件並發出蕃鳴
+    const handleNewOrders = async (e: Event) => {
+      const orders = (e as CustomEvent<{ orders: Order[] }>).detail?.orders;
+      if (!orders || orders.length === 0) return;
+      // 收銀台只播鈴聲，不播報框號語音（避免干擾收銀對話）
+      try { await playOrderChimeSound(); } catch (_) {}
+    };
+    window.addEventListener('sabay_new_orders_detected', handleNewOrders);
+
+    return () => {
+      window.removeEventListener('click', handleGesture);
+      window.removeEventListener('touchstart', handleGesture);
+      window.removeEventListener('keydown', handleGesture);
+      window.removeEventListener('sabay_new_orders_detected', handleNewOrders);
+    };
+  }, []);
 
   useEffect(() => {
     setTerminalPage(1);
@@ -1469,7 +1495,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
       subtotal: o.subtotal || 0,
       serviceCharge: o.serviceCharge || 0,
       total: o.total || 0,
-      status: o.status === 'completed' ? '已出餐完成' : (o.status === 'pending' ? '未處置待理' : (o.status === 'preparing' ? '配餐準備中' : '已取消復歸')),
+      status: o.status === 'completed' ? '已出餐完成' : (o.status === 'confirmed' ? '已確認接單' : (o.status === 'delivering' ? '出餐上桌中' : (o.status === 'pending' ? '未處置待理' : (o.status === 'preparing' ? '配餐準備中' : (o.status === 'paid' ? '已結帳' : '已取消復歸'))))),
       isMember: o.isMember ? 'Google會員' : '非會員一般餐客'
     }));
     const map = {

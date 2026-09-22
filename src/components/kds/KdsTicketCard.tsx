@@ -199,11 +199,13 @@ export const KdsTicketCard: React.FC<KdsTicketCardProps> = React.memo(({
                 ? 'animate-red-breathing-glow border-red-500 ring-2 ring-red-500/35 shadow-[0_0_15px_rgba(239,68,68,0.35)] font-bold'
                 : order.status === 'pending'
                   ? 'border-amber-400 ring-2 ring-amber-400/60 animate-pulse bg-gradient-to-b from-amber-950/40 via-[#161616] to-[#161616] shadow-[0_0_25px_rgba(245,158,11,0.45)] font-bold'
-                  : order.status === 'paid'
-                    ? 'border-emerald-500/60 ring-2 ring-emerald-500/40 bg-gradient-to-b from-emerald-950/30 via-[#161616] to-[#161616] shadow-[0_0_15px_rgba(16,185,129,0.3)]'
-                    : order.status === 'preparing'
-                      ? 'border-sky-500/40 hover:border-sky-500'
-                      : 'border-white/10'
+                  : order.status === 'confirmed'
+                    ? 'border-sky-400 ring-2 ring-sky-400/50 bg-gradient-to-b from-sky-950/30 via-[#161616] to-[#161616] shadow-[0_0_20px_rgba(56,189,248,0.35)] font-bold'
+                    : order.status === 'paid'
+                      ? 'border-emerald-500/60 ring-2 ring-emerald-500/40 bg-gradient-to-b from-emerald-950/30 via-[#161616] to-[#161616] shadow-[0_0_15px_rgba(16,185,129,0.3)]'
+                      : order.status === 'preparing'
+                        ? 'border-sky-500/40 hover:border-sky-500'
+                        : 'border-white/10'
         }`}
       >
         {/* Reservation Hold Status Header Banner */}

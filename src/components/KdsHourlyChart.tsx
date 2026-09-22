@@ -61,7 +61,7 @@ export const KdsHourlyChart: React.FC<KdsHourlyChartProps> = React.memo(({
       {activeChartTab === 'current' ? (
         <>
           {/* Peak Load Warning Banner */}
-          {orders.filter(o => o.status === 'pending' || o.status === 'preparing').length > 0 &&
+          {orders.filter(o => o.status === 'pending' || o.status === 'confirmed' || o.status === 'preparing').length > 0 &&
            hourlyData.some(item => item.count >= 3) && (
             <div className="flex items-center space-x-2 bg-red-500/10 border border-red-500/25 p-3 rounded-lg text-red-400 text-xs font-bold animate-pulse">
               <AlertTriangle size={15} className="shrink-0 text-red-400" />

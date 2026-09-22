@@ -63,7 +63,7 @@ export interface OrderItem {
   isCompleted?: boolean;
 }
 
-export type OrderStatus = 'pending' | 'preparing' | 'paid' | 'completed' | 'cancelled';
+export type OrderStatus = 'pending' | 'confirmed' | 'preparing' | 'delivering' | 'paid' | 'completed' | 'cancelled';
 
 export type PaymentMethod = 'cash' | 'credit' | 'member' | 'twqr' | string;
 
