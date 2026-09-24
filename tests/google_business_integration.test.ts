@@ -183,9 +183,10 @@ describe('Google Business Profile Integration Tests', () => {
       expect(mgrCode).toContain('setInterval(checkBridgeStatus, 15000)');
     });
 
-    it('must retain Offline Queue probe in OrderDataContext.tsx', () => {
+    it('must retain Offline Queue probe in OrderDataContext.tsx (or extracted hooks)', () => {
       const orderDataCode = fs.readFileSync(path.join(__dirname, '../src/context/OrderDataContext.tsx'), 'utf-8');
-      expect(orderDataCode).toContain('const probeTimer = setInterval(');
+      const offlineSyncCode = fs.readFileSync(path.join(__dirname, '../src/hooks/useOfflineSync.ts'), 'utf-8');
+      expect(offlineSyncCode).toContain('const probeTimer = setInterval(');
       expect(orderDataCode).toContain('checkAndSyncTables, 15000');
     });
   });

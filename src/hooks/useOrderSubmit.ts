@@ -3,7 +3,7 @@ import { Order, OrderItem } from '../types';
 import { apiFetch } from '../lib/api';
 import { addRequestToQueue } from '../lib/offlineQueue';
 import { safeStorage } from '../lib/safeStorage';
-import { broadcastOrderEvent } from '../context/OrderDataContext';
+import { broadcastOrderEvent } from './useLiveOrders';
 import { orderCalculationService } from '../services/orderCalculationService';
 
 export interface OrderDataPayload {

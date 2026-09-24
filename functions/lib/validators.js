@@ -52,6 +52,18 @@ function validateOrderPayload(body) {
             notes: sanitizeString(item.notes || '', 200)
         });
     }
+    let sanitizedTakeoutInfo = undefined;
+    if (body.takeoutInfo && typeof body.takeoutInfo === 'object') {
+        const rawPickupTime = sanitizeString(body.takeoutInfo.pickupTime || '', 10);
+        if (rawPickupTime && !/^\d{1,2}:\d{2}$/.test(rawPickupTime)) {
+            return { isValid: false, error: '預計取餐時間格式不正確，請使用 HH:mm (Invalid pickup time format)' };
+        }
+        sanitizedTakeoutInfo = {
+            customerName: sanitizeString(body.takeoutInfo.customerName || '', 50),
+            phone: sanitizeString(body.takeoutInfo.phone || '', 30),
+            pickupTime: rawPickupTime || undefined
+        };
+    }
     const sanitizedOrder = {
         ...body,
         tableNumber,
@@ -61,6 +73,7 @@ function validateOrderPayload(body) {
         notes: sanitizeString(body.notes || '', 500),
         source: sanitizeString(body.source || 'direct', 50),
         utm_medium: sanitizeString(body.utm_medium || '', 50),
+        takeoutInfo: sanitizedTakeoutInfo,
         notificationSent: false
     };
     return { isValid: true, sanitizedData: sanitizedOrder };

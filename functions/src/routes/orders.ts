@@ -24,6 +24,7 @@ export function registerOrdersRoutes(app: express.Application, ctx: RouteContext
   const { db, storageBucket, requireStaffAuth, requireAppCheck, createRateLimiter, sendErrorResponse } = ctx;
   const getCachedSettings = createGetCachedSettings(db);
   const orderRateLimiter = createRateLimiter(20, 60 * 1000, '訂單提交');
+  const ratingRateLimiter = createRateLimiter(15, 60 * 1000, '訂單評價');
 
   // 雙路徑路由包裝器
   const get: RouteRegister = (routePath, ...handlers) => app.get([`/api${routePath}`, routePath], ...handlers);
@@ -210,7 +211,7 @@ post('/orders', requireAppCheck, orderRateLimiter, async (req, res) => {
         t.set(idempotencyRef, {
           orderId,
           createdAt: new Date().toISOString(),
-          expireAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000)
         });
       }
 
@@ -561,12 +562,12 @@ put('/orders/:id/complete', requireStaffAuth, async (req, res) => {
   }
 });
 
-// 23.6. Toggle single order item completed state
+// 23.6. Toggle single order item completed state (with Concurrency & Role Conflict checks)
 
 put('/orders/:id/items/:itemId/complete', requireStaffAuth, async (req, res) => {
   const id = req.params.id as string;
   const itemId = req.params.itemId as string;
-  const { isCompleted, isPrepared } = req.body;
+  const { isCompleted, isPrepared, expectedVersion, modifier } = req.body;
 
   try {
     const docRef = db.collection('orders').doc(id);
@@ -577,6 +578,19 @@ put('/orders/:id/items/:itemId/complete', requireStaffAuth, async (req, res) => 
       }
 
       const order = docSnap.data() as any;
+      const currentVersion = order.version || 0;
+
+      // 🛡️ Concurrency Check: If client specified expectedVersion and role is staff, reject if outdated
+      if (typeof expectedVersion === 'number' && expectedVersion < currentVersion) {
+        // If modified by kitchen recently, kitchen is the master truth -> reject stale staff
+        if (order.lastUpdatedBy?.role === 'kitchen' && modifier?.role === 'staff') {
+          const err: any = new Error('CONCURRENCY_CONFLICT');
+          err.statusCode = 409;
+          err.currentOrder = { id: docSnap.id, ...order };
+          throw err;
+        }
+      }
+
       const item = order.items.find((it: any) => it.id === itemId);
       if (!item) {
         throw new Error('Item not found');
@@ -600,16 +614,184 @@ put('/orders/:id/items/:itemId/complete', requireStaffAuth, async (req, res) => 
         order.status = 'preparing';
       }
 
-      t.update(docRef, {
+      const newVersion = currentVersion + 1;
+      const nowIso = new Date().toISOString();
+
+      const updateData: Record<string, any> = {
         items: order.items,
         status: order.status,
-        updatedAt: new Date().toISOString()
-      });
-      return order;
+        updatedAt: nowIso,
+        version: newVersion
+      };
+
+      if (modifier && typeof modifier === 'object') {
+        updateData.lastUpdatedBy = {
+          role: modifier.role || 'staff',
+          deviceId: modifier.deviceId || 'unknown',
+          timestamp: nowIso
+        };
+      }
+
+      t.update(docRef, updateData);
+      return { ...order, ...updateData };
     });
     return res.json(updatedOrder);
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.statusCode === 409 || error?.message === 'CONCURRENCY_CONFLICT') {
+      return res.status(409).json({
+        error: '該餐點狀態已被廚房主畫面更新，已自動為您同步最新狀態！',
+        currentOrder: error.currentOrder
+      });
+    }
+    if (error?.message === 'Order not found') {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    if (error?.message === 'Item not found') {
+      return res.status(404).json({ error: 'Item not found' });
+    }
     res.status(500).send(error);
+  }
+});
+
+// ============================================================
+// 🍳 KDS Kitchen Role Mutex Lease APIs (單一實例廚房鎖)
+// ============================================================
+
+// 1. 取得/搶佔廚房主控權 (Claim Kitchen Role)
+post('/kds/claim-kitchen', requireStaffAuth, async (req, res) => {
+  const { deviceId, force } = req.body;
+  if (!deviceId || typeof deviceId !== 'string') {
+    return res.status(400).json({ error: '缺少有效的設備識別碼 (deviceId is required)' });
+  }
+
+  const kdsSessionRef = db.collection('settings').doc('kds_session');
+  const LEASE_DURATION_MS = 45 * 1000; // 45 秒租約過期門檻
+
+  try {
+    const result = await db.runTransaction(async (t) => {
+      const snap = await t.get(kdsSessionRef);
+      const data = snap.exists ? (snap.data() as any) : null;
+      const now = Date.now();
+      const nowIso = new Date(now).toISOString();
+      const expiresAtIso = new Date(now + LEASE_DURATION_MS).toISOString();
+
+      if (data && data.activeKitchenDeviceId && data.activeKitchenDeviceId !== deviceId) {
+        const lastHeartbeatTime = data.lastHeartbeat ? new Date(data.lastHeartbeat).getTime() : 0;
+        const isExpired = (now - lastHeartbeatTime) > LEASE_DURATION_MS;
+
+        // 如果存在其他設備佔用且未過期，且客戶端未帶 force 旗標，回傳 409 衝突
+        if (!isExpired && !force) {
+          const conflictErr: any = new Error('KITCHEN_ROLE_OCCUPIED');
+          conflictErr.statusCode = 409;
+          conflictErr.activeKitchenDeviceId = data.activeKitchenDeviceId;
+          conflictErr.lastHeartbeat = data.lastHeartbeat;
+          throw conflictErr;
+        }
+      }
+
+      // 搶佔或續約成功
+      const sessionData = {
+        activeKitchenDeviceId: deviceId,
+        lastHeartbeat: nowIso,
+        claimedAt: data?.activeKitchenDeviceId === deviceId ? (data.claimedAt || nowIso) : nowIso,
+        leaseExpiresAt: expiresAtIso
+      };
+
+      t.set(kdsSessionRef, sessionData, { merge: true });
+      return sessionData;
+    });
+
+    return res.json({ success: true, session: result });
+  } catch (error: any) {
+    if (error?.statusCode === 409 || error?.message === 'KITCHEN_ROLE_OCCUPIED') {
+      return res.status(409).json({
+        error: '目前已有其他平板登入為【廚房】角色',
+        activeKitchenDeviceId: error.activeKitchenDeviceId,
+        lastHeartbeat: error.lastHeartbeat
+      });
+    }
+    console.error('[KDS Claim Error]', error);
+    res.status(500).json({ error: '無法搶佔廚房角色' });
+  }
+});
+
+// 2. 廚房主控權心跳維持 (Heartbeat)
+post('/kds/heartbeat', requireStaffAuth, async (req, res) => {
+  const { deviceId } = req.body;
+  if (!deviceId || typeof deviceId !== 'string') {
+    return res.status(400).json({ error: '缺少有效的設備識別碼 (deviceId is required)' });
+  }
+
+  const kdsSessionRef = db.collection('settings').doc('kds_session');
+  const LEASE_DURATION_MS = 45 * 1000;
+
+  try {
+    const result = await db.runTransaction(async (t) => {
+      const snap = await t.get(kdsSessionRef);
+      const data = snap.exists ? (snap.data() as any) : null;
+      const now = Date.now();
+      const nowIso = new Date(now).toISOString();
+      const expiresAtIso = new Date(now + LEASE_DURATION_MS).toISOString();
+
+      if (!data || data.activeKitchenDeviceId !== deviceId) {
+        // 如果當前不是此設備持有鎖，表示已被搶佔或已被強制登出
+        const preemptedErr: any = new Error('KITCHEN_ROLE_PREEMPTED');
+        preemptedErr.statusCode = 403;
+        throw preemptedErr;
+      }
+
+      const sessionData = {
+        ...data,
+        lastHeartbeat: nowIso,
+        leaseExpiresAt: expiresAtIso
+      };
+
+      t.update(kdsSessionRef, {
+        lastHeartbeat: nowIso,
+        leaseExpiresAt: expiresAtIso
+      });
+
+      return sessionData;
+    });
+
+    return res.json({ success: true, session: result });
+  } catch (error: any) {
+    if (error?.statusCode === 403 || error?.message === 'KITCHEN_ROLE_PREEMPTED') {
+      return res.status(403).json({ error: '您的廚房角色已被其他裝置取代' });
+    }
+    console.error('[KDS Heartbeat Error]', error);
+    res.status(500).json({ error: '心跳更新失敗' });
+  }
+});
+
+// 3. 自願釋放廚房主控權 (Release Kitchen Role)
+post('/kds/release-kitchen', requireStaffAuth, async (req, res) => {
+  const { deviceId } = req.body;
+  if (!deviceId || typeof deviceId !== 'string') {
+    return res.status(400).json({ error: '缺少有效的設備識別碼 (deviceId is required)' });
+  }
+
+  const kdsSessionRef = db.collection('settings').doc('kds_session');
+
+  try {
+    await db.runTransaction(async (t) => {
+      const snap = await t.get(kdsSessionRef);
+      if (!snap.exists) return;
+      const data = snap.data() as any;
+
+      // 只有當持有者是自己的時候才清除，避免清到新搶佔設備的鎖
+      if (data && data.activeKitchenDeviceId === deviceId) {
+        t.update(kdsSessionRef, {
+          activeKitchenDeviceId: null,
+          leaseExpiresAt: null
+        });
+      }
+    });
+
+    return res.json({ success: true, message: '廚房角色已成功釋放' });
+  } catch (error) {
+    console.error('[KDS Release Error]', error);
+    res.status(500).json({ error: '無法釋放廚房角色' });
   }
 });
 
@@ -669,7 +851,7 @@ post('/print-logs/clear', requireStaffAuth, async (_req, res) => {
 
 // --- Order Rating APIs ---
 
-put('/orders/:id/rate', async (req, res) => {
+put('/orders/:id/rate', ratingRateLimiter, async (req, res) => {
   const id = req.params.id as string;
   const validation = validateRatingPayload(req.body);
   if (!validation.isValid || !validation.sanitizedData) {

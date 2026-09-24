@@ -1,7 +1,7 @@
 import { apiFetch } from "../lib/api";
 import { ErrorBoundary } from './ErrorBoundary';
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Ingredient, Language, Category, TableConfig, Order, OrderStatus, Reservation, SoldOutType } from '../types';
+import React, { useState, useEffect, useMemo, useCallback, Suspense, lazy } from 'react';
+import { Ingredient, Language, Category, TableConfig, Order, OrderStatus, Reservation, SoldOutType, PrinterConfig, PaidModDetails } from '../types';
 import { getLocalizedText } from '../utils/i18n';
 import { safeStorage } from '../lib/safeStorage';
 import { useDashboardStore } from '../stores/dashboard/useDashboardStore';
@@ -12,17 +12,25 @@ import {
   printViaBridge,
   DEFAULT_POS_BRIDGE_URL
 } from '../lib/posBridgeClient';
-import { ManagerStatsTab } from './manager/ManagerStatsTab';
-import { ManagerOrdersTab } from './manager/ManagerOrdersTab';
-import { ManagerInventoryTab } from './manager/ManagerInventoryTab';
-import { ManagerMenuTab } from './manager/ManagerMenuTab';
-import { ManagerMembersTab } from './manager/ManagerMembersTab';
-import { ManagerPrinterTab, PrinterConfig } from './manager/ManagerPrinterTab';
-import { ManagerOptionRulesTab } from './manager/ManagerOptionRulesTab';
-import { ManagerEodTab } from './manager/ManagerEodTab';
-import { ManagerTerminalTab } from './manager/ManagerTerminalTab';
-import { ManagerCashierTab } from './manager/ManagerCashierTab';
-import { ManagerNotificationsTab } from './manager/ManagerNotificationsTab';
+const ManagerStatsTab = lazy(() => import('./manager/ManagerStatsTab').then(m => ({ default: m.ManagerStatsTab })));
+const ManagerOrdersTab = lazy(() => import('./manager/ManagerOrdersTab').then(m => ({ default: m.ManagerOrdersTab })));
+const ManagerInventoryTab = lazy(() => import('./manager/ManagerInventoryTab').then(m => ({ default: m.ManagerInventoryTab })));
+const ManagerMenuTab = lazy(() => import('./manager/ManagerMenuTab').then(m => ({ default: m.ManagerMenuTab })));
+const ManagerMembersTab = lazy(() => import('./manager/ManagerMembersTab').then(m => ({ default: m.ManagerMembersTab })));
+
+const ManagerPrinterTab = lazy(() => import('./manager/ManagerPrinterTab').then(m => ({ default: m.ManagerPrinterTab })));
+const ManagerOptionRulesTab = lazy(() => import('./manager/ManagerOptionRulesTab').then(m => ({ default: m.ManagerOptionRulesTab })));
+const ManagerEodTab = lazy(() => import('./manager/ManagerEodTab').then(m => ({ default: m.ManagerEodTab })));
+const ManagerTerminalTab = lazy(() => import('./manager/ManagerTerminalTab').then(m => ({ default: m.ManagerTerminalTab })));
+const ManagerCashierTab = lazy(() => import('./manager/ManagerCashierTab').then(m => ({ default: m.ManagerCashierTab })));
+const ManagerNotificationsTab = lazy(() => import('./manager/ManagerNotificationsTab').then(m => ({ default: m.ManagerNotificationsTab })));
+
+const TabSuspenseFallback = () => (
+  <div className="flex flex-col items-center justify-center p-12 min-h-[400px]">
+    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-4"></div>
+    <p className="text-gray-500 text-sm">載入模組中 Loading Module...</p>
+  </div>
+);
 import { ManagerModalContainer } from './manager/ManagerModalContainer';
 import { PaidOrderModificationModal } from './manager/modals/PaidOrderModificationModal';
 import { OrderDetailDrilldownModal } from './manager/modals/OrderDetailDrilldownModal';
@@ -577,7 +585,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   }, [selectedOrder]);
 
   // Paid Order Modifications (Return & Refund workflow)
-  const [paidModDetails, setPaidModDetails] = useState<{ item?: any; menuItemId?: string; delta: number; isAddingNew: boolean } | null>(null);
+  const [paidModDetails, setPaidModDetails] = useState<PaidModDetails | null>(null);
   const [modReason, setModReason] = useState('input_error');
   const [modNotes, setModNotes] = useState('');
   const [modPin, setModPin] = useState('');
@@ -1593,32 +1601,37 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
           ))}
         </div>
       )}
+      <Suspense fallback={<TabSuspenseFallback />}>
       {/* ==================== TAB 1: OPERATIONAL ANALYTICS ==================== */}
       {activeSubTab === 'stats' && (
-        <ManagerStatsTab
-          currentLang={currentLang}
-          analytics={analytics}
-          takeoutStatus={takeoutStatus}
-          chartCategoryData={chartCategoryData}
-          chartHourlyData={chartHourlyData}
-          printLogs={printLogs}
-          fetchPrintLogs={fetchPrintLogs}
-          handleExportLast30DaysOrdersCSV={handleExportLast30DaysOrdersCSV}
-          csvExportSuccess={csvExportSuccess}
-          csvExportError={csvExportError}
-          menuItems={menuItems}
-          localPopularIds={localPopularIds}
-          setLocalPopularIds={setLocalPopularIds}
-          showClearAllPopularConfirm={showClearAllPopularConfirm}
-          setShowClearAllPopularConfirm={setShowClearAllPopularConfirm}
-          popularItemToRemoveId={popularItemToRemoveId}
-          setPopularItemToRemoveId={setPopularItemToRemoveId}
-          popularSaveStatus={popularSaveStatus}
-          setPopularSaveStatus={setPopularSaveStatus}
-          isSavingPopular={isSavingPopular}
-          setIsSavingPopular={setIsSavingPopular}
-          onUpdatePopularItemIds={onUpdatePopularItemIds}
-        />
+        <ErrorBoundary fallbackTitle="營運數據模組異常" fallbackMessage="圖表模組發生錯誤，但其他營業功能仍可正常使用。">
+          <Suspense fallback={<TabSuspenseFallback />}>
+            <ManagerStatsTab
+              currentLang={currentLang}
+              analytics={analytics}
+              takeoutStatus={takeoutStatus}
+              chartCategoryData={chartCategoryData}
+              chartHourlyData={chartHourlyData}
+              printLogs={printLogs}
+              fetchPrintLogs={fetchPrintLogs}
+              handleExportLast30DaysOrdersCSV={handleExportLast30DaysOrdersCSV}
+              csvExportSuccess={csvExportSuccess}
+              csvExportError={csvExportError}
+              menuItems={menuItems}
+              localPopularIds={localPopularIds}
+              setLocalPopularIds={setLocalPopularIds}
+              showClearAllPopularConfirm={showClearAllPopularConfirm}
+              setShowClearAllPopularConfirm={setShowClearAllPopularConfirm}
+              popularItemToRemoveId={popularItemToRemoveId}
+              setPopularItemToRemoveId={setPopularItemToRemoveId}
+              popularSaveStatus={popularSaveStatus}
+              setPopularSaveStatus={setPopularSaveStatus}
+              isSavingPopular={isSavingPopular}
+              setIsSavingPopular={setIsSavingPopular}
+              onUpdatePopularItemIds={onUpdatePopularItemIds}
+            />
+          </Suspense>
+        </ErrorBoundary>
       )}
 
 
@@ -1660,23 +1673,27 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
 
       {/* ==================== TAB 2: ACCOUNTING LOG CHART & SINGLE DRILLDOWN ==================== */}
       {activeSubTab === 'orders' && (
-        <ManagerOrdersTab
-          setShowBulkDeleteOrdersModal={setShowBulkDeleteOrdersModal}
-          handleExportOrdersReport={handleExportOrdersReport}
-          dateRangeFilter={dateRangeFilter}
-          setDateRangeFilter={setDateRangeFilter}
-          orderQueryStartDate={orderQueryStartDate}
-          setOrderQueryStartDate={setOrderQueryStartDate}
-          orderQueryEndDate={orderQueryEndDate}
-          setOrderQueryEndDate={setOrderQueryEndDate}
-          orderQueryKeyword={orderQueryKeyword}
-          setOrderQueryKeyword={setOrderQueryKeyword}
-          orderQueryStatus={orderQueryStatus}
-          setOrderQueryStatus={setOrderQueryStatus}
-          filteredStats={filteredStats}
-          filteredOrders={filteredOrders}
-          setSelectedOrder={setSelectedOrder}
-        />
+        <ErrorBoundary fallbackTitle="帳務明細模組異常" fallbackMessage="明細載入發生錯誤，請重新整理或聯繫管理員。">
+          <Suspense fallback={<TabSuspenseFallback />}>
+            <ManagerOrdersTab
+              setShowBulkDeleteOrdersModal={setShowBulkDeleteOrdersModal}
+              handleExportOrdersReport={handleExportOrdersReport}
+              dateRangeFilter={dateRangeFilter}
+              setDateRangeFilter={setDateRangeFilter}
+              orderQueryStartDate={orderQueryStartDate}
+              setOrderQueryStartDate={setOrderQueryStartDate}
+              orderQueryEndDate={orderQueryEndDate}
+              setOrderQueryEndDate={setOrderQueryEndDate}
+              orderQueryKeyword={orderQueryKeyword}
+              setOrderQueryKeyword={setOrderQueryKeyword}
+              orderQueryStatus={orderQueryStatus}
+              setOrderQueryStatus={setOrderQueryStatus}
+              filteredStats={filteredStats}
+              filteredOrders={filteredOrders}
+              setSelectedOrder={setSelectedOrder}
+            />
+          </Suspense>
+        </ErrorBoundary>
       )}
 
       {/* ==================== TAB 3: INVENTORY LEDGER (進銷存) ==================== */}
@@ -1720,22 +1737,26 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
 
       {/* ==================== TAB 4: MENU ITEMS MANAGER ==================== */}
       {activeSubTab === 'menu' && (
-        <ManagerMenuTab
-          currentLang={currentLang}
-          menuItems={menuItems}
-          categories={categories}
-          triggerAddMenuItemMode={triggerAddMenuItemMode}
-          triggerEditMenuItemMode={triggerEditMenuItemMode}
-          onToggleMenuItemAvailability={onToggleMenuItemAvailability}
-          onDeleteMenuItem={onDeleteMenuItem}
-          onReorderMenuItems={onReorderMenuItems}
-          triggerAddCatMode={triggerAddCatMode}
-          triggerEditCatMode={triggerEditCatMode}
-          onAddCategory={onAddCategory}
-          onEditCategory={onEditCategory}
-          onDeleteCategory={onDeleteCategory}
-          onReorderCategories={onReorderCategories}
-        />
+        <ErrorBoundary fallbackTitle="菜單編輯模組異常" fallbackMessage="菜單編輯器載入失敗，不影響前台出餐運作。">
+          <Suspense fallback={<TabSuspenseFallback />}>
+            <ManagerMenuTab
+              currentLang={currentLang}
+              menuItems={menuItems}
+              categories={categories}
+              triggerAddMenuItemMode={triggerAddMenuItemMode}
+              triggerEditMenuItemMode={triggerEditMenuItemMode}
+              onToggleMenuItemAvailability={onToggleMenuItemAvailability}
+              onDeleteMenuItem={onDeleteMenuItem}
+              onReorderMenuItems={onReorderMenuItems}
+              triggerAddCatMode={triggerAddCatMode}
+              triggerEditCatMode={triggerEditCatMode}
+              onAddCategory={onAddCategory}
+              onEditCategory={onEditCategory}
+              onDeleteCategory={onDeleteCategory}
+              onReorderCategories={onReorderCategories}
+            />
+          </Suspense>
+        </ErrorBoundary>
       )}
 
       {/* ==================== TAB 5: MEMBERS, ACCESS PRIVILEGE AND PIN ==================== */}
@@ -1867,6 +1888,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
           onPlaceOrder={onPlaceOrder}
         />
       )}
+      </Suspense>
 
       {/* ========================================================================= */}
       {/* ==================== SCREEN POPUP RESILIENT MODALS ==================== */}

@@ -10,7 +10,7 @@ import {
   isOrderOnLocalDate,
   calculateOrderTotalWithPayment
 } from './ManagerDashboardUtils';
-import { PrinterConfig } from './ManagerPrinterTab';
+import { PrinterConfig } from '../../types';
 
 const localStorage = safeStorage;
 

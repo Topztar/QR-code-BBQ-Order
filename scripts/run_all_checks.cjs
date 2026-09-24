@@ -30,7 +30,7 @@ const stages = [
     name: 'Phase 3: 雲端維運與成本防護審計 (Cost Guard Audit)',
     command: 'node scripts/run_cost_audit.cjs',
     badge: '💰 [Phase 3]',
-    expectedCount: '16 項檢查'
+    expectedCount: '21 項檢查'
   },
   {
     name: 'TypeScript 靜態型別與語法檢驗 (Strict Typecheck)',
@@ -39,10 +39,10 @@ const stages = [
     expectedCount: '0 型別錯誤'
   },
   {
-    name: 'Vitest 全端自動化單元與整合測試 (84 Tests)',
+    name: 'Vitest 全端自動化單元與整合測試 (200+ Tests)',
     command: 'npx vitest run',
     badge: '🧪 [Vitest Suite]',
-    expectedCount: '84/84 通過'
+    expectedCount: '207/207 通過'
   },
   {
     name: 'Vite + esbuild 生產環境雙重預壓縮建置 (Gzip & Brotli)',

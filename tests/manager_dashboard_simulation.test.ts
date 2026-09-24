@@ -3,12 +3,9 @@ import {
   getMaskedEmail,
   computeOrderItemUnitPrice,
   computeOrderItemsSubtotal,
-  calculateOrderTotalWithPayment,
-  getLocalDateString,
   isOrderOnLocalDate,
   generateReservationNo,
 } from '../src/components/manager/ManagerDashboardUtils';
-import { orderCalculationService } from '../src/services/orderCalculationService';
 
 describe('ManagerDashboard & Extended Files Functional Simulation Suite', () => {
   const mockMenu = [

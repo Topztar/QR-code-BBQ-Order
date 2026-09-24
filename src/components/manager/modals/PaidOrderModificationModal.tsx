@@ -1,13 +1,6 @@
 import React from 'react';
-import { Language } from '../../../types';
+import { Language, PaidModDetails } from '../../../types';
 import { getLocalizedText } from '../../../utils/i18n';
-
-export interface PaidModDetails {
-  item?: any;
-  menuItemId?: string;
-  delta: number;
-  isAddingNew: boolean;
-}
 
 export interface PaidOrderModificationModalProps {
   paidModDetails: PaidModDetails | null;

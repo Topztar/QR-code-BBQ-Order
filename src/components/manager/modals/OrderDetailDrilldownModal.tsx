@@ -3,7 +3,7 @@ import { Minus, Plus, Coins } from 'lucide-react';
 import { Order, OrderStatus, Language, TableConfig } from '../../../types';
 import { getLocalizedText } from '../../../utils/i18n';
 import { ConfirmActionModalConfig } from './ConfirmActionModal';
-import { PaidModDetails } from './PaidOrderModificationModal';
+import { PaidModDetails } from '../../../types';
 import { memberService } from '../../../services/memberService';
 import { getMaskedEmail, computeOrderItemUnitPrice, computeOrderItemsSubtotal } from '../ManagerDashboardUtils';
 

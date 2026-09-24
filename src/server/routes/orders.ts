@@ -19,45 +19,13 @@ export interface OrderRouteContext {
   triggerCashDrawerOpen: (settings: any) => Promise<{ success: boolean; log: string }>;
   saveStateToDisk: () => void;
   orderRateLimiter?: express.RequestHandler;
+  ratingRateLimiter?: express.RequestHandler;
 }
 
-export function getMappedTableId(inputTableId: string, availableTables: Array<{ id: string }>): string {
-  if (!availableTables || availableTables.length === 0) {
-    return inputTableId;
-  }
-  const cleanInput = String(inputTableId).trim();
-  if (availableTables.some(t => t.id.toString().trim() === cleanInput)) {
-    return cleanInput;
-  }
-  if (cleanInput.includes('外帶') || cleanInput.toLowerCase().includes('takeout')) {
-    return cleanInput;
-  }
+import { getMappedTableId } from '../../utils/tableUtils';
+export { getMappedTableId };
 
-  // Extract digits
-  const matchDigits = cleanInput.match(/\d+/);
-  if (matchDigits) {
-    const tableNum = parseInt(matchDigits[0], 10);
-    const numericTables = availableTables
-      .map(t => ({ id: t.id, num: parseInt(String(t.id).match(/\d+/)?.[0] || '', 10) }))
-      .filter(t => !isNaN(t.num));
-
-    if (numericTables.length > 0) {
-      let closestTable = numericTables[0];
-      let minDiff = Math.abs(numericTables[0].num - tableNum);
-      for (const nt of numericTables) {
-        const diff = Math.abs(nt.num - tableNum);
-        if (diff < minDiff) {
-          minDiff = diff;
-          closestTable = nt;
-        }
-      }
-      return closestTable.id;
-    }
-  }
-
-  // If no match found, preserve exact cleaned input without randomly guessing or hashing tables
-  return cleanInput;
-}
+const localIdempotencyKeys = new Map<string, { orderId: string, expiresAt: number }>();
 
 export function registerOrdersRoutes(app: express.Express, ctx: OrderRouteContext) {
   const {
@@ -75,11 +43,13 @@ export function registerOrdersRoutes(app: express.Express, ctx: OrderRouteContex
     calculatePromoDiscount,
     triggerCashDrawerOpen,
     saveStateToDisk,
-    orderRateLimiter
+    orderRateLimiter,
+    ratingRateLimiter
   } = ctx;
 
   const noopMiddleware: express.RequestHandler = (_req, _res, next) => next();
   const rateLimiter = orderRateLimiter || noopMiddleware;
+  const ratingLimiter = ratingRateLimiter || noopMiddleware;
 
   // 1. History Check
   app.get('/api/orders/history-check', (req, res) => {
@@ -143,11 +113,32 @@ export function registerOrdersRoutes(app: express.Express, ctx: OrderRouteContex
     const liveTables = getLiveTables();
     const liveMenu = getLiveMenu();
 
+    // Clean up expired idempotency keys
+    const now = Date.now();
+    for (const [key, val] of localIdempotencyKeys.entries()) {
+      if (now > val.expiresAt) {
+        localIdempotencyKeys.delete(key);
+      }
+    }
+
     if (clientOrderId) {
-      const existing = liveOrders.find(o => o.clientOrderId === clientOrderId);
-      if (existing) {
-        console.log(`[Idempotency check] Duplicate order detected for clientOrderId ${clientOrderId}. Returning existing order #${existing.id}`);
-        return res.status(201).json(existing);
+      if (localIdempotencyKeys.has(clientOrderId)) {
+        const entry = localIdempotencyKeys.get(clientOrderId)!;
+        const existing = liveOrders.find(o => o.id === entry.orderId);
+        if (existing) {
+          console.log(`[Idempotency check] Duplicate order detected for clientOrderId ${clientOrderId}. Returning existing order #${existing.id}`);
+          return res.status(201).json(existing);
+        }
+      }
+      
+      const existingInOrders = liveOrders.find(o => o.clientOrderId === clientOrderId);
+      if (existingInOrders) {
+        localIdempotencyKeys.set(clientOrderId, {
+          orderId: existingInOrders.id,
+          expiresAt: Date.now() + 24 * 60 * 60 * 1000
+        });
+        console.log(`[Idempotency check] Duplicate order detected for clientOrderId ${clientOrderId} (fallback). Returning existing order #${existingInOrders.id}`);
+        return res.status(201).json(existingInOrders);
       }
     }
 
@@ -262,6 +253,13 @@ export function registerOrdersRoutes(app: express.Express, ctx: OrderRouteContex
 
     liveOrders.push(newOrder);
 
+    if (clientOrderId) {
+      localIdempotencyKeys.set(clientOrderId, {
+        orderId: newOrder.id,
+        expiresAt: Date.now() + 24 * 60 * 60 * 1000
+      });
+    }
+
     // Interlock table status: when order is successfully placed, transition table status to in_use
     if (!isTakeoutOrder && mappedTableNumber) {
       const tb = liveTables.find(t => t.id.toString().trim() === mappedTableNumber);
@@ -276,7 +274,7 @@ export function registerOrdersRoutes(app: express.Express, ctx: OrderRouteContex
   });
 
   // 4. Rate Completed Order
-  app.put('/api/orders/:id/rate', (req, res) => {
+  app.put('/api/orders/:id/rate', ratingLimiter, (req, res) => {
     const { id } = req.params;
     const { rating, feedback } = req.body;
 
@@ -718,12 +716,24 @@ ${customerDetails}
   // 14. Toggle single order item completed state
   app.put('/api/orders/:id/items/:itemId/complete', (req, res) => {
     const { id, itemId } = req.params;
-    const { isCompleted, isPrepared } = req.body;
+    const { isCompleted, isPrepared, expectedVersion, modifier } = req.body;
 
     const liveOrders = getLiveOrders();
     const order = liveOrders.find(o => o.id === id);
     if (!order) {
       return res.status(404).json({ error: 'Order not found' });
+    }
+
+    const currentVersion = order.version || 0;
+
+    // 🛡️ Concurrency Check: If client specified expectedVersion and role is staff, reject if outdated
+    if (typeof expectedVersion === 'number' && expectedVersion < currentVersion) {
+      if (order.lastUpdatedBy?.role === 'kitchen' && modifier?.role === 'staff') {
+        return res.status(409).json({
+          error: '該餐點狀態已被廚房主畫面更新，已自動為您同步最新狀態！',
+          currentOrder: order
+        });
+      }
     }
 
     const item = order.items.find(it => it.id === itemId);
@@ -749,8 +759,95 @@ ${customerDetails}
       order.status = 'preparing';
     }
 
+    const nowIso = new Date().toISOString();
+    order.updatedAt = nowIso;
+    order.version = currentVersion + 1;
+    if (modifier && typeof modifier === 'object') {
+      order.lastUpdatedBy = {
+        role: modifier.role || 'staff',
+        deviceId: modifier.deviceId || 'unknown',
+        timestamp: nowIso
+      };
+    }
+
     saveStateToDisk();
     res.json(order);
+  });
+
+  // --- KDS Mutex Lock Session in Local Mode ---
+  let localKdsSession: {
+    activeKitchenDeviceId: string | null;
+    lastHeartbeat: string | null;
+    claimedAt: string | null;
+    leaseExpiresAt: string | null;
+  } = {
+    activeKitchenDeviceId: null,
+    lastHeartbeat: null,
+    claimedAt: null,
+    leaseExpiresAt: null
+  };
+
+  app.post('/api/kds/claim-kitchen', (req, res) => {
+    const { deviceId, force } = req.body;
+    if (!deviceId) return res.status(400).json({ error: 'deviceId is required' });
+
+    const now = Date.now();
+    const LEASE_DURATION_MS = 45 * 1000;
+    const nowIso = new Date(now).toISOString();
+    const expiresAtIso = new Date(now + LEASE_DURATION_MS).toISOString();
+
+    if (localKdsSession.activeKitchenDeviceId && localKdsSession.activeKitchenDeviceId !== deviceId) {
+      const lastHeartbeatTime = localKdsSession.lastHeartbeat ? new Date(localKdsSession.lastHeartbeat).getTime() : 0;
+      const isExpired = (now - lastHeartbeatTime) > LEASE_DURATION_MS;
+
+      if (!isExpired && !force) {
+        return res.status(409).json({
+          error: '目前已有其他平板登入為【廚房】角色',
+          activeKitchenDeviceId: localKdsSession.activeKitchenDeviceId,
+          lastHeartbeat: localKdsSession.lastHeartbeat
+        });
+      }
+    }
+
+    localKdsSession = {
+      activeKitchenDeviceId: deviceId,
+      lastHeartbeat: nowIso,
+      claimedAt: localKdsSession.activeKitchenDeviceId === deviceId ? (localKdsSession.claimedAt || nowIso) : nowIso,
+      leaseExpiresAt: expiresAtIso
+    };
+
+    res.json({ success: true, session: localKdsSession });
+  });
+
+  app.post('/api/kds/heartbeat', (req, res) => {
+    const { deviceId } = req.body;
+    if (!deviceId) return res.status(400).json({ error: 'deviceId is required' });
+
+    const now = Date.now();
+    const LEASE_DURATION_MS = 45 * 1000;
+    const nowIso = new Date(now).toISOString();
+    const expiresAtIso = new Date(now + LEASE_DURATION_MS).toISOString();
+
+    if (localKdsSession.activeKitchenDeviceId !== deviceId) {
+      return res.status(403).json({ error: '您的廚房角色已被其他裝置取代' });
+    }
+
+    localKdsSession.lastHeartbeat = nowIso;
+    localKdsSession.leaseExpiresAt = expiresAtIso;
+
+    res.json({ success: true, session: localKdsSession });
+  });
+
+  app.post('/api/kds/release-kitchen', (req, res) => {
+    const { deviceId } = req.body;
+    if (!deviceId) return res.status(400).json({ error: 'deviceId is required' });
+
+    if (localKdsSession.activeKitchenDeviceId === deviceId) {
+      localKdsSession.activeKitchenDeviceId = null;
+      localKdsSession.leaseExpiresAt = null;
+    }
+
+    res.json({ success: true, message: '廚房角色已成功釋放' });
   });
 
   // 15. Modify Order Items (🛡️ Hardened with Paid/Cancelled Lockout)

@@ -147,5 +147,16 @@ export const orderCalculationService = {
     if (!createdAt) return false;
     const twDate = orderCalculationService.getTaiwanLocalDateString(createdAt);
     return twDate === targetDateStr;
+  },
+
+  calculateVipStatus: (userPoints: number | undefined, vipThreshold: number): { isVip: boolean; pointsToNext: number } => {
+    const points = userPoints || 0;
+    const isVip = points >= vipThreshold;
+    const pointsToNext = Math.max(0, vipThreshold - points);
+    return { isVip, pointsToNext };
+  },
+
+  canRedeemReward: (userPoints: number | undefined, rewardCost: number): boolean => {
+    return (userPoints || 0) >= rewardCost;
   }
 };

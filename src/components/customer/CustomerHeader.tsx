@@ -1,8 +1,9 @@
 import React from 'react';
 import { TableConfig, Order, Language, Reservation } from '../../types';
-import { getLocalizedText } from '../../utils/i18n';
 import { TRANSLATIONS } from '../../data';
-import { getMappedTableId } from '../CustomerOrderView';
+import { getMappedTableId } from '../../utils/tableUtils';
+import { getLocalizedText } from '../../utils/i18n';
+import { orderCalculationService } from '../../services/orderCalculationService';
 import {
   BellRing,
   AlertTriangle,
@@ -887,21 +888,25 @@ const CustomerHeaderBase: React.FC<CustomerHeaderProps> = ({
       {/* Google Loyalty Program Banner */}
       {!isSimplifiedMode &&
         (lineProfile ? (
-          <div
-            className="bg-gradient-to-br from-[#121824] to-[#0d0e14] border border-blue-500/25 rounded-3xl p-6 text-left shadow-2xl space-y-4 relative overflow-hidden"
-            id="google-loyalty-panel"
-          >
-            <div className="absolute top-0 right-0 w-48 h-48 bg-blue-500/5 rounded-full blur-3xl pointer-events-none" />
-
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-white/5 pb-4">
-              <div className="flex items-center space-x-3.5 flex-1">
-                <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-blue-600 to-sky-400 flex items-center justify-center text-white shadow-lg shadow-blue-500/10 shrink-0">
-                  <Coins size={22} className="animate-pulse" />
+          <div className="bg-[#121212] border border-white/5 rounded-3xl p-5 text-left flex flex-col space-y-4 shadow-xl animate-fade-in my-4 font-sans">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div className="flex items-center space-x-3.5">
+                <div className="relative">
+                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#E5B453] to-amber-600 p-[2px] shadow-lg shadow-amber-500/20">
+                    <img
+                      src={lineProfile.pictureUrl || 'https://via.placeholder.com/150'}
+                      alt="profile"
+                      className="w-full h-full rounded-full border-2 border-[#121212] object-cover bg-zinc-800"
+                    />
+                  </div>
+                  <div className="absolute -bottom-1 -right-1 bg-blue-500 rounded-full p-1 border-2 border-[#121212]">
+                    <Coins size={10} className="text-white" />
+                  </div>
                 </div>
                 <div className="space-y-1">
                   <h4 className="text-white font-extrabold text-sm sm:text-base tracking-wide flex items-center gap-2">
                     <span>Google 會員專屬累點好禮中心</span>
-                    {(userPoints || 0) >= vipThreshold ? (
+                    {orderCalculationService.calculateVipStatus(userPoints, vipThreshold).isVip ? (
                       <span className="bg-gradient-to-r from-amber-500/30 to-yellow-500/20 text-[#E5B453] border border-amber-500/50 text-[10px] font-black px-2.5 py-0.5 rounded-full shadow-sm">
                         👑 VIP 尊榮貴賓 ({Math.round(vipDiscountRate * 100)}% 專屬結帳)
                       </span>
@@ -914,31 +919,12 @@ const CustomerHeaderBase: React.FC<CustomerHeaderProps> = ({
                   <p className="text-slate-400 text-xs">
                     歡迎回來，<strong className="text-white font-black">{lineProfile.displayName}</strong>
                     ！每 {memberPointsRatio} 元消費可累積 1 點{enablePointsDiscount ? `，點數可按 ${pointsRedeemRate} 點抵 NT$1 折現` : ''}或兌換熱銷串燒好禮！
-                    {(userPoints || 0) < vipThreshold && (
+                    {!orderCalculationService.calculateVipStatus(userPoints, vipThreshold).isVip && (
                       <span className="block text-amber-400/90 text-[11px] font-medium mt-0.5">
-                        ✨ 距離升級 👑 VIP 尊榮貴賓（享全單 {Math.round(vipDiscountRate * 100)}% 折扣）還差 <strong className="font-bold">{vipThreshold - (userPoints || 0)} 點</strong>！
+                        ✨ 距離升級 👑 VIP 尊榮貴賓（享全單 {Math.round(vipDiscountRate * 100)}% 折扣）還差 <strong className="font-bold">{orderCalculationService.calculateVipStatus(userPoints, vipThreshold).pointsToNext} 點</strong>！
                       </span>
                     )}
                   </p>
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-2 shrink-0">
-                <div className="bg-gradient-to-b from-blue-950/80 to-slate-900 border border-blue-400/40 px-5 py-2.5 rounded-2xl flex flex-col items-center justify-center shrink-0 min-w-[120px] shadow-lg">
-                  <span className="text-blue-300 text-[9px] font-black uppercase tracking-widest leading-none mb-1">
-                    您擁有的累積點數
-                  </span>
-                  <span className="text-xl font-black text-white font-mono tracking-wide flex items-baseline gap-1">
-                    {(userPoints || 0).toLocaleString()}{' '}
-                    <span className="text-xs font-bold text-slate-300 font-sans">點</span>
-                  </span>
-                </div>
-                <div className="bg-gradient-to-b from-emerald-950/80 to-slate-900 border border-emerald-400/40 px-5 py-2.5 rounded-2xl flex flex-col items-center justify-center shrink-0 min-w-[120px] shadow-lg text-center">
-                  <span className="text-emerald-300 text-[9px] font-black uppercase tracking-widest leading-none mb-1">
-                    您的會員儲值餘額
-                  </span>
-                  <span className="text-xl font-black text-emerald-400 font-mono tracking-wide">
-                    NT$ {(userBalance || 0).toLocaleString()}
-                  </span>
                 </div>
               </div>
             </div>
@@ -962,7 +948,7 @@ const CustomerHeaderBase: React.FC<CustomerHeaderProps> = ({
 
               <div className="grid grid-cols-2 md:grid-cols-5 gap-3.5">
                 {REWARD_ITEMS.map((item) => {
-                  const isEligible = userPoints >= item.cost;
+                  const isEligible = orderCalculationService.canRedeemReward(userPoints, item.cost);
                   return (
                     <div
                       key={item.id}
@@ -1002,7 +988,7 @@ const CustomerHeaderBase: React.FC<CustomerHeaderProps> = ({
                             : 'bg-zinc-900 text-zinc-650 cursor-not-allowed font-medium'
                         }`}
                       >
-                        {isEligible ? '立即兌換' : `賸餘 ${item.cost - userPoints} 點`}
+                        {isEligible ? '立即兌換' : `賸餘 ${Math.max(0, item.cost - (userPoints || 0))} 點`}
                       </button>
                     </div>
                   );
@@ -1011,7 +997,7 @@ const CustomerHeaderBase: React.FC<CustomerHeaderProps> = ({
             </div>
           </div>
         ) : (
-          <div className="bg-gradient-to-r from-blue-950/20 via-slate-900/40 to-transparent border border-blue-500/15 rounded-3xl p-5 text-left flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 animate-fade-in">
+          <div className="bg-gradient-to-r from-blue-950/20 via-slate-900/40 to-transparent border border-blue-500/15 rounded-3xl p-5 text-left flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 animate-fade-in my-4">
             <div className="flex items-center space-x-3">
               <div className="w-10 h-10 rounded-xl bg-blue-500/15 flex items-center justify-center text-blue-400 shrink-0">
                 <Coins size={18} />
@@ -1021,7 +1007,7 @@ const CustomerHeaderBase: React.FC<CustomerHeaderProps> = ({
                   💡 登入 Google 帳號，尊享超值累點與美食兌換！
                 </h5>
                 <p className="text-slate-400 text-xs">
-                  每 20 元消費皆可累積 1 點，點數可免費兌換泰式奶茶、爆汁豬肉串與經典冬蔭功海鮮湯！
+                  每 {memberPointsRatio} 元消費可累積 1 點{enablePointsDiscount ? `，點數可按 ${pointsRedeemRate} 點抵 NT$1 折現` : ''}或兌換熱銷串燒好禮！
                 </p>
               </div>
             </div>

@@ -17,6 +17,11 @@ export function useCustomerCart({
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [hoverCartItem, setHoverCartItem] = useState<OrderItem | null>(null);
   const [isHoverCartOpen, setIsHoverCartOpen] = useState(false);
+  const [clientOrderId, setClientOrderId] = useState<string>(() => {
+    return typeof crypto !== 'undefined' && crypto.randomUUID 
+      ? crypto.randomUUID() 
+      : `ORD-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+  });
 
   const handleAddToCart = ({
     item,
@@ -129,6 +134,9 @@ export function useCustomerCart({
 
   const clearCart = () => {
     setCart([]);
+    setClientOrderId(typeof crypto !== 'undefined' && crypto.randomUUID 
+      ? crypto.randomUUID() 
+      : `ORD-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`);
   };
 
   const activeCombosAndDiscounts = useMemo(() => {
@@ -212,5 +220,6 @@ export function useCustomerCart({
     expressFee,
     cartTotal,
     cartItemsCount,
+    clientOrderId,
   };
 }

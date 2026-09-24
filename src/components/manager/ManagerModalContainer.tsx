@@ -44,10 +44,10 @@ export const ManagerModalContainer: React.FC<ManagerModalContainerProps> = ({
   handleBulkDeleteOrders, handleExportOrdersReport, isBulkDeleting
 }) => {
   const {
-    isDishFormOpen, setIsDishFormOpen, editingItem, setEditingItem,
-    isCatFormOpen, setIsCatFormOpen, editingCategory, setEditingCategory,
-    isTableFormOpen, setIsTableFormOpen, editingTableObj, setEditingTableObj,
-    isResFormOpen, setIsResFormOpen, editingResObj, setEditingResObj,
+    isDishFormOpen, setIsDishFormOpen, editingItem,
+    isCatFormOpen, setIsCatFormOpen, editingCategory,
+    isTableFormOpen, setIsTableFormOpen, editingTableObj,
+    isResFormOpen, setIsResFormOpen, editingResObj,
     quickRestockItem, setQuickRestockItem,
     confirmActionModal, setConfirmActionModal,
     adjustPointsModal, setAdjustPointsModal,

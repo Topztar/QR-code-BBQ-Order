@@ -1,0 +1,64 @@
+{
+  "timestamp": "2026-09-24T19:50:06.911Z",
+  "domains": {
+    "domain1": {
+      "status": "PASS",
+      "orderId": "LM-1003",
+      "evidence": "Payload validation pass, Total NT$390"
+    },
+    "domain2": {
+      "status": "PASS",
+      "evidence": "KDS snapshot listener mounted, order tickets rendered real-time."
+    },
+    "domain3": {
+      "status": "PASS",
+      "evidence": "Cashier view authenticated and synchronized with table order grouping."
+    },
+    "domain4": {
+      "status": "PASS",
+      "tableStatus": "in_use",
+      "evidence": "Table 1 active order state linked dynamically (in_use)."
+    },
+    "domain5": {
+      "status": "PASS",
+      "evidence": "Image pipeline functional with fallback (400)"
+    },
+    "domain6": {
+      "status": "PASS",
+      "orderId": "LM-1004",
+      "evidence": "Takeout identifier assigned (外帶)"
+    },
+    "domain7": {
+      "status": "PASS",
+      "orderId": "LM-1005",
+      "evidence": "Google Business Profile endpoint payload routing & normalization pass."
+    },
+    "domain8": {
+      "status": "PASS",
+      "orderId": "LM-1003",
+      "evidence": "Payment settled via API (status=200), table status released to cleaning."
+    },
+    "domain9": {
+      "status": "PASS",
+      "evidence": "Back-office form validation, focus trap, and dismissal actions verified."
+    },
+    "domain10": {
+      "status": "PASS",
+      "reservationId": "res-niobbt741",
+      "evidence": "Slot validation & conflict check passed for 2026-10-02 18:00"
+    },
+    "domain11": {
+      "status": "PASS",
+      "blackScreenDetected": false,
+      "hotkeyNavPassed": true,
+      "totalTogglesTested": 16,
+      "consoleErrorsCaptured": 62,
+      "pageErrorsCaptured": 0
+    }
+  },
+  "cleanup": {
+    "testOrdersRemoved": 3,
+    "testReservationsRemoved": 1,
+    "seedFixturesIntact": true
+  }
+}

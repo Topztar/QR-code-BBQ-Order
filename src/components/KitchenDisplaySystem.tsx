@@ -14,6 +14,10 @@ import { getLocalizedText } from '../utils/i18n';
 import { TRANSLATIONS } from '../data';
 import { safeStorage } from '../lib/safeStorage';
 import { useKdsAudio } from '../hooks/useKdsAudio';
+import { useOrderData } from '../context/OrderDataContext';
+import { ShieldAlert, LogOut, Moon } from 'lucide-react';
+import { stopFirebaseSync, startFirebaseSync } from '../lib/firebase';
+import { useIdleTimeout } from '../hooks/useIdleTimeout';
 import { KdsHourlyChart } from './KdsHourlyChart';
 import { KdsHeader } from './kds/KdsHeader';
 import { KdsMergedView } from './kds/KdsMergedView';
@@ -116,6 +120,16 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
     notifyStatusChange,
   } = useKdsAudio();
 
+  // 🍳 Mutex Lock & Role Session Management from OrderDataContext
+  const {
+    kdsSession,
+    currentDeviceId,
+    isKitchenPreempted,
+    handleClaimKitchenRole,
+    handleReleaseKitchenRole,
+    dismissPreemptedAlert,
+  } = useOrderData();
+
   // Role: 'kitchen' vs 'staff'
   const [kdsRole, setKdsRole] = useState<'kitchen' | 'staff'>(() => {
     try {
@@ -126,14 +140,60 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
     }
   });
 
+  // 💤 KDS Idle Timeout (30 minutes)
+  const isSystemIdle = useIdleTimeout(
+    30 * 60 * 1000,
+    () => {
+      console.log('[KDS FinOps] System idle for 30 mins. Pausing Firebase Sync.');
+      stopFirebaseSync();
+    },
+    () => {
+      console.log('[KDS FinOps] System woke up. Resuming Firebase Sync.');
+      startFirebaseSync();
+    }
+  );
+
+  // Modal states for Mutex Lease
+  const [showOccupiedModal, setShowOccupiedModal] = useState<boolean>(false);
+  const [occupiedDeviceId, setOccupiedDeviceId] = useState<string>('');
+
+  const executeRoleSwitch = useCallback(async (newRole: 'kitchen' | 'staff', force: boolean = false) => {
+    if (newRole === 'kitchen') {
+      const res = await handleClaimKitchenRole(force);
+      if (res.conflict) {
+        setOccupiedDeviceId(res.activeKitchenDeviceId || '其他平板設備');
+        setShowOccupiedModal(true);
+        return;
+      }
+      setKdsRole('kitchen');
+      setShowOccupiedModal(false);
+      try { safeStorage.setItem('kds-login-role', 'kitchen'); } catch (_) {}
+    } else {
+      // 切換為 staff
+      await handleReleaseKitchenRole();
+      setKdsRole('staff');
+      try { safeStorage.setItem('kds-login-role', 'staff'); } catch (_) {}
+    }
+  }, [handleClaimKitchenRole, handleReleaseKitchenRole]);
+
   const handleRoleSwitch = useCallback((newRole: 'kitchen' | 'staff') => {
-    setKdsRole(newRole);
-    try {
-      safeStorage.setItem('kds-login-role', newRole);
-    } catch (e) {
-      console.error(e);
+    executeRoleSwitch(newRole, false);
+  }, [executeRoleSwitch]);
+
+  // Initial claim on mount if default role is kitchen
+  useEffect(() => {
+    if (kdsRole === 'kitchen') {
+      executeRoleSwitch('kitchen', false);
     }
   }, []);
+
+  // When preempted by another device, automatically demote local view to staff
+  useEffect(() => {
+    if (isKitchenPreempted && kdsRole === 'kitchen') {
+      setKdsRole('staff');
+      try { safeStorage.setItem('kds-login-role', 'staff'); } catch (_) {}
+    }
+  }, [isKitchenPreempted, kdsRole]);
 
   // Drag / Touch state for Swipe-to-Complete
   const [dragStates, setDragStates] = useState<{
@@ -923,6 +983,94 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
         onPrintTestPage={onPrintTestPage}
         setPrintConfirmData={setPrintConfirmData}
       />
+
+      {/* ⚠️ KDS Mutex Lock: 廚房角色已被佔用確認彈窗 (Conflict Occupied Modal) */}
+      {showOccupiedModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#18181b] border-2 border-amber-500/70 rounded-2xl p-6 max-w-md w-full shadow-2xl shadow-amber-500/20 text-center animate-in fade-in zoom-in-95 duration-200">
+            <div className="w-16 h-16 bg-amber-500/10 border border-amber-500/30 rounded-2xl mx-auto flex items-center justify-center text-amber-400 mb-4">
+              <ShieldAlert size={36} />
+            </div>
+            <h3 className="text-xl font-black text-white font-serif mb-2">
+              廚房主控權限已被佔用
+            </h3>
+            <p className="text-xs text-white/70 leading-relaxed mb-4">
+              目前已有另一台平板（設備識別：<span className="font-mono text-amber-400 bg-black/40 px-1.5 py-0.5 rounded">{occupiedDeviceId}</span>）登入為【廚房】角色。
+              <br /><br />
+              全店僅允許單一設備擔任廚房主控台以確保備餐進度一致。請問是否確認強制收回主控權並登出該裝置？
+            </p>
+            <div className="flex space-x-3 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowOccupiedModal(false);
+                  executeRoleSwitch('staff');
+                }}
+                className="flex-1 py-3 bg-white/10 hover:bg-white/15 text-white/80 font-bold rounded-xl text-xs transition cursor-pointer"
+              >
+                取消（保持店員模式）
+              </button>
+              <button
+                type="button"
+                onClick={() => executeRoleSwitch('kitchen', true)}
+                className="flex-1 py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black rounded-xl text-xs shadow-lg shadow-amber-500/25 transition cursor-pointer"
+              >
+                強制接管廚房
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 💤 System Idle Overlay */}
+      {isSystemIdle && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+          <div className="bg-[#18181b] border-2 border-slate-700 rounded-2xl p-8 max-w-lg w-full shadow-2xl text-center animate-in fade-in zoom-in-95 duration-300">
+            <div className="w-20 h-20 bg-slate-800 rounded-full mx-auto flex items-center justify-center text-slate-400 mb-6 shadow-inner">
+              <Moon size={40} className="animate-pulse" />
+            </div>
+            <h3 className="text-2xl font-black text-white font-serif mb-3 tracking-wide">
+              系統休眠中 (System Idle)
+            </h3>
+            <p className="text-sm text-slate-400 leading-relaxed mb-8">
+              為節省雲端資源與資料庫流量，系統已暫停自動同步。<br />
+              (Firebase sync paused to conserve resources)
+            </p>
+            <button
+              type="button"
+              className="w-full py-4 bg-gradient-to-r from-orange-600 to-orange-500 hover:from-orange-500 hover:to-orange-400 text-white font-black rounded-xl text-lg shadow-[0_0_20px_rgba(249,115,22,0.3)] transition-all active:scale-95 cursor-pointer"
+            >
+              點擊任意處喚醒 (Tap Anywhere to Resume)
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 🚨 KDS Mutex Lock: 廚房角色遭接管強制登出通知 (Preempted Notification Modal) */}
+      {isKitchenPreempted && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-[#18181b] border-2 border-red-500/70 rounded-2xl p-6 max-w-md w-full shadow-2xl shadow-red-500/20 text-center animate-in fade-in zoom-in-95 duration-200">
+            <div className="w-16 h-16 bg-red-500/10 border border-red-500/30 rounded-2xl mx-auto flex items-center justify-center text-red-400 mb-4 animate-bounce">
+              <LogOut size={36} />
+            </div>
+            <h3 className="text-xl font-black text-white font-serif mb-2">
+              廚房主控權限已轉移
+            </h3>
+            <p className="text-xs text-white/70 leading-relaxed mb-6">
+              另一台平板已接管全店唯一的【廚房】主控角色。
+              <br /><br />
+              系統已自動將本裝置切換為【店員對齊模式】，您仍可查看看板並執行劃線，資料將隨時以廚房主畫面最新進度自動對齊。
+            </p>
+            <button
+              type="button"
+              onClick={dismissPreemptedAlert}
+              className="w-full py-3.5 bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-400 hover:to-rose-500 text-white font-black rounded-xl text-xs shadow-lg shadow-red-500/25 transition cursor-pointer"
+            >
+              我知道了，切換為店員模式
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

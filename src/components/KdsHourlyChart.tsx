@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Clock, TrendingUp, AlertTriangle, Info } from 'lucide-react';
 import { ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
@@ -21,6 +21,17 @@ export const KdsHourlyChart: React.FC<KdsHourlyChartProps> = React.memo(({
   predictionData,
   CustomTooltip,
 }) => {
+  const sanitizedPredictionData = useMemo(() => {
+    if (!Array.isArray(predictionData)) return [];
+    return predictionData.map(d => ({
+      ...d,
+      expectedVolume: Number.isFinite(d?.expectedVolume) ? Math.max(0, d.expectedVolume) : 0,
+      actualToday: Number.isFinite(d?.actualToday) ? Math.max(0, d.actualToday) : 0,
+      historicalAvg: Number.isFinite(d?.historicalAvg) ? Math.max(0, d.historicalAvg) : 0,
+      upperBound: Number.isFinite(d?.upperBound) ? Math.max(0, d.upperBound) : 0,
+    }));
+  }, [predictionData]);
+
   return (
     <div className="bg-[#161616] border border-white/10 rounded-xl p-5 space-y-4" id="kds-hourly-chart">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between border-b border-white/5 pb-3.5 gap-3">
@@ -119,6 +130,10 @@ export const KdsHourlyChart: React.FC<KdsHourlyChartProps> = React.memo(({
             })}
           </div>
         </>
+      ) : (!sanitizedPredictionData || sanitizedPredictionData.length === 0) ? (
+        <div className="p-10 text-center text-white/40 text-xs font-bold bg-black/20 rounded-xl border border-white/5">
+          暫無足夠歷史數據可供預測分析 (Insufficient data for prediction)
+        </div>
       ) : (
         <div className="space-y-4">
           {/* Prediction Summary Widgets */}
@@ -127,12 +142,12 @@ export const KdsHourlyChart: React.FC<KdsHourlyChartProps> = React.memo(({
               <span className="text-[10px] text-white/40 block font-bold mb-1">預計單日客流量 & 總點單</span>
               <div className="flex items-baseline space-x-1">
                 <span className="text-xl font-black font-mono text-[#E5B453]">
-                  ~{predictionData.reduce((acc, current) => acc + current.expectedVolume, 0)}
+                  ~{sanitizedPredictionData.reduce((acc, current) => acc + current.expectedVolume, 0)}
                 </span>
                 <span className="text-xs text-white/60">筆期望單</span>
               </div>
               <span className="text-[9px] text-zinc-400 block mt-1 font-mono">
-                今日累計同段已收: {predictionData.reduce((acc, current) => acc + current.actualToday, 0)} 筆
+                今日累計同段已收: {sanitizedPredictionData.reduce((acc, current) => acc + current.actualToday, 0)} 筆
               </span>
             </div>
 
@@ -140,10 +155,10 @@ export const KdsHourlyChart: React.FC<KdsHourlyChartProps> = React.memo(({
               <span className="text-[10px] text-white/40 block font-bold mb-1">預估尖峰時段 (Expected Peak)</span>
               <div className="flex items-baseline space-x-1">
                 <span className="text-xl font-black font-mono text-rose-400">
-                  {predictionData.length > 0 ? predictionData.reduce((prev, current) => (prev.expectedVolume > current.expectedVolume) ? prev : current, predictionData[0]).label : ''}
+                  {sanitizedPredictionData.length > 0 ? sanitizedPredictionData.reduce((prev, current) => (prev.expectedVolume > current.expectedVolume) ? prev : current, sanitizedPredictionData[0]).label : ''}
                 </span>
                 <span className="text-xs text-red-400 font-extrabold animate-pulse">
-                  ({predictionData.length > 0 ? predictionData.reduce((prev, current) => (prev.expectedVolume > current.expectedVolume) ? prev : current, predictionData[0]).expectedVolume : 0} 筆預估高峰)
+                  ({sanitizedPredictionData.length > 0 ? sanitizedPredictionData.reduce((prev, current) => (prev.expectedVolume > current.expectedVolume) ? prev : current, sanitizedPredictionData[0]).expectedVolume : 0} 筆預估高峰)
                 </span>
               </div>
               <span className="text-[9px] text-zinc-400 block mt-1">
@@ -155,10 +170,10 @@ export const KdsHourlyChart: React.FC<KdsHourlyChartProps> = React.memo(({
               <div>
                 <span className="text-[10px] text-white/40 block font-bold mb-1">廚房備料負荷指示 (Strain Index)</span>
                 <span className={`text-xs font-extrabold flex items-center gap-1 ${
-                  predictionData.some(d => d.expectedVolume >= 8) ? 'text-amber-400 animate-pulse' : 'text-emerald-400'
+                  sanitizedPredictionData.some(d => d.expectedVolume >= 8) ? 'text-amber-400 animate-pulse' : 'text-emerald-400'
                 }`}>
                   <Info size={11} className="shrink-0" />
-                  {predictionData.some(d => d.expectedVolume >= 8) ? '⚡ 建議：尖峰廚力高強度預備' : '🟢 運作正常：無嚴重擁堵風險'}
+                  {sanitizedPredictionData.some(d => d.expectedVolume >= 8) ? '⚡ 建議：尖峰廚力高強度預備' : '🟢 運作正常：無嚴重擁堵風險'}
                 </span>
               </div>
               <span className="text-[9px] text-zinc-500 block mt-1">
@@ -176,9 +191,9 @@ export const KdsHourlyChart: React.FC<KdsHourlyChartProps> = React.memo(({
             </p>
             
             <div className="h-60 w-full pt-1">
-              <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+              <ResponsiveContainer width="100%" height="100%" minWidth={100} minHeight={200}>
                 <ComposedChart
-                  data={predictionData}
+                  data={sanitizedPredictionData}
                   margin={{ top: 10, right: 10, bottom: 0, left: -25 }}
                 >
                   <defs>

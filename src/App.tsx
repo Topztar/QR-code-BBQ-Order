@@ -25,6 +25,7 @@ const lazyWithRetry = <T extends React.ComponentType<any>>(
       return component;
     } catch (error) {
       if (!pageHasAlreadyBeenForceRefreshed) {
+        console.warn(`[Sabay BBQ Diagnostics] Component chunk load failed. Triggering automatic soft recovery reload. Error:`, error);
         window.sessionStorage.setItem('page-has-been-force-refreshed', 'true');
         window.location.reload();
         // Return a promise that never resolves, so Suspense keeps showing fallback while reloading
@@ -642,9 +643,9 @@ function AppContent({
             </div>
           ) : (
             <div>
-              <Suspense fallback={<ViewLoadingFallback />}>
-                {activeTab === 'kitchen' ? (
-                  <ErrorBoundary fallbackTitle="廚房監控系統載入異常" fallbackMessage="KDS 系統遇到短暫渲染問題，請點擊下方按鈕重新整理。">
+              <ErrorBoundary fallbackTitle="系統視圖載入異常" fallbackMessage="視圖載入遇到問題，請點擊下方按鈕重試。">
+                <Suspense fallback={<ViewLoadingFallback />}>
+                  {activeTab === 'kitchen' ? (
                     <KitchenDisplaySystem
                       currentLang={lang}
                       orders={orders}
@@ -669,9 +670,7 @@ function AppContent({
                       onToggleOrderItemComplete={handleToggleOrderItemComplete}
                       reservations={reservations}
                     />
-                  </ErrorBoundary>
-                ) : (
-                  <ErrorBoundary fallbackTitle="管理後台載入異常" fallbackMessage="後台系統視圖遇到短暫渲染問題，請點擊下方按鈕重新整理。">
+                  ) : (
                     <ManagerDashboard
                       currentLang={lang}
                       analytics={analytics}
@@ -739,9 +738,9 @@ function AppContent({
                       memberRewards={memberRewards}
                       onUpdateMemberConfig={fetchData}
                     />
-                  </ErrorBoundary>
-                )}
-              </Suspense>
+                  )}
+                </Suspense>
+              </ErrorBoundary>
             </div>
           )
         ) : (

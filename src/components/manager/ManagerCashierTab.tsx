@@ -103,7 +103,6 @@ export const ManagerCashierTab: React.FC<ManagerCashierTabProps> = (props) => {
   
   const { 
     selectedCashierOrderId, setSelectedCashierOrderId, 
-    cashierListFilter, setCashierListFilter,
     cashierCheckoutScope, setCashierCheckoutScope,
     cashierDiscountType, setCashierDiscountType,
     cashierDiscountFlat, setCashierDiscountFlat,
@@ -112,26 +111,23 @@ export const ManagerCashierTab: React.FC<ManagerCashierTabProps> = (props) => {
     cashierSurchargeFlat, setCashierSurchargeFlat,
     cashierSurchargeRate, setCashierSurchargeRate,
     cashierPaymentMethod, setCashierPaymentMethod,
-    cashierCashReceived, setCashierCashReceived,
+    setCashierCashReceived,
     cashierSelectedMergeOrderIds, setCashierSelectedMergeOrderIds,
-    isAdjustingDiscount, setIsAdjustingDiscount,
-    isAdjustingSurcharge, setIsAdjustingSurcharge,
+    setIsAdjustingDiscount,
+    setIsAdjustingSurcharge,
     takeoutDetailModalOrder, setTakeoutDetailModalOrder,
-    showCheckoutConfirm, setShowCheckoutConfirm,
     isCashierWidthAuto,
     
     setIsCashierWidthAuto, setSimulatedElapsedOrders, setCopiedTakeoutPhone, setCopiedGoogleLinkNotice,
     setBatchSuccessMessage, setIsBatchProcessing, setSelectedResIds,
-    setSelectedCalendarStatusFilter, setSelectedFineTuneTableId,
+    setSelectedCalendarStatusFilter,
     
-    setIsTableFormOpen, setEditingTableObj, setTableError, setTableSuccess,
-    tableToDeleteId, setTableToDeleteId, reservationToDeleteId, setReservationToDeleteId,
+    reservationToDeleteId, setReservationToDeleteId,
     editingOrderTableId, setEditingOrderTableId,
     editingOrderTableValue, setEditingOrderTableValue,
-    cashierCashChannel, setCashierCashChannel,
     simulatedElapsedOrders, copiedTakeoutPhone, copiedGoogleLinkNotice,
     batchSuccessMessage, isBatchProcessing, selectedResIds,
-    selectedCalendarStatusFilter, selectedFineTuneTableId
+    selectedCalendarStatusFilter
   } = useDashboardStore();
 
   const posBridgeUrl = props.posBridgeUrl || "http://127.0.0.1:8060";

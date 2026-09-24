@@ -10,7 +10,7 @@ import {
   speakUtterance,
   playOvertimeBeepSound,
 } from '../utils/kdsAudio';
-import { safeStorage } from '../lib/safeStorage';
+import { safeStorage, safeSessionStorage } from '../lib/safeStorage';
 
 const localStorage = safeStorage;
 
@@ -24,12 +24,21 @@ export function useKdsAudio() {
     }
   });
 
-  const [audioNeedsUnlock, setAudioNeedsUnlock] = useState<boolean>(true);
+  const [audioNeedsUnlock, setAudioNeedsUnlock] = useState<boolean>(() => {
+    try {
+      return safeSessionStorage.getItem('kds-audio-unlocked') !== 'true';
+    } catch {
+      return true;
+    }
+  });
   const [beepSim, setBeepSim] = useState<boolean>(false);
 
   const isMountedRef = useRef<boolean>(true);
   useEffect(() => {
-    return () => { isMountedRef.current = false; };
+    return () => {
+      isMountedRef.current = false;
+      stopSpeech();
+    };
   }, []);
 
   // Auto-listen for user gesture to unlock audio
@@ -38,6 +47,9 @@ export function useKdsAudio() {
       const unlocked = await unlockAudio();
       if (unlocked && isMountedRef.current) {
         setAudioNeedsUnlock(false);
+        window.removeEventListener('click', handleGesture);
+        window.removeEventListener('keydown', handleGesture);
+        window.removeEventListener('touchstart', handleGesture);
       }
     };
 

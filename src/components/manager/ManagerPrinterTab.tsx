@@ -2,26 +2,9 @@ import React from 'react';
 import { Cpu, RefreshCw, Unlock, Printer, Download, Trash2 } from 'lucide-react';
 import { safeStorage } from '../../lib/safeStorage';
 import { apiFetch } from '../../lib/api';
+import { PrinterConfig } from '../../types';
 
 const localStorage = safeStorage;
-
-export interface PrinterConfig {
-  connectionType: 'USB' | 'IP' | 'LPT';
-  ip: string;
-  usbPort: string;
-  width: '58mm' | '80mm';
-  fontSizeFactor: number;
-  restaurantName: string;
-  headerPrefix: string;
-  footerSuffix: string;
-  printAddress?: string;
-  printTelephone?: string;
-  printTimeEnabled?: boolean;
-  cashDrawerEnabled?: boolean;
-  cashDrawerDriver?: 'OPOS' | 'POS_NET' | 'ESC_POS_RAW';
-  cashDrawerOposName?: string;
-  cashDrawerEscPosCommand?: string;
-}
 
 interface ManagerPrinterTabProps {
   printerSaveSuccess: string | null;

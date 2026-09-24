@@ -1,5 +1,6 @@
 import { Order, Reservation } from '../../types';
 import { orderCalculationService } from '../../services/orderCalculationService';
+import { getTaiwanDateString, isSameTaiwanDate } from '../../utils/dateUtils';
 
 export const getMaskedEmail = (email: string | null | undefined): string => {
   if (!email) return '';
@@ -28,12 +29,13 @@ export const calculateOrderTotalWithPayment = (
   return orderCalculationService.calculateOrderPricing(order, menuItemsList);
 };
 
-export const getLocalDateString = (d: Date = new Date()): string => {
-  return orderCalculationService.getTaiwanLocalDateString(d);
+export const getLocalDateString = (d: Date | string = new Date()): string => {
+  return getTaiwanDateString(d);
 };
 
 export const isOrderOnLocalDate = (createdAt: string | undefined | null, targetDateStr: string): boolean => {
-  return orderCalculationService.isOrderInTaiwanDate(createdAt, targetDateStr);
+  if (!createdAt) return false;
+  return isSameTaiwanDate(createdAt, targetDateStr);
 };
 
 export const generateReservationNo = (dateStr: string, existingRes: Reservation[] = []): string => {

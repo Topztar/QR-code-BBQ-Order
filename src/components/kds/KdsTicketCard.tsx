@@ -31,10 +31,10 @@ export interface KdsTicketCardProps {
   selectedCategory: string;
   printerIp: string;
   operatingHours?: any[];
-  dragStates: Record<string, { startX: number; currentX: number; isDragging: boolean }>;
-  handleCardTouchStart: (orderId: string, clientX: number) => void;
-  handleCardTouchMove: (orderId: string, clientX: number) => void;
-  handleCardTouchEnd: (orderId: string) => void;
+  dragStates?: Record<string, { startX: number; currentX: number; isDragging: boolean }>;
+  handleCardTouchStart?: (orderId: string, clientX: number) => void;
+  handleCardTouchMove?: (orderId: string, clientX: number) => void;
+  handleCardTouchEnd?: (orderId: string) => void;
   getUrgencyText: (dateStr: string) => { text: string; style: string };
   getElapsedTime: (dateStr: string) => { mins: number; text: string; style: string };
   getTableOccupancyElapsedTime: (tableNumber: string) => any;
@@ -132,10 +132,39 @@ export const KdsTicketCard: React.FC<KdsTicketCardProps> = React.memo(({
   handleStatusChange,
   processingOrderIds,
 }) => {
+  // ⚡ 效能優化：將拖曳滑動狀態降階至卡片內部，杜絕 60fps 全看板重繪風暴
+  const [localDrag, setLocalDrag] = React.useState<{ startX: number; currentX: number; isDragging: boolean }>({
+    startX: 0,
+    currentX: 0,
+    isDragging: false,
+  });
+
+  const onTouchStart = (clientX: number) => {
+    setLocalDrag({ startX: clientX, currentX: clientX, isDragging: true });
+    if (handleCardTouchStart) handleCardTouchStart(order.id, clientX);
+  };
+
+  const onTouchMove = (clientX: number) => {
+    setLocalDrag(prev => {
+      if (!prev.isDragging) return prev;
+      return { ...prev, currentX: clientX };
+    });
+    if (handleCardTouchMove) handleCardTouchMove(order.id, clientX);
+  };
+
+  const onTouchEnd = () => {
+    const offset = Math.max(0, localDrag.currentX - localDrag.startX);
+    if (offset >= 150) {
+      handleStatusChange(order.id, 'completed');
+    }
+    setLocalDrag({ startX: 0, currentX: 0, isDragging: false });
+    if (handleCardTouchEnd) handleCardTouchEnd(order.id);
+  };
+
   const urg = getUrgencyText(order.createdAt);
   const elapsed = getElapsedTime(order.createdAt);
   const occ = getTableOccupancyElapsedTime(order.tableNumber);
-  const drag = dragStates[order.id] || { startX: 0, currentX: 0, isDragging: false };
+  const drag = dragStates ? (dragStates[order.id] || localDrag) : localDrag;
   const offset = drag.isDragging ? Math.max(0, drag.currentX - drag.startX) : 0;
   const lateCheck = isOrderLateForPrepTime(order);
   const holdCheck = checkReservationOrderHoldStatus(order);
@@ -175,19 +204,19 @@ export const KdsTicketCard: React.FC<KdsTicketCardProps> = React.memo(({
           transition: drag.isDragging ? 'none' : 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
           cursor: drag.isDragging ? 'grabbing' : 'grab',
         }}
-        onTouchStart={(e) => handleCardTouchStart(order.id, e.touches[0].clientX)}
-        onTouchMove={(e) => handleCardTouchMove(order.id, e.touches[0].clientX)}
-        onTouchEnd={() => handleCardTouchEnd(order.id)}
-        onMouseDown={(e) => handleCardTouchStart(order.id, e.clientX)}
+        onTouchStart={(e) => onTouchStart(e.touches[0].clientX)}
+        onTouchMove={(e) => onTouchMove(e.touches[0].clientX)}
+        onTouchEnd={() => onTouchEnd()}
+        onMouseDown={(e) => onTouchStart(e.clientX)}
         onMouseMove={(e) => {
-          if (dragStates[order.id]?.isDragging) {
-            handleCardTouchMove(order.id, e.clientX);
+          if (drag.isDragging) {
+            onTouchMove(e.clientX);
           }
         }}
-        onMouseUp={() => handleCardTouchEnd(order.id)}
+        onMouseUp={() => onTouchEnd()}
         onMouseLeave={() => {
-          if (dragStates[order.id]?.isDragging) {
-            handleCardTouchEnd(order.id);
+          if (drag.isDragging) {
+            onTouchEnd();
           }
         }}
         className={`bg-[#161616] border rounded-xl overflow-hidden shadow-md flex flex-col justify-between text-left transition-colors duration-300 ${

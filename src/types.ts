@@ -155,6 +155,22 @@ export interface Order {
   source?: 'google_business' | 'direct' | string;
   utm_medium?: string;
   notificationSent?: boolean;
+  version?: number;
+  updatedAt?: string;
+  lastUpdatedBy?: OrderItemModifier;
+}
+
+export interface OrderItemModifier {
+  role: 'kitchen' | 'staff' | 'admin' | 'customer';
+  deviceId: string;
+  timestamp: string;
+}
+
+export interface KdsSession {
+  activeKitchenDeviceId: string | null;
+  lastHeartbeat: string | null;
+  claimedAt: string | null;
+  leaseExpiresAt: string | null;
 }
 
 export interface Ingredient {
@@ -231,6 +247,45 @@ export interface OrderHistoryUserStatus {
 export interface OrderHistoryBillStatus {
   hasUnpaidBillOnTable: boolean;
   tableNumber?: string;
+}
+
+export interface PrinterConfig {
+  connectionType: 'USB' | 'IP' | 'LPT';
+  ip: string;
+  usbPort: string;
+  width: '58mm' | '80mm';
+  fontSizeFactor: number;
+  restaurantName: string;
+  headerPrefix: string;
+  footerSuffix: string;
+  printAddress?: string;
+  printTelephone?: string;
+  printTimeEnabled?: boolean;
+  cashDrawerEnabled?: boolean;
+  cashDrawerDriver?: 'OPOS' | 'POS_NET' | 'ESC_POS_RAW';
+  cashDrawerOposName?: string;
+  cashDrawerEscPosCommand?: string;
+}
+
+export interface PaidModDetails {
+  item?: any;
+  menuItemId?: string;
+  delta: number;
+  isAddingNew: boolean;
+}
+
+export interface MergedDishItem {
+  id: string;
+  name: any;
+  totalQty: number;
+  orderItems: Array<{
+    orderId: string;
+    tableNumber: string;
+    createdAt: string;
+    qty: number;
+    customization: any;
+    originalOrder: Order;
+  }>;
 }
 
 export interface MemberRewardItem {

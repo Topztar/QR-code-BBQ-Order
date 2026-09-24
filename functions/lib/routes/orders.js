@@ -469,7 +469,7 @@ function registerOrdersRoutes(app, ctx) {
     put('/orders/:id/items/:itemId/complete', requireStaffAuth, async (req, res) => {
         const id = req.params.id;
         const itemId = req.params.itemId;
-        const { isCompleted, isPrepared } = req.body;
+        const { isCompleted, isPrepared, expectedVersion, modifier } = req.body;
         try {
             const docRef = db.collection('orders').doc(id);
             const updatedOrder = await db.runTransaction(async (t) => {
@@ -478,6 +478,15 @@ function registerOrdersRoutes(app, ctx) {
                     throw new Error('Order not found');
                 }
                 const order = docSnap.data();
+                const currentVersion = order.version || 0;
+                if (typeof expectedVersion === 'number' && expectedVersion < currentVersion) {
+                    if (order.lastUpdatedBy?.role === 'kitchen' && modifier?.role === 'staff') {
+                        const err = new Error('CONCURRENCY_CONFLICT');
+                        err.statusCode = 409;
+                        err.currentOrder = { id: docSnap.id, ...order };
+                        throw err;
+                    }
+                }
                 const item = order.items.find((it) => it.id === itemId);
                 if (!item) {
                     throw new Error('Item not found');
@@ -498,17 +507,154 @@ function registerOrdersRoutes(app, ctx) {
                 else if (!allCompleted && order.status === 'completed') {
                     order.status = 'preparing';
                 }
-                t.update(docRef, {
+                const newVersion = currentVersion + 1;
+                const nowIso = new Date().toISOString();
+                const updateData = {
                     items: order.items,
                     status: order.status,
-                    updatedAt: new Date().toISOString()
-                });
-                return order;
+                    updatedAt: nowIso,
+                    version: newVersion
+                };
+                if (modifier && typeof modifier === 'object') {
+                    updateData.lastUpdatedBy = {
+                        role: modifier.role || 'staff',
+                        deviceId: modifier.deviceId || 'unknown',
+                        timestamp: nowIso
+                    };
+                }
+                t.update(docRef, updateData);
+                return { ...order, ...updateData };
             });
             return res.json(updatedOrder);
         }
         catch (error) {
+            if (error?.statusCode === 409 || error?.message === 'CONCURRENCY_CONFLICT') {
+                return res.status(409).json({
+                    error: '該餐點狀態已被廚房主畫面更新，已自動為您同步最新狀態！',
+                    currentOrder: error.currentOrder
+                });
+            }
+            if (error?.message === 'Order not found') {
+                return res.status(404).json({ error: 'Order not found' });
+            }
+            if (error?.message === 'Item not found') {
+                return res.status(404).json({ error: 'Item not found' });
+            }
             res.status(500).send(error);
+        }
+    });
+    post('/kds/claim-kitchen', requireStaffAuth, async (req, res) => {
+        const { deviceId, force } = req.body;
+        if (!deviceId || typeof deviceId !== 'string') {
+            return res.status(400).json({ error: '缺少有效的設備識別碼 (deviceId is required)' });
+        }
+        const kdsSessionRef = db.collection('settings').doc('kds_session');
+        const LEASE_DURATION_MS = 45 * 1000;
+        try {
+            const result = await db.runTransaction(async (t) => {
+                const snap = await t.get(kdsSessionRef);
+                const data = snap.exists ? snap.data() : null;
+                const now = Date.now();
+                const nowIso = new Date(now).toISOString();
+                const expiresAtIso = new Date(now + LEASE_DURATION_MS).toISOString();
+                if (data && data.activeKitchenDeviceId && data.activeKitchenDeviceId !== deviceId) {
+                    const lastHeartbeatTime = data.lastHeartbeat ? new Date(data.lastHeartbeat).getTime() : 0;
+                    const isExpired = (now - lastHeartbeatTime) > LEASE_DURATION_MS;
+                    if (!isExpired && !force) {
+                        const conflictErr = new Error('KITCHEN_ROLE_OCCUPIED');
+                        conflictErr.statusCode = 409;
+                        conflictErr.activeKitchenDeviceId = data.activeKitchenDeviceId;
+                        conflictErr.lastHeartbeat = data.lastHeartbeat;
+                        throw conflictErr;
+                    }
+                }
+                const sessionData = {
+                    activeKitchenDeviceId: deviceId,
+                    lastHeartbeat: nowIso,
+                    claimedAt: data?.activeKitchenDeviceId === deviceId ? (data.claimedAt || nowIso) : nowIso,
+                    leaseExpiresAt: expiresAtIso
+                };
+                t.set(kdsSessionRef, sessionData, { merge: true });
+                return sessionData;
+            });
+            return res.json({ success: true, session: result });
+        }
+        catch (error) {
+            if (error?.statusCode === 409 || error?.message === 'KITCHEN_ROLE_OCCUPIED') {
+                return res.status(409).json({
+                    error: '目前已有其他平板登入為【廚房】角色',
+                    activeKitchenDeviceId: error.activeKitchenDeviceId,
+                    lastHeartbeat: error.lastHeartbeat
+                });
+            }
+            console.error('[KDS Claim Error]', error);
+            res.status(500).json({ error: '無法搶佔廚房角色' });
+        }
+    });
+    post('/kds/heartbeat', requireStaffAuth, async (req, res) => {
+        const { deviceId } = req.body;
+        if (!deviceId || typeof deviceId !== 'string') {
+            return res.status(400).json({ error: '缺少有效的設備識別碼 (deviceId is required)' });
+        }
+        const kdsSessionRef = db.collection('settings').doc('kds_session');
+        const LEASE_DURATION_MS = 45 * 1000;
+        try {
+            const result = await db.runTransaction(async (t) => {
+                const snap = await t.get(kdsSessionRef);
+                const data = snap.exists ? snap.data() : null;
+                const now = Date.now();
+                const nowIso = new Date(now).toISOString();
+                const expiresAtIso = new Date(now + LEASE_DURATION_MS).toISOString();
+                if (!data || data.activeKitchenDeviceId !== deviceId) {
+                    const preemptedErr = new Error('KITCHEN_ROLE_PREEMPTED');
+                    preemptedErr.statusCode = 403;
+                    throw preemptedErr;
+                }
+                const sessionData = {
+                    ...data,
+                    lastHeartbeat: nowIso,
+                    leaseExpiresAt: expiresAtIso
+                };
+                t.update(kdsSessionRef, {
+                    lastHeartbeat: nowIso,
+                    leaseExpiresAt: expiresAtIso
+                });
+                return sessionData;
+            });
+            return res.json({ success: true, session: result });
+        }
+        catch (error) {
+            if (error?.statusCode === 403 || error?.message === 'KITCHEN_ROLE_PREEMPTED') {
+                return res.status(403).json({ error: '您的廚房角色已被其他裝置取代' });
+            }
+            console.error('[KDS Heartbeat Error]', error);
+            res.status(500).json({ error: '心跳更新失敗' });
+        }
+    });
+    post('/kds/release-kitchen', requireStaffAuth, async (req, res) => {
+        const { deviceId } = req.body;
+        if (!deviceId || typeof deviceId !== 'string') {
+            return res.status(400).json({ error: '缺少有效的設備識別碼 (deviceId is required)' });
+        }
+        const kdsSessionRef = db.collection('settings').doc('kds_session');
+        try {
+            await db.runTransaction(async (t) => {
+                const snap = await t.get(kdsSessionRef);
+                if (!snap.exists)
+                    return;
+                const data = snap.data();
+                if (data && data.activeKitchenDeviceId === deviceId) {
+                    t.update(kdsSessionRef, {
+                        activeKitchenDeviceId: null,
+                        leaseExpiresAt: null
+                    });
+                }
+            });
+            return res.json({ success: true, message: '廚房角色已成功釋放' });
+        }
+        catch (error) {
+            console.error('[KDS Release Error]', error);
+            res.status(500).json({ error: '無法釋放廚房角色' });
         }
     });
     del('/orders/:id', requireStaffAuth, async (req, res) => {

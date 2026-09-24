@@ -8,8 +8,6 @@ import {
   TableConfig,
   CustomAddOn,
   SoldOutType,
-  OrderHistoryUserStatus,
-  OrderHistoryBillStatus,
   Reservation,
 } from '../types';
 import { TRANSLATIONS } from '../data';
@@ -24,6 +22,7 @@ import {
   autoSelectOptimalTables,
 } from '../utils/reservationValidator';
 import { useCustomerCart } from '../hooks/useCustomerCart';
+import { getTaiwanTimeParts } from '../utils/dateUtils';
 import { CustomerHeader } from './customer/CustomerHeader';
 import { CustomerCategoryTabs } from './customer/CustomerCategoryTabs';
 import { CustomerMenuGrid } from './customer/CustomerMenuGrid';
@@ -54,63 +53,8 @@ export function isValidTableFormat(str: string | null): boolean {
   return hasDigit && !isTooLong && !hasInvalidWords;
 }
 
-export function getMappedTableId(inputTableId: string, availableTables: Array<{ id: string }>): string {
-  if (!availableTables || availableTables.length === 0) {
-    return inputTableId;
-  }
-  // If the table already exists, use it directly
-  if (availableTables.some((t) => t.id === inputTableId)) {
-    return inputTableId;
-  }
-  if (String(inputTableId || '').includes('外帶')) {
-    return inputTableId;
-  }
-
-  // Extract digits
-  const matchDigits = inputTableId.match(/\d+/);
-  if (matchDigits) {
-    const tableNum = parseInt(matchDigits[0], 10);
-    const numericTables = availableTables
-      .map((t) => ({ id: t.id, num: parseInt(t.id.match(/\d+/)?.[0] || '', 10) }))
-      .filter((t) => !isNaN(t.num));
-
-    if (numericTables.length > 0) {
-      let closestTable = numericTables[0];
-      let minDiff = Math.abs(numericTables[0].num - tableNum);
-      for (const nt of numericTables) {
-        const diff = Math.abs(nt.num - tableNum);
-        if (diff < minDiff) {
-          minDiff = diff;
-          closestTable = nt;
-        }
-      }
-      return closestTable.id;
-    }
-  }
-
-  // Fallback to string hashing or first table
-  let hash = 0;
-  for (let i = 0; i < inputTableId.length; i++) {
-    hash = inputTableId.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  const idx = Math.abs(hash) % availableTables.length;
-  return availableTables[idx].id;
-}
-
-export function shouldShowOrderHistory(
-  userStatus: OrderHistoryUserStatus | null | undefined,
-  billStatus: OrderHistoryBillStatus | null | undefined
-): boolean {
-  if (!userStatus && !billStatus) return false;
-
-  // 1. Active Table Session: outstanding (unpaid) bill on that specific table number
-  const hasActiveTableSession = !!(billStatus?.tableNumber && billStatus?.hasUnpaidBillOnTable);
-
-  // 2. Member Authentication: logged in as a member AND has at least one previous order
-  const hasMemberAuthHistory = !!(userStatus?.isMember && userStatus?.hasPastOrders);
-
-  return hasActiveTableSession || hasMemberAuthHistory;
-}
+import { getMappedTableId } from '../utils/tableUtils';
+export { getMappedTableId };
 
 interface CustomerOrderViewProps {
   currentLang: Language;
@@ -204,7 +148,6 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
     [currentLang]
   );
 
-  const lineProfile: any = null;
   const [selectedTable, setSelectedTable] = useState(() => {
     if (typeof window !== 'undefined') {
       const searchParams = new URLSearchParams(window.location.search);
@@ -277,7 +220,6 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
   const [isTableFixed, setIsTableFixed] = useState(false);
   const [activeLightboxImg, setActiveLightboxImg] = useState<string | null>(null);
 
-  const [loginCount] = useState<number>(0);
   const [isMerchantMode, setIsMerchantMode] = useState(false);
   const [showPasscodeModal, setShowPasscodeModal] = useState(false);
   const [pincodeInput, setPincodeInput] = useState('');
@@ -355,22 +297,14 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
   // Operating schedule checks
   const isTaiwanRestDay = useMemo(() => {
     if (!restDays || restDays.length === 0) return false;
-    const now = new Date();
-    const utcTime = now.getTime() + now.getTimezoneOffset() * 60000;
-    const localDate = new Date(utcTime + 3600000 * 8);
-    const y = localDate.getFullYear();
-    const m = String(localDate.getMonth() + 1).padStart(2, '0');
-    const d = String(localDate.getDate()).padStart(2, '0');
-    return restDays.includes(`${y}-${m}-${d}`);
+    const { dateStr } = getTaiwanTimeParts();
+    return restDays.includes(dateStr);
   }, [restDays]);
 
   const isCurrentSlotReservableOnly = useMemo(() => {
     if (!operatingHours || operatingHours.length === 0) return false;
-    const now = new Date();
-    const utcTime = now.getTime() + now.getTimezoneOffset() * 60000;
-    const localDate = new Date(utcTime + 3600000 * 8);
-    const dayOfWeek = localDate.getDay();
-    const currentMins = localDate.getHours() * 60 + localDate.getMinutes();
+    const { dayOfWeek, hours, minutes } = getTaiwanTimeParts();
+    const currentMins = hours * 60 + minutes;
 
     // Find if the current moment matches an active slot that isReservableOnly
     for (const slot of operatingHours) {
@@ -426,6 +360,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
     cartTotal,
     cartItemsCount,
     handleReorderItems,
+    clientOrderId,
   } = useCustomerCart({
     promoCombo,
     paymentMethod,
@@ -614,9 +549,6 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
     setOrderError(null);
 
     try {
-      const clientOrderId = `ORD-${Date.now().toString(36).toUpperCase()}-${Math.floor(
-        100 + Math.random() * 900
-      )}`;
       const result = await onPlaceOrder({
         tableNumber: selectedTable,
         items: cart,
@@ -842,7 +774,6 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
         takeoutTimeError={takeoutTimeError}
         setTakeoutTimeError={setTakeoutTimeError}
         operatingHours={operatingHours}
-        lineProfile={lineProfile}
         isCheckoutSubmitting={isCheckoutSubmitting}
         handleCheckout={handleCheckout}
         setIsCartOpen={setIsCartOpen}
@@ -919,7 +850,6 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
         setOrderSentSuccess={setOrderSentSuccess}
         activeOrders={activeOrders}
         orderError={orderError}
-        lineProfile={lineProfile}
         userPoints={userPoints}
         userBalance={userBalance}
         memberPointsRatio={memberPointsRatio}
@@ -1369,7 +1299,6 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
         promoCombo={promoCombo}
         promoComboDiscount={promoComboDiscount}
         activeCombosAndDiscounts={activeCombosAndDiscounts}
-        lineProfile={lineProfile}
         expressFee={expressFee}
         userBalance={userBalance}
         cartTotal={cartTotal}
@@ -1392,8 +1321,6 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
         displayedMenuItems={displayedMenuItems}
         popularItemIds={popularItemIds}
         isStoreCurrentlyOpen={effectiveIsStoreCurrentlyOpen}
-        lineProfile={lineProfile}
-        loginCount={loginCount}
         ratingStates={ratingStates}
         setRatingStates={setRatingStates}
         ratingSubmitting={ratingSubmitting}

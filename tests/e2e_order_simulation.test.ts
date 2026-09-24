@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import express from 'express';
 import { registerOrdersRoutes, OrderRouteContext } from '../src/server/routes/orders';
 import { Order, MenuItem, TableConfig, Reservation } from '../src/types';
-import { orderCalculationService } from '../src/services/orderCalculationService';
 
 // Simple mock framework for Express to simulate End-to-End logic without network
 describe('E2E Order Flow Simulation (Frontend -> KDS -> Cashier)', () => {

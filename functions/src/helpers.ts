@@ -242,10 +242,23 @@ export function processMenuItemSoldOut(item: any, now: Date): any {
     } else if (item.soldOutType === 'daily') {
       const soldDate = new Date(item.soldOutAt);
       if (!isNaN(soldDate.getTime())) {
-        const restoreTime = new Date(soldDate);
-        restoreTime.setDate(restoreTime.getDate() + 1);
-        restoreTime.setHours(12, 0, 0, 0);
-        if (now.getTime() >= restoreTime.getTime()) {
+        // Convert soldDate to Asia/Taipei string (YYYY-MM-DD)
+        const soldDateTwStr = new Intl.DateTimeFormat('en-CA', {
+          timeZone: 'Asia/Taipei',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+        }).format(soldDate);
+        
+        const nowDateTwStr = new Intl.DateTimeFormat('en-CA', {
+          timeZone: 'Asia/Taipei',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+        }).format(now);
+        
+        // If current Taiwan date is greater than the date it was sold out, it should be restored.
+        if (nowDateTwStr > soldDateTwStr) {
           item.available = true;
           item.soldOutAt = null;
           item.soldOutType = 'none';

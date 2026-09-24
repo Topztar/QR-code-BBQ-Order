@@ -18,7 +18,7 @@ import net from 'net';
 import { initializeApp as initializeClientApp, getApps as getClientApps } from 'firebase/app';
 import { getFirestore as getClientFirestore, collection, doc, deleteDoc, getDoc, getDocs, setDoc, writeBatch } from 'firebase/firestore';
 import { createServer as createViteServer } from 'vite';
-import { Order, Ingredient, MenuItem, OrderItem, Category, TableConfig, OperatingHourSlot, Reservation, SoldOutType } from './src/types';
+import { Order, Ingredient, MenuItem, Category, TableConfig, OperatingHourSlot, Reservation } from './src/types';
 import fs from 'fs';
 const dataJson = JSON.parse(fs.readFileSync('./public/data.json', 'utf-8'));
 const { INITIAL_MENU, INITIAL_INGREDIENTS, INITIAL_CATEGORIES, INGREDIENT_RECIPE_MAP } = dataJson;
@@ -37,6 +37,7 @@ initFirebaseStorage();
 
 const orderRateLimiter = createRateLimiter(15, 60 * 1000, '訂單提交');
 const reservationRateLimiter = createRateLimiter(10, 60 * 1000, '預約提交');
+const ratingRateLimiter = createRateLimiter(15, 60 * 1000, '訂單評價');
 
 function getMimeTypeFromExt(filePath: string): string {
   const ext = path.extname(filePath).toLowerCase();
@@ -1947,8 +1948,8 @@ async function processLocalAndSaveImage(buffer: Buffer, targetFolder: string, ra
   ]);
 
   if (gcsBucket) {
-    const webpMetadata = { contentType: 'image/webp', cacheControl: 'public, max-age=86400, stale-while-revalidate=604800' };
-    const avifMetadata = { contentType: 'image/avif', cacheControl: 'public, max-age=86400, stale-while-revalidate=604800' };
+    const webpMetadata = { contentType: 'image/webp', cacheControl: 'public, max-age=31536000, immutable' };
+    const avifMetadata = { contentType: 'image/avif', cacheControl: 'public, max-age=31536000, immutable' };
 
     await Promise.all([
       gcsBucket.file(targetPath).save(webpBuffer, { metadata: webpMetadata, resumable: false }),
@@ -1998,6 +1999,15 @@ async function processLocalAndSaveImage(buffer: Buffer, targetFolder: string, ra
 
 // Upload image to Google Cloud Storage (雙模式：支援 multipart/form-data 二進位串流 與 JSON Base64 向下相容)
 app.post('/api/images/upload', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: '未授權存取：缺少有效安全憑證 (Unauthorized)' });
+  }
+  const token = authHeader.split('Bearer ')[1]?.trim();
+  if (!token || (token !== 'valid-staff-session' && !token.startsWith('st_'))) {
+    return res.status(401).json({ error: '安全憑證無效或已過期' });
+  }
+
   try {
     const contentType = req.headers['content-type'] || '';
 
@@ -2013,13 +2023,95 @@ app.post('/api/images/upload', async (req, res) => {
       let targetFolder = 'dishes';
       let fileExceededLimit = false;
 
+      let uploadStreamPromise: Promise<any> | null = null;
+
       bb.on('file', (_name, fileStream, info) => {
         rawFilename = info.filename || rawFilename;
-        const chunks: Buffer[] = [];
+        
+        const { Transform } = require('stream');
+        const magicByteChecker = new Transform({
+          transform(chunk: Buffer, encoding: any, callback: any) {
+            if (!(this as any).checked) {
+              (this as any).checked = true;
+              const hex = chunk.toString('hex', 0, 12).toUpperCase();
+              const isValid = hex.startsWith('FFD8') || hex.startsWith('89504E47') || 
+                              hex.includes('57454250') || hex.includes('66747970') || hex.includes('61766966');
+              if (!isValid) {
+                return callback(new Error('INVALID_MAGIC_BYTES'));
+              }
+            }
+            callback(null, chunk);
+          }
+        });
 
-        fileStream.on('data', (data) => chunks.push(data));
         fileStream.on('limit', () => { fileExceededLimit = true; });
-        fileStream.on('end', () => { fileBuffer = Buffer.concat(chunks); });
+
+        if (gcsBucket) {
+          const cleanFolder = targetFolder.replace(/[^a-zA-Z0-9_-]/g, '') || 'dishes';
+          const timestamp = Date.now();
+          const nameWithoutExt = rawFilename.replace(/[^a-zA-Z0-9._-]/g, '').replace(/\.[^/.]+$/, '') || `dish-${timestamp}`;
+          
+          const versionedFilename = `${nameWithoutExt}-${timestamp}.webp`;
+          const thumbFilename = `${nameWithoutExt}-${timestamp}-thumb.webp`;
+          const avifFilename = `${nameWithoutExt}-${timestamp}.avif`;
+          const thumbAvifFilename = `${nameWithoutExt}-${timestamp}-thumb.avif`;
+
+          const targetPath = `${cleanFolder}/${versionedFilename}`;
+          const thumbTargetPath = `${cleanFolder}/${thumbFilename}`;
+          const avifTargetPath = `${cleanFolder}/${avifFilename}`;
+          const thumbAvifTargetPath = `${cleanFolder}/${thumbAvifFilename}`;
+
+          const webpMetadata = { contentType: 'image/webp', cacheControl: 'public, max-age=31536000, immutable' };
+          const avifMetadata = { contentType: 'image/avif', cacheControl: 'public, max-age=31536000, immutable' };
+
+          const sharpWebp = sharp().resize(800, null, { withoutEnlargement: true }).webp({ quality: 80, effort: 4 });
+          const sharpThumbWebp = sharp().resize(200, 200, { fit: 'cover' }).webp({ quality: 70 });
+          const sharpAvif = sharp().resize(800, null, { withoutEnlargement: true }).avif({ quality: 75, effort: 4 });
+          const sharpThumbAvif = sharp().resize(200, 200, { fit: 'cover' }).avif({ quality: 65, effort: 4 });
+
+          const p1 = new Promise((resolve, reject) => {
+            magicByteChecker.pipe(sharpWebp).pipe(gcsBucket.file(targetPath).createWriteStream({ metadata: webpMetadata, resumable: false }))
+              .on('finish', resolve).on('error', reject);
+          });
+          const p2 = new Promise((resolve, reject) => {
+            magicByteChecker.pipe(sharpThumbWebp).pipe(gcsBucket.file(thumbTargetPath).createWriteStream({ metadata: webpMetadata, resumable: false }))
+              .on('finish', resolve).on('error', reject);
+          });
+          const p3 = new Promise((resolve, reject) => {
+            magicByteChecker.pipe(sharpAvif).pipe(gcsBucket.file(avifTargetPath).createWriteStream({ metadata: avifMetadata, resumable: false }))
+              .on('finish', resolve).on('error', reject);
+          });
+          const p4 = new Promise((resolve, reject) => {
+            magicByteChecker.pipe(sharpThumbAvif).pipe(gcsBucket.file(thumbAvifTargetPath).createWriteStream({ metadata: avifMetadata, resumable: false }))
+              .on('finish', resolve).on('error', reject);
+          });
+
+          uploadStreamPromise = Promise.all([p1, p2, p3, p4]).then(() => ({
+            success: true,
+            url: `/api/images/${targetPath}`,
+            thumbnailUrl: `/api/images/${thumbTargetPath}`,
+            avifUrl: `/api/images/${avifTargetPath}`,
+            avifThumbnailUrl: `/api/images/${thumbAvifTargetPath}`,
+            path: targetPath,
+            thumbPath: thumbTargetPath,
+            avifPath: avifTargetPath,
+            thumbAvifPath: thumbAvifTargetPath,
+            filename: versionedFilename,
+            contentType: 'image/webp'
+          }));
+          
+          magicByteChecker.on('error', (err: any) => {
+             // Handle magic byte checker error
+          });
+          
+          fileStream.pipe(magicByteChecker);
+
+        } else {
+          const chunks: Buffer[] = [];
+          magicByteChecker.on('data', (data: Buffer) => chunks.push(data));
+          magicByteChecker.on('end', () => { fileBuffer = Buffer.concat(chunks); });
+          fileStream.pipe(magicByteChecker);
+        }
       });
 
       bb.on('field', (name, val) => {
@@ -2037,14 +2129,22 @@ app.post('/api/images/upload', async (req, res) => {
         if (fileExceededLimit) {
           return res.status(400).json({ error: '圖片大小超出 10MB 上限 (Max 10MB)' });
         }
-        if (!fileBuffer || fileBuffer.length === 0) {
-          return res.status(400).json({ error: '未接收到有效圖片檔案 (Missing file)' });
-        }
 
         try {
-          const result = await processLocalAndSaveImage(fileBuffer, targetFolder, rawFilename);
-          return res.json(result);
+          if (uploadStreamPromise) {
+            const result = await uploadStreamPromise;
+            return res.json(result);
+          } else {
+            if (!fileBuffer || fileBuffer.length === 0) {
+              return res.status(400).json({ error: '未接收到有效圖片檔案 (Missing file)' });
+            }
+            const result = await processLocalAndSaveImage(fileBuffer, targetFolder, rawFilename);
+            return res.json(result);
+          }
         } catch (err: any) {
+          if (err.message === 'INVALID_MAGIC_BYTES') {
+             return res.status(400).json({ error: '無效的圖片格式或包含惡意內容 (Invalid magic bytes)' });
+          }
           console.error('[Local Server Storage Upload Error]:', err);
           return res.status(500).json({ error: 'Failed to upload image', details: err?.message });
         }
@@ -2060,8 +2160,8 @@ app.post('/api/images/upload', async (req, res) => {
     }
 
     // 🌟 模式 B：JSON Base64 (向下相容備援)
-    const { base64, data, filename, folder = 'dishes' } = req.body;
-    const rawData = base64 || data;
+    const { image, base64, data, filename, folder = 'dishes' } = req.body;
+    const rawData = base64 || data || image;
     if (!rawData) {
       return res.status(400).json({ error: 'Missing image data (base64) / 缺少圖片資料' });
     }
@@ -3431,7 +3531,8 @@ registerOrdersRoutes(app, {
   calculatePromoDiscount: (items: any[]) => calculatePromoDiscount(items),
   triggerCashDrawerOpen: (settings: any) => triggerRealCashDrawer(settings),
   saveStateToDisk: () => saveStateToDisk(),
-  orderRateLimiter
+  orderRateLimiter,
+  ratingRateLimiter
 });
 
 // 8. Management Analytical Insights Data

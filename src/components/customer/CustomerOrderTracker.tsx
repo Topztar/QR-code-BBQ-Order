@@ -15,8 +15,6 @@ export interface CustomerOrderTrackerProps {
   displayedMenuItems: MenuItem[];
   popularItemIds?: string[];
   isStoreCurrentlyOpen?: boolean;
-  lineProfile?: any;
-  loginCount?: number;
   ratingStates: Record<string, { rating: number; feedback: string; isSubmitted: boolean; isEditing: boolean }>;
   setRatingStates: React.Dispatch<
     React.SetStateAction<Record<string, { rating: number; feedback: string; isSubmitted: boolean; isEditing: boolean }>>
@@ -44,8 +42,6 @@ export const CustomerOrderTracker: React.FC<CustomerOrderTrackerProps> = ({
   displayedMenuItems,
   popularItemIds = ['ty-01', 'nd-01', 'sk-02', 'sk-01'],
   isStoreCurrentlyOpen = true,
-  lineProfile,
-  loginCount = 0,
   ratingStates,
   setRatingStates,
   ratingSubmitting,
@@ -539,26 +535,6 @@ export const CustomerOrderTracker: React.FC<CustomerOrderTrackerProps> = ({
                   </h6>
                 </div>
 
-                {!!lineProfile && (
-                  <div className="bg-[#E5B453]/10 border border-[#E5B453]/20 rounded-xl p-4 text-left space-y-2">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5">
-                      <span className="text-xs font-black text-[#E5B453] bg-[#E5B453]/15 border border-[#E5B453]/30 px-2.5 py-1 rounded-full uppercase tracking-wider flex items-center gap-1.5 self-start">
-                        <Sparkles size={11} className="text-[#E5B453] animate-pulse" />
-                        ✨ 尊榮多次登入老饕會員 Exclusive Diner ✨
-                      </span>
-                      <span className="text-[10px] text-white/55 font-mono">
-                        累計安全驗證登入：
-                        <strong className="text-[#E5B453] text-xs font-bold font-mono">
-                          {loginCount}
-                        </strong>{' '}
-                        次
-                      </span>
-                    </div>
-                    <p className="text-xs text-white/70 leading-relaxed font-sans">
-                      {t('welcomeBackNotice')}
-                    </p>
-                  </div>
-                )}
 
                 {/* Past Orders List */}
                 {(() => {

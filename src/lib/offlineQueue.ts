@@ -1,4 +1,5 @@
 import { safeStorage } from './safeStorage';
+import { getIdbItem, setIdbItem, isIndexedDbSupported } from './idbStorage';
 
 export interface QueuedRequest {
   id: string;          // Unique request uuid/timestamp
@@ -13,6 +14,28 @@ export interface QueuedRequest {
 
 const STORAGE_KEY = 'sabay_offline_sync_queue_v1';
 
+// In-memory synchronized cache for sub-millisecond synchronous access without main-thread blocking
+let memoryQueueCache: QueuedRequest[] | null = null;
+
+// Initialize and hydrate queue from IndexedDB on startup (runs in background)
+if (typeof window !== 'undefined' && isIndexedDbSupported()) {
+  getIdbItem<QueuedRequest[]>(STORAGE_KEY).then((idbQueue) => {
+    if (Array.isArray(idbQueue) && idbQueue.length > 0) {
+      const currentSyncQueue = getOfflineQueue();
+      // Reconcile if IndexedDB contains items
+      if (currentSyncQueue.length === 0 || JSON.stringify(idbQueue) !== JSON.stringify(currentSyncQueue)) {
+        memoryQueueCache = idbQueue;
+        try {
+          safeStorage.setItem(STORAGE_KEY, JSON.stringify(idbQueue));
+        } catch (_) {}
+        window.dispatchEvent(new CustomEvent('offline_queue_changed', { detail: idbQueue }));
+      }
+    }
+  }).catch((err) => {
+    console.warn('[OfflineQueue] IndexedDB hydration note:', err);
+  });
+}
+
 // ─── Phase A: Exponential Backoff Helper ─────────────────────────────────────
 // Delays retry attempts using capped exponential backoff to prevent
 // Thundering Herd when the server or network is temporarily unavailable.
@@ -25,24 +48,41 @@ const calcBackoffMs = (retryCount: number): number =>
   Math.min(1000 * 2 ** (retryCount - 1), MAX_BACKOFF_MS);
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Get current request queue from safeStorage
+// Get current request queue with in-memory & safeStorage fallback
 export function getOfflineQueue(): QueuedRequest[] {
+  if (memoryQueueCache !== null) {
+    return memoryQueueCache;
+  }
   try {
     const raw = safeStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    return JSON.parse(raw);
+    if (!raw) {
+      memoryQueueCache = [];
+      return [];
+    }
+    const parsed = JSON.parse(raw);
+    memoryQueueCache = Array.isArray(parsed) ? parsed : [];
+    return memoryQueueCache;
   } catch (error) {
     console.error('[OfflineQueue] Failed to parse queue from storage:', error);
+    memoryQueueCache = [];
     return [];
   }
 }
 
-// Persist request queue to safeStorage
+// Persist request queue to memory cache, safeStorage and durable IndexedDB
 export function saveOfflineQueue(queue: QueuedRequest[]) {
+  memoryQueueCache = [...queue];
+  // 1. Synchronous fallback for immediate consistency
   try {
     safeStorage.setItem(STORAGE_KEY, JSON.stringify(queue));
   } catch (error) {
-    console.error('[OfflineQueue] Failed to write queue to storage:', error);
+    console.error('[OfflineQueue] Failed to write queue to safeStorage:', error);
+  }
+  // 2. High-capacity asynchronous IndexedDB persistence (non-blocking for UI thread)
+  if (isIndexedDbSupported()) {
+    setIdbItem(STORAGE_KEY, queue).catch((err) => {
+      console.warn('[OfflineQueue] IndexedDB background write warning:', err);
+    });
   }
 }
 

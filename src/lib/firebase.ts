@@ -48,7 +48,8 @@ try {
     firestoreInstance = initializeFirestore(app, {
       localCache: memoryLocalCache()
     }, FIRESTORE_DATABASE_ID);
-    console.warn('[Firebase] Downgraded to memoryLocalCache due to IndexedDB failure.');
+    console.error('[FinOps Alert] Downgraded to memoryLocalCache due to IndexedDB failure. Cache miss rate may spike!');
+    // TODO: Connect this alert to Sentry or Firebase Analytics once tracking is enabled.
   } catch (err: any) {
     // 若拋出 failed-precondition 代表 Firestore 內部已完成部分啟動，直接取回實例
     if (err?.code !== 'failed-precondition') {
@@ -58,9 +59,27 @@ try {
   }
 }
 
+import { getDatabase, type Database, connectDatabaseEmulator } from 'firebase/database';
+
 export const db = firestoreInstance;
 export const auth = getAuth(app);
 export const functions = getFunctions(app, 'asia-east1');
+
+let rtdbInstance: Database | null = null;
+const rtdbUrl = (firebaseConfig as any).databaseURL || (import.meta as any).env?.VITE_FIREBASE_DATABASE_URL;
+
+if (rtdbUrl) {
+  try {
+    rtdbInstance = getDatabase(app, rtdbUrl);
+    if (isEmulatorMode) {
+      connectDatabaseEmulator(rtdbInstance, 'localhost', 9000);
+    }
+  } catch (err) {
+    console.warn('[Firebase] Realtime Database init warning:', err);
+  }
+}
+
+export const rtdb = rtdbInstance;
 
 if (isEmulatorMode) {
   try {

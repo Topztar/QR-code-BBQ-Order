@@ -1,54 +1,13 @@
-import React, { createContext, useContext, useState, useEffect, useRef, useMemo, useCallback, ReactNode } from 'react';
-import { Order, OrderItem, TableConfig, Reservation, OrderStatus } from '../types';
-import { orderCalculationService } from '../services/orderCalculationService';
+import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
+import { Order, OrderItem, TableConfig, Reservation, OrderStatus, KdsSession } from '../types';
 import { apiFetch } from '../lib/api';
-import { db, isFirebaseSyncEnabled, ensureFirebaseAuthReady } from '../lib/firebase';
-import { collection, onSnapshot, query, limit, where, orderBy } from 'firebase/firestore';
-import { getOfflineQueue, addRequestToQueue, removeOrderRequestsFromQueue, processOfflineQueue, QueuedRequest } from '../lib/offlineQueue';
 import { safeStorage } from '../lib/safeStorage';
+import { QueuedRequest } from '../lib/offlineQueue';
 import { useOrderSubmit } from '../hooks/useOrderSubmit';
-
-// 🚀 0 雲端成本跨分頁即時廣播頻道 (Zero-Cost Local Cross-Tab Sync)
-let ordersBroadcastChannel: BroadcastChannel | null = null;
-if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
-  try {
-    ordersBroadcastChannel = new BroadcastChannel('sabay_orders_sync');
-  } catch (e) {
-    console.warn('[BroadcastChannel] Initialization failed, using storage fallback:', e);
-  }
-}
-
-interface OrderBroadcastPayload {
-  type: 'ORDER_CREATED' | 'ORDER_UPDATED' | 'ORDER_DELETED';
-  order?: Order;
-  orderId?: string;
-  updates?: Partial<Order>;
-  timestamp: number;
-}
-
-export const broadcastOrderEvent = (payload: Omit<OrderBroadcastPayload, 'timestamp'>) => {
-  const fullPayload: OrderBroadcastPayload = { ...payload, timestamp: Date.now() };
-  if (ordersBroadcastChannel) {
-    try {
-      ordersBroadcastChannel.postMessage(fullPayload);
-    } catch (_) {}
-  }
-  // LocalStorage storage event fallback for cross-tab sync
-  try {
-    safeStorage.setItem('sabay_orders_sync_event', JSON.stringify(fullPayload));
-  } catch (_) {}
-};
-
-interface RecentOrderTransition {
-  status?: OrderStatus;
-  items?: any[];
-  tableNumber?: string;
-  quickNotes?: string;
-  isFlagged?: boolean;
-  flagReason?: string;
-  isPaid?: boolean;
-  timestamp: number;
-}
+import { useLiveOrders } from '../hooks/useLiveOrders';
+import { useOfflineSync } from '../hooks/useOfflineSync';
+import { useKdsMutexSession } from '../hooks/useKdsMutexSession';
+import { isFirebaseSyncEnabled } from '../lib/firebase';
 
 export interface OrderDataContextType {
   orders: Order[];
@@ -118,6 +77,12 @@ export interface OrderDataContextType {
   handleForceSync: () => Promise<void>;
   handleSendPromoPush: (notif: { title: string; message: string; badge: string }) => Promise<void>;
   handleMarkNotificationRead: (notifId: string) => void;
+  kdsSession: KdsSession | null;
+  currentDeviceId: string;
+  isKitchenPreempted: boolean;
+  handleClaimKitchenRole: (force?: boolean) => Promise<{ success: boolean; conflict?: boolean; activeKitchenDeviceId?: string }>;
+  handleReleaseKitchenRole: () => Promise<void>;
+  dismissPreemptedAlert: () => void;
 }
 
 const OrderDataContext = createContext<OrderDataContextType | undefined>(undefined);
@@ -145,7 +110,6 @@ export function OrderDataProvider({
   handleUpdateTableStatus,
   onRefreshData,
 }: ProviderProps) {
-  const [orders, setOrders] = useState<Order[]>([]);
   const [pushNotifications, setPushNotifications] = useState<any[]>([]);
   const [, setLocalOrderIds] = useState<string[]>(() => {
     try {
@@ -156,25 +120,6 @@ export function OrderDataProvider({
     }
   });
 
-  const [offlineQueue, setOfflineQueue] = useState<QueuedRequest[]>(getOfflineQueue());
-  const [isSyncing, setIsSyncing] = useState<boolean>(false);
-  const isSyncingRef = useRef<boolean>(false);
-  useEffect(() => {
-    isSyncingRef.current = isSyncing;
-  }, [isSyncing]);
-
-  const reservationsRef = useRef(reservations);
-  useEffect(() => {
-    reservationsRef.current = reservations;
-  }, [reservations]);
-
-  const onRefreshDataRef = useRef(onRefreshData);
-  useEffect(() => {
-    onRefreshDataRef.current = onRefreshData;
-  }, [onRefreshData]);
-
-  const [syncProgressMsg, setSyncProgressMsg] = useState<string>('');
-  const [isNetworkOnline, setIsNetworkOnline] = useState<boolean>(typeof navigator !== 'undefined' ? navigator.onLine : true);
   const [syncActive, setSyncActive] = useState<boolean>(() => isFirebaseSyncEnabled());
 
   useEffect(() => {
@@ -190,367 +135,47 @@ export function OrderDataProvider({
     return () => window.removeEventListener('firebase_sync_changed', handleSyncChanged);
   }, []);
 
-  const [forceApiFallback] = useState<boolean>(false);
+  const {
+    offlineQueue,
+    isSyncing,
+    syncProgressMsg,
+    isNetworkOnline,
+    handleForceSync
+  } = useOfflineSync(onRefreshData);
+
+  const {
+    kdsSession,
+    currentDeviceId,
+    isKitchenPreempted,
+    handleClaimKitchenRole,
+    handleReleaseKitchenRole,
+    dismissPreemptedAlert
+  } = useKdsMutexSession(activeTab, isNetworkOnline, syncActive);
+
+  const {
+    orders,
+    setOrders,
+    handleUpdateOrderStatus,
+    handleToggleOrderItemComplete,
+    handleUpdateTableNumber,
+    handleUpdateQuickNotes,
+    handleToggleOrderFlag,
+    handleUpdateOrderItems,
+    handlePayOrder,
+    handleBulkPayOrders,
+    handleDeleteOrder
+  } = useLiveOrders(
+    activeTab,
+    currentDeviceId,
+    isNetworkOnline,
+    syncActive,
+    tables,
+    reservations,
+    handleUpdateTableStatus,
+    handleDeleteReservation
+  );
+
   const { handlePlaceOrder } = useOrderSubmit(setOrders, setLocalOrderIds, handleUpdateTableStatus, onRefreshData);
-  const recentStatusTransitionsRef = useRef<Map<string, RecentOrderTransition>>(new Map());
-  const deletedOrderIdsRef = useRef<Set<string>>(new Set());
-
-  // 🛡️ 統一訂單異動對齊防護函式 (防止 Firestore onSnapshot 與定時輪詢覆寫樂觀狀態造成回滾/Lag)
-  const reconcileOrdersWithRecentTransitions = (incomingOrders: Order[]): Order[] => {
-    if (!Array.isArray(incomingOrders)) return [];
-    const nowMs = Date.now();
-
-    for (const [tId, tRecord] of recentStatusTransitionsRef.current.entries()) {
-      if (nowMs - tRecord.timestamp > 30000) {
-        recentStatusTransitionsRef.current.delete(tId);
-      }
-    }
-
-    return incomingOrders
-      .filter((ord) => !deletedOrderIdsRef.current.has(ord.id))
-      .map((ord: Order) => {
-      const transition = recentStatusTransitionsRef.current.get(ord.id);
-      if (!transition) return ord;
-
-      let reconciled = { ...ord };
-
-      if (transition.status) {
-        if (ord.status === transition.status) {
-          reconciled.isOfflinePending = false;
-          // Clear matching transition to prevent overriding newer updates
-          recentStatusTransitionsRef.current.delete(ord.id);
-        } else {
-          reconciled.status = transition.status;
-          reconciled.isOfflinePending = false;
-        }
-      }
-
-      if (transition.isPaid !== undefined) {
-        reconciled.isPaid = transition.isPaid;
-      }
-
-      if (transition.tableNumber !== undefined && ord.tableNumber !== transition.tableNumber) {
-        reconciled.tableNumber = transition.tableNumber;
-      }
-
-      if (transition.quickNotes !== undefined && ord.quickNotes !== transition.quickNotes) {
-        reconciled.quickNotes = transition.quickNotes;
-      }
-
-      if (transition.isFlagged !== undefined) {
-        reconciled.isFlagged = transition.isFlagged;
-        if (transition.flagReason !== undefined) reconciled.flagReason = transition.flagReason;
-      }
-
-      if (transition.items && Array.isArray(transition.items)) {
-        const itemMap = new Map((transition.items as any[]).map((it: any) => [it.id, it]));
-        reconciled.items = ord.items.map(it => {
-          const transIt: any = itemMap.get(it.id);
-          if (transIt) {
-            return {
-              ...it,
-              isCompleted: transIt.isCompleted !== undefined ? transIt.isCompleted : it.isCompleted,
-              isPrepared: transIt.isPrepared !== undefined ? transIt.isPrepared : it.isPrepared
-            };
-          }
-          return it;
-        });
-      }
-
-      return reconciled;
-    });
-  };
-
-  // 🚀 0 雲端成本跨分頁同步監聽 (BroadcastChannel + LocalStorage Event)
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    try { safeStorage.removeItem('sabay_orders_sync_event'); } catch (_) {}
-
-    const handleBroadcastMessage = (event: MessageEvent<OrderBroadcastPayload>) => {
-      const data = event.data;
-      if (!data || !data.type) return;
-
-      if (data.type === 'ORDER_CREATED' && data.order) {
-        setOrders(prev => {
-          if (prev.some(o => o.id === data.order!.id)) return prev;
-          return [data.order!, ...prev];
-        });
-      } else if (data.type === 'ORDER_UPDATED' && data.orderId && data.updates) {
-        setOrders(prev => prev.map(o => o.id === data.orderId ? { ...o, ...data.updates } : o));
-      } else if (data.type === 'ORDER_DELETED' && data.orderId) {
-        setOrders(prev => prev.filter(o => o.id !== data.orderId));
-      }
-    };
-
-    const handleStorageEvent = (e: StorageEvent) => {
-      if (e.key === 'sabay_orders_sync_event' && e.newValue) {
-        try {
-          const data: OrderBroadcastPayload = JSON.parse(e.newValue);
-          handleBroadcastMessage({ data } as MessageEvent);
-        } catch (_) {}
-      }
-    };
-
-    if (ordersBroadcastChannel) {
-      ordersBroadcastChannel.addEventListener('message', handleBroadcastMessage);
-    }
-    window.addEventListener('storage', handleStorageEvent);
-
-    return () => {
-      if (ordersBroadcastChannel) {
-        ordersBroadcastChannel.removeEventListener('message', handleBroadcastMessage);
-      }
-      window.removeEventListener('storage', handleStorageEvent);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const updateOnlineStatus = () => {
-      setIsNetworkOnline(typeof navigator !== 'undefined' ? navigator.onLine : true);
-    };
-    window.addEventListener('online', updateOnlineStatus);
-    window.addEventListener('offline', updateOnlineStatus);
-
-    const handleQueueChange = (e: Event) => {
-      const customEvent = e as CustomEvent<QueuedRequest[]>;
-      setOfflineQueue(customEvent.detail || getOfflineQueue());
-    };
-    window.addEventListener('offline_queue_changed', handleQueueChange);
-
-    return () => {
-      window.removeEventListener('online', updateOnlineStatus);
-      window.removeEventListener('offline', updateOnlineStatus);
-      window.removeEventListener('offline_queue_changed', handleQueueChange);
-    };
-  }, []);
-
-  const handleForceSync = useCallback(async () => {
-    if (isSyncingRef.current) return;
-    isSyncingRef.current = true;
-    setIsSyncing(true);
-    setSyncProgressMsg('正在準備批次重發...');
-    try {
-      const result = await processOfflineQueue((progress) => setSyncProgressMsg(progress));
-      if (result.successCount > 0) {
-        console.log(`[Offline Sync] Successfully synced ${result.successCount} requests!`);
-        if (onRefreshDataRef.current) {
-          await onRefreshDataRef.current();
-        }
-      }
-    } catch (e) {
-      console.error('[Offline Sync Error]', e);
-    } finally {
-      isSyncingRef.current = false;
-      setIsSyncing(false);
-      setSyncProgressMsg('');
-    }
-  }, []);
-
-  // Trigger sync immediately when network comes back online with pending items
-  useEffect(() => {
-    if (isNetworkOnline && offlineQueue.length > 0) {
-      handleForceSync();
-    }
-  }, [isNetworkOnline, offlineQueue.length, handleForceSync]);
-
-  // Phase B ─ Background Probe Timer (解決 G-1 / G-4)
-  // When the offline queue is non-empty, poll every 30s to attempt sync even if
-  // the 'online' event never re-fires (e.g. captive portals, weak Wi-Fi signal).
-  // The timer auto-clears when the queue is drained or a sync is already running.
-  const PROBE_INTERVAL_MS = 30_000;
-  useEffect(() => {
-    if (offlineQueue.length === 0) return; // No work — skip starting the timer
-
-    const probeTimer = setInterval(() => {
-      // Re-read directly from storage to get the freshest count (avoids stale closure)
-      const currentQueue = getOfflineQueue();
-      if (currentQueue.length > 0 && !isSyncing) {
-        console.log(`[OfflineQueue] Background probe: ${currentQueue.length} items pending — triggering auto-sync.`);
-        handleForceSync();
-      }
-    }, PROBE_INTERVAL_MS);
-
-    return () => clearInterval(probeTimer);
-  }, [offlineQueue.length, isSyncing, handleForceSync]);
-
-  // Firestore Realtime Orders listener & Fallback API Polling
-  useEffect(() => {
-    let unsubscribeOrders = () => {};
-    // 🛡️ 生命週期守衛：防止非同步 await 期間元件卸載產生死庲監聽器 (Zombie Listener)
-    let isCancelled = false;
-
-    const isCustomerView = activeTab === 'customer';
-
-    // 🛡️ 顧客端防護：顧客端手機為匹名訪客，無 staff 權限。
-    // Firestore Rules 與後端 /api/orders 皆拒絕匹名存取全店訂單 (避免顧客資訊外流)。
-    // 顧客訂單完全由提交時的本地狀態與 sabay-my-submitted-order-ids 維護，
-    // 嚴禁顧客端發起 onSnapshot 或 /api/orders 請求，徹底消除 401/403 錯誤與失敗監聽風暴。
-    if (isCustomerView) {
-      return () => {
-        unsubscribeOrders();
-      };
-    }
-
-    // Fallback Polling Mechanism for Staff Views when offline / Firebase quota exceeded
-    const fetchOrdersFromApi = async () => {
-      try {
-        let url = `/api/orders?_t=${Date.now()}`;
-        const res = await apiFetch(url);
-        if (res.ok) {
-          let data = await res.json();
-          if (Array.isArray(data)) {
-            // Replicate Firebase query sorting logic (descending by createdAt)
-            data.sort((a: Order, b: Order) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-            
-            // Normalize data to ensure all items have a customization object
-            const normalizedData = data.map((o: Order) => ({
-              ...o,
-              items: o.items?.map(it => ({
-                ...it,
-                customization: it.customization || { spiciness: 0, notes: '', selectedAddOns: [] }
-              })) || []
-            }));
-
-            setOrders(() => reconcileOrdersWithRecentTransitions(normalizedData));
-          }
-        }
-      } catch (_e) {
-        // Silent fallback when running on static Firebase hosting without Express server
-      }
-    };
-
-    let reconnectTimer: any = null;
-    let fallbackPollInterval: any = null;
-    let retryCount = 0;
-
-    const setupRealtimeListener = async () => {
-      try {
-        // 🛡️ Auth 連線守衛：等待 Firebase Auth 狀態從 IndexedDB 復原（F5 重載場景）
-        const user = await ensureFirebaseAuthReady();
-        if (isCancelled) return; // 防止非同步 await 期間元件已卸載
-
-        if (!user) {
-          console.warn('[Firebase Sync] Auth not ready after wait, deferring listener setup...');
-          fetchOrdersFromApi(); // 先用 API 取資料防止畫面凍結
-          if (!reconnectTimer && !isCancelled) {
-            reconnectTimer = setTimeout(() => {
-              reconnectTimer = null;
-              setupRealtimeListener();
-            }, 3000);
-          }
-          return;
-        }
-
-        const activeStatuses: OrderStatus[] = ['pending', 'confirmed', 'preparing', 'delivering', 'paid'];
-        const ordersQuery = query(
-          collection(db, "orders"),
-          where("status", "in", activeStatuses),
-          orderBy("createdAt", "desc")
-        );
-
-        // 🛡️ 綁定於此監聽器實例，防止重連時將全店既有訂單誤判為新單引發音效轟鳴 (Reconnect Stampede)
-        let isFirstSnapshotOfThisListener = true;
-
-        unsubscribeOrders = onSnapshot(ordersQuery, (snapshot) => {
-          // 🔊 增量新單偵測（利用 Firestore 原生差異 API，消除時鐘偏差）
-          if (!isFirstSnapshotOfThisListener) {
-            const newlyAdded: Order[] = [];
-            snapshot.docChanges().forEach(change => {
-              if (change.type === 'added') {
-                const ord = { id: change.doc.id, ...change.doc.data() } as Order;
-                if (ord.status === 'pending' || ord.status === 'confirmed') {
-                  newlyAdded.push(ord);
-                }
-              }
-            });
-            if (newlyAdded.length > 0 && typeof window !== 'undefined') {
-              window.dispatchEvent(new CustomEvent('sabay_new_orders_detected', {
-                detail: { orders: newlyAdded }
-              }));
-            }
-          } else {
-            // 第一次快照：設定初始狀態，不觸發音效
-            isFirstSnapshotOfThisListener = false;
-          }
-
-          const updatedOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
-          // Client-side sort descending by createdAt
-          updatedOrders.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-          
-          // Normalize data to ensure all items have a customization object
-          const normalizedOrders = updatedOrders.map(o => ({
-            ...o,
-            items: o.items?.map(it => ({
-              ...it,
-              customization: it.customization || { spiciness: 0, notes: '', selectedAddOns: [] }
-            })) || []
-          }));
-
-          retryCount = 0; // 監聽器就緒後重置重試計數器
-          setOrders(reconcileOrdersWithRecentTransitions(normalizedOrders));
-        }, (error) => {
-          console.warn('[Firebase Sync] Realtime listener error:', error);
-          
-          // 🛡️ 錯誤分類防護：
-          // 若為暫時性網絡中斷 (unavailable)，Firebase SDK 內部會持續使用離線快取並自動重試，不宣告監聽死亡
-          if ((error as any)?.code === 'unavailable') {
-            console.log('[Firebase Sync] Network unavailable, retaining persistent cache & waiting for SDK auto-reconnect.');
-            return;
-          }
-
-          // 其他異常 (如 permission-denied 或監聽失效)：執行單次 API 同步並安排指數退避自動重連拒絕永久死亡
-          fetchOrdersFromApi();
-          
-          if (!reconnectTimer && !isCancelled) {
-            retryCount++;
-            // 指數退避：1s, 2s, 4s, 8s ... 上限 30s + 隨機亂數防雷群效應
-            const retryDelay = Math.min(1000 * Math.pow(2, retryCount - 1), 30000) + Math.floor(Math.random() * 500);
-            console.log(`[Firebase Sync] Scheduling realtime listener re-attach in ${retryDelay}ms (attempt #${retryCount})...`);
-            reconnectTimer = setTimeout(() => {
-              reconnectTimer = null;
-              try {
-                unsubscribeOrders();
-              } catch (_) {}
-              if (!isCancelled) setupRealtimeListener();
-            }, retryDelay);
-          }
-        });
-      } catch (e) {
-        console.warn('[Firebase Sync] Realtime listener initialization skipped:', e);
-        fetchOrdersFromApi();
-        if (!reconnectTimer && !isCancelled) {
-          retryCount++;
-          const retryDelay = Math.min(1000 * Math.pow(2, retryCount - 1), 30000) + Math.floor(Math.random() * 500);
-          reconnectTimer = setTimeout(() => {
-            reconnectTimer = null;
-            if (!isCancelled) setupRealtimeListener();
-          }, retryDelay);
-        }
-      }
-    };
-
-    if (syncActive && isFirebaseSyncEnabled() && !forceApiFallback) {
-      // 🍳 後台 (廨房 KDS / 櫃台收銀 / 數據分析)：即時監聽在席與待處理訂單
-      setupRealtimeListener();
-    } else {
-      // Initial fetch when sync is inactive or forced API fallback
-      fetchOrdersFromApi();
-
-      // 🛡️ 後台守護心跳：當 Firebase Sync 尚未就緒或被關閉時，後台以 15 秒溫和輪詢作為保底防線，避免畫面凍結
-      fallbackPollInterval = setInterval(() => {
-        fetchOrdersFromApi();
-      }, 15000);
-    }
-
-    return () => {
-      isCancelled = true; // 🛡️ 通知所有非同步操作：元件已卸載，停止一切重連試圖
-      if (reconnectTimer) clearTimeout(reconnectTimer);
-      if (fallbackPollInterval) clearInterval(fallbackPollInterval);
-      unsubscribeOrders();
-    };
-  }, [activeTab, currentPath, forceApiFallback, syncActive]);
 
   // Real-time Table Status Auto-Sync based on Orders & Reservations
   useEffect(() => {
@@ -647,548 +272,7 @@ export function OrderDataProvider({
     checkAndSyncTables();
     const interval = setInterval(checkAndSyncTables, 15000);
     return () => clearInterval(interval);
-  }, [orders, reservations, tables?.length]);
-
-
-
-  const handleUpdateOrderStatus = async (orderId: string, status: OrderStatus) => {
-    const description = `更新 🥢 訂單 #${orderId.replace('offline_temp_', '離線')} 狀態至「${status}」`;
-    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
-    
-    // ☁️ Firestore 即時寫入 (已移除，避免觸發 Security Rules 錯誤導致監聽器死亡，改由後端 API 統一處理)
-
-    // 🚀 本地跨分頁 0 成本廣播
-    broadcastOrderEvent({ type: 'ORDER_UPDATED', orderId, updates: { status } });
-
-    if (!isOnline || orderId.startsWith('offline_temp_')) {
-      console.log('[Sabay Offline] Intercepting state change offline...');
-      addRequestToQueue(`/api/orders/${orderId}/status`, 'PUT', { status }, description);
-      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status, isOfflinePending: true } : o));
-      return;
-    }
-
-    removeOrderRequestsFromQueue(orderId);
-
-    recentStatusTransitionsRef.current.set(orderId, {
-      ...recentStatusTransitionsRef.current.get(orderId),
-      status,
-      timestamp: Date.now()
-    });
-
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status, isOfflinePending: false } : o));
-
-    try {
-      const res = await apiFetch(`/api/orders/${orderId}/status`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status }),
-      });
-      if (res.ok) {
-        console.log(`[KDS Sync] Order #${orderId} status synced to "${status}" successfully`);
-      } else {
-        console.warn(`[KDS Sync] Server returned status ${res.status}, keeping optimistic update`);
-      }
-    } catch (err) {
-      console.warn('[KDS Sync Error]', err);
-    }
-
-    if (getOfflineQueue().length > 0) {
-      processOfflineQueue().catch(() => {});
-    }
-  };
-
-  const handleToggleOrderItemComplete = async (orderId: string, itemId: string, isCompleted: boolean, isPrepared?: boolean) => {
-    const description = `更新 🥢 訂單 #${orderId.replace('offline_temp_', '離線')} 內單一商品狀態`;
-    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
-    
-    let nextStatus: OrderStatus | undefined;
-    let nextItems: any[] = [];
-
-    setOrders(prev => prev.map(o => {
-      if (o.id === orderId) {
-        const updatedItems = o.items.map(it => {
-          if (it.id === itemId) {
-            const prep = typeof isPrepared !== 'undefined' ? isPrepared : (isCompleted ? true : (it.isPrepared || false));
-            return { ...it, isCompleted, isPrepared: prep };
-          }
-          return it;
-        });
-        nextItems = updatedItems;
-        const allCompleted = updatedItems.every(item => item.isCompleted);
-        const status = allCompleted && o.status !== 'paid' ? 'completed' : (o.status === 'completed' ? 'preparing' : o.status);
-        nextStatus = status;
-        return { ...o, items: updatedItems, status, isOfflinePending: !isOnline };
-      }
-      return o;
-    }));
-
-    // ☁️ Firestore 即時寫入 (已移除，避免觸發 Security Rules 錯誤導致監聽器死亡，改由後端 API 統一處理)
-
-    // 🚀 本地跨分頁 0 成本廣播
-    broadcastOrderEvent({ type: 'ORDER_UPDATED', orderId, updates: { items: nextItems, status: nextStatus } });
-
-    if (!isOnline || orderId.startsWith('offline_temp_')) {
-      addRequestToQueue(`/api/orders/${orderId}/items/${itemId}/complete`, 'PUT', { isCompleted, isPrepared }, description);
-      return;
-    }
-
-    removeOrderRequestsFromQueue(orderId);
-    recentStatusTransitionsRef.current.set(orderId, {
-      ...recentStatusTransitionsRef.current.get(orderId),
-      items: nextItems,
-      status: nextStatus,
-      timestamp: Date.now()
-    });
-
-    try {
-      const res = await apiFetch(`/api/orders/${orderId}/items/${itemId}/complete`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isCompleted, isPrepared }),
-      });
-      if (res.ok) {
-        const updatedOrder = await res.json();
-        setOrders(prev => prev.map(o => o.id === orderId ? { ...updatedOrder, isOfflinePending: false } : o));
-      } else {
-        addRequestToQueue(`/api/orders/${orderId}/items/${itemId}/complete`, 'PUT', { isCompleted, isPrepared }, description);
-      }
-    } catch (err) {
-      console.warn('[Offline Fallback] Toggle order item state failed, queued:', err);
-      addRequestToQueue(`/api/orders/${orderId}/items/${itemId}/complete`, 'PUT', { isCompleted, isPrepared }, description);
-    }
-
-    if (getOfflineQueue().length > 0) {
-      processOfflineQueue().catch(() => {});
-    }
-  };
-
-  const handleUpdateTableNumber = async (orderId: string, tableNumber: string) => {
-    const description = `修改 🥢 訂單 #${orderId.replace('offline_temp_', '離線')} 的桌號至 ${tableNumber} 桌`;
-    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, tableNumber, isOfflinePending: !isOnline } : o));
-    
-    // ☁️ Firestore 即時寫入 (已移除，避免觸發 Security Rules 錯誤導致監聽器死亡，改由後端 API 統一處理)
-
-    // 🚀 本地跨分頁 0 成本廣播
-    broadcastOrderEvent({ type: 'ORDER_UPDATED', orderId, updates: { tableNumber } });
-
-    if (!isOnline || orderId.startsWith('offline_temp_')) {
-      addRequestToQueue(`/api/orders/${orderId}/table-number`, 'PUT', { tableNumber }, description);
-      return { success: true };
-    }
-
-    removeOrderRequestsFromQueue(orderId);
-    recentStatusTransitionsRef.current.set(orderId, {
-      ...recentStatusTransitionsRef.current.get(orderId),
-      tableNumber,
-      timestamp: Date.now()
-    });
-
-    try {
-      const res = await apiFetch(`/api/orders/${orderId}/table-number`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tableNumber }),
-      });
-      if (res.ok) {
-        return { success: true };
-      }
-      addRequestToQueue(`/api/orders/${orderId}/table-number`, 'PUT', { tableNumber }, description);
-      return { success: true };
-    } catch (err: any) {
-      console.warn('[Offline Fallback] Update table number failed, queued:', err);
-      addRequestToQueue(`/api/orders/${orderId}/table-number`, 'PUT', { tableNumber }, description);
-      return { success: true };
-    }
-  };
-
-  const handleUpdateQuickNotes = async (orderId: string, quickNotes: string) => {
-    const description = `更新 🥢 訂單 #${orderId.replace('offline_temp_', '離線')} 備註: "${quickNotes}"`;
-    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, quickNotes, isOfflinePending: !isOnline } : o));
-
-    // ☁️ Firestore 即時寫入 (已移除，避免觸發 Security Rules 錯誤導致監聽器死亡，改由後端 API 統一處理)
-
-    // 🚀 本地跨分頁 0 成本廣播
-    broadcastOrderEvent({ type: 'ORDER_UPDATED', orderId, updates: { quickNotes } });
-
-    if (!isOnline || orderId.startsWith('offline_temp_')) {
-      addRequestToQueue(`/api/orders/${orderId}/quick-notes`, 'PUT', { quickNotes }, description);
-      return { success: true };
-    }
-
-    removeOrderRequestsFromQueue(orderId);
-    recentStatusTransitionsRef.current.set(orderId, {
-      ...recentStatusTransitionsRef.current.get(orderId),
-      quickNotes,
-      timestamp: Date.now()
-    });
-
-    try {
-      const res = await apiFetch(`/api/orders/${orderId}/quick-notes`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ quickNotes }),
-      });
-      if (res.ok) {
-        return { success: true };
-      }
-      addRequestToQueue(`/api/orders/${orderId}/quick-notes`, 'PUT', { quickNotes }, description);
-      return { success: true };
-    } catch (err: any) {
-      console.warn('[Offline Fallback] Update quick notes failed, queued:', err);
-      addRequestToQueue(`/api/orders/${orderId}/quick-notes`, 'PUT', { quickNotes }, description);
-      return { success: true };
-    }
-  };
-
-  const handleToggleOrderFlag = async (orderId: string, isFlagged: boolean, flagReason: string) => {
-    const description = `設定 🥢 訂單 #${orderId.replace('offline_temp_', '離線')} 關注旗幟 ${isFlagged ? 'ON' : 'OFF'}`;
-    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, isFlagged, flagReason, isOfflinePending: !isOnline } : o));
-
-    // ☁️ Firestore 即時寫入 (已移除，避免觸發 Security Rules 錯誤導致監聽器死亡，改由後端 API 統一處理)
-
-    // 🚀 本地跨分頁 0 成本廣播
-    broadcastOrderEvent({ type: 'ORDER_UPDATED', orderId, updates: { isFlagged, flagReason } });
-
-    if (!isOnline || orderId.startsWith('offline_temp_')) {
-      addRequestToQueue(`/api/orders/${orderId}/flag`, 'PUT', { isFlagged, flagReason }, description);
-      return { success: true };
-    }
-
-    removeOrderRequestsFromQueue(orderId);
-    recentStatusTransitionsRef.current.set(orderId, {
-      ...recentStatusTransitionsRef.current.get(orderId),
-      isFlagged,
-      flagReason,
-      timestamp: Date.now()
-    });
-
-    try {
-      const res = await apiFetch(`/api/orders/${orderId}/flag`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isFlagged, flagReason }),
-      });
-      if (res.ok) {
-        return { success: true };
-      }
-      addRequestToQueue(`/api/orders/${orderId}/flag`, 'PUT', { isFlagged, flagReason }, description);
-      return { success: true };
-    } catch (err: any) {
-      console.warn('[Offline Fallback] Toggle order flag failed, queued:', err);
-      addRequestToQueue(`/api/orders/${orderId}/flag`, 'PUT', { isFlagged, flagReason }, description);
-      return { success: true };
-    }
-  };
-
-  const handleUpdateOrderItems = async (orderId: string, items: any[], refundLogs?: any[]) => {
-    const description = `調整 🥢 訂單 #${orderId.replace('offline_temp_', '離線')} 品項數量`;
-    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
-    let computedPricing = { subtotal: 0, serviceCharge: 0, discount: 0, total: 0 };
-    setOrders(prev => prev.map(o => {
-      if (o.id !== orderId) return o;
-      computedPricing = orderCalculationService.calculateOrderPricing({
-        ...o,
-        items
-      });
-      return {
-        ...o,
-        items,
-        subtotal: computedPricing.subtotal,
-        serviceCharge: computedPricing.serviceCharge,
-        discount: computedPricing.discount,
-        total: computedPricing.total,
-        isOfflinePending: !isOnline
-      };
-    }));
-
-    // 🚀 本地跨分頁 0 成本廣播
-    broadcastOrderEvent({
-      type: 'ORDER_UPDATED',
-      orderId,
-      updates: {
-        items,
-        subtotal: computedPricing.subtotal,
-        serviceCharge: computedPricing.serviceCharge,
-        discount: computedPricing.discount,
-        total: computedPricing.total
-      }
-    });
-
-    if (!isOnline || orderId.startsWith('offline_temp_')) {
-      addRequestToQueue(`/api/orders/${orderId}/items`, 'PUT', { items, refundLogs }, description);
-      return;
-    }
-
-    removeOrderRequestsFromQueue(orderId);
-    recentStatusTransitionsRef.current.set(orderId, {
-      ...recentStatusTransitionsRef.current.get(orderId),
-      items,
-      timestamp: Date.now()
-    });
-
-    try {
-      const res = await apiFetch(`/api/orders/${orderId}/items`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items, refundLogs }),
-      });
-      if (!res.ok) {
-        addRequestToQueue(`/api/orders/${orderId}/items`, 'PUT', { items, refundLogs }, description);
-      }
-    } catch (err) {
-      console.warn('[Offline Fallback] Update order items failed, queued:', err);
-      addRequestToQueue(`/api/orders/${orderId}/items`, 'PUT', { items, refundLogs }, description);
-    }
-  };
-
-  const handlePayOrder = async (
-    orderId: string,
-    checkoutData?: {
-      paymentMethod?: string;
-      subtotal?: number;
-      serviceCharge?: number;
-      total?: number;
-      discount?: number;
-      cashTendered?: number;
-      changeAmount?: number;
-      checkoutRecord?: any;
-      isPaid?: boolean;
-    },
-    skipRefresh?: boolean
-  ) => {
-    const isOnline = navigator.onLine;
-    const description = `結帳 🥢 訂單 #${orderId.replace('offline_temp_', '離線')}`;
-    
-    const targetOrder = orders.find(o => o.id === orderId);
-    const resolvedStatus: OrderStatus = (targetOrder?.status === 'completed' || targetOrder?.status === 'cancelled')
-      ? targetOrder.status
-      : 'paid';
-
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, isPaid: true, status: (o.status === 'completed' || o.status === 'cancelled') ? o.status : 'paid', isOfflinePending: !isOnline } : o));
-
-    // ☁️ Firestore 即時寫入 (已移除，避免觸發 Security Rules 錯誤導致監聽器死亡，改由後端 API 統一處理)
-
-    // 🚀 本地跨分頁 0 成本廣播
-    broadcastOrderEvent({ type: 'ORDER_UPDATED', orderId, updates: { isPaid: true, status: resolvedStatus, ...(checkoutData || {}) } });
-
-    if (targetOrder) {
-      if (targetOrder.tableNumber && targetOrder.tableNumber !== '外帶' && targetOrder.tableNumber !== 'takeout') {
-        const remainingUnpaid = orders.filter(o => o.tableNumber === targetOrder.tableNumber && o.id !== orderId && !o.isPaid && o.status !== 'cancelled');
-        if (remainingUnpaid.length === 0) {
-          handleUpdateTableStatus(targetOrder.tableNumber, {
-            status: 'cleaning',
-            cleaningStartedAt: new Date().toISOString()
-          });
-        }
-      }
-      const resNo = targetOrder.reservationNo;
-      const matchingRes = (reservationsRef.current || []).find(r =>
-        (resNo && (r.id === resNo || (r as any).reservationNo === resNo)) ||
-        (r.tableNumber === targetOrder.tableNumber && r.date === targetOrder.reservationDate)
-      );
-      if (matchingRes) {
-        console.log(`[Checkout Cleanup] Deleting reservation ${matchingRes.id} associated with paid order ${orderId}`);
-        handleDeleteReservation(matchingRes.id);
-      }
-    }
-
-    if (!isOnline || orderId.startsWith('offline_temp_')) {
-      addRequestToQueue(`/api/orders/${orderId}/checkout`, 'PUT', checkoutData || { isPaid: true }, description);
-      return;
-    }
-
-    removeOrderRequestsFromQueue(orderId);
-    recentStatusTransitionsRef.current.set(orderId, {
-      ...recentStatusTransitionsRef.current.get(orderId),
-      isPaid: true,
-      status: resolvedStatus,
-      timestamp: Date.now()
-    });
-
-    try {
-      const res = await apiFetch(`/api/orders/${orderId}/checkout`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(checkoutData || { isPaid: true }),
-      });
-      if (res.ok) {
-        // 🛡️ 結帳成功：訂單狀態與桌態已由樂觀更新與廣播頻道同步，消除每次結帳重複下載完整 bootstrap 的浪費
-      } else {
-        addRequestToQueue(`/api/orders/${orderId}/checkout`, 'PUT', checkoutData || { isPaid: true }, description);
-      }
-    } catch (err) {
-      console.warn('[Offline Fallback] Pay order failed, queued:', err);
-      addRequestToQueue(`/api/orders/${orderId}/checkout`, 'PUT', checkoutData || { isPaid: true }, description);
-    }
-  };
-
-  const handleBulkPayOrders = async (
-    orderIds: string[],
-    checkoutData: {
-      paymentMethod?: string;
-      subtotal?: number;
-      serviceCharge?: number;
-      total?: number;
-      discount?: number;
-      cashTendered?: number;
-      changeAmount?: number;
-      tableNumbers?: string[];
-      checkoutRecord?: any;
-    },
-    skipRefresh?: boolean
-  ): Promise<{ success: boolean }> => {
-    if (!orderIds || orderIds.length === 0) return { success: false };
-    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
-    const description = `批次結帳 🥢 ${orderIds.length} 筆訂單`;
-
-    // 1. Local Optimistic Update
-    setOrders(prev => prev.map(o => {
-      if (orderIds.includes(o.id)) {
-        const resolvedStatus: OrderStatus = (o.status === 'completed' || o.status === 'cancelled') ? o.status : 'paid';
-        return {
-          ...o,
-          isPaid: true,
-          status: resolvedStatus,
-          isOfflinePending: !isOnline
-        };
-      }
-      return o;
-    }));
-
-    // 2. Broadcast updates & Record status transitions
-    orderIds.forEach(orderId => {
-      const targetOrder = orders.find(o => o.id === orderId);
-      const resolvedStatus: OrderStatus = (targetOrder?.status === 'completed' || targetOrder?.status === 'cancelled') ? targetOrder.status : 'paid';
-
-      broadcastOrderEvent({
-        type: 'ORDER_UPDATED',
-        orderId,
-        updates: { isPaid: true, status: resolvedStatus }
-      });
-
-      recentStatusTransitionsRef.current.set(orderId, {
-        ...recentStatusTransitionsRef.current.get(orderId),
-        isPaid: true,
-        status: resolvedStatus,
-        timestamp: Date.now()
-      });
-      removeOrderRequestsFromQueue(orderId);
-    });
-
-    // 3. Smart table status release locally
-    const candidateTableNumbers = new Set<string>();
-    if (checkoutData.tableNumbers) {
-      checkoutData.tableNumbers.forEach(t => candidateTableNumbers.add(t));
-    }
-    orderIds.forEach(id => {
-      const ord = orders.find(o => o.id === id);
-      if (ord?.tableNumber) candidateTableNumbers.add(ord.tableNumber);
-    });
-
-    candidateTableNumbers.forEach(tblId => {
-      if (tblId && !tblId.includes('外帶') && tblId.toLowerCase() !== 'takeout') {
-        const remainingUnpaid = orders.filter(
-          o => o.tableNumber === tblId && !orderIds.includes(o.id) && !o.isPaid && o.status !== 'cancelled'
-        );
-        if (remainingUnpaid.length === 0) {
-          handleUpdateTableStatus(tblId, {
-            status: 'cleaning',
-            preservedFor: '',
-            mergedWith: '',
-            cleaningStartedAt: new Date().toISOString()
-          });
-        }
-      }
-    });
-
-    // 4. Reservation cleanup locally
-    orderIds.forEach(id => {
-      const ord = orders.find(o => o.id === id);
-      if (ord) {
-        const resNo = ord.reservationNo;
-        const matchingRes = (reservationsRef.current || []).find(r =>
-          (resNo && (r.id === resNo || (r as any).reservationNo === resNo)) ||
-          (r.tableNumber === ord.tableNumber && r.date === ord.reservationDate)
-        );
-        if (matchingRes) {
-          handleDeleteReservation(matchingRes.id);
-        }
-      }
-    });
-
-    const payload = {
-      orderIds,
-      tableNumbers: Array.from(candidateTableNumbers),
-      paymentMethod: checkoutData.paymentMethod || 'cash',
-      cashTendered: checkoutData.cashTendered || 0,
-      changeAmount: checkoutData.changeAmount || 0,
-      checkoutRecord: checkoutData.checkoutRecord
-    };
-
-    if (!isOnline) {
-      addRequestToQueue('/api/orders/bulk-checkout', 'POST', payload, description);
-      return { success: true };
-    }
-
-    try {
-      const res = await apiFetch('/api/orders/bulk-checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      if (res.ok) {
-        // 🛡️ 批次結帳成功：消除重複下載完整 bootstrap 的無效請求
-        return { success: true };
-      } else {
-        addRequestToQueue('/api/orders/bulk-checkout', 'POST', payload, description);
-        return { success: false };
-      }
-    } catch (err) {
-      console.warn('[Offline Fallback] Bulk pay orders failed, queued:', err);
-      addRequestToQueue('/api/orders/bulk-checkout', 'POST', payload, description);
-      return { success: false };
-    }
-  };
-
-  const handleDeleteOrder = async (orderId: string) => {
-    const description = `刪除 🥢 訂單 #${orderId.replace('offline_temp_', '離線')}`;
-    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
-    deletedOrderIdsRef.current.add(orderId);
-    setOrders(prev => prev.filter(o => o.id !== orderId));
-
-    // ☁️ Firestore 即時刪除 (已移除，避免觸發 Security Rules 錯誤導致監聽器死亡，改由後端 API 統一處理)
-
-    // 🚀 本地跨分頁 0 成本廣播
-    broadcastOrderEvent({ type: 'ORDER_DELETED', orderId });
-
-    if (!isOnline || orderId.startsWith('offline_temp_')) {
-      addRequestToQueue(`/api/orders/${orderId}`, 'DELETE', {}, description);
-      return { success: true };
-    }
-
-    removeOrderRequestsFromQueue(orderId);
-    recentStatusTransitionsRef.current.delete(orderId);
-
-    try {
-      const res = await apiFetch(`/api/orders/${orderId}`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-      });
-      if (res.ok) {
-        return { success: true };
-      } else {
-        addRequestToQueue(`/api/orders/${orderId}`, 'DELETE', {}, description);
-        return { success: false };
-      }
-    } catch (err) {
-      console.warn('[Offline Fallback] Delete order failed, queued:', err);
-      addRequestToQueue(`/api/orders/${orderId}`, 'DELETE', {}, description);
-      return { success: true };
-    }
-  };
+  }, [orders, reservations, tables?.length, setTables]);
 
   const handleSendPromoPush = async (notif: { title: string; message: string; badge: string }) => {
     try {
@@ -1230,8 +314,17 @@ export function OrderDataProvider({
     handleForceSync,
     handleSendPromoPush,
     handleMarkNotificationRead,
+    kdsSession,
+    currentDeviceId,
+    isKitchenPreempted,
+    handleClaimKitchenRole,
+    handleReleaseKitchenRole,
+    dismissPreemptedAlert,
   }), [
-    orders, pushNotifications, offlineQueue, isSyncing, syncProgressMsg, isNetworkOnline
+    orders, pushNotifications, offlineQueue, isSyncing, syncProgressMsg, isNetworkOnline,
+    kdsSession, currentDeviceId, isKitchenPreempted, handleClaimKitchenRole, handleReleaseKitchenRole, dismissPreemptedAlert,
+    handlePlaceOrder, handleUpdateOrderStatus, handleToggleOrderItemComplete, handleUpdateTableNumber, handleUpdateQuickNotes,
+    handleToggleOrderFlag, handleUpdateOrderItems, handlePayOrder, handleBulkPayOrders, handleDeleteOrder, handleForceSync
   ]);
 
   return (

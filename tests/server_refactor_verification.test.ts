@@ -114,6 +114,25 @@ describe('Server Refactoring & Security Safeguards Verification', () => {
     expect(statusSent404).toBe(404);
     expect(jsonSent404.error).toBe('Order not found');
   });
+
+  it('PUT /api/orders/:id/rate route should exist and include rate limiter middleware', () => {
+    const rateLayer = app._router.stack.find((layer: any) => layer.route && layer.route.path === '/api/orders/:id/rate' && layer.route.methods.put);
+    expect(rateLayer).toBeDefined();
+    // Route stack should contain rate limiter middleware followed by the route handler
+    expect(rateLayer.route.stack.length).toBeGreaterThanOrEqual(2);
+
+    const handler = rateLayer.route.stack[rateLayer.route.stack.length - 1].handle;
+    const req404: any = { params: { id: 'non-existent-order-999' }, body: { rating: 5, feedback: 'Great!' } };
+    let statusSent404 = 0;
+    let jsonSent404: any = null;
+    const res404: any = {
+      status(s: number) { statusSent404 = s; return this; },
+      json(data: any) { jsonSent404 = data; return this; }
+    };
+    handler(req404, res404);
+    expect(statusSent404).toBe(404);
+    expect(jsonSent404.error).toBe('Order not found');
+  });
 });
 
 

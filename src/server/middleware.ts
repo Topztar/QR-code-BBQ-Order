@@ -6,12 +6,27 @@ interface RateLimitBucket {
   resetAt: number;
 }
 const rateLimitStore = new Map<string, RateLimitBucket>();
+let requestCounter = 0;
+const SWEEP_THRESHOLD = 100;
+
+function sweepRateLimitStore(now: number) {
+  for (const [key, bucket] of rateLimitStore.entries()) {
+    if (now > bucket.resetAt) {
+      rateLimitStore.delete(key);
+    }
+  }
+}
 
 export function createRateLimiter(maxRequests: number, windowMs: number = 60 * 1000, actionName: string = '操作') {
   return (req: express.Request, res: express.Response, next: express.NextFunction) => {
     const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip || '127.0.0.1';
     const key = `${actionName}:${ip}`;
     const now = Date.now();
+
+    if (++requestCounter >= SWEEP_THRESHOLD) {
+      requestCounter = 0;
+      sweepRateLimitStore(now);
+    }
 
     let bucket = rateLimitStore.get(key);
     if (!bucket || now > bucket.resetAt) {
@@ -44,9 +59,11 @@ export function setupMiddleware(app: express.Express) {
     res.setHeader('X-XSS-Protection', '1; mode=block');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
     res.setHeader('Permissions-Policy', 'camera=(), microphone=(self), geolocation=()');
+    const isDev = process.env.NODE_ENV !== 'production';
+    const devConnectSrc = isDev ? " ws: wss: ws://localhost:* ws://127.0.0.1:*" : "";
     res.setHeader(
-      'Content-Security-Policy',
-      "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.firebaseapp.com https://*.googleapis.com https://apis.google.com https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://*.firebaseio.com https://*.googleapis.com https://firestore.googleapis.com https://*.cloudfunctions.net https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.google.com/recaptcha/ http://127.0.0.1:8060 http://localhost:8060; frame-src 'self' https://*.firebaseapp.com https://accounts.google.com https://www.google.com/recaptcha/; object-src 'none'; base-uri 'self';"
+      "Content-Security-Policy",
+      `default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.firebaseapp.com https://*.googleapis.com https://apis.google.com https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self'${devConnectSrc} https://*.firebaseio.com https://*.googleapis.com https://firestore.googleapis.com https://*.cloudfunctions.net https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.google.com/recaptcha/ http://127.0.0.1:8060 http://localhost:8060; frame-src 'self' https://*.firebaseapp.com https://accounts.google.com https://www.google.com/recaptcha/; object-src 'none'; base-uri 'self';`
     );
     // Enable CORS for cross-origin local PC bridge requests from Firebase Hosting
     res.setHeader('Access-Control-Allow-Origin', '*');

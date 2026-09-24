@@ -41,12 +41,10 @@ export default defineConfig(({ mode }) => {
         ]
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2,json}'],
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,webp,avif,woff,woff2,json}'],
         globIgnores: [
           '**/ManagerDashboard*',
           '**/vendor-charts*',
-          '**/KitchenDisplaySystem*',
-          '**/StaffLoginGate*',
           '**/data.json'
         ],
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5MB limits for firebase SDK chunks
@@ -54,12 +52,12 @@ export default defineConfig(({ mode }) => {
           // 🛡️ 離線點單統一由 src/lib/offlineQueue.ts (搭配 safeStorage 與指數退避) 進行管理與 UI 狀態回饋，
           // 移除 Workbox BackgroundSync 避免雙軌佇列競爭與重試碰撞 (Race Condition)。
           {
-            urlPattern: /\.(?:png|jpg|jpeg|svg|gif)$/,
-            handler: 'StaleWhileRevalidate',
+            urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp|avif)$/,
+            handler: 'CacheFirst',
             options: {
               cacheName: 'image-cache',
               expiration: {
-                maxEntries: 50,
+                maxEntries: 100,
                 maxAgeSeconds: 30 * 24 * 60 * 60, // 30 Days
               }
             }

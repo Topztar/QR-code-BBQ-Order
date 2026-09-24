@@ -34,6 +34,13 @@ export default [
       'no-empty': 'off',
       'no-useless-escape': 'off',
       'no-constant-condition': 'off',
+      'no-restricted-syntax': [
+        'warn',
+        {
+          selector: "CallExpression[callee.name='onSnapshot'] > CallExpression[callee.name='collection']",
+          message: "[FinOps] Unbounded onSnapshot listener detected. Always wrap collection() with query() and limit() to prevent runaway read charges."
+        }
+      ],
       'unused-imports/no-unused-imports': 'error',
       'unused-imports/no-unused-vars': [
         'warn',

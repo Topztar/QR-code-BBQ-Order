@@ -20,7 +20,6 @@ export interface CustomerCartDrawerProps {
   promoCombo?: any;
   promoComboDiscount: number;
   activeCombosAndDiscounts: any[];
-  lineProfile?: any;
   expressFee: number;
   userBalance?: number;
   cartTotal: number;
@@ -47,7 +46,6 @@ export const CustomerCartDrawer: React.FC<CustomerCartDrawerProps> = ({
   promoCombo,
   promoComboDiscount,
   activeCombosAndDiscounts,
-  lineProfile,
   expressFee,
   userBalance = 0,
   cartTotal,
@@ -373,28 +371,7 @@ export const CustomerCartDrawer: React.FC<CustomerCartDrawerProps> = ({
                   </div>
                 )}
 
-                {lineProfile && (
-                  <div className="flex justify-between text-[#4285F4] font-bold">
-                    <span>
-                      {currentLang === 'zh'
-                        ? 'Google 會員可累積點數'
-                        : currentLang === 'en'
-                          ? 'Google Member point accruable'
-                          : currentLang === 'th'
-                            ? 'สมาชิก Google สะสมคะแนนได้'
-                            : currentLang === 'ja'
-                              ? 'Google会員ポイント貯まります'
-                              : currentLang === 'ko'
-                                ? '구글 회원 포인트 적립 가능'
-                                : currentLang === 'ru'
-                                  ? 'Начисление баллов Google'
-                                  : currentLang === 'es'
-                                    ? 'Acumula puntos de Google'
-                                    : 'Thành viên Google tích điểm'}
-                    </span>
-                    <span className="font-mono">+{Math.round(cartSubtotal * 0.1)} {currentLang === 'zh' ? '點' : currentLang === 'en' ? 'pts' : currentLang === 'ja' ? 'pt' : currentLang === 'th' ? 'คะแนน' : 'pts'}</span>
-                  </div>
-                )}
+
 
                 {(paymentMethod === 'credit' || paymentMethod === 'twqr') && (
                   <div
@@ -607,22 +584,20 @@ export const CustomerCartDrawer: React.FC<CustomerCartDrawerProps> = ({
                 )}
 
                 {/* Google Member Promo Banner */}
-                {!lineProfile && (
-                  <div
-                    className={`text-[10px] border rounded-lg p-2.5 mt-2 flex items-center justify-between ${
-                      isSimplifiedMode
-                        ? 'bg-zinc-100 border-zinc-250 text-black'
-                        : 'bg-white/5 border-white/10 text-white/50'
-                    }`}
-                  >
-                    <span>
-                      {TRANSLATIONS.googleLoginPromo?.[currentLang] || '💡 綁定 Google 帳戶可累積點數！'}
-                    </span>
-                    <span className="text-[#4285F4] font-black cursor-pointer">
-                      {TRANSLATIONS.loginNow?.[currentLang] || '手刀登入'}
-                    </span>
-                  </div>
-                )}
+                <div
+                  className={`text-[10px] border rounded-lg p-2.5 mt-2 flex items-center justify-between ${
+                    isSimplifiedMode
+                      ? 'bg-zinc-100 border-zinc-250 text-black'
+                      : 'bg-white/5 border-white/10 text-white/50'
+                  }`}
+                >
+                  <span>
+                    {TRANSLATIONS.googleLoginPromo?.[currentLang] || '💡 綁定 Google 帳戶可累積點數！'}
+                  </span>
+                  <span className="text-[#4285F4] font-black cursor-pointer">
+                    {TRANSLATIONS.loginNow?.[currentLang] || '手刀登入'}
+                  </span>
+                </div>
               </div>
             </div>
           )}

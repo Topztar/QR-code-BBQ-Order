@@ -17,6 +17,8 @@
     "audit:perf": "node scripts/run_perf_audit.cjs",
     "audit:cost": "node scripts/run_cost_audit.cjs",
     "audit:all": "node scripts/run_all_checks.cjs",
+    "audit:e2e": "node scripts/run_e2e_qa_audit.cjs",
+    "predeploy": "npm test && npm run audit:e2e",
     "set-version": "node scripts/set-version.cjs"
   },
   "devDependencies": {

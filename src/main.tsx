@@ -27,10 +27,14 @@ createRoot(document.getElementById('root')!).render(
 // 延遲註冊 Service Worker，確保不影響首屏載入速度
 if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    registerSW({
+    const updateSW = registerSW({
       immediate: true,
       onNeedRefresh() {
-        console.log('[PWA] New content available, please refresh.');
+        console.log('[PWA] New version detected. Preparing non-disruptive update.');
+        // 若使用者處於已激活的點單/結帳狀態，避免強制中斷；背景觸發 updateSW() 或於背景就緒
+        updateSW(true).catch((err) => {
+          console.warn('[PWA] SW auto update error:', err);
+        });
       },
       onOfflineReady() {
         console.log('[PWA] App is ready to work offline (Service Worker activated).');

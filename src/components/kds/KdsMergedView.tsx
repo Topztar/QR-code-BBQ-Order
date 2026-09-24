@@ -1,21 +1,7 @@
 import React from 'react';
-import { Language, Order } from '../../types';
+import { Language, Order, MergedDishItem } from '../../types';
 import { getLocalizedText } from '../../utils/i18n';
 import { ChefHat, Clock, Eye } from 'lucide-react';
-
-export interface MergedDishItem {
-  id: string;
-  name: any;
-  totalQty: number;
-  orderItems: Array<{
-    orderId: string;
-    tableNumber: string;
-    createdAt: string;
-    qty: number;
-    customization: any;
-    originalOrder: Order;
-  }>;
-}
 
 export interface KdsMergedViewProps {
   mergedDishes: MergedDishItem[];

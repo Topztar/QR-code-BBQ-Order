@@ -49,6 +49,10 @@ export async function unlockAudio(): Promise<boolean> {
       window.speechSynthesis.resume();
       loadVoices();
     }
+
+    if (unlocked && typeof window !== 'undefined') {
+      sessionStorage.setItem('kds-audio-unlocked', 'true');
+    }
   } catch (err) {
     console.warn('[KDS Audio Unlock]', err);
   }
@@ -228,10 +232,18 @@ export function stopSpeech(): void {
       clearInterval(utteranceHeartbeat);
       utteranceHeartbeat = null;
     }
+    // Only cancel if there is something active to prevent deadlock on some Chrome versions
     if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
       window.speechSynthesis.cancel();
     }
+    
+    // Explicitly resume to clear any paused state from heartbeat
+    window.speechSynthesis.resume();
+    
     activeUtterance = null;
+    if (typeof window !== 'undefined') {
+      (window as any).__kdsActiveUtterance = null;
+    }
   } catch (err) {
     console.warn('[Stop Speech Error]', err);
   }

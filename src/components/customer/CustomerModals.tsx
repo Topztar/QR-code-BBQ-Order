@@ -1,6 +1,7 @@
 import React from 'react';
 import { safeStorage } from '../../lib/safeStorage';
 import { sanitizePhoneDigits, isValidTaiwanPhone, TAIWAN_PHONE_ERROR_MSG } from '../../utils/phoneValidator';
+import { getTaiwanTimeParts } from '../../utils/dateUtils';
 
 const localStorage = safeStorage;
 
@@ -162,7 +163,6 @@ export interface CustomerTakeoutModalProps {
   takeoutTimeError: string | null;
   setTakeoutTimeError: (val: string | null) => void;
   operatingHours?: any[];
-  lineProfile?: any;
   isCheckoutSubmitting: boolean;
   handleCheckout: (skipTakeoutCheck?: boolean) => Promise<void>;
   setIsCartOpen?: (val: boolean) => void;
@@ -180,7 +180,6 @@ export const CustomerTakeoutModal: React.FC<CustomerTakeoutModalProps> = ({
   takeoutTimeError,
   setTakeoutTimeError,
   operatingHours = [],
-  lineProfile,
   isCheckoutSubmitting,
   handleCheckout,
   setIsCartOpen,
@@ -188,11 +187,8 @@ export const CustomerTakeoutModal: React.FC<CustomerTakeoutModalProps> = ({
   if (!showTakeoutFormModal) return null;
 
   // Helper to compute available pickup time slots based on general operating hours
-  const now = new Date();
-  const utcTime = now.getTime() + now.getTimezoneOffset() * 60000;
-  const localDate = new Date(utcTime + 3600000 * 8); // Taiwan Time
-  const dayOfWeek = localDate.getDay();
-  const currentMinutes = localDate.getHours() * 60 + localDate.getMinutes();
+  const { dayOfWeek, hours, minutes } = getTaiwanTimeParts();
+  const currentMinutes = hours * 60 + minutes;
 
   const generalSlots = (operatingHours || []).filter(
     (s: any) => s && s.isActive && !s.isReservableOnly
@@ -336,9 +332,6 @@ export const CustomerTakeoutModal: React.FC<CustomerTakeoutModalProps> = ({
                 placeholder="請輸入您的姓名 (Name)"
                 className="w-full bg-black/40 border border-blue-500/20 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/50 transition-colors"
               />
-              {lineProfile && (
-                <p className="text-[10px] text-zinc-500">已為您自動帶入 Google 帳戶名稱</p>
-              )}
             </div>
 
             {/* 聯絡電話 */}

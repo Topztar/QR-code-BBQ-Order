@@ -1,12 +1,13 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useMemo, ReactNode } from 'react';
 import { MenuItem, Ingredient, Category, TableConfig, OperatingHourSlot, Reservation, Language, SoldOutType } from '../types';
-import { evaluateDishAvailability, getTaiwanDateString } from '../utils/menuAvailability';
+import { evaluateDishAvailability } from '../utils/menuAvailability';
 import { apiFetch } from '../lib/api';
 import { db, isFirebaseSyncEnabled, startFirebaseSync, stopFirebaseSync } from '../lib/firebase';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { INITIAL_MENU, INITIAL_CATEGORIES, loadData } from '../data';
 import { addRequestToQueue } from '../lib/offlineQueue';
 import { validateTableMonopoly } from '../utils/reservationValidator';
+import { getMsUntilTaiwanMidnight, getTaiwanDateString } from '../utils/dateUtils';
 
 export interface AnalyticsData {
   totalRevenue: number;
@@ -213,16 +214,7 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
     let timeoutId: NodeJS.Timeout;
 
     const setupMidnightRefresh = () => {
-      // Calculate time until next midnight in Asia/Taipei
-      const now = new Date();
-      const options = { timeZone: 'Asia/Taipei' };
-      const tzhString = now.toLocaleString('en-US', options);
-      const tzDate = new Date(tzhString);
-      
-      const nextMidnight = new Date(tzDate);
-      nextMidnight.setHours(24, 0, 0, 100); // 100ms after midnight to be safe
-
-      const msUntilMidnight = nextMidnight.getTime() - tzDate.getTime();
+      const msUntilMidnight = getMsUntilTaiwanMidnight();
       
       timeoutId = setTimeout(() => {
         // Trigger a re-evaluation of all menu items in state

@@ -19,13 +19,13 @@ if (startIndex === -1 || endIndex === -1) {
 let newContent = content.substring(0, startIndex) + content.substring(endIndex);
 
 // Also update `triggerAddReservationMode` and `triggerEditReservationMode`
-newContent = newContent.replace(/  const triggerAddReservationMode = \(\) => \{[\s\S]*?setIsResFormOpen\(true\);\n  \};/, 
+newContent = newContent.replace(/ {2}const triggerAddReservationMode = \(\) => \{[\s\S]*?setIsResFormOpen\(true\);\n {2}\};/, 
 `  const triggerAddReservationMode = () => {
     setEditingResObj(null);
     setIsResFormOpen(true);
   };`);
 
-newContent = newContent.replace(/  const triggerEditReservationMode = \(res: Reservation\) => \{[\s\S]*?setIsResFormOpen\(true\);\n  \};/, 
+newContent = newContent.replace(/ {2}const triggerEditReservationMode = \(res: Reservation\) => \{[\s\S]*?setIsResFormOpen\(true\);\n {2}\};/, 
 `  const triggerEditReservationMode = (res: Reservation) => {
     setEditingResObj(res);
     setIsResFormOpen(true);
