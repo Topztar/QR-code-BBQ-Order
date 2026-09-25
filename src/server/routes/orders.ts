@@ -106,7 +106,10 @@ export function registerOrdersRoutes(app: express.Express, ctx: OrderRouteContex
       reservationNo,
       reservationDate,
       reservationTime,
-      takeoutInfo
+      takeoutInfo,
+      source,
+      utm_medium,
+      notificationSent
     } = req.body;
 
     const liveOrders = getLiveOrders();
@@ -248,7 +251,10 @@ export function registerOrdersRoutes(app: express.Express, ctx: OrderRouteContex
       reservationNo: reservationNo || undefined,
       reservationDate: reservationDate || undefined,
       reservationTime: reservationTime || undefined,
-      takeoutInfo: takeoutInfo || undefined
+      takeoutInfo: takeoutInfo || undefined,
+      source: source || 'direct',
+      utm_medium: utm_medium || undefined,
+      notificationSent: !!notificationSent
     };
 
     liveOrders.push(newOrder);

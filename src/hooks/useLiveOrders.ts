@@ -82,10 +82,9 @@ export function useLiveOrders(
   tables: TableConfig[],
   reservations: Reservation[],
   handleUpdateTableStatus: (id: string, updates: Partial<Omit<TableConfig, 'id' | 'qrCodeUrl'>>) => Promise<{ success: boolean }>,
-  handleDeleteReservation: (id: string) => Promise<{ success: boolean; error?: string }>
+  handleDeleteReservation?: (id: string) => Promise<{ success: boolean; error?: string }>
 ) {
   const [orders, setOrders] = useState<Order[]>([]);
-  const [forceApiFallback] = useState<boolean>(false);
   const recentStatusTransitionsRef = useRef<Map<string, RecentOrderTransition>>(new Map());
   const deletedOrderIdsRef = useRef<BoundedSet<string>>(new BoundedSet(1000));
   const isStaffView = activeTab !== 'customer';
@@ -342,7 +341,7 @@ export function useLiveOrders(
       }
     };
 
-    if (syncActive && isFirebaseSyncEnabled() && !forceApiFallback) {
+    if (syncActive && isFirebaseSyncEnabled()) {
       setupRealtimeListener();
     } else {
       fetchOrdersFromApi();
@@ -357,7 +356,7 @@ export function useLiveOrders(
       if (fallbackPollInterval) clearInterval(fallbackPollInterval);
       unsubscribeOrders();
     };
-  }, [isStaffView, forceApiFallback, syncActive, reconcileOrders]);
+  }, [isStaffView, syncActive, reconcileOrders]);
 
   const handleUpdateOrderStatus = async (orderId: string, status: OrderStatus) => {
     const description = `更新 🥢 訂單 #${orderId.replace('offline_temp_', '離線')} 狀態至「${status}」`;
@@ -664,14 +663,6 @@ export function useLiveOrders(
           });
         }
       }
-      const resNo = targetOrder.reservationNo;
-      const matchingRes = (reservationsRef.current || []).find(r =>
-        (resNo && (r.id === resNo || (r as any).reservationNo === resNo)) ||
-        (r.tableNumber === targetOrder.tableNumber && r.date === targetOrder.reservationDate)
-      );
-      if (matchingRes) {
-        handleDeleteReservation(matchingRes.id);
-      }
     }
 
     if (!isOnline || orderId.startsWith('offline_temp_')) {
@@ -769,20 +760,6 @@ export function useLiveOrders(
             mergedWith: '',
             cleaningStartedAt: new Date().toISOString()
           });
-        }
-      }
-    });
-
-    orderIds.forEach(id => {
-      const ord = orders.find(o => o.id === id);
-      if (ord) {
-        const resNo = ord.reservationNo;
-        const matchingRes = (reservationsRef.current || []).find(r =>
-          (resNo && (r.id === resNo || (r as any).reservationNo === resNo)) ||
-          (r.tableNumber === ord.tableNumber && r.date === ord.reservationDate)
-        );
-        if (matchingRes) {
-          handleDeleteReservation(matchingRes.id);
         }
       }
     });

@@ -108,6 +108,11 @@ export function addRequestToQueue(
 
   if (isDuplicate) {
     console.warn(`[OfflineQueue] Blocked duplicate request to ${url}`);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('offline_queue_duplicate_blocked', {
+        detail: { url, method, description }
+      }));
+    }
     return null;
   }
 

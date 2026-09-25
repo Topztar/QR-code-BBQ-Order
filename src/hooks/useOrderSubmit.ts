@@ -123,6 +123,22 @@ export function useOrderSubmit(
       let completedOrder = baseOrder;
       const serverData = await res.json();
       if (serverData && serverData.id) {
+        if (serverData.total !== undefined && typeof baseOrder.total === 'number') {
+          const delta = Math.abs(serverData.total - baseOrder.total);
+          if (delta > 0.01) {
+            console.warn(`[OrderSubmit Price Discrepancy] Client calculated total ($${baseOrder.total}) differs from server authoritative total ($${serverData.total}). Difference: $${delta}`);
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('order_price_reconciliation_warning', {
+                detail: {
+                  clientOrderId,
+                  clientTotal: baseOrder.total,
+                  serverTotal: serverData.total,
+                  delta
+                }
+              }));
+            }
+          }
+        }
         completedOrder = { ...baseOrder, ...serverData };
       }
 
