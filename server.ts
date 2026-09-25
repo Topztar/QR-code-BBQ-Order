@@ -33,6 +33,8 @@ import { orderCalculationService } from './src/services/orderCalculationService'
 import { initFirebaseStorage, gcsBucket, app, PORT } from './src/server/init';
 import { setupMiddleware, createRateLimiter } from './src/server/middleware';
 import { registerOrdersRoutes } from './src/server/routes/orders';
+import { registerPrinterRoutes } from './src/server/routes/printer';
+import { PrinterStateManager } from './src/server/printerStateManager';
 initFirebaseStorage();
 
 const orderRateLimiter = createRateLimiter(15, 60 * 1000, '訂單提交');
@@ -179,9 +181,6 @@ const defaultCategories = [...liveCategories];
 import 'dotenv/config';
 
 let liveStaffPin = process.env.DEFAULT_STAFF_PIN || '000000';
-
-let livePrinterIp = process.env.PRINTER_IP || '127.0.0.1';
-
 let liveSystemVersion = '1.0.0';
 
 let liveTables: TableConfig[] = [
@@ -373,38 +372,40 @@ let liveOptionRules: any[] = [
         ];
 let livePromoCombo = { enabled: false, requiredQty: 10, discountAmount: 20, eligibleItemIds: [] };
 let livePromoCombos: any[] = [];
-let livePrinterSettings = {
-  "bill": {
-    "cashDrawerOposName": "CashDrawer1",
-    "printTelephone": "0966626408",
-    "connectionType": "LPT",
-    "printTimeEnabled": true,
-    "footerSuffix": "謝謝光臨，歡迎再度光臨！",
-    "restaurantName": "沙貝燒烤 SABAY BBQ",
-    "cashDrawerEscPosCommand": "1B700119FA",
-    "cashDrawerDriver": "ESC_POS_RAW",
-    "fontSizeFactor": 0.8,
-    "cashDrawerEnabled": true,
-    "printAddress": "桃園市大園區高鐵北路二段198號1樓",
-    "width": "58mm",
-    "usbPort": "LPT1:",
-    "ip": "192.168.1.102",
-    "headerPrefix": "★★★ 顧客結帳明細單 ★★★"
-  },
-  "kitchen": {
-    "connectionType": "IP",
-    "width": "80mm",
-    "printTelephone": "0966626408",
-    "printAddress": "桃園市大園區高鐵北路二段198號1樓",
-    "headerPrefix": "★★★ 廚房工作備餐單 ★★★",
-    "fontSizeFactor": 1,
-    "usbPort": "USB001",
-    "ip": "192.168.123.100",
-    "restaurantName": "沙貝燒烤",
-    "footerSuffix": "請主廚盡速配餐出餐！",
-    "printTimeEnabled": true
+export const printerStateManager = new PrinterStateManager(
+  process.env.PRINTER_IP || '127.0.0.1',
+  {
+    "bill": {
+      "printTelephone": "0966626408",
+      "connectionType": "LPT",
+      "printTimeEnabled": true,
+      "footerSuffix": "謝謝光臨，歡迎再度光臨！",
+      "restaurantName": "沙貝燒烤 SABAY BBQ",
+      "cashDrawerEscPosCommand": "1B700119FA",
+      "cashDrawerDriver": "ESC_POS_RAW",
+      "fontSizeFactor": 0.8,
+      "cashDrawerEnabled": true,
+      "printAddress": "桃園市大園區高鐵北路二段198號1樓",
+      "width": "58mm",
+      "usbPort": "LPT1:",
+      "ip": "192.168.1.102",
+      "headerPrefix": "★★★ 顧客結帳明細單 ★★★"
+    },
+    "kitchen": {
+      "connectionType": "IP",
+      "width": "80mm",
+      "printTelephone": "0966626408",
+      "printAddress": "桃園市大園區高鐵北路二段198號1樓",
+      "headerPrefix": "★★★ 廚房工作備餐單 ★★★",
+      "fontSizeFactor": 1,
+      "usbPort": "USB001",
+      "ip": "192.168.123.100",
+      "restaurantName": "沙貝燒烤",
+      "footerSuffix": "請主廚盡速配餐出餐！",
+      "printTimeEnabled": true
+    }
   }
-};
+);
 let liveNotificationSettings: any = {};
 
 export function calculatePromoDiscount(items: any[]): number {
@@ -935,7 +936,7 @@ async function saveStateToFirestore() {
     // 7. System Settings
     await setDoc(doc(firestoreDb, 'settings', 'system'), cleanUndefined({
       liveStaffPin,
-      livePrinterIp,
+      livePrinterIp: printerStateManager.getPrinterIp(),
       liveTakeoutSeq,
       lastTakeoutDate,
       liveMinSpendPerPerson,
@@ -944,7 +945,7 @@ async function saveStateToFirestore() {
       liveCustomerNotice,
       liveServicePaused,
       liveOptionRules,
-      livePrinterSettings,
+      livePrinterSettings: printerStateManager.getAllSettings(),
       livePromoCombo,
       livePromoCombos,
       livePopularItemIds,
@@ -1156,7 +1157,7 @@ async function loadStateFromFirestore(): Promise<boolean> {
     if (systemDoc.exists()) {
       const sys = systemDoc.data();
       if (sys.liveStaffPin !== undefined) liveStaffPin = String(sys.liveStaffPin);
-      if (sys.livePrinterIp !== undefined) livePrinterIp = String(sys.livePrinterIp);
+      if (sys.livePrinterIp !== undefined) printerStateManager.setPrinterIp(String(sys.livePrinterIp));
       if (sys.liveTakeoutSeq !== undefined) liveTakeoutSeq = Number(sys.liveTakeoutSeq);
       if (sys.lastTakeoutDate !== undefined) lastTakeoutDate = String(sys.lastTakeoutDate);
       if (sys.liveMinSpendPerPerson !== undefined) liveMinSpendPerPerson = Number(sys.liveMinSpendPerPerson);
@@ -1165,7 +1166,10 @@ async function loadStateFromFirestore(): Promise<boolean> {
       if (sys.liveCustomerNotice !== undefined) liveCustomerNotice = String(sys.liveCustomerNotice);
       if (sys.liveServicePaused !== undefined) liveServicePaused = !!sys.liveServicePaused;
       if (sys.liveOptionRules !== undefined) liveOptionRules = sys.liveOptionRules;
-      if (sys.livePrinterSettings !== undefined && !Array.isArray(sys.livePrinterSettings)) livePrinterSettings = sys.livePrinterSettings;
+      if (sys.livePrinterSettings !== undefined && !Array.isArray(sys.livePrinterSettings)) {
+        if (sys.livePrinterSettings.kitchen) printerStateManager.updateKitchenSettings(sys.livePrinterSettings.kitchen);
+        if (sys.livePrinterSettings.bill) printerStateManager.updateBillSettings(sys.livePrinterSettings.bill);
+      }
       if (sys.livePromoCombo !== undefined) livePromoCombo = sys.livePromoCombo;
       if (sys.livePromoCombos !== undefined) livePromoCombos = sys.livePromoCombos;
       if (sys.livePopularItemIds !== undefined) livePopularItemIds = sys.livePopularItemIds;
@@ -1219,7 +1223,7 @@ function flushStateToDiskNow() {
       liveIngredients,
       liveCategories,
       liveStaffPin,
-      livePrinterIp,
+      livePrinterIp: printerStateManager.getPrinterIp(),
       liveTables,
       liveReservations,
       liveTakeoutSeq,
@@ -1234,7 +1238,7 @@ function flushStateToDiskNow() {
       printLogs,
       promoNotifications,
       liveOptionRules,
-      livePrinterSettings,
+      livePrinterSettings: printerStateManager.getAllSettings(),
       livePromoCombo,
       livePromoCombos,
       livePopularItemIds,
@@ -1314,7 +1318,7 @@ function loadStateFromDisk() {
           }
         }
         if (parsed.livePrinterIp) {
-          livePrinterIp = String(parsed.livePrinterIp);
+          printerStateManager.setPrinterIp(String(parsed.livePrinterIp));
         }
         if (Array.isArray(parsed.liveTables)) {
           liveTables = parsed.liveTables.map((t: any) => ({
@@ -1381,20 +1385,17 @@ function loadStateFromDisk() {
           liveOptionRules = parsed.liveOptionRules;
         }
         if (parsed.livePrinterSettings && !Array.isArray(parsed.livePrinterSettings)) {
-          livePrinterSettings = {
-            kitchen: {
-              ...livePrinterSettings.kitchen,
-              ...(parsed.livePrinterSettings.kitchen || {})
-            },
-            bill: {
-              ...livePrinterSettings.bill,
-              ...(parsed.livePrinterSettings.bill || {})
+          if (parsed.livePrinterSettings.kitchen) {
+            printerStateManager.updateKitchenSettings(parsed.livePrinterSettings.kitchen);
+          }
+          if (parsed.livePrinterSettings.bill) {
+            const billSettings = { ...parsed.livePrinterSettings.bill };
+            if (billSettings.connectionType === 'LPT' || billSettings.usbPort?.toUpperCase().startsWith('LPT')) {
+              if (billSettings.usbPort && !billSettings.usbPort.includes(':')) {
+                billSettings.usbPort = `${billSettings.usbPort.toUpperCase()}:`;
+              }
             }
-          };
-          if (livePrinterSettings.bill?.connectionType === 'LPT' || livePrinterSettings.bill?.usbPort?.toUpperCase().startsWith('LPT')) {
-            if (livePrinterSettings.bill.usbPort && !livePrinterSettings.bill.usbPort.includes(':')) {
-              livePrinterSettings.bill.usbPort = `${livePrinterSettings.bill.usbPort.toUpperCase()}:`;
-            }
+            printerStateManager.updateBillSettings(billSettings);
           }
         }
         if (parsed.livePromoCombo) {
@@ -1457,367 +1458,16 @@ async function initializeState() {
 
 // --- Virtual Printer & Push Notification Supporting Endpoints ---
 
-// Get all print logs
-app.get('/api/print-logs', (_req, res) => {
-  res.json(printLogs);
-});
-
-// Clear all virtual print logs
-app.post('/api/print-logs/clear', (_req, res) => {
-  printLogs = [];
-  res.json({ success: true, message: '虛擬出單記錄已全部清除' });
-});
-
-
-// Get promotional push notification list
-app.get('/api/push-notifications', (_req, res) => {
-  res.json(promoNotifications);
-});
-
-// Broadcast promotional/special notification coupon
-app.post('/api/send-promo-push', (req, res) => {
-  const { title, message, badge } = req.body;
-  const newNotif = {
-    id: `notif-${Date.now()}`,
-    timestamp: new Date().toLocaleTimeString(),
-    title: title || '沙貝限時優惠 🇹🇭',
-    message: message || '老闆瘋了！即刻點餐全單享特別折扣！',
-    badge: badge || 'PROMO',
-    isRead: false
-  };
-  promoNotifications.push(newNotif);
-  res.status(201).json(newNotif);
-});
-
-// Get printer IP configuration
-app.get('/api/printer/config', (_req, res) => {
-  res.json({ ip: livePrinterIp });
-});
-
-// Get active network ping test of the printer IP
-app.get('/api/printer/ping', (req, res) => {
-  const ip = (req.query.ip as string) || livePrinterIp;
-  const isMock = req.query.simulate === 'true' || ip.toLowerCase().includes('mock') || ip.toLowerCase().includes('simulate');
-
-  if (isMock) {
-    return res.json({
-      reachable: true,
-      ip,
-      port: 9100,
-      simulated: true,
-      timestamp: new Date().toISOString()
-    });
-  }
-
-  // Real TCP connect check to probe printer availability on raw print port 9100
-  const socket = new net.Socket();
-  let completed = false;
-  
-  socket.setTimeout(1500);
-
-  const cleanUp = () => {
-    socket.removeAllListeners();
-    if (!socket.destroyed) {
-      socket.destroy();
-    }
-  };
-
-  socket.on('connect', () => {
-    if (!completed) {
-      completed = true;
-      cleanUp();
-      res.json({
-        reachable: true,
-        ip,
-        port: 9100,
-        simulated: false,
-        timestamp: new Date().toISOString()
-      });
-    }
-  });
-
-  socket.on('error', (err) => {
-    if (!completed) {
-      completed = true;
-      cleanUp();
-      res.json({
-        reachable: true,
-        ip,
-        port: 9100,
-        simulated: true,
-        error: err.message,
-        timestamp: new Date().toISOString()
-      });
-    }
-  });
-
-  socket.on('timeout', () => {
-    if (!completed) {
-      completed = true;
-      cleanUp();
-      res.json({
-        reachable: true,
-        ip,
-        port: 9100,
-        simulated: true,
-        error: 'Network connection timeout (ETIMEDOUT) - Socket destroyed',
-        timestamp: new Date().toISOString()
-      });
-    }
-  });
-
-  socket.on('close', () => {
-    cleanUp();
-  });
-
-  try {
-    socket.connect(9100, ip);
-  } catch (err: any) {
-    if (!completed) {
-      completed = true;
-      cleanUp();
-      res.json({
-        reachable: true,
-        ip,
-        port: 9100,
-        simulated: true,
-        error: err?.message || 'Failed to initiate connect',
-        timestamp: new Date().toISOString()
-      });
-    }
-  }
-});
-
-// Update printer IP configuration
-app.put('/api/printer/config', (req, res) => {
-  const { ip } = req.body;
-  if (ip) {
-    livePrinterIp = ip;
-  }
-  saveStateToDisk();
-  res.json({ ip: livePrinterIp });
-});
-
-// Check LOCAL-PRINTER-POS-BRIDGE (http://127.0.0.1:8060) health from server side
-app.get('/api/printer/bridge/health', async (_req, res) => {
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 1000);
-    const bridgeRes = await fetch('http://127.0.0.1:8060/health', {
-      headers: { 'Accept': 'application/json' },
-      signal: controller.signal
-    });
-    clearTimeout(timer);
-
-    if (bridgeRes.ok) {
-      const data = await bridgeRes.json();
-      return res.json({ online: true, service: 'LOCAL-PRINTER-POS-BRIDGE', bridgeUrl: 'http://127.0.0.1:8060', data });
-    }
-    return res.json({ online: false, message: `Bridge returned status ${bridgeRes.status}` });
-  } catch (err: any) {
-    return res.json({ online: false, message: 'LOCAL-PRINTER-POS-BRIDGE is offline or not running on 127.0.0.1:8060', error: err.message });
-  }
-});
-
-// Helper function to trigger hardware cash drawer (via real serial/socket driver or simulated OPOS)
-async function triggerCashDrawerOpen(settings: any): Promise<{ success: boolean; log: string }> {
-  return await triggerRealCashDrawer({
-    cashDrawerDriver: settings?.cashDrawerDriver,
-    cashDrawerOposName: settings?.cashDrawerOposName,
-    cashDrawerEscPosCommand: settings?.cashDrawerEscPosCommand || '1B700019FA',
-    usbPort: settings?.usbPort || 'USB002',
-    cashDrawerEnabled: settings?.cashDrawerEnabled,
-    connectionType: settings?.connectionType,
-    ip: settings?.ip || livePrinterIp,
-    port: settings?.port || 9100
-  });
-}
-
-// POST endpoint to manually open cash drawer from the frontend
-app.post('/api/printer/open-drawer', async (req, res) => {
-  const customSettings = req.body?.settings;
-  const settings = {
-    ...livePrinterSettings.bill,
-    ...(customSettings || {})
-  };
-  const isLpt = settings.connectionType === 'LPT' || (settings.usbPort && settings.usbPort.toUpperCase().startsWith('LPT'));
-  const portName = isLpt ? (settings.usbPort?.includes(':') ? settings.usbPort.toUpperCase() : `${settings.usbPort?.toUpperCase() || 'LPT1'}:`) : (settings.usbPort || 'USB002');
-  
-  const result = await triggerCashDrawerOpen({
-    ...settings,
-    usbPort: portName
-  });
-  
-  printLogs.push({
-    id: `pr-${Date.now()}-manual-drawer`,
-    timestamp: new Date().toLocaleTimeString(),
-    content: `========================================\n         SABAY BBQ 開啟收銀抽屜\n========================================\n連線型態: ${isLpt ? 'LPT (並列埠 / POS Bridge)' : (settings.connectionType || 'USB')}\n實體埠口: ${portName}\n執行日誌:\n${result.log}\n========================================`,
-    orderId: 'MANUAL-TRIGGER',
-    type: 'customer'
-  });
-  
-  saveStateToDisk();
-  res.json({ success: result.success, log: result.log, port: portName });
-});
-
-// Unified endpoint to print arbitrary formatted receipt / ticket / EOD
-app.post('/api/printer/print-receipt', async (req, res) => {
-  const { target = 'bill', text, settings: clientSettings, autoOpenDrawer = false, title = '單據出單' } = req.body || {};
-  
-  if (!text) {
-    return res.status(400).json({ success: false, error: '缺少列印內容' });
-  }
-
-  const isBill = target === 'bill' || target === 'customer' || target === 'eod';
-  const effectiveSettings = isBill 
-    ? { ...livePrinterSettings.bill, ...(clientSettings || {}) }
-    : { ...livePrinterSettings.kitchen, ...(clientSettings || {}) };
-
-  let printRes = { success: false, log: '' };
-  if (isBill) {
-    printRes = await printCustomerReceipt(text, {
-      ip: effectiveSettings.ip || livePrinterIp,
-      port: effectiveSettings.port || 9100,
-      connectionType: effectiveSettings.connectionType || 'LPT',
-      usbPort: effectiveSettings.usbPort || 'LPT1:',
-      cashDrawerEnabled: autoOpenDrawer || effectiveSettings.cashDrawerEnabled,
-      cashDrawerDriver: effectiveSettings.cashDrawerDriver,
-      cashDrawerEscPosCommand: effectiveSettings.cashDrawerEscPosCommand
-    });
-  } else {
-    printRes = await printKitchenTicket(text, {
-      ip: effectiveSettings.ip || livePrinterIp,
-      port: effectiveSettings.port || 9100,
-      connectionType: effectiveSettings.connectionType || 'IP',
-      usbPort: effectiveSettings.usbPort || 'USB001'
-    });
-  }
-
-  printLogs.push({
-    id: `pr-${Date.now()}-${target}`,
-    timestamp: new Date().toLocaleTimeString(),
-    content: `${text}\n\n[實體${isBill ? '前台 (LPT/POS Bridge)' : '廚房 (IP)'}印表機出單日誌]:\n${printRes.log}`,
-    orderId: req.body?.orderId || (target === 'eod' ? 'EOD-REPORT' : 'RECEIPT-PRINT'),
-    type: isBill ? 'customer' : 'kitchen'
-  });
-
-  saveStateToDisk();
-  res.json({
-    success: printRes.success,
-    log: printRes.log,
-    target,
-    title
-  });
-});
-
-// Printer Test Ticket Generator for local server
-app.post('/api/printer/test', async (req, res) => {
-  try {
-    const { target = 'all', settings: customSettings, bridgeSuccess } = req.body || {};
-    const effectiveKitchen = {
-      ...livePrinterSettings.kitchen,
-      ...(customSettings?.kitchen || {})
-    };
-    const effectiveBill = {
-      ...livePrinterSettings.bill,
-      ...(customSettings?.bill || {})
-    };
-
-    const isKitchen = target === 'kitchen' || target === 'all';
-    const isBill = target === 'bill' || target === 'all';
-
-    let kitchenResult = { success: true, log: '未選取廚房出單' };
-    let billResult = { success: true, log: '未選取前台出單' };
-
-    const testTime = new Date().toLocaleString();
-
-    if (!bridgeSuccess) {
-      if (isKitchen) {
-        const kitchenText = [
-          '================================',
-          '    SABAY BBQ KDS 測試頁',
-          '================================',
-          `出單類別: 廚房工作票 (${effectiveKitchen.connectionType || 'IP'})`,
-          `目標位址: ${effectiveKitchen.connectionType === 'IP' ? (effectiveKitchen.ip || livePrinterIp) : (effectiveKitchen.usbPort || 'USB001')}`,
-          `列印時間: ${testTime}`,
-          '測試品項: 泰式烤豬肉串 x 2 (小辣)',
-          '================================\n\n'
-        ].join('\n');
-
-        kitchenResult = await printKitchenTicket(kitchenText, {
-          ip: effectiveKitchen.ip || livePrinterIp,
-          port: effectiveKitchen.port || 9100,
-          connectionType: effectiveKitchen.connectionType || 'IP',
-          usbPort: effectiveKitchen.usbPort || 'USB001'
-        });
-      }
-
-      if (isBill) {
-        const billText = [
-          '================================',
-          '    SABAY BBQ 前台收銀測試頁',
-          '================================',
-          `出單類別: 前台帳單與收銀明細 (${effectiveBill.connectionType || 'LPT'})`,
-          `實體埠口: ${effectiveBill.usbPort || 'LPT1:'}`,
-          `列印時間: ${testTime}`,
-          '錢箱連動: 支援 ESC/POS Pulse',
-          '================================\n\n'
-        ].join('\n');
-
-        billResult = await printCustomerReceipt(billText, {
-          ip: effectiveBill.ip || livePrinterIp,
-          port: effectiveBill.port || 9100,
-          connectionType: effectiveBill.connectionType || 'LPT',
-          usbPort: effectiveBill.usbPort || 'LPT1:',
-          cashDrawerEnabled: isBill
-        });
-      }
-    } else {
-      kitchenResult = { success: true, log: '已透過本機 POS 橋接器成功送印' };
-      billResult = { success: true, log: '已透過本機 POS 橋接器成功送印' };
-    }
-
-    printLogs.push({
-      id: `pr-${Date.now()}-test-${target}`,
-      timestamp: new Date().toLocaleTimeString(),
-      content: `[測試頁列印]: target=${target}\n廚房日誌: ${kitchenResult.log}\n前台日誌: ${billResult.log}`,
-      orderId: 'TEST-PAGE',
-      type: target === 'bill' ? 'customer' : 'kitchen'
-    });
-    if (printLogs.length > 100) printLogs = printLogs.slice(-100);
-    saveStateToDisk();
-
-    res.json({
-      success: (isKitchen ? kitchenResult.success : true) && (isBill ? billResult.success : true),
-      message: `測試頁 (${target}) 已成功處理！`,
-      hardwareLogs: {
-        kitchen: kitchenResult.log,
-        bill: billResult.log
-      }
-    });
-  } catch (error: any) {
-    console.error('Error in /api/printer/test:', error);
-    res.status(500).json({ error: error?.message || '伺服器端列印處理失敗' });
-  }
-});
-
-
-
-// Update printer/staff authentication PIN (used from Manager dashboard)
-app.post('/api/printer/pin', (req, res) => {
-  const { currentPin, newPin } = req.body;
-  if (!currentPin || !newPin) {
-    return res.status(400).json({ error: '請輸入目前金鑰與新解鎖金鑰 / Required fields missing' });
-  }
-  if (currentPin !== liveStaffPin) {
-    return res.status(400).json({ error: '目前解鎖金鑰輸入錯誤！ / Incorrect current PIN' });
-  }
-  if (!/^\d{6}$/.test(newPin)) {
-    return res.status(400).json({ error: '新金鑰必須為 6 位半形數字！ / New PIN must be a 6-digit number' });
-  }
-  liveStaffPin = newPin;
-  saveStateToDisk();
-  res.json({ success: true, message: '員工解鎖金鑰已成功變更！' });
+registerPrinterRoutes(app, {
+  getLivePrinterIp: () => printerStateManager.getPrinterIp(),
+  setLivePrinterIp: (ip: string) => printerStateManager.setPrinterIp(ip),
+  getLiveStaffPin: () => liveStaffPin,
+  setLiveStaffPin: (pin: string) => { liveStaffPin = pin; },
+  getLivePrinterSettings: () => printerStateManager.getAllSettings(),
+  getPrintLogs: () => printLogs,
+  setPrintLogs: (logs: any[]) => { printLogs = logs; },
+  getPromoNotifications: () => promoNotifications,
+  saveStateToDisk: () => saveStateToDisk()
 });
 
 // -----------------------------------------------------------------
@@ -2244,7 +1894,7 @@ app.get('/api/bootstrap', (_req, res) => {
       rewards: liveMemberRewards
     },
     servicePaused: { servicePaused: liveServicePaused },
-    printerConfig: { ip: livePrinterIp },
+    printerConfig: { ip: printerStateManager.getPrinterIp() },
     ingredients: liveIngredients,
     reservations: liveReservations
   });
@@ -2904,25 +2554,7 @@ app.delete('/api/option-rules/:id', (req, res) => {
   res.status(404).json({ error: 'Rule not found' });
 });
 
-// Printer Settings Endpoints
-app.get('/api/printer/settings', (_req, res) => {
-  res.json(livePrinterSettings);
-});
-
-app.put('/api/printer/settings', (req, res) => {
-  const { kitchen, bill } = req.body;
-  if (kitchen) {
-    livePrinterSettings.kitchen = { ...livePrinterSettings.kitchen, ...kitchen };
-    if (kitchen.ip) {
-      livePrinterIp = kitchen.ip;
-    }
-  }
-  if (bill) {
-    livePrinterSettings.bill = { ...livePrinterSettings.bill, ...bill };
-  }
-  saveStateToDisk();
-  res.json({ success: true, settings: livePrinterSettings });
-});
+// (Note: /api/printer/settings GET & PUT are modularly registered via registerPrinterRoutes at line 1463)
 
 
 // Automatic Package Promo Combo Discount Endpoints
@@ -3522,8 +3154,8 @@ registerOrdersRoutes(app, {
   getLiveTables: () => liveTables,
   getLiveMenu: () => liveMenu,
   getLiveReservations: () => liveReservations,
-  getLivePrinterIp: () => livePrinterIp,
-  getLivePrinterSettings: () => livePrinterSettings,
+  getLivePrinterIp: () => printerStateManager.getPrinterIp(),
+  getLivePrinterSettings: () => printerStateManager.getAllSettings(),
   getPrintLogs: () => printLogs,
   getFirestoreDb: () => firestoreDb,
   isStoreOpen: () => isStoreOpen(),

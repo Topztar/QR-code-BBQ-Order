@@ -520,67 +520,39 @@ export const ManagerPrinterTab: React.FC<ManagerPrinterTabProps> = ({
                 {billPrinter.cashDrawerEnabled && (
                   <div className="space-y-3 pt-2 border-t border-white/5 text-[11px] animate-fadeIn">
                     <div>
-                      <label className="text-zinc-400 block mb-1">硬體驅動連動技術 Driver Layer</label>
-                      <select
-                        value={billPrinter.cashDrawerDriver}
-                        onChange={(e) => setBillPrinter({ ...billPrinter, cashDrawerDriver: e.target.value as any })}
-                        className="w-full bg-zinc-900 border border-white/10 rounded-lg p-2 text-white font-sans"
-                      >
-                        <option value="OPOS">UPOS / OPOS 控制驅動標準 (EPSON/Star 零售大廠標準)</option>
-                        <option value="POS_NET">POS for .NET 類別庫 (Microsoft 點對點標準)</option>
-                        <option value="ESC_POS_RAW">ESC/POS 直通 RAW 指令 (winspool.drv / 脈衝指令)</option>
-                      </select>
+                      <label className="text-zinc-400 block mb-1">ESC/POS 脈衝開鎖指令 (HEX 16進制碼)</label>
+                      <input
+                        type="text"
+                        value={billPrinter.cashDrawerEscPosCommand}
+                        onChange={(e) => setBillPrinter({ ...billPrinter, cashDrawerEscPosCommand: e.target.value.toUpperCase().replace(/\s/g, '') })}
+                        className="w-full bg-zinc-900 border border-white/10 rounded-lg p-2 text-white font-mono"
+                        placeholder="例如: 1B700019FA"
+                      />
+                      <div className="flex gap-1.5 mt-2">
+                        <button
+                          type="button"
+                          onClick={() => setBillPrinter({ ...billPrinter, cashDrawerEscPosCommand: '1B700019FA' })}
+                          className={`px-2 py-1 rounded text-[10px] border transition ${
+                            billPrinter.cashDrawerEscPosCommand === '1B700019FA'
+                              ? 'bg-rose-500/25 border-rose-500/50 text-rose-300'
+                              : 'bg-zinc-900 border-white/5 text-zinc-400 hover:text-white'
+                          }`}
+                        >
+                          引腳 2 預設 (1B 70 00 19 FA)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setBillPrinter({ ...billPrinter, cashDrawerEscPosCommand: '1B700119FA' })}
+                          className={`px-2 py-1 rounded text-[10px] border transition ${
+                            billPrinter.cashDrawerEscPosCommand === '1B700119FA'
+                              ? 'bg-rose-500/25 border-rose-500/50 text-rose-300'
+                              : 'bg-zinc-900 border-white/5 text-zinc-400 hover:text-white'
+                          }`}
+                        >
+                          引腳 5 預設 (1B 70 01 19 FA)
+                        </button>
+                      </div>
                     </div>
-
-                    {(billPrinter.cashDrawerDriver === 'OPOS' || billPrinter.cashDrawerDriver === 'POS_NET') && (
-                      <div>
-                        <label className="text-zinc-400 block mb-1">OPOS 宣告之設備編號 (Logical Device Name / ID)</label>
-                        <input
-                          type="text"
-                          value={billPrinter.cashDrawerOposName}
-                          onChange={(e) => setBillPrinter({ ...billPrinter, cashDrawerOposName: e.target.value })}
-                          className="w-full bg-zinc-900 border border-white/10 rounded-lg p-2 text-white font-mono"
-                          placeholder="例如: CashDrawer1, Epson_Drawer_Pin2"
-                        />
-                      </div>
-                    )}
-
-                    {billPrinter.cashDrawerDriver === 'ESC_POS_RAW' && (
-                      <div>
-                        <label className="text-zinc-400 block mb-1">ESC/POS 脈衝開鎖指令 (HEX 16進制碼)</label>
-                        <input
-                          type="text"
-                          value={billPrinter.cashDrawerEscPosCommand}
-                          onChange={(e) => setBillPrinter({ ...billPrinter, cashDrawerEscPosCommand: e.target.value.toUpperCase().replace(/\s/g, '') })}
-                          className="w-full bg-zinc-900 border border-white/10 rounded-lg p-2 text-white font-mono"
-                          placeholder="例如: 1B700019FA"
-                        />
-                        <div className="flex gap-1.5 mt-2">
-                          <button
-                            type="button"
-                            onClick={() => setBillPrinter({ ...billPrinter, cashDrawerEscPosCommand: '1B700019FA' })}
-                            className={`px-2 py-1 rounded text-[10px] border transition ${
-                              billPrinter.cashDrawerEscPosCommand === '1B700019FA'
-                                ? 'bg-rose-500/25 border-rose-500/50 text-rose-300'
-                                : 'bg-zinc-900 border-white/5 text-zinc-400 hover:text-white'
-                            }`}
-                          >
-                            引腳 2 預設 (1B 70 00 19 FA)
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setBillPrinter({ ...billPrinter, cashDrawerEscPosCommand: '1B700119FA' })}
-                            className={`px-2 py-1 rounded text-[10px] border transition ${
-                              billPrinter.cashDrawerEscPosCommand === '1B700119FA'
-                                ? 'bg-rose-500/25 border-rose-500/50 text-rose-300'
-                                : 'bg-zinc-900 border-white/5 text-zinc-400 hover:text-white'
-                            }`}
-                          >
-                            引腳 5 預設 (1B 70 01 19 FA)
-                          </button>
-                        </div>
-                      </div>
-                    )}
 
                     <div className="pt-1.5">
                       <button

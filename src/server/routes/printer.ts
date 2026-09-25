@@ -9,7 +9,6 @@ import {
 export async function triggerCashDrawerOpen(settings: any, livePrinterIp?: string): Promise<{ success: boolean; log: string }> {
   return await triggerRealCashDrawer({
     cashDrawerDriver: settings?.cashDrawerDriver,
-    cashDrawerOposName: settings?.cashDrawerOposName,
     cashDrawerEscPosCommand: settings?.cashDrawerEscPosCommand || '1B700019FA',
     usbPort: settings?.usbPort || 'USB002',
     cashDrawerEnabled: settings?.cashDrawerEnabled,
@@ -240,7 +239,7 @@ export function registerPrinterRoutes(app: express.Express, ctx: PrinterRouteCon
         port: effectiveSettings.port || 9100,
         connectionType: effectiveSettings.connectionType || 'LPT',
         usbPort: effectiveSettings.usbPort || 'LPT1:',
-        cashDrawerEnabled: autoOpenDrawer || effectiveSettings.cashDrawerEnabled,
+        cashDrawerEnabled: effectiveSettings.cashDrawerEnabled,
         cashDrawerDriver: effectiveSettings.cashDrawerDriver,
         cashDrawerEscPosCommand: effectiveSettings.cashDrawerEscPosCommand
       });

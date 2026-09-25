@@ -262,8 +262,7 @@ export interface PrinterConfig {
   printTelephone?: string;
   printTimeEnabled?: boolean;
   cashDrawerEnabled?: boolean;
-  cashDrawerDriver?: 'OPOS' | 'POS_NET' | 'ESC_POS_RAW';
-  cashDrawerOposName?: string;
+  cashDrawerDriver?: 'ESC_POS_RAW';
   cashDrawerEscPosCommand?: string;
 }
 

@@ -1045,8 +1045,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     headerPrefix: '★★★ 顧客結帳明細單 ★★★',
     footerSuffix: '謝謝光臨，歡迎再度光臨！',
     cashDrawerEnabled: true,
-    cashDrawerDriver: 'ESC_POS_RAW', // 'OPOS' | 'POS_NET' | 'ESC_POS_RAW'
-    cashDrawerOposName: 'CashDrawer1',
+    cashDrawerDriver: 'ESC_POS_RAW',
     cashDrawerEscPosCommand: '1B700119FA'
   });
 

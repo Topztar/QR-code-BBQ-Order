@@ -8,8 +8,7 @@ export interface PrinterDriverResult {
 }
 
 export interface CashDrawerSettings {
-  cashDrawerDriver?: 'OPOS' | 'POS_NET' | 'ESC_POS_RAW';
-  cashDrawerOposName?: string;
+  cashDrawerDriver?: 'ESC_POS_RAW';
   cashDrawerEscPosCommand?: string;
   usbPort?: string;
   cashDrawerEnabled?: boolean;
@@ -29,7 +28,7 @@ export interface PrinterDeviceSettings {
   autoCut?: boolean;
   copies?: number;
   cashDrawerEnabled?: boolean;
-  cashDrawerDriver?: 'OPOS' | 'POS_NET' | 'ESC_POS_RAW';
+  cashDrawerDriver?: 'ESC_POS_RAW';
   cashDrawerEscPosCommand?: string;
 }
 
@@ -205,7 +204,7 @@ export async function sendToPosBridgeService(
 export async function sendToSerialPrinter(
   portName: string,
   data: Buffer | string,
-  options: { baudRate?: number; autoOpenDrawer?: boolean } = {}
+  options: { baudRate?: number; autoOpenDrawer?: boolean; cashDrawerDriver?: string; cashDrawerEscPosCommand?: string; } = {}
 ): Promise<PrinterDriverResult> {
   const baudRate = options.baudRate ?? 9600;
   const bufferData = Buffer.isBuffer(data) ? data : Buffer.from(data, 'utf-8');
@@ -223,7 +222,7 @@ export async function sendToSerialPrinter(
   if (targetPort.toUpperCase().startsWith('LPT')) {
     return new Promise((resolve) => {
       console.log(`${logPrefix} Writing directly to Parallel Port (${targetPort})...`);
-      fs.writeFile(targetPort, bufferData, (err) => {
+      fs.writeFile(targetPort, bufferData, async (err) => {
         if (err) {
           console.warn(`${logPrefix} Parallel port write error:`, err.message);
           resolve({
@@ -232,9 +231,19 @@ export async function sendToSerialPrinter(
           });
         } else {
           console.log(`${logPrefix} Successfully written ${bufferData.length} bytes to ${targetPort}.`);
+          let logStr = `${logPrefix} Successfully sent ${bufferData.length} bytes to LPT printer at ${targetPort}.`;
+          if (options.autoOpenDrawer) {
+            const drawerRes = await triggerRealCashDrawer({
+              cashDrawerDriver: options.cashDrawerDriver as 'ESC_POS_RAW',
+              cashDrawerEscPosCommand: options.cashDrawerEscPosCommand,
+              usbPort: targetPort,
+              connectionType: 'LPT'
+            });
+            logStr += `\n${drawerRes.log}`;
+          }
           resolve({
             success: true,
-            log: `${logPrefix} Successfully sent ${bufferData.length} bytes to LPT printer at ${targetPort}.`
+            log: logStr
           });
         }
       });
@@ -244,8 +253,8 @@ export async function sendToSerialPrinter(
   let SerialPortClass: any = null;
   try {
     // Dynamic import to allow running even if native bindings fail in sandboxed CI
-    const spModule = require('serialport');
-    SerialPortClass = spModule.SerialPort || spModule;
+    const spModule: any = await import('serialport');
+    SerialPortClass = spModule.SerialPort || spModule.default?.SerialPort || spModule.default || spModule;
   } catch (err: any) {
     console.warn(`${logPrefix} SerialPort library unavailable or missing native bindings:`, err?.message);
     return {
@@ -282,7 +291,7 @@ export async function sendToSerialPrinter(
             });
           }
 
-          portInstance.drain((drainErr: any) => {
+          portInstance.drain(async (drainErr: any) => {
             portInstance.close();
             if (drainErr) {
               return resolve({
@@ -291,9 +300,19 @@ export async function sendToSerialPrinter(
               });
             }
             console.log(`${logPrefix} Successfully written ${bufferData.length} bytes.`);
+            let logStr = `${logPrefix} Successfully sent ${bufferData.length} bytes to USB/Serial printer at ${targetPort}.`;
+            if (options.autoOpenDrawer) {
+              const drawerRes = await triggerRealCashDrawer({
+                cashDrawerDriver: options.cashDrawerDriver as 'ESC_POS_RAW',
+                cashDrawerEscPosCommand: options.cashDrawerEscPosCommand,
+                usbPort: targetPort,
+                connectionType: 'USB'
+              });
+              logStr += `\n${drawerRes.log}`;
+            }
             resolve({
               success: true,
-              log: `${logPrefix} Successfully sent ${bufferData.length} bytes to USB/Serial printer at ${targetPort}.`
+              log: logStr
             });
           });
         });
@@ -391,7 +410,7 @@ export async function triggerRealCashDrawer(settings: CashDrawerSettings): Promi
   if (isNetwork) {
     return await sendToNetworkPrinter(targetIp, targetPort, drawerBuffer);
   } else {
-    return await sendToSerialPrinter(portName, drawerBuffer, { autoOpenDrawer: true });
+    return await sendToSerialPrinter(portName, drawerBuffer, { autoOpenDrawer: false });
   }
 }
 
@@ -461,21 +480,24 @@ export async function printCustomerReceipt(
   let printRes: PrinterDriverResult;
   if (isNetwork) {
     printRes = await sendToNetworkPrinter(host, settings.port || 9100, receiptBuffer);
+    // Trigger cash drawer if enabled for counter printer
+    if (printRes.success && settings.cashDrawerEnabled) {
+      const drawerRes = await triggerRealCashDrawer({
+        cashDrawerDriver: settings.cashDrawerDriver || 'ESC_POS_RAW',
+        cashDrawerEscPosCommand: settings.cashDrawerEscPosCommand || '1B700019FA',
+        usbPort: portName,
+        connectionType: settings.connectionType,
+        ip: host,
+        port: settings.port || 9100
+      });
+      printRes.log += `\n${drawerRes.log}`;
+    }
   } else {
-    printRes = await sendToSerialPrinter(portName, receiptBuffer, { autoOpenDrawer: !!settings.cashDrawerEnabled });
-  }
-
-  // Trigger cash drawer if enabled for counter printer
-  if (settings.cashDrawerEnabled && isNetwork) {
-    const drawerRes = await triggerRealCashDrawer({
-      cashDrawerDriver: settings.cashDrawerDriver || 'ESC_POS_RAW',
-      cashDrawerEscPosCommand: settings.cashDrawerEscPosCommand || '1B700019FA',
-      usbPort: portName,
-      connectionType: settings.connectionType,
-      ip: host,
-      port: settings.port || 9100
+    printRes = await sendToSerialPrinter(portName, receiptBuffer, {
+      autoOpenDrawer: !!settings.cashDrawerEnabled,
+      cashDrawerDriver: settings.cashDrawerDriver,
+      cashDrawerEscPosCommand: settings.cashDrawerEscPosCommand
     });
-    printRes.log += `\n${drawerRes.log}`;
   }
 
   return printRes;
