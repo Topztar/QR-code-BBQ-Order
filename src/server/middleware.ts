@@ -60,7 +60,8 @@ export function setupMiddleware(app: express.Express) {
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
     res.setHeader('Permissions-Policy', 'camera=(), microphone=(self), geolocation=()');
     const isDev = process.env.NODE_ENV !== 'production';
-    const devConnectSrc = isDev ? " ws: wss: ws://localhost:* ws://127.0.0.1:*" : "";
+    // Permit Vite development HMR WebSockets across arbitrary dev ports (e.g. 24678, 3000, 5173)
+    const devConnectSrc = isDev ? " ws: wss: http://localhost:* http://127.0.0.1:*" : "";
     res.setHeader(
       "Content-Security-Policy",
       `default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.firebaseapp.com https://*.googleapis.com https://apis.google.com https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self'${devConnectSrc} https://*.firebaseio.com https://*.googleapis.com https://firestore.googleapis.com https://*.cloudfunctions.net https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.google.com/recaptcha/ http://127.0.0.1:8060 http://localhost:8060; frame-src 'self' https://*.firebaseapp.com https://accounts.google.com https://www.google.com/recaptcha/; object-src 'none'; base-uri 'self';`

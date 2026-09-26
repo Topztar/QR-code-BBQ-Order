@@ -52,6 +52,9 @@ export const CashierCheckoutPanel: React.FC<CashierCheckoutPanelProps> = ({
       return;
     }
 
+    let cashierDeductedEmail: string | null = null;
+    let cashierDeductedAmount = 0;
+
     if (cashierPaymentMethod === 'member') {
       const member = cashierSelectedOrder?.customerName
         ? memberService.getMemberByName(cashierSelectedOrder.customerName)
@@ -67,7 +70,7 @@ export const CashierCheckoutPanel: React.FC<CashierCheckoutPanelProps> = ({
         const deductRes = await fetch(`/api/members/${encodeURIComponent(vipEmail)}/deduct`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ amount: cashierCalculatedTotals.total }),
+          body: JSON.stringify({ amount: cashierCalculatedTotals.total, orderId: cashierSelectedOrder?.id }),
         });
 
         const deductData = await deductRes.json();
@@ -75,6 +78,9 @@ export const CashierCheckoutPanel: React.FC<CashierCheckoutPanelProps> = ({
           alert(`⚠️ 會員餘額扣抵失敗：${deductData.error || '餘額不足或系統異常'}！`);
           return;
         }
+
+        cashierDeductedEmail = vipEmail;
+        cashierDeductedAmount = cashierCalculatedTotals.total;
 
         memberService.updateMember(vipEmail, {
           balance: deductData.member.balance,
@@ -212,7 +218,7 @@ export const CashierCheckoutPanel: React.FC<CashierCheckoutPanelProps> = ({
         checkoutScope: cashierCheckoutScope
       });
 
-      // Cash drawer interlock linkage via LOCAL-PRINTER-POS-BRIDGE & Server API
+      // Cash drawer interlock linkage via LOCAL-PRINTER-POS-BRIDGE with Server API fallback
       if (billPrinter.cashDrawerEnabled) {
         // Direct local bridge dispatch (works on localhost, LAN, and Windows POS Bridge)
         const targetPort = billPrinter.usbPort?.includes(':') ? billPrinter.usbPort.toUpperCase() : `${billPrinter.usbPort?.toUpperCase() || 'LPT1'}:`;
@@ -220,25 +226,56 @@ export const CashierCheckoutPanel: React.FC<CashierCheckoutPanelProps> = ({
           .then(bRes => {
             if (bRes.success) {
               console.log('[Cash Drawer Bridge Success]', bRes.message);
+            } else {
+              // Server API fallback ONLY if local POS bridge failed
+              console.warn('[Cash Drawer Bridge Warning] Local bridge failed, triggering server fallback...', bRes.message);
+              apiFetch('/api/printer/open-drawer', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ settings: billPrinter })
+              })
+                .then(res => res.json())
+                .then(data => console.log('[Cash Drawer Server Log]', data.log))
+                .catch(e => console.error('[Cash Drawer Server Error]', e));
             }
           })
-          .catch(e => console.warn('[Cash Drawer Bridge Warning]', e));
-
-        // Server API logging and execution
-        apiFetch('/api/printer/open-drawer', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ settings: billPrinter })
-        })
-          .then(res => res.json())
-          .then(data => {
-            console.log('[Cash Drawer Server Log]', data.log);
-          })
-          .catch(e => console.error('[Cash Drawer Server Error]', e));
+          .catch(e => {
+            console.warn('[Cash Drawer Bridge Warning]', e);
+            // Fallback trigger
+            apiFetch('/api/printer/open-drawer', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ settings: billPrinter })
+            })
+              .then(res => res.json())
+              .then(data => console.log('[Cash Drawer Server Log]', data.log))
+              .catch(err => console.error('[Cash Drawer Server Error]', err));
+          });
       }
 
     } catch (err: any) {
       console.error('[Cashier Checkout processing error]', err);
+      // Compensating Transaction (Rollback)
+      if (cashierDeductedEmail && cashierDeductedAmount > 0) {
+        try {
+          const rbRes = await fetch(`/api/members/${encodeURIComponent(cashierDeductedEmail)}/topup`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ amount: cashierDeductedAmount })
+          });
+          const rbData = await rbRes.json();
+          if (rbRes.ok && rbData.member) {
+            memberService.updateMember(cashierDeductedEmail, {
+              balance: rbData.member.balance,
+              points: rbData.member.points,
+            });
+            alert(`❌ 收銀失敗！已自動撤銷會員扣款，返還 NT$ ${cashierDeductedAmount}。\n錯誤原因: ${err?.message || String(err)}`);
+            return;
+          }
+        } catch (rbErr) {
+          console.error('[Critical] Cashier rollback failed:', rbErr);
+        }
+      }
       alert(`❌ 收銀失敗: ${err?.message || String(err)}`);
     } finally {
       setIsCheckoutSubmitting(false);

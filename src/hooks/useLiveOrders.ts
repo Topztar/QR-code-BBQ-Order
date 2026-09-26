@@ -354,7 +354,11 @@ export function useLiveOrders(
       isCancelled = true;
       if (reconnectTimer) clearTimeout(reconnectTimer);
       if (fallbackPollInterval) clearInterval(fallbackPollInterval);
-      unsubscribeOrders();
+      setTimeout(() => {
+        try {
+          unsubscribeOrders();
+        } catch (_) {}
+      }, 0);
     };
   }, [isStaffView, syncActive, reconcileOrders]);
 

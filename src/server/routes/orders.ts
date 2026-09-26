@@ -434,6 +434,28 @@ ${customerDetails}
     res.json({ success: true, message: `Successfully deleted order #${deletedOrder.id}`, order: deletedOrder });
   });
 
+  // 7.5 Bulk Delete Orders
+  app.post('/api/orders/bulk-delete', (req, res) => {
+    const { orderIds } = req.body;
+    if (!Array.isArray(orderIds) || orderIds.length === 0) {
+      return res.status(400).json({ error: 'orderIds must be a non-empty array' });
+    }
+
+    const liveOrders = getLiveOrders();
+    const initialLength = liveOrders.length;
+    
+    // Filter out the deleted orders
+    const newOrders = liveOrders.filter(o => !orderIds.includes(o.id));
+    setLiveOrders(newOrders);
+    
+    saveStateToDisk();
+
+    res.json({ 
+      success: true, 
+      deletedCount: initialLength - newOrders.length 
+    });
+  });
+
   // 8. Update Table Number
   app.put('/api/orders/:id/table-number', (req, res) => {
     const { id } = req.params;

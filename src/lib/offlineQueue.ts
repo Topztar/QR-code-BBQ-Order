@@ -202,9 +202,14 @@ async function executeRequest(item: QueuedRequest): Promise<Response> {
 }
 
 let isQueuePaused = false;
+let isExecutingQueue = false; // Mutex to prevent overlapping drain loops
 
 export function isOfflineQueuePaused(): boolean {
   return isQueuePaused;
+}
+
+export function isOfflineQueueExecuting(): boolean {
+  return isExecutingQueue;
 }
 
 export function resumeOfflineQueue(onProgress?: (msg: string) => void) {
@@ -221,14 +226,22 @@ export async function processOfflineQueue(onProgress?: (msg: string) => void): P
     return { successCount: 0, failureCount: 0 };
   }
 
-  const queue = getOfflineQueue();
-  if (queue.length === 0) {
+  if (isExecutingQueue) {
+    console.warn('[OfflineQueue] Queue is already actively executing in another flight. Skipping concurrent invocation.');
     return { successCount: 0, failureCount: 0 };
   }
 
   let successCount = 0;
   let failureCount = 0;
-  const remaining: QueuedRequest[] = [...queue];
+
+  isExecutingQueue = true;
+  try {
+    const queue = getOfflineQueue();
+    if (queue.length === 0) {
+      return { successCount: 0, failureCount: 0 };
+    }
+
+    const remaining: QueuedRequest[] = [...queue];
 
   console.log(`[OfflineQueue] Starting sync for ${queue.length} queued offset transactions...`);
 
@@ -364,6 +377,10 @@ export async function processOfflineQueue(onProgress?: (msg: string) => void): P
       // continue to the next item — do NOT break the whole batch
       continue;
     }
+  }
+
+  } finally {
+    isExecutingQueue = false;
   }
 
   return { successCount, failureCount };

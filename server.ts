@@ -901,26 +901,7 @@ async function saveStateToFirestore() {
     await syncCollection('reservations', liveReservations, 'id', false);
 
     // 6. Orders
-    const orderCollRef = collection(firestoreDb, 'orders');
-    const orderSnapshot = await getDocs(orderCollRef);
-    const liveOrderIds = new Set(liveOrders.map(o => o.id));
-    
-    // Delete orders no longer in live state in batches of 400
-    const deletedDocRefs: any[] = [];
-    orderSnapshot.forEach((snapDoc: any) => {
-      if (!liveOrderIds.has(snapDoc.id)) {
-        deletedDocRefs.push(snapDoc.ref);
-      }
-    });
-    
-    for (let i = 0; i < deletedDocRefs.length; i += 400) {
-      const batch = writeBatch(firestoreDb);
-      const chunk = deletedDocRefs.slice(i, i + 400);
-      chunk.forEach(ref => batch.delete(ref));
-      await batch.commit();
-    }
-
-    // Set live orders in batches of 400
+    // Safe Merge Strategy: Only push updates for orders modified locally. DO NOT delete remote documents.
     const orderChunks: Order[][] = [];
     for (let i = 0; i < liveOrders.length; i += 400) {
       orderChunks.push(liveOrders.slice(i, i + 400));
@@ -928,7 +909,7 @@ async function saveStateToFirestore() {
     for (const chunk of orderChunks) {
       const batch = writeBatch(firestoreDb);
       chunk.forEach((order) => {
-        batch.set(doc(firestoreDb, 'orders', order.id), cleanUndefined(order));
+        batch.set(doc(firestoreDb, 'orders', order.id), cleanUndefined(order), { merge: true });
       });
       await batch.commit();
     }
@@ -1718,6 +1699,11 @@ app.post('/api/images/upload', async (req, res) => {
           const sharpThumbWebp = sharp().resize(200, 200, { fit: 'cover' }).webp({ quality: 70 });
           const sharpAvif = sharp().resize(800, null, { withoutEnlargement: true }).avif({ quality: 75, effort: 4 });
           const sharpThumbAvif = sharp().resize(200, 200, { fit: 'cover' }).avif({ quality: 65, effort: 4 });
+
+          magicByteChecker.on('error', (err) => {
+            console.error('[Upload] Magic byte stream error:', err);
+            req.unpipe(); // Stop reading from the request if the file format is invalid
+          });
 
           const p1 = new Promise((resolve, reject) => {
             magicByteChecker.pipe(sharpWebp).pipe(gcsBucket.file(targetPath).createWriteStream({ metadata: webpMetadata, resumable: false }))
@@ -3320,6 +3306,35 @@ async function main() {
     console.error('[Sabay Server] Failed to initialize state on boot, falling back to disk:', err);
     loadStateFromDisk();
   }
+
+  // 0b. Real-time store status endpoint (Parity with Cloud Functions /api/store-status)
+  app.get('/api/store-status', (_req, res) => {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+
+    const todayStr = getTaiwanDateString();
+    const soldOutItemIds = liveMenu
+      .filter(dish => {
+        if (dish.available === false) return true;
+        if (dish.soldOutType === 'permanent') return true;
+        if (dish.soldOutType === 'daily' && dish.soldOutDate === todayStr) return true;
+        return false;
+      })
+      .map(dish => dish.id);
+
+    res.json({
+      isOpen: isStoreOpen(),
+      servicePaused: !!liveServicePaused,
+      soldOutItemIds,
+      timestamp: Date.now()
+    });
+  });
+
+  // 404 Guard for API routes to prevent falling into Vite SPA middleware with 500 errors
+  app.all('/api/*', (_req, res) => {
+    res.status(404).json({ error: 'API endpoint not found', timestamp: Date.now() });
+  });
 
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({

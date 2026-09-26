@@ -71,7 +71,11 @@ export function useKdsMutexSession(
       console.warn('[KDS Session Snapshot Note]', err);
     });
 
-    return () => unsubscribeSession();
+    return () => {
+      setTimeout(() => {
+        try { unsubscribeSession(); } catch (_) {}
+      }, 0);
+    };
   }, [syncActive, currentDeviceId]);
 
   useEffect(() => {

@@ -185,7 +185,10 @@ async function main() {
       const sampleBase64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
       const uploadRes = await fetch(`${BASE_URL}/api/images/upload`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer valid-staff-session'
+        },
         body: JSON.stringify({ image: sampleBase64, filename: 'e2e_test_dish.png' })
       });
       const uploadData = await uploadRes.json();

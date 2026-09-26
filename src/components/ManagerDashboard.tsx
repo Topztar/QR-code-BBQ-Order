@@ -12,6 +12,7 @@ import {
   printViaBridge,
   DEFAULT_POS_BRIDGE_URL
 } from '../lib/posBridgeClient';
+import { DEFAULT_RECIPE_COMPOSITION_MAP } from '../config/recipeMap';
 const ManagerStatsTab = lazy(() => import('./manager/ManagerStatsTab').then(m => ({ default: m.ManagerStatsTab })));
 const ManagerOrdersTab = lazy(() => import('./manager/ManagerOrdersTab').then(m => ({ default: m.ManagerOrdersTab })));
 const ManagerInventoryTab = lazy(() => import('./manager/ManagerInventoryTab').then(m => ({ default: m.ManagerInventoryTab })));
@@ -61,7 +62,8 @@ interface ManagerDashboardProps {
   onUpdateOrderStatus: (orderId: string, status: OrderStatus) => Promise<void>;
   onRestock: (id: string, amount: number) => Promise<void>;
 
-  onSendPromoPush: (notif: { title: string; message: string; badge: string }) => Promise<void>;
+  /** @deprecated Retained for upstream App.tsx compatibility. Pass to marketing tab when push broadcast is enabled. */
+  onSendPromoPush?: (notif: { title: string; message: string; badge: string }) => Promise<void>;
   onToggleMenuItemAvailability: (id: string, targetType?: SoldOutType) => Promise<void>;
   menuItems: any[];
   onAddMenuItem?: (item: any) => Promise<void>;
@@ -150,15 +152,6 @@ interface ManagerDashboardProps {
   memberRewards?: any[];
   onUpdateMemberConfig?: () => Promise<void>;
 }
-
-// Ingredient Recipe Maps definition for local recipe cards auditing 
-const RECIPE_COMPOSITION_MAP: { [key: string]: { name: string; qty: string }[] } = {
-  'ty-01': [{ name: '大鮮蝦', qty: '3 只 / pcs' }, { name: '頂級椰奶罐', qty: '0.1 罐 / can' }],
-  'ty-02': [{ name: '大鮮蝦', qty: '2 只 / pcs' }, { name: '頂級牛肉串面料', qty: '1 串 / skewer' }, { name: '頂級椰奶罐', qty: '0.1 罐' }],
-  'nd-01': [{ name: '大鮮蝦', qty: '4 只' }, { name: '冬蔭功泡麵 / 米線', qty: '1 包 / pack' }],
-  'nd-02': [{ name: '大鮮蝦', qty: '2 只' }, { name: '冬蔭功泡麵 / 米線', qty: '1 包' }],
-  'cb-01': [{ name: '頂級牛肉串', qty: '1 串' }, { name: '爆香豬五花 / 金針', qty: '1 份' }, { name: '泰手標紅茶原料', qty: '0.35 升' }]
-};
 
 export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   currentLang,
@@ -320,7 +313,6 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
       setShowBulkDeleteOrdersModal: state.setShowBulkDeleteOrdersModal
     }))
   );
-  const [bulkDeleteThresholdDate, setBulkDeleteThresholdDate] = useState<string>('');
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
 
   // Local reordering states with confirmation buttons to prevent accidental clicks
@@ -360,12 +352,25 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     }
   }, [menuItems, hasUnsavedMenuItemOrder]);
 
-  // Custom reusable confirmation dialog modal state & Member modal trigger
-  const { confirmActionModal, setConfirmActionModal, setAddMemberModalOpen } = useDashboardStore(
+  // Custom reusable confirmation dialog modal state, Member modal trigger & Reactive form modal setters
+  const {
+    confirmActionModal, setConfirmActionModal, setAddMemberModalOpen,
+    setEditingItem, setIsDishFormOpen,
+    setEditingCategory, setIsCatFormOpen,
+    setEditingResObj, setIsResFormOpen,
+    setAdjustPointsModal
+  } = useDashboardStore(
     useShallow(state => ({
       confirmActionModal: state.confirmActionModal,
       setConfirmActionModal: state.setConfirmActionModal,
-      setAddMemberModalOpen: state.setAddMemberModalOpen
+      setAddMemberModalOpen: state.setAddMemberModalOpen,
+      setEditingItem: state.setEditingItem,
+      setIsDishFormOpen: state.setIsDishFormOpen,
+      setEditingCategory: state.setEditingCategory,
+      setIsCatFormOpen: state.setIsCatFormOpen,
+      setEditingResObj: state.setEditingResObj,
+      setIsResFormOpen: state.setIsResFormOpen,
+      setAdjustPointsModal: state.setAdjustPointsModal
     }))
   );
 
@@ -764,7 +769,13 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
       // Step 1: Direct Local POS Bridge Call (http://127.0.0.1:8060)
       const bridgeRes = await openCashDrawerViaBridge(port, posBridgeUrl);
 
-      // Step 2: Server API Call with full printer settings
+      if (bridgeRes.success) {
+        alert(`✓ 🔓 實體收銀箱抽屜已成功彈開！\n\n【本機橋接器通訊】: ${bridgeRes.message} (埠口: ${bridgeRes.port || port})`);
+        return;
+      }
+
+      // Step 2: Fallback to Server API Call ONLY if Local Bridge was unavailable
+      console.warn('[Cash Drawer] Local POS bridge failed, initiating server fallback pulse...');
       let serverData: any = null;
       try {
         const res = await apiFetch('/api/printer/open-drawer', {
@@ -779,12 +790,10 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
         console.warn('[Server Drawer Trigger Warning]', err);
       }
 
-      if (bridgeRes.success) {
-        alert(`✓ 🔓 實體收銀箱抽屜已成功彈開！\n\n【本機橋接器通訊】: ${bridgeRes.message} (埠口: ${bridgeRes.port || port})\n${serverData?.log ? `【伺服器記錄】:\n${serverData.log}` : ''}`);
-      } else if (serverData && serverData.success) {
-        alert(`✓ 🔓 實體收銀箱抽屜已成功彈開！\n\n【伺服器驅動日誌】:\n${serverData.log}`);
+      if (serverData && serverData.success) {
+        alert(`✓ 🔓 實體收銀箱抽屜已成功彈開！(伺服器驅動備援)\n\n【伺服器驅動日誌】:\n${serverData.log}`);
       } else {
-        alert(`⚠️ 開啟收銀箱結果回應:\n${bridgeRes.message}\n\n💡 提示: 若您在 Windows 上直接控制實體錢箱，請確認已啟動 LOCAL-PRINTER-POS-BRIDGE (pos_bridge.exe) 於 127.0.0.1:8060`);
+        alert(`⚠️ 開啟收銀箱失敗:\n本機橋接: ${bridgeRes.message}\n伺服器備援: ${serverData?.error || '無法連線至印表機'}\n\n💡 提示: 請確認 LOCAL-PRINTER-POS-BRIDGE 正在 127.0.0.1:8060 運作或印表機 USB 連線正常。`);
       }
     } catch (e: any) {
       console.error('[Manual open cash drawer error]', e);
@@ -892,19 +901,37 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
       return;
     }
 
+    let memberDeductedEmail: string | null = null;
+    let memberDeductedAmount = 0;
+
     if (selectedOrder.paymentMethod === 'member') {
       const member = selectedOrder.customerName ? memberService.getMemberByName(selectedOrder.customerName) : null;
-      if (!member) {
-        alert('⚠️ 找不到匹配此結帳單的會員，無法使用會員餘額付款！');
+      if (!member || !member.email) {
+        alert('⚠️ 找不到匹配此結帳單的會員帳戶，無法使用會員餘額付款！');
         return;
       }
-      const currentBal = Number(member.balance) || 0;
-      if (currentBal < selectedOrder.total) {
-        alert(`⚠️ 會員餘額不足 (剩餘: NT$ ${currentBal})！無法進行扣抵結帳，請先至收銀台點選【儲值增額】。`);
+
+      try {
+        const deductRes = await fetch(`/api/members/${encodeURIComponent(member.email)}/deduct`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ amount: selectedOrder.total, orderId: selectedOrder.id }),
+        });
+        const deductData = await deductRes.json();
+        if (!deductRes.ok || !deductData.member) {
+          alert(`⚠️ 會員餘額扣抵失敗：${deductData.error || '餘額不足或伺服器異常'}！`);
+          return;
+        }
+        memberDeductedEmail = member.email;
+        memberDeductedAmount = selectedOrder.total;
+        memberService.updateMember(member.email, {
+          balance: deductData.member.balance,
+          points: deductData.member.points,
+        });
+      } catch (err: any) {
+        alert(`⚠️ 連線伺服器失敗，無法完成會員餘額扣抵：${err?.message || err}`);
         return;
       }
-      // Deduct balance via memberService
-      memberService.updateMemberBalance(member.email, -selectedOrder.total);
     }
 
     setIsCheckoutSubmitting(true);
@@ -956,7 +983,28 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
       });
 
     } catch (error: any) {
-      console.error('Failed to processed checkout to database:', error);
+      console.error('Failed to process checkout in database:', error);
+      // Compensating Transaction (Rollback) if order payment failed after member deduction
+      if (memberDeductedEmail && memberDeductedAmount > 0) {
+        try {
+          const refundRes = await fetch(`/api/members/${encodeURIComponent(memberDeductedEmail)}/topup`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ amount: memberDeductedAmount }),
+          });
+          const refundData = await refundRes.json();
+          if (refundRes.ok && refundData.member) {
+            memberService.updateMember(memberDeductedEmail, {
+              balance: refundData.member.balance,
+              points: refundData.member.points,
+            });
+            alert(`⚠️ 資料庫寫入失敗！已自動回滾撤銷會員扣款 (已回補 NT$ ${memberDeductedAmount})。\n原因: ${error.message || error}`);
+            return;
+          }
+        } catch (rollbackErr) {
+          console.error('[Critical] Member rollback failed:', rollbackErr);
+        }
+      }
       alert(`⚠️ 資料庫寫入失敗！請確認 Firebase 設定。錯誤: ${error.message || error}`);
     } finally {
       setIsCheckoutSubmitting(false);
@@ -1281,7 +1329,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   const handleAdjustPoints = (email: string) => {
     const member = membersList.find(m => m.email === email);
     if (!member) return;
-    useDashboardStore.getState().setAdjustPointsModal({
+    setAdjustPointsModal({
       isOpen: true,
       email: member.email,
       name: member.name,
@@ -1294,7 +1342,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     if (!currentAdjustModal) return { success: false, error: '未選擇會員！' };
     const res = memberService.updateMemberPoints(currentAdjustModal.email, amount);
     if (res.success) {
-      useDashboardStore.getState().setAdjustPointsModal(null);
+      setAdjustPointsModal(null);
       return { success: true };
     }
     return { success: false, error: res.error || '儲存點數時發生資料處理錯誤！' };
@@ -1459,12 +1507,11 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
 
   // Bulk delete old orders from Firestore
   const handleBulkDeleteOrders = async (dateStr?: string) => {
-    const selectedDate = dateStr || bulkDeleteThresholdDate;
-    if (!selectedDate) {
+    if (!dateStr) {
       alert('請選擇截止日期');
       return;
     }
-    const targetDate = new Date(selectedDate);
+    const targetDate = new Date(dateStr);
     targetDate.setHours(0, 0, 0, 0);
 
     setIsBulkDeleting(true);
@@ -1478,7 +1525,6 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
         const data = await res.json();
         alert(`已成功刪除 ${data.deletedCount || 0} 筆歷史訂單！`);
         setShowBulkDeleteOrdersModal(false);
-        setBulkDeleteThresholdDate('');
       } else {
         const errData = await res.json().catch(() => ({}));
         alert('刪除失敗: ' + (errData.error || '伺服器處理異常'));
@@ -1550,20 +1596,20 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     }));
   }, [analytics.hourlyDistribution]);
 
-  // Modals triggers utilizing useDashboardStore
-  const triggerAddMenuItemMode = () => { useDashboardStore.getState().setEditingItem(null); useDashboardStore.getState().setIsDishFormOpen(true); };
-  const triggerEditMenuItemMode = (item: any) => { useDashboardStore.getState().setEditingItem(item); useDashboardStore.getState().setIsDishFormOpen(true); };
-  const triggerAddCatMode = () => { useDashboardStore.getState().setEditingCategory(null); useDashboardStore.getState().setIsCatFormOpen(true); };
-  const triggerEditCatMode = (cat: Category) => { useDashboardStore.getState().setEditingCategory(cat); useDashboardStore.getState().setIsCatFormOpen(true); };
-  const triggerAddTableMode = () => { useDashboardStore.getState().setEditingTableObj(null); useDashboardStore.getState().setIsTableFormOpen(true); };
-  const triggerEditTableMode = (tb: TableConfig) => { useDashboardStore.getState().setEditingTableObj(tb); useDashboardStore.getState().setIsTableFormOpen(true); };
-  const triggerAddReservationMode = () => { useDashboardStore.getState().setEditingResObj(null); useDashboardStore.getState().setIsResFormOpen(true); };
-  const triggerEditReservationMode = (res: Reservation) => { useDashboardStore.getState().setEditingResObj(res); useDashboardStore.getState().setIsResFormOpen(true); };
+  // Modals triggers utilizing reactive Zustand hook dispatchers
+  const triggerAddMenuItemMode = useCallback(() => { setEditingItem(null); setIsDishFormOpen(true); }, [setEditingItem, setIsDishFormOpen]);
+  const triggerEditMenuItemMode = useCallback((item: any) => { setEditingItem(item); setIsDishFormOpen(true); }, [setEditingItem, setIsDishFormOpen]);
+  const triggerAddCatMode = useCallback(() => { setEditingCategory(null); setIsCatFormOpen(true); }, [setEditingCategory, setIsCatFormOpen]);
+  const triggerEditCatMode = useCallback((cat: Category) => { setEditingCategory(cat); setIsCatFormOpen(true); }, [setEditingCategory, setIsCatFormOpen]);
+  const triggerAddTableMode = useCallback(() => { setEditingTableObj(null); setIsTableFormOpen(true); }, [setEditingTableObj, setIsTableFormOpen]);
+  const triggerEditTableMode = useCallback((tb: TableConfig) => { setEditingTableObj(tb); setIsTableFormOpen(true); }, [setEditingTableObj, setIsTableFormOpen]);
+  const triggerAddReservationMode = useCallback(() => { setEditingResObj(null); setIsResFormOpen(true); }, [setEditingResObj, setIsResFormOpen]);
+  const triggerEditReservationMode = useCallback((res: Reservation) => { setEditingResObj(res); setIsResFormOpen(true); }, [setEditingResObj, setIsResFormOpen]);
 
 
 
   // Ingredient Recipe Maps definition for local recipe cards auditing 
-  const recipeCompositionMap = RECIPE_COMPOSITION_MAP;
+  const recipeCompositionMap = DEFAULT_RECIPE_COMPOSITION_MAP;
 
   return (
     <div className="space-y-6 text-white" id="manager-dashboard-container">

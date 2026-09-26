@@ -35,6 +35,25 @@ class MemberService {
   }
 
   /**
+   * 從後端 API 同步全域最新會員資料至本地快取
+   */
+  async syncFromBackend(): Promise<Member[]> {
+    try {
+      const res = await fetch('/api/members');
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          this.saveMembers(data, true);
+          return data;
+        }
+      }
+    } catch (err) {
+      console.warn('[memberService] Background sync with /api/members failed, using local cache:', err);
+    }
+    return this.getMembers();
+  }
+
+  /**
    * 儲存會員列表至 localStorage 並發送全域同步事件
    */
   saveMembers(members: Member[], emitEvent: boolean = true): void {
