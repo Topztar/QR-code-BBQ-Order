@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-09-26T09:30:36.144Z",
+  "timestamp": "2026-09-26T17:06:28.225Z",
   "domains": {
     "domain1": {
       "status": "PASS",
@@ -21,7 +21,7 @@
     },
     "domain5": {
       "status": "PASS",
-      "evidence": "Storage upload write verified. Asset URL: /api/images/dishes/e2e_test_dish-1790415041613.webp"
+      "evidence": "Storage upload write verified. Asset URL: /api/images/dishes/e2e_test_dish-1790442395336.webp"
     },
     "domain6": {
       "status": "PASS",
@@ -44,16 +44,16 @@
     },
     "domain10": {
       "status": "PASS",
-      "reservationId": "res-qxl998t7x",
-      "evidence": "Slot validation & conflict check passed for 2026-10-03 18:00"
+      "reservationId": "res-qz8rugb5i",
+      "evidence": "Slot validation & conflict check passed for 2026-10-04 18:00"
     },
     "domain11": {
       "status": "PASS",
       "blackScreenDetected": false,
       "hotkeyNavPassed": true,
       "totalTogglesTested": 16,
-      "consoleErrorsCaptured": 28,
-      "pageErrorsCaptured": 20
+      "consoleErrorsCaptured": 5,
+      "pageErrorsCaptured": 0
     }
   },
   "cleanup": {

@@ -8,6 +8,7 @@ function registerOrdersRoutes(app, ctx) {
     const { db, storageBucket, requireStaffAuth, requireAppCheck, createRateLimiter, sendErrorResponse } = ctx;
     const getCachedSettings = (0, helpers_1.createGetCachedSettings)(db);
     const orderRateLimiter = createRateLimiter(20, 60 * 1000, '訂單提交');
+    const ratingRateLimiter = createRateLimiter(15, 60 * 1000, '訂單評價');
     const get = (routePath, ...handlers) => app.get([`/api${routePath}`, routePath], ...handlers);
     const post = (routePath, ...handlers) => app.post([`/api${routePath}`, routePath], ...handlers);
     const put = (routePath, ...handlers) => app.put([`/api${routePath}`, routePath], ...handlers);
@@ -157,7 +158,7 @@ function registerOrdersRoutes(app, ctx) {
                     t.set(idempotencyRef, {
                         orderId,
                         createdAt: new Date().toISOString(),
-                        expireAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+                        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000)
                     });
                 }
                 t.set(db.collection('orders').doc(orderId), orderToSave);
@@ -701,7 +702,7 @@ function registerOrdersRoutes(app, ctx) {
             res.status(500).send(error);
         }
     });
-    put('/orders/:id/rate', async (req, res) => {
+    put('/orders/:id/rate', ratingRateLimiter, async (req, res) => {
         const id = req.params.id;
         const validation = (0, validators_1.validateRatingPayload)(req.body);
         if (!validation.isValid || !validation.sanitizedData) {
