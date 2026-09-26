@@ -22,10 +22,11 @@ export interface OrderRouteContext {
   ratingRateLimiter?: express.RequestHandler;
 }
 
-import { getMappedTableId } from '../../utils/tableUtils';
+import { getMappedTableId, isTakeoutTable } from '../../utils/tableUtils';
 export { getMappedTableId };
 
 const localIdempotencyKeys = new Map<string, { orderId: string, expiresAt: number }>();
+let lastCashDrawerOpenTime = 0; // G-12: Cash drawer debounce flag
 
 export function registerOrdersRoutes(app: express.Express, ctx: OrderRouteContext) {
   const {
@@ -152,7 +153,7 @@ export function registerOrdersRoutes(app: express.Express, ctx: OrderRouteContex
 
     // Validate that the store is open (operating hours check)
     // 預約專屬點餐 (reservationNo) 或 預約日期 (reservationDate) 或 外帶點餐 豁免營業時間限制
-    const isTakeoutOrder = !!(takeoutInfo || mappedTableNumber === '外帶' || mappedTableNumber === 'takeout');
+    const isTakeoutOrder = !!(takeoutInfo || isTakeoutTable(mappedTableNumber));
     const isReservationOrder = !!(reservationNo || reservationDate);
     if (!isReservationOrder && !isTakeoutOrder && !isStoreOpen()) {
       return res.status(403).json({ error: '目前不在營業時間內（店鋪休息中），系統不開放下單點餐！' });
@@ -542,7 +543,7 @@ ${customerDetails}
       const tb = liveTables.find(t => t.id.toString().trim() === tblId);
       if (tb) {
         if (order.isPaid) {
-          if (tblId.toLowerCase() !== 'takeout' && tblId !== '外帶' && tblId !== '') {
+          if (!isTakeoutTable(tblId) && tblId !== '') {
             tb.status = 'cleaning';
             tb.preservedFor = '';
             tb.cleaningStartedAt = new Date().toISOString();
@@ -556,9 +557,10 @@ ${customerDetails}
         }
       }
       if (order.isPaid) {
+        const todayStr = getTaiwanDateString();
         const resIdx = liveReservations.findIndex(r =>
           (order.reservationNo && (r.id === order.reservationNo || (r as any).reservationNo === order.reservationNo)) ||
-          (String(r.tableNumber).trim() === tblId && (r.status === 'pending' || r.status === 'seated' || r.status === 'upcoming' || r.status === 'confirmed'))
+          (String(r.tableNumber).trim() === tblId && (r.status === 'pending' || r.status === 'seated' || r.status === 'upcoming' || r.status === 'confirmed') && r.date === todayStr)
         );
         if (resIdx > -1) {
           const [deletedRes] = liveReservations.splice(resIdx, 1);
@@ -570,9 +572,14 @@ ${customerDetails}
       }
     }
 
+    saveStateToDisk();
+
     // Interlock cash drawer trigger: when transition to paid and cash drawer is enabled
     let drawerLog = '';
-    if (order.isPaid && livePrinterSettings?.bill?.cashDrawerEnabled) {
+    const nowMs = Date.now();
+    const isDrawerDebounced = nowMs - lastCashDrawerOpenTime < 3000;
+    if (order.isPaid && livePrinterSettings?.bill?.cashDrawerEnabled && !isDrawerDebounced) {
+      lastCashDrawerOpenTime = nowMs;
       try {
         const drawerRes = await triggerCashDrawerOpen(livePrinterSettings.bill);
         drawerLog = drawerRes.log;
@@ -588,7 +595,6 @@ ${customerDetails}
       }
     }
 
-    saveStateToDisk();
     res.json({ ...order, drawerLog });
   });
 
@@ -612,17 +618,25 @@ ${customerDetails}
 
       if (Array.isArray(tableNumbers)) {
         tableNumbers.forEach(t => {
-          if (t && !String(t).includes('外帶') && String(t).toLowerCase() !== 'takeout') {
+          if (t && !isTakeoutTable(String(t))) {
             tableSet.add(String(t).trim());
           }
         });
       }
 
-      // 1. Process all target orders in memory
+      // 0. Pre-validation for Atomicity (All-or-Nothing)
+      const ordersToCheckout = [];
       for (const id of orderIds) {
         const order = liveOrders.find(o => o.id === id);
-        if (!order) continue;
+        if (!order) {
+          return res.status(404).json({ error: `找不到訂單 ${id}，請重新整理後重試。` });
+        }
+        ordersToCheckout.push(order);
+      }
 
+      // 1. Process all target orders in memory
+      for (const order of ordersToCheckout) {
+        const id = order.id;
         const currentStatus = order.status;
         const resolvedStatus = (currentStatus === 'completed' || currentStatus === 'cancelled') ? currentStatus : 'paid';
         resolvedOrderStatuses[id] = resolvedStatus;
@@ -634,7 +648,7 @@ ${customerDetails}
         order.status = resolvedStatus;
         (order as any).updatedAt = new Date().toISOString();
 
-        if (order.tableNumber && !String(order.tableNumber).includes('外帶') && String(order.tableNumber).toLowerCase() !== 'takeout') {
+        if (order.tableNumber && !isTakeoutTable(String(order.tableNumber))) {
           tableSet.add(String(order.tableNumber).trim());
         }
 
@@ -671,9 +685,15 @@ ${customerDetails}
         }
       }
 
-      // 3. Optional Cash Drawer Trigger on Cash Payment
+      // 3. Persist State to Disk before external actions
+      saveStateToDisk();
+
+      // 4. Optional Cash Drawer Trigger on Cash Payment
       let drawerLog = '';
-      if (livePrinterSettings?.bill?.cashDrawerEnabled) {
+      const nowMs = Date.now();
+      const isDrawerDebounced = nowMs - lastCashDrawerOpenTime < 3000;
+      if (livePrinterSettings?.bill?.cashDrawerEnabled && !isDrawerDebounced) {
+        lastCashDrawerOpenTime = nowMs;
         try {
           const drawerRes = await triggerCashDrawerOpen(livePrinterSettings.bill);
           drawerLog = drawerRes.log;
@@ -688,8 +708,6 @@ ${customerDetails}
           console.error('[Bulk Cash Drawer Error]', drawerErr);
         }
       }
-
-      saveStateToDisk();
 
       res.json({
         success: true,
@@ -859,7 +877,7 @@ ${customerDetails}
   // 15. Modify Order Items (🛡️ Hardened with Paid/Cancelled Lockout)
   app.put('/api/orders/:id/items', (req, res) => {
     const { id } = req.params;
-    const { items, refundLogs } = req.body;
+    const { items, refundLogs, expectedVersion } = req.body;
 
     const liveOrders = getLiveOrders();
     const liveMenu = getLiveMenu();
@@ -868,11 +886,23 @@ ${customerDetails}
       return res.status(404).json({ error: 'Order not found' });
     }
 
+    // 🛡️ Concurrency Check (G-16): Ensure client has latest version before mutating items
+    const currentVersion = order.version || 0;
+    if (typeof expectedVersion === 'number' && expectedVersion < currentVersion) {
+      return res.status(409).json({ error: '訂單已被其他裝置更新，請重新載入後再修改餐點。', currentOrder: order });
+    }
+
     // 🛡️ Security Guard: Reject modifications if order is already paid or cancelled unless valid refundLogs audit is provided
     const isPaidOrCancelled = order.status === 'paid' || order.status === 'cancelled' || order.isPaid;
-    const hasValidRefundLogs = Array.isArray(refundLogs) && refundLogs.length > 0;
-    if (isPaidOrCancelled && !hasValidRefundLogs) {
-      return res.status(409).json({ error: '訂單已結帳或已取消，未附帶退換核銷紀錄不可修改餐點內容！' });
+    if (isPaidOrCancelled) {
+      if (!Array.isArray(refundLogs) || refundLogs.length === 0) {
+        return res.status(409).json({ error: '訂單已結帳或已取消，未附帶退換核銷紀錄不可修改餐點內容！' });
+      }
+      for (const log of refundLogs) {
+        if (!log.id || !log.timestamp || typeof log.totalDiff !== 'number' || !log.type) {
+          return res.status(400).json({ error: '退換核銷紀錄格式錯誤 (Refund Log Schema Invalid)。' });
+        }
+      }
     }
 
     order.items = items;
@@ -901,6 +931,9 @@ ${customerDetails}
     const netSubtotal = Math.max(0, subtotal - promoDiscount);
     order.serviceCharge = (order.paymentMethod === 'credit' || order.paymentMethod === 'twqr') ? Math.round(subtotal * 0.1) : 0;
     order.total = netSubtotal + order.serviceCharge;
+
+    order.version = currentVersion + 1;
+    (order as any).updatedAt = new Date().toISOString();
 
     saveStateToDisk();
     res.json(order);

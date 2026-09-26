@@ -3,6 +3,12 @@
  * Single source of truth for table mapping and validation across frontend & backend.
  */
 
+export function isTakeoutTable(tableId: string | null | undefined): boolean {
+  if (!tableId) return false;
+  const cleanId = String(tableId).trim().toLowerCase();
+  return cleanId === 'takeout' || cleanId.includes('外帶');
+}
+
 export function getMappedTableId(inputTableId: string, availableTables: Array<{ id: string }>): string {
   if (!availableTables || availableTables.length === 0) {
     return inputTableId;
@@ -11,7 +17,7 @@ export function getMappedTableId(inputTableId: string, availableTables: Array<{ 
   if (availableTables.some((t) => t.id.toString().trim() === cleanInput)) {
     return cleanInput;
   }
-  if (cleanInput.includes('外帶') || cleanInput.toLowerCase().includes('takeout')) {
+  if (isTakeoutTable(cleanInput)) {
     return cleanInput;
   }
 
