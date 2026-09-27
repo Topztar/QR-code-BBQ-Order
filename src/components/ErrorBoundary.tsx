@@ -45,9 +45,19 @@ export class ErrorBoundary extends React.Component<Props, State> {
   private handleClearAndReload = () => {
     try {
       sessionStorage.clear();
-      const url = new URL(window.location.href);
-      url.searchParams.set('_r', Date.now().toString());
-      window.location.href = url.toString();
+      if ('caches' in window) {
+        caches.keys().then((names) => {
+          names.forEach((name) => caches.delete(name));
+        });
+      }
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then((registrations) => {
+          registrations.forEach((reg) => reg.update());
+        });
+      }
+      const url = new URL(window.location.origin);
+      url.searchParams.set('_v', Date.now().toString());
+      window.location.replace(url.toString());
     } catch (_e) {
       window.location.reload();
     }
@@ -55,6 +65,12 @@ export class ErrorBoundary extends React.Component<Props, State> {
 
   public override render(): ReactNode {
     if (this.state.hasError) {
+      const isChunkError =
+        this.state.error?.name === 'ChunkLoadError' ||
+        this.state.error?.message?.includes('Failed to fetch dynamically imported module') ||
+        this.state.error?.message?.includes('dynamically imported module') ||
+        this.state.error?.message?.includes('loading chunk');
+
       return (
         <div className="min-h-[60vh] flex flex-col items-center justify-center p-6 text-center max-w-lg mx-auto">
           <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 mb-5 shadow-lg shadow-amber-500/10 animate-pulse">
@@ -62,32 +78,46 @@ export class ErrorBoundary extends React.Component<Props, State> {
           </div>
 
           <h2 className="text-xl sm:text-2xl font-serif font-black text-white mb-2">
-            {this.props.fallbackTitle || '畫面載入遇到短暫問題'}
+            {isChunkError ? '系統已發布最新版本' : (this.props.fallbackTitle || '畫面載入遇到短暫問題')}
           </h2>
 
           <p className="text-xs sm:text-sm text-zinc-400 mb-6 leading-relaxed">
-            {this.props.fallbackMessage ||
-              '系統已自動攔截並保護您的點餐資料。請點擊下方按鈕重新載入或重試。'}
+            {isChunkError
+              ? '偵測到伺服器已更新系統模組。請點擊下方按鈕以載入最新版本並重整快取。'
+              : (this.props.fallbackMessage || '系統已自動攔截並保護您的點餐資料。請點擊下方按鈕重新載入或重試。')}
           </p>
 
           <div className="flex flex-col sm:flex-row items-center gap-3 w-full justify-center">
-            <button
-              type="button"
-              onClick={this.handleReset}
-              className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#E5B453] to-amber-500 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 cursor-pointer transition active:scale-95"
-            >
-              <RefreshCw size={14} />
-              <span>重新整理頁面</span>
-            </button>
+            {isChunkError ? (
+              <button
+                type="button"
+                onClick={this.handleClearAndReload}
+                className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-gradient-to-r from-[#E5B453] to-amber-500 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 cursor-pointer transition active:scale-95"
+              >
+                <RefreshCw size={14} />
+                <span>立即更新系統版本</span>
+              </button>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={this.handleReset}
+                  className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#E5B453] to-amber-500 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 cursor-pointer transition active:scale-95"
+                >
+                  <RefreshCw size={14} />
+                  <span>重新整理頁面</span>
+                </button>
 
-            <button
-              type="button"
-              onClick={this.handleClearAndReload}
-              className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/80 border border-white/10 font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition active:scale-95"
-            >
-              <Home size={14} />
-              <span>修復快取並返回首頁</span>
-            </button>
+                <button
+                  type="button"
+                  onClick={this.handleClearAndReload}
+                  className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/80 border border-white/10 font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition active:scale-95"
+                >
+                  <Home size={14} />
+                  <span>修復快取並返回首頁</span>
+                </button>
+              </>
+            )}
           </div>
 
           {this.state.error && (

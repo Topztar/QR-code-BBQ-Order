@@ -10,6 +10,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { RestaurantDataProvider, useRestaurantData } from './context/RestaurantDataContext';
 import { OrderDataProvider, useOrderData } from './context/OrderDataContext';
 import { PrinterDataProvider, usePrinterData } from './context/PrinterDataContext';
+import { StaffLoginGate } from './components/StaffLoginGate';
 
 // Wrapper for lazy loading with retry to prevent chunk load errors causing black screens
 export const resilientLazy = <T extends React.ComponentType<any>>(
@@ -31,9 +32,25 @@ export const resilientLazy = <T extends React.ComponentType<any>>(
         error?.name === 'ChunkLoadError';
 
       if (isChunkError && now - lastRetry > 10000) { // 10 seconds debounce
-        console.warn(`[Sabay BBQ Diagnostics] Component chunk load failed. Triggering automatic soft recovery reload. Error:`, error);
+        console.warn(`[Sabay BBQ Diagnostics] Component chunk load failed. Purging stale cache & reloading:`, error);
         window.sessionStorage.setItem(key, now.toString());
-        
+
+        // Purge CacheStorage & update Service Workers
+        if ('caches' in window) {
+          try {
+            const cacheNames = await caches.keys();
+            await Promise.all(cacheNames.map((name) => caches.delete(name)));
+          } catch (_) {}
+        }
+        if ('serviceWorker' in navigator) {
+          try {
+            const regs = await navigator.serviceWorker.getRegistrations();
+            for (const reg of regs) {
+              await reg.update();
+            }
+          } catch (_) {}
+        }
+
         // Use a cache-busting URL parameter
         const url = new URL(window.location.href);
         url.searchParams.set('_v', now.toString());
@@ -49,7 +66,6 @@ export const resilientLazy = <T extends React.ComponentType<any>>(
 const CustomerOrderView = resilientLazy(() => import('./components/CustomerOrderView').then(m => ({ default: m.CustomerOrderView })));
 const KitchenDisplaySystem = resilientLazy(() => import('./components/KitchenDisplaySystem').then(m => ({ default: m.KitchenDisplaySystem })));
 const ManagerDashboard = resilientLazy(() => import('./components/ManagerDashboard').then(m => ({ default: m.ManagerDashboard })));
-const StaffLoginGate = resilientLazy(() => import('./components/StaffLoginGate').then(m => ({ default: m.StaffLoginGate })));
 
 const ViewLoadingFallback = () => (
   <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
@@ -640,18 +656,16 @@ function AppContent({
                 </p>
               </div>
               <ErrorBoundary fallbackTitle="員工登入門戶載入異常" fallbackMessage="安全驗證門戶載入遇到問題，請點擊下方按鈕重試。">
-                <Suspense fallback={<ViewLoadingFallback />}>
-                  <StaffLoginGate
-                    onLoginSuccess={() => {
-                      setIsStaff(true);
-                      handleStaffTabSwitch('/admin?tab=stats', 'admin', 'stats');
-                    }}
-                    onCancel={() => {
-                      setActiveTab('customer');
-                      navigateTo('/');
-                    }}
-                  />
-                </Suspense>
+                <StaffLoginGate
+                  onLoginSuccess={() => {
+                    setIsStaff(true);
+                    handleStaffTabSwitch('/admin?tab=stats', 'admin', 'stats');
+                  }}
+                  onCancel={() => {
+                    setActiveTab('customer');
+                    navigateTo('/');
+                  }}
+                />
               </ErrorBoundary>
             </div>
           ) : (
