@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
+import { RootErrorBoundary } from './components/RootErrorBoundary';
 import './index.css';
 
 // Global error and unhandled promise rejection resilience handlers
@@ -20,7 +21,9 @@ import { registerSW } from 'virtual:pwa-register';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <RootErrorBoundary>
+      <App />
+    </RootErrorBoundary>
   </StrictMode>,
 );
 

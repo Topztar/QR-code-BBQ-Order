@@ -124,13 +124,5 @@ describe('Order Calculation Parity Tests (Frontend vs. Functions Backend)', () =
     expect(frontTwqr).toEqual({ subtotal: 360, serviceCharge: 36, discount: 0, total: 396 });
     expect(frontTwqr).toEqual(backTwqr);
   });
-
-  it('should format and match Taiwan dates identically', () => {
-    const testDate = new Date('2026-09-19T11:00:00Z'); // 19:00 Taipei time
-    const frontDateStr = frontendCalc.getTaiwanLocalDateString(testDate);
-    const backDateStr = backendCalc.getTaiwanLocalDateString(testDate);
-
-    expect(frontDateStr).toBe('2026-09-19');
-    expect(frontDateStr).toEqual(backDateStr);
-  });
 });
+

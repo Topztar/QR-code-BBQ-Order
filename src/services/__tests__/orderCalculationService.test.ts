@@ -125,16 +125,5 @@ describe('orderCalculationService SSOT Engine', () => {
       expect(pricing.total).toBe(484);
     });
   });
-
-  describe('Taiwan Date utilities', () => {
-    it('should format date to Asia/Taipei string format', () => {
-      const dateStr = orderCalculationService.getTaiwanLocalDateString(new Date('2026-09-13T12:00:00Z'));
-      expect(dateStr).toBe('2026-09-13');
-    });
-
-    it('should correctly check if order was created in target Taiwan date', () => {
-      const isToday = orderCalculationService.isOrderInTaiwanDate('2026-09-13T08:00:00.000Z', '2026-09-13');
-      expect(isToday).toBe(true);
-    });
-  });
 });
+

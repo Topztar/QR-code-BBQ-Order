@@ -32,6 +32,51 @@ export function registerOrdersRoutes(app: express.Application, ctx: RouteContext
   const put: RouteRegister = (routePath, ...handlers) => app.put([`/api${routePath}`, routePath], ...handlers);
   const del: RouteRegister = (routePath, ...handlers) => app.delete([`/api${routePath}`, routePath], ...handlers);
 
+  // 1. History Check
+  get('/orders/history-check', async (req, res) => {
+    try {
+      const { tableNumber, memberName } = req.query;
+      const tableStr = tableNumber ? String(tableNumber).trim() : '';
+      const memberStr = memberName ? String(memberName).trim() : '';
+
+      let hasUnpaidBillOnTable = false;
+      let hasPastOrders = false;
+
+      if (tableStr) {
+        const tableOrders = await db.collection('orders')
+          .where('tableNumber', '==', tableStr)
+          .where('isPaid', '==', false)
+          .limit(1)
+          .get();
+        hasUnpaidBillOnTable = !tableOrders.empty;
+      }
+
+      if (memberStr) {
+        if (memberStr === '沙貝泰烤老饕' || memberStr === 'VIP Member') {
+          hasPastOrders = true;
+        } else {
+          const pastOrders = await db.collection('orders')
+            .where('customerName', '==', memberStr)
+            .limit(1)
+            .get();
+          hasPastOrders = !pastOrders.empty;
+        }
+      }
+
+      res.json({
+        hasUnpaidBillOnTable,
+        hasPastOrders
+      });
+    } catch (error) {
+      console.error('Error in /orders/history-check:', error);
+      res.status(500).json({
+        error: 'Internal Server Error',
+        hasUnpaidBillOnTable: false,
+        hasPastOrders: false
+      });
+    }
+  });
+
 get('/orders', requireStaffAuth, async (_req, res) => {
   try {
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
@@ -39,12 +84,12 @@ get('/orders', requireStaffAuth, async (_req, res) => {
     let needsManualSort = false;
     try {
       snapshot = await db.collection('orders')
-        .select('id', 'tableNumber', 'items', 'subtotal', 'serviceCharge', 'total', 'status', 'createdAt', 'customerName', 'customerPhone', 'customerAvatar', 'paymentMethod', 'isMember', 'isPaid', 'guestCount', 'discount', 'quickNotes', 'isFlagged', 'flagReason', 'takeoutInfo', 'pickupTime', 'clientOrderId')
+        .select('id', 'tableNumber', 'items', 'subtotal', 'serviceCharge', 'total', 'status', 'createdAt', 'customerName', 'customerPhone', 'customerAvatar', 'paymentMethod', 'isMember', 'isPaid', 'guestCount', 'discount', 'quickNotes', 'isFlagged', 'flagReason', 'takeoutInfo', 'pickupTime', 'clientOrderId', 'version', 'updatedAt', 'lastUpdatedBy', 'refundLogs')
         .orderBy('createdAt', 'desc').limit(200).get();
     } catch (_idxErr) {
       needsManualSort = true;
       snapshot = await db.collection('orders')
-        .select('id', 'tableNumber', 'items', 'subtotal', 'serviceCharge', 'total', 'status', 'createdAt', 'customerName', 'customerPhone', 'customerAvatar', 'paymentMethod', 'isMember', 'isPaid', 'guestCount', 'discount', 'quickNotes', 'isFlagged', 'flagReason', 'takeoutInfo', 'pickupTime', 'clientOrderId')
+        .select('id', 'tableNumber', 'items', 'subtotal', 'serviceCharge', 'total', 'status', 'createdAt', 'customerName', 'customerPhone', 'customerAvatar', 'paymentMethod', 'isMember', 'isPaid', 'guestCount', 'discount', 'quickNotes', 'isFlagged', 'flagReason', 'takeoutInfo', 'pickupTime', 'clientOrderId', 'version', 'updatedAt', 'lastUpdatedBy', 'refundLogs')
         .limit(200).get();
     }
     const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));

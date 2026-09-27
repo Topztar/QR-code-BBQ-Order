@@ -97,7 +97,7 @@ export const VersionInput: React.FC<VersionInputProps> = ({ className = '', onVe
       </div>
 
       <p className="text-[11px] text-zinc-400 leading-normal">
-        此版本號用於顧客首頁 Version 標籤展示與雲端部署版本對齊。部署流程自動同步 <code className="text-[#E5B453] bg-black/40 px-1 py-0.5 rounded font-mono">package.json</code> 的版本號，管理員亦可在此進行即時手動覆寫。
+        此版本號用於顧客首頁 Version 標籤展示與雲端部署版本對齊。管理員可在此進行即時手動設定，確保顧客端顯示正確的版本。
       </p>
 
       {error && (

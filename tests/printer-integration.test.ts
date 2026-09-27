@@ -37,6 +37,8 @@ describe('Printer Integration and Cash Drawer Trigger', () => {
         end: vi.fn((cb) => { if (typeof cb === 'function') cb(); }),
         on: vi.fn(),
         setTimeout: vi.fn(),
+        setNoDelay: vi.fn(),
+        setKeepAlive: vi.fn(),
         destroy: vi.fn(),
         removeAllListeners: vi.fn()
       };
@@ -110,6 +112,8 @@ describe('Printer Integration and Cash Drawer Trigger', () => {
         end: vi.fn((cb) => { if (typeof cb === 'function') cb(); }),
         on: vi.fn(),
         setTimeout: vi.fn(),
+        setNoDelay: vi.fn(),
+        setKeepAlive: vi.fn(),
         destroy: vi.fn(),
         removeAllListeners: vi.fn()
       };
@@ -143,6 +147,8 @@ describe('Printer Integration and Cash Drawer Trigger', () => {
         end: vi.fn((cb) => { if (typeof cb === 'function') cb(); }),
         on: vi.fn(),
         setTimeout: vi.fn(),
+        setNoDelay: vi.fn(),
+        setKeepAlive: vi.fn(),
         destroy: vi.fn(),
         removeAllListeners: vi.fn()
       };

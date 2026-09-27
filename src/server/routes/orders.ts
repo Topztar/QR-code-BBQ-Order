@@ -600,20 +600,25 @@ ${customerDetails}
     let drawerLog = '';
     const nowMs = Date.now();
     const isDrawerDebounced = nowMs - lastCashDrawerOpenTime < 3000;
-    if (order.isPaid && livePrinterSettings?.bill?.cashDrawerEnabled && !isDrawerDebounced) {
-      lastCashDrawerOpenTime = nowMs;
-      try {
-        const drawerRes = await triggerCashDrawerOpen(livePrinterSettings.bill);
-        drawerLog = drawerRes.log;
-        printLogs.push({
-          id: `pr-${Date.now()}-drawer-checkout`,
-          timestamp: new Date().toLocaleTimeString(),
-          content: `========================================\n         SABAY BBQ 結帳自動開啟收銀抽屜\n========================================\n觸發來源: 訂單 [${order.id}] 結帳完成\n實體埠口: ${livePrinterSettings.bill.usbPort || 'USB002'}\n執行日誌:\n${drawerLog}\n========================================`,
-          orderId: order.id,
-          type: 'customer'
-        });
-      } catch (drawerErr) {
-        console.error('[Cash Drawer Error]', drawerErr);
+    
+    if (order.isPaid && livePrinterSettings?.bill?.cashDrawerEnabled) {
+      if (order.paymentMethod !== 'cash') {
+        console.log(`[Cash Drawer] Skipped opening drawer for order #${order.id} (Payment method: ${order.paymentMethod})`);
+      } else if (!isDrawerDebounced) {
+        lastCashDrawerOpenTime = nowMs;
+        try {
+          const drawerRes = await triggerCashDrawerOpen(livePrinterSettings.bill);
+          drawerLog = drawerRes.log;
+          printLogs.push({
+            id: `pr-${Date.now()}-drawer-checkout`,
+            timestamp: new Date().toLocaleTimeString(),
+            content: `========================================\n         SABAY BBQ 結帳自動開啟收銀抽屜\n========================================\n觸發來源: 訂單 [${order.id}] 結帳完成\n實體埠口: ${livePrinterSettings.bill.usbPort || 'USB002'}\n執行日誌:\n${drawerLog}\n========================================`,
+            orderId: order.id,
+            type: 'customer'
+          });
+        } catch (drawerErr) {
+          console.error('[Cash Drawer Error]', drawerErr);
+        }
       }
     }
 
@@ -714,20 +719,26 @@ ${customerDetails}
       let drawerLog = '';
       const nowMs = Date.now();
       const isDrawerDebounced = nowMs - lastCashDrawerOpenTime < 3000;
-      if (livePrinterSettings?.bill?.cashDrawerEnabled && !isDrawerDebounced) {
-        lastCashDrawerOpenTime = nowMs;
-        try {
-          const drawerRes = await triggerCashDrawerOpen(livePrinterSettings.bill);
-          drawerLog = drawerRes.log;
-          printLogs.push({
-            id: `pr-${Date.now()}-drawer-bulk`,
-            timestamp: new Date().toLocaleTimeString(),
-            content: `========================================\n         SABAY BBQ 批次結帳自動開啟收銀抽屜\n========================================\n觸發來源: 批次訂單 [${orderIds.join(', ')}]\n實體埠口: ${livePrinterSettings.bill.usbPort || 'USB002'}\n執行日誌:\n${drawerLog}\n========================================`,
-            orderId: orderIds.join(','),
-            type: 'customer'
-          });
-        } catch (drawerErr) {
-          console.error('[Bulk Cash Drawer Error]', drawerErr);
+      const actualPaymentMethod = paymentMethod || 'cash';
+      
+      if (livePrinterSettings?.bill?.cashDrawerEnabled) {
+        if (actualPaymentMethod !== 'cash') {
+          console.log(`[Cash Drawer] Skipped opening drawer for bulk checkout [${orderIds.join(', ')}] (Payment method: ${actualPaymentMethod})`);
+        } else if (!isDrawerDebounced) {
+          lastCashDrawerOpenTime = nowMs;
+          try {
+            const drawerRes = await triggerCashDrawerOpen(livePrinterSettings.bill);
+            drawerLog = drawerRes.log;
+            printLogs.push({
+              id: `pr-${Date.now()}-drawer-bulk`,
+              timestamp: new Date().toLocaleTimeString(),
+              content: `========================================\n         SABAY BBQ 批次結帳自動開啟收銀抽屜\n========================================\n觸發來源: 批次訂單 [${orderIds.join(', ')}]\n實體埠口: ${livePrinterSettings.bill.usbPort || 'USB002'}\n執行日誌:\n${drawerLog}\n========================================`,
+              orderId: orderIds.join(','),
+              type: 'customer'
+            });
+          } catch (drawerErr) {
+            console.error('[Bulk Cash Drawer Error]', drawerErr);
+          }
         }
       }
 

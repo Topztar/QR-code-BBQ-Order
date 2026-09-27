@@ -15,11 +15,15 @@ import json
 import socket
 import re
 import base64
+import locale
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from socketserver import ThreadingMixIn
 
 # ESC/POS 控制碼常數 (二進位位元組流)
-ESC_POS_INIT = bytes([0x1B, 0x40, 0x1C, 0x26, 0x1C, 0x43, 0x01])  # ESC @ (Init), FS & (Kanji Mode), FS C 1 (Big5 Mode)
+ESC_POS_RESET = bytes([0x1B, 0x40])               # ESC @ (Init)
+ESC_POS_KANJI_ON = bytes([0x1C, 0x26])            # FS & (Kanji Mode)
+ESC_POS_FS_C_GBK = bytes([0x1C, 0x43, 0x00])      # FS C 0 (GBK/GB18030 Mode)
+ESC_POS_FS_C_BIG5 = bytes([0x1C, 0x43, 0x01])     # FS C 1 (Big5 Mode)
 ESC_POS_CUT = bytes([0x1D, 0x56, 0x00])                           # GS V 0 (Full Cut)
 ESC_POS_DRAWER_PULSE = bytes([0x1B, 0x70, 0x00, 0x19, 0xFA])       # ESC p m t1 t2 (25ms pulse to Pin 2)
 
@@ -41,26 +45,41 @@ def sanitize_text(text: str) -> str:
     cleaned = re.sub(r'[\uD800-\uDBFF][\uDC00-\uDFFF]|[\uFE00-\uFE0F]', '', cleaned)
     return cleaned
 
-
-def encode_for_printer(text: str) -> bytes:
-    """
-    多重編碼容錯管道：
-    1. 優先嘗試 Big5 (繁體中文熱感應機標準編碼)
-    2. 次選 GB18030 / GBK (簡體中文相容且字集最廣)
-    3. 備援 UTF-8 (以防極端罕見字)
-    """
-    cleaned = sanitize_text(text)
+def get_system_default_encoding() -> str:
     try:
-        return cleaned.encode('big5')
-    except UnicodeEncodeError:
-        pass
-
-    try:
-        return cleaned.encode('gb18030', errors='ignore')
+        enc = locale.getpreferredencoding().lower()
+        if 'cp936' in enc or 'gb' in enc:
+            return 'gbk'
     except Exception:
         pass
+    return 'big5'
 
-    return cleaned.encode('utf-8', errors='ignore')
+
+def encode_for_printer(text: str, encoding_hint: str = 'big5') -> bytes:
+    """
+    多重編碼容錯管道：
+    1. 優先嘗試傳入的 encoding_hint
+    2. 次選對應編碼
+    3. 備援 UTF-8
+    """
+    cleaned = sanitize_text(text)
+    if encoding_hint == 'gbk':
+        try:
+            return cleaned.encode('gb18030', errors='ignore')
+        except Exception:
+            return cleaned.encode('utf-8', errors='ignore')
+    else:
+        try:
+            return cleaned.encode('big5')
+        except UnicodeEncodeError:
+            pass
+
+        try:
+            return cleaned.encode('gb18030', errors='ignore')
+        except Exception:
+            pass
+
+        return cleaned.encode('utf-8', errors='ignore')
 
 
 def normalize_port_name(port_str: str) -> str:
@@ -103,8 +122,10 @@ def send_to_network_printer(ip: str, port: int, data: bytes, timeout: float = 3.
     """透過 TCP Socket (預設 Port 9100) 直連網路熱感應印表機 (KDS 廚房印表機)"""
     try:
         with socket.create_connection((ip, port), timeout=timeout) as sock:
+            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
             sock.sendall(data)
-            sock.shutdown(socket.SHUT_RDWR)
+            sock.shutdown(socket.SHUT_WR)
         return True, f"成功傳送 {len(data)} 位元組至網路印表機 {ip}:{port}"
     except socket.timeout:
         return False, f"連線至網路印表機 {ip}:{port} 逾時 ({timeout}秒)"
@@ -221,9 +242,14 @@ class POSBridgeRequestHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 return self.send_json_response(400, {"success": False, "message": f"Hex 解碼失敗: {e}"})
         elif raw_text:
+            encoding_hint = payload.get('encoding', get_system_default_encoding())
+            init_mode = ESC_POS_FS_C_GBK if encoding_hint == 'gbk' else ESC_POS_FS_C_BIG5
+            
             # 組裝 ESC/POS 單據
-            buffer_to_send.extend(ESC_POS_INIT)
-            buffer_to_send.extend(encode_for_printer(raw_text))
+            buffer_to_send.extend(ESC_POS_RESET)
+            buffer_to_send.extend(ESC_POS_KANJI_ON)
+            buffer_to_send.extend(init_mode)
+            buffer_to_send.extend(encode_for_printer(raw_text, encoding_hint))
             buffer_to_send.extend(b"\n\n\n")
             buffer_to_send.extend(ESC_POS_CUT)
         else:

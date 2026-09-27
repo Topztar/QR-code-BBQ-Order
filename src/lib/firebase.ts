@@ -41,21 +41,24 @@ try {
   } else {
     firestoreInstance = getFirestore(app, FIRESTORE_DATABASE_ID);
   }
-} catch (error) {
-  console.warn('[Firebase] Firestore initialization cache fallback or double-init check:', error);
-  try {
-    // IndexedDB 鎖定或孤兒租約：安全降級至記憶體快取
-    firestoreInstance = initializeFirestore(app, {
-      localCache: memoryLocalCache()
-    }, FIRESTORE_DATABASE_ID);
-    console.error('[FinOps Alert] Downgraded to memoryLocalCache due to IndexedDB failure. Cache miss rate may spike!');
-    // TODO: Connect this alert to Sentry or Firebase Analytics once tracking is enabled.
-  } catch (err: any) {
-    // 若拋出 failed-precondition 代表 Firestore 內部已完成部分啟動，直接取回實例
-    if (err?.code !== 'failed-precondition') {
-      console.error('[Firebase] Critical fallback initialization failed:', err);
-    }
+} catch (error: any) {
+  if (error?.code === 'failed-precondition') {
+    // Firestore already initialized (e.g. strict mode double-render), directly use it
     firestoreInstance = getFirestore(app, FIRESTORE_DATABASE_ID);
+  } else {
+    console.warn('[Firebase] Firestore initialization cache fallback or double-init check:', error);
+    try {
+      // IndexedDB 鎖定或孤兒租約：安全降級至記憶體快取
+      firestoreInstance = initializeFirestore(app, {
+        localCache: memoryLocalCache()
+      }, FIRESTORE_DATABASE_ID);
+      console.error('[FinOps Alert] Downgraded to memoryLocalCache due to IndexedDB failure. Cache miss rate may spike!');
+    } catch (err: any) {
+      if (err?.code !== 'failed-precondition') {
+        console.error('[Firebase] Critical fallback initialization failed:', err);
+      }
+      firestoreInstance = getFirestore(app, FIRESTORE_DATABASE_ID);
+    }
   }
 }
 

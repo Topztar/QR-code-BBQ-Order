@@ -9,6 +9,25 @@ export function isTakeoutTable(tableId: string | null | undefined): boolean {
   return cleanId === 'takeout' || cleanId.includes('外帶');
 }
 
+export function isValidTableFormat(str: string | null): boolean {
+  if (!str) return false;
+  const clean = str.trim().toLowerCase();
+
+  // Special takeout values are valid login table identifiers
+  if (clean === 'takeout' || clean === 'take-out') {
+    return true;
+  }
+
+  // Check if it is a standard table format:
+  const hasDigit = /\d/.test(clean);
+  const isTooLong = clean.length > 8;
+  const hasInvalidWords = ['guest', 'browse', 'admin', 'hack', 'test', 'null', 'undefined'].some(
+    (word) => clean.includes(word)
+  );
+
+  return hasDigit && !isTooLong && !hasInvalidWords;
+}
+
 export function getMappedTableId(inputTableId: string, availableTables: Array<{ id: string }>): string {
   if (!availableTables || availableTables.length === 0) {
     return inputTableId;

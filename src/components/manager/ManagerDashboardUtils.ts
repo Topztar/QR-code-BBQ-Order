@@ -14,25 +14,14 @@ export const getMaskedEmail = (email: string | null | undefined): string => {
   return `VIP-USR (${user.slice(0, 3)}****@${domain})`;
 };
 
-export const computeOrderItemUnitPrice = (it: any, menuItemsList: any[] = []): number => {
-  return orderCalculationService.computeOrderItemUnitPrice(it, menuItemsList);
-};
 
-export const computeOrderItemsSubtotal = (items: any[], menuItemsList: any[] = []): number => {
-  return orderCalculationService.computeOrderItemsSubtotal(items, menuItemsList);
-};
-
-export const calculateOrderTotalWithPayment = (
-  order: Partial<Order> | null | undefined,
-  menuItemsList: any[] = []
-): { subtotal: number; serviceCharge: number; discount: number; total: number } => {
-  return orderCalculationService.calculateOrderPricing(order, menuItemsList);
-};
-
-export const getLocalDateString = (d: Date | string = new Date()): string => {
-  return getTaiwanDateString(d);
-};
-
+/** @deprecated Use orderCalculationService.computeOrderItemUnitPrice directly */
+export const computeOrderItemUnitPrice = orderCalculationService.computeOrderItemUnitPrice;
+/** @deprecated Use orderCalculationService.computeOrderItemsSubtotal directly */
+export const computeOrderItemsSubtotal = orderCalculationService.computeOrderItemsSubtotal;
+/** @deprecated Use orderCalculationService.calculateOrderPricing directly */
+export const calculateOrderTotalWithPayment = orderCalculationService.calculateOrderPricing;
+export const getLocalDateString = getTaiwanDateString;
 export const isOrderOnLocalDate = (createdAt: string | undefined | null, targetDateStr: string): boolean => {
   if (!createdAt) return false;
   return isSameTaiwanDate(createdAt, targetDateStr);

@@ -27,7 +27,6 @@
     "site": "sabay-bbq-order",
     "public": "dist",
     "predeploy": [
-      "npm run set-version",
       "npm run predeploy"
     ],
     "ignore": [

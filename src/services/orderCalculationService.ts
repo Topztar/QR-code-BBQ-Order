@@ -131,25 +131,6 @@ export const orderCalculationService = {
       return totalDiscount;
     }, 0);
   },
-
-  getTaiwanLocalDateString: (d: Date | string = new Date()): string => {
-    const dateObj = typeof d === 'string' ? new Date(d) : d;
-    if (isNaN(dateObj.getTime())) return '';
-    // Use 'en-CA' because it safely formats to YYYY-MM-DD
-    return new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'Asia/Taipei',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit'
-    }).format(dateObj);
-  },
-
-  isOrderInTaiwanDate: (createdAt: string | undefined | null, targetDateStr: string): boolean => {
-    if (!createdAt) return false;
-    const twDate = orderCalculationService.getTaiwanLocalDateString(createdAt);
-    return twDate === targetDateStr;
-  },
-
   calculateVipStatus: (userPoints: number | undefined, vipThreshold: number): { isVip: boolean; pointsToNext: number } => {
     return pointsHelper.calculateVipStatus(userPoints, vipThreshold);
   },
@@ -158,3 +139,4 @@ export const orderCalculationService = {
     return pointsHelper.canRedeemReward(userPoints, rewardCost);
   }
 };
+

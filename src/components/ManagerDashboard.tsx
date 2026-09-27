@@ -2,6 +2,7 @@ import { apiFetch } from "../lib/api";
 import { ErrorBoundary } from './ErrorBoundary';
 import { ChunkErrorBoundary } from './ChunkErrorBoundary';
 import React, { useState, useEffect, useMemo, useCallback, Suspense, lazy } from 'react';
+import { resilientLazy } from '../App';
 import { Ingredient, Language, Category, TableConfig, Order, OrderStatus, Reservation, SoldOutType, PrinterConfig, PaidModDetails } from '../types';
 import { getLocalizedText } from '../utils/i18n';
 import { safeStorage } from '../lib/safeStorage';
@@ -14,18 +15,18 @@ import {
   DEFAULT_POS_BRIDGE_URL
 } from '../lib/posBridgeClient';
 import { DEFAULT_RECIPE_COMPOSITION_MAP } from '../config/recipeMap';
-const ManagerStatsTab = lazy(() => import('./manager/ManagerStatsTab').then(m => ({ default: m.ManagerStatsTab })));
-const ManagerOrdersTab = lazy(() => import('./manager/ManagerOrdersTab').then(m => ({ default: m.ManagerOrdersTab })));
-const ManagerInventoryTab = lazy(() => import('./manager/ManagerInventoryTab').then(m => ({ default: m.ManagerInventoryTab })));
-const ManagerMenuTab = lazy(() => import('./manager/ManagerMenuTab').then(m => ({ default: m.ManagerMenuTab })));
-const ManagerMembersTab = lazy(() => import('./manager/ManagerMembersTab').then(m => ({ default: m.ManagerMembersTab })));
+const ManagerStatsTab = resilientLazy(() => import('./manager/ManagerStatsTab').then(m => ({ default: m.ManagerStatsTab })));
+const ManagerOrdersTab = resilientLazy(() => import('./manager/ManagerOrdersTab').then(m => ({ default: m.ManagerOrdersTab })));
+const ManagerInventoryTab = resilientLazy(() => import('./manager/ManagerInventoryTab').then(m => ({ default: m.ManagerInventoryTab })));
+const ManagerMenuTab = resilientLazy(() => import('./manager/ManagerMenuTab').then(m => ({ default: m.ManagerMenuTab })));
+const ManagerMembersTab = resilientLazy(() => import('./manager/ManagerMembersTab').then(m => ({ default: m.ManagerMembersTab })));
 
-const ManagerPrinterTab = lazy(() => import('./manager/ManagerPrinterTab').then(m => ({ default: m.ManagerPrinterTab })));
-const ManagerOptionRulesTab = lazy(() => import('./manager/ManagerOptionRulesTab').then(m => ({ default: m.ManagerOptionRulesTab })));
-const ManagerEodTab = lazy(() => import('./manager/ManagerEodTab').then(m => ({ default: m.ManagerEodTab })));
-const ManagerTerminalTab = lazy(() => import('./manager/ManagerTerminalTab').then(m => ({ default: m.ManagerTerminalTab })));
-const ManagerCashierTab = lazy(() => import('./manager/ManagerCashierTab').then(m => ({ default: m.ManagerCashierTab })));
-const ManagerNotificationsTab = lazy(() => import('./manager/ManagerNotificationsTab').then(m => ({ default: m.ManagerNotificationsTab })));
+const ManagerPrinterTab = resilientLazy(() => import('./manager/ManagerPrinterTab').then(m => ({ default: m.ManagerPrinterTab })));
+const ManagerOptionRulesTab = resilientLazy(() => import('./manager/ManagerOptionRulesTab').then(m => ({ default: m.ManagerOptionRulesTab })));
+const ManagerEodTab = resilientLazy(() => import('./manager/ManagerEodTab').then(m => ({ default: m.ManagerEodTab })));
+const ManagerTerminalTab = resilientLazy(() => import('./manager/ManagerTerminalTab').then(m => ({ default: m.ManagerTerminalTab })));
+const ManagerCashierTab = resilientLazy(() => import('./manager/ManagerCashierTab').then(m => ({ default: m.ManagerCashierTab })));
+const ManagerNotificationsTab = resilientLazy(() => import('./manager/ManagerNotificationsTab').then(m => ({ default: m.ManagerNotificationsTab })));
 
 const TabSuspenseFallback = () => (
   <div className="flex flex-col items-center justify-center p-12 min-h-[400px]">

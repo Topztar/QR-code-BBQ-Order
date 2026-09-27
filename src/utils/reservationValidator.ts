@@ -14,12 +14,9 @@ export function parseTimeToMinutes(t: string): number {
   return (h || 0) * 60 + (m || 0);
 }
 
-export function formatDateStr(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
+import { getTaiwanDateString } from './dateUtils';
+
+export const formatDateStr = getTaiwanDateString;
 
 export function isSameDayReservation(resDateStr: string, referenceDate: Date = new Date()): boolean {
   return resDateStr.trim() === formatDateStr(referenceDate);

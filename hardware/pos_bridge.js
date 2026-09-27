@@ -9,7 +9,10 @@ const fs = require('fs');
 const net = require('net');
 
 const PORT = process.env.PORT || 8060;
-const ESC_POS_INIT = Buffer.from([0x1B, 0x40, 0x1C, 0x26, 0x1C, 0x43, 0x01]);
+const ESC_POS_RESET = Buffer.from([0x1B, 0x40]);
+const ESC_POS_KANJI_ON = Buffer.from([0x1C, 0x26]);
+const ESC_POS_FS_C_GBK = Buffer.from([0x1C, 0x43, 0x00]);
+const ESC_POS_FS_C_BIG5 = Buffer.from([0x1C, 0x43, 0x01]);
 const ESC_POS_CUT = Buffer.from([0x1D, 0x56, 0x00]);
 const ESC_POS_DRAWER_PULSE = Buffer.from([0x1B, 0x70, 0x00, 0x19, 0xFA]);
 
@@ -27,16 +30,24 @@ function sanitizeText(text) {
     .replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, '');
 }
 
-function encodeText(text) {
+function encodeText(text, encodingHint = 'big5') {
   const clean = sanitizeText(text);
   if (iconv) {
-    try {
-      return iconv.encode(clean, 'big5');
-    } catch {
+    if (encodingHint === 'gbk') {
       try {
         return iconv.encode(clean, 'gb18030');
       } catch {
         return Buffer.from(clean, 'utf-8');
+      }
+    } else {
+      try {
+        return iconv.encode(clean, 'big5');
+      } catch {
+        try {
+          return iconv.encode(clean, 'gb18030');
+        } catch {
+          return Buffer.from(clean, 'utf-8');
+        }
       }
     }
   }
@@ -62,6 +73,8 @@ function sendToNetwork(ip, port, data, timeoutMs = 3000) {
     };
 
     socket.setTimeout(timeoutMs);
+    socket.setNoDelay(true);
+    socket.setKeepAlive(true, 1000);
     socket.on('connect', () => {
       socket.write(data, (err) => {
         if (settled) return;
@@ -174,9 +187,13 @@ const server = http.createServer(async (req, res) => {
         } else if (payload.hex) {
           buffer = Buffer.from(payload.hex.replace(/[^0-9A-Fa-f]/g, ''), 'hex');
         } else if (payload.text) {
+          const encodingHint = payload.encoding || 'big5';
+          const initMode = encodingHint === 'gbk' ? ESC_POS_FS_C_GBK : ESC_POS_FS_C_BIG5;
           buffer = Buffer.concat([
-            ESC_POS_INIT,
-            encodeText(payload.text),
+            ESC_POS_RESET,
+            ESC_POS_KANJI_ON,
+            initMode,
+            encodeText(payload.text, encodingHint),
             Buffer.from('\n\n\n'),
             ESC_POS_CUT
           ]);

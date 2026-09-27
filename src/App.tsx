@@ -12,22 +12,33 @@ import { OrderDataProvider, useOrderData } from './context/OrderDataContext';
 import { PrinterDataProvider, usePrinterData } from './context/PrinterDataContext';
 
 // Wrapper for lazy loading with retry to prevent chunk load errors causing black screens
-const lazyWithRetry = <T extends React.ComponentType<any>>(
+export const resilientLazy = <T extends React.ComponentType<any>>(
   componentImport: () => Promise<{ default: T }>
 ) =>
   lazy(async () => {
-    const pageHasAlreadyBeenForceRefreshed = JSON.parse(
-      window.sessionStorage.getItem('page-has-been-force-refreshed') || 'false'
-    );
+    const key = 'sabay_chunk_retry_timestamp';
+    const lastRetry = parseInt(window.sessionStorage.getItem(key) || '0', 10);
+    const now = Date.now();
+
     try {
       const component = await componentImport();
-      window.sessionStorage.setItem('page-has-been-force-refreshed', 'false');
+      window.sessionStorage.removeItem(key);
       return component;
-    } catch (error) {
-      if (!pageHasAlreadyBeenForceRefreshed) {
+    } catch (error: any) {
+      const isChunkError =
+        error?.message?.includes('Failed to fetch dynamically imported module') ||
+        error?.message?.includes('Unexpected token') ||
+        error?.name === 'ChunkLoadError';
+
+      if (isChunkError && now - lastRetry > 10000) { // 10 seconds debounce
         console.warn(`[Sabay BBQ Diagnostics] Component chunk load failed. Triggering automatic soft recovery reload. Error:`, error);
-        window.sessionStorage.setItem('page-has-been-force-refreshed', 'true');
-        window.location.reload();
+        window.sessionStorage.setItem(key, now.toString());
+        
+        // Use a cache-busting URL parameter
+        const url = new URL(window.location.href);
+        url.searchParams.set('_v', now.toString());
+        window.location.replace(url.toString());
+        
         // Return a promise that never resolves, so Suspense keeps showing fallback while reloading
         return new Promise<{ default: T }>(() => {}); 
       }
@@ -35,10 +46,10 @@ const lazyWithRetry = <T extends React.ComponentType<any>>(
     }
   });
 
-const CustomerOrderView = lazyWithRetry(() => import('./components/CustomerOrderView').then(m => ({ default: m.CustomerOrderView })));
-const KitchenDisplaySystem = lazyWithRetry(() => import('./components/KitchenDisplaySystem').then(m => ({ default: m.KitchenDisplaySystem })));
-const ManagerDashboard = lazyWithRetry(() => import('./components/ManagerDashboard').then(m => ({ default: m.ManagerDashboard })));
-const StaffLoginGate = lazyWithRetry(() => import('./components/StaffLoginGate').then(m => ({ default: m.StaffLoginGate })));
+const CustomerOrderView = resilientLazy(() => import('./components/CustomerOrderView').then(m => ({ default: m.CustomerOrderView })));
+const KitchenDisplaySystem = resilientLazy(() => import('./components/KitchenDisplaySystem').then(m => ({ default: m.KitchenDisplaySystem })));
+const ManagerDashboard = resilientLazy(() => import('./components/ManagerDashboard').then(m => ({ default: m.ManagerDashboard })));
+const StaffLoginGate = resilientLazy(() => import('./components/StaffLoginGate').then(m => ({ default: m.StaffLoginGate })));
 
 const ViewLoadingFallback = () => (
   <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">

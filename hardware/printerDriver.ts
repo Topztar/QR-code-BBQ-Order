@@ -30,10 +30,22 @@ export interface PrinterDeviceSettings {
   cashDrawerEnabled?: boolean;
   cashDrawerDriver?: 'ESC_POS_RAW';
   cashDrawerEscPosCommand?: string;
+  encoding?: 'gbk' | 'big5' | 'utf-8';
 }
 
 // ESC/POS Command Buffers
-export const ESC_POS_INIT = Buffer.from([0x1B, 0x40, 0x1C, 0x26, 0x1C, 0x43, 0x01]); // ESC @ (Init), FS & (Kanji Mode), FS C 1 (Big5 Mode)
+export const ESC_POS_RESET = Buffer.from([0x1B, 0x40]);
+export const ESC_POS_KANJI_ON = Buffer.from([0x1C, 0x26]);
+export const ESC_POS_FS_C_GBK = Buffer.from([0x1C, 0x43, 0x00]);
+export const ESC_POS_FS_C_BIG5 = Buffer.from([0x1C, 0x43, 0x01]);
+export const ESC_POS_INIT = Buffer.concat([ESC_POS_RESET, ESC_POS_KANJI_ON, ESC_POS_FS_C_BIG5]); // Backwards compatibility
+export function getPrinterInitBuffer(encoding: 'gbk' | 'big5' | 'utf-8' = 'big5'): Buffer {
+  return Buffer.concat([
+    ESC_POS_RESET,
+    ESC_POS_KANJI_ON,
+    encoding === 'gbk' ? ESC_POS_FS_C_GBK : ESC_POS_FS_C_BIG5
+  ]);
+}
 export const ESC_POS_CUT = Buffer.from([0x1D, 0x56, 0x00]); // GS V 0 (Full cut)
 export const ESC_POS_DRAWER_PULSE_DEFAULT = Buffer.from([0x1B, 0x70, 0x00, 0x19, 0xFA]); // ESC p m t1 t2 (25ms pulse to Pin 2)
 
@@ -55,7 +67,7 @@ export async function sendToNetworkPrinter(
   host: string,
   port: number = 9100,
   data: Buffer | string,
-  options: { timeoutMs?: number; retries?: number } = {}
+  options: { timeoutMs?: number; retries?: number; simulate?: boolean } = {}
 ): Promise<PrinterDriverResult> {
   const timeoutMs = options.timeoutMs ?? 4000;
   const maxRetries = options.retries ?? 1;
@@ -83,6 +95,8 @@ export async function sendToNetworkPrinter(
         socket.setTimeout(timeoutMs);
 
         socket.on('connect', () => {
+          socket.setNoDelay(true);
+          socket.setKeepAlive(true, 1000);
           console.log(`${logPrefix} Connected. Writing ${bufferData.length} bytes...`);
           socket.write(bufferData, (err) => {
             if (isSettled) return;
@@ -152,10 +166,17 @@ export async function sendToNetworkPrinter(
   }
 
   console.warn(`[Real Hardware Network] Connection to ${host}:${port} failed after retries. Log: ${lastError}`);
-  return {
-    success: true,
-    log: `[Simulated Network Fallback] ${lastError} (Printer offline or IP unreachable, fell back to simulation)`
-  };
+  if (options.simulate) {
+    return {
+      success: true,
+      log: `[Simulated Network Fallback] ${lastError} (Printer offline or IP unreachable, fell back to simulation)`
+    };
+  } else {
+    return {
+      success: false,
+      log: `[Network Error] ${lastError} (Printer offline or IP unreachable)`
+    };
+  }
 }
 
 /**
@@ -417,14 +438,22 @@ export async function triggerRealCashDrawer(settings: CashDrawerSettings): Promi
 /**
  * 安全編碼函式：優先 Big5，若含簡體或特殊字元則自動 fallback 至 GBK 或 UTF-8
  */
-export function safeEncodeForPrinter(text: string): Buffer {
-  try {
-    return iconv.encode(text, 'big5');
-  } catch {
+export function safeEncodeForPrinter(text: string, encoding: 'gbk' | 'big5' | 'utf-8' = 'big5'): Buffer {
+  if (encoding === 'gbk') {
     try {
       return iconv.encode(text, 'gbk');
     } catch {
       return Buffer.from(text, 'utf-8');
+    }
+  } else {
+    try {
+      return iconv.encode(text, 'big5');
+    } catch {
+      try {
+        return iconv.encode(text, 'gbk');
+      } catch {
+        return Buffer.from(text, 'utf-8');
+      }
     }
   }
 }
@@ -443,8 +472,8 @@ export async function printKitchenTicket(
 
   const cleanTicketText = sanitizeTextForThermalPrinter(ticketText);
   const ticketBuffer = Buffer.concat([
-    ESC_POS_INIT,
-    safeEncodeForPrinter(cleanTicketText),
+    getPrinterInitBuffer(settings.encoding),
+    safeEncodeForPrinter(cleanTicketText, settings.encoding),
     Buffer.from('\n\n\n\n', 'utf-8'),
     ESC_POS_CUT
   ]);
@@ -471,8 +500,8 @@ export async function printCustomerReceipt(
 
   const cleanReceiptText = sanitizeTextForThermalPrinter(receiptText);
   const receiptBuffer = Buffer.concat([
-    ESC_POS_INIT,
-    safeEncodeForPrinter(cleanReceiptText),
+    getPrinterInitBuffer(settings.encoding),
+    safeEncodeForPrinter(cleanReceiptText, settings.encoding),
     Buffer.from('\n\n\n', 'utf-8'),
     ESC_POS_CUT
   ]);

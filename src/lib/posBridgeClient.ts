@@ -24,6 +24,7 @@ export interface POSPrintOptions {
   connectionType?: 'IP' | 'USB' | 'LPT';
   target?: 'kitchen' | 'bill' | 'all';
   autoOpenDrawer?: boolean;
+  encoding?: 'gbk' | 'big5' | 'utf-8';
 }
 
 export const DEFAULT_POS_BRIDGE_URL = 'http://127.0.0.1:8060';
@@ -161,7 +162,8 @@ export async function printViaBridge(
         ip: options.ip,
         connectionType: options.connectionType || (options.ip ? 'IP' : 'LPT'),
         target: options.target || 'bill',
-        autoOpenDrawer: options.autoOpenDrawer ?? false
+        autoOpenDrawer: options.autoOpenDrawer ?? false,
+        encoding: options.encoding
       }),
       signal: controller.signal
     });

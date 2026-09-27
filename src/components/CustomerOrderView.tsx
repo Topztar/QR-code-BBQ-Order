@@ -34,26 +34,19 @@ const CustomerStaffPinModal = lazy(() => import('./customer/CustomerStaffPinModa
 const CustomerLightboxModal = lazy(() => import('./customer/CustomerModals').then(m => ({ default: m.CustomerLightboxModal })));
 const CustomerTakeoutModal = lazy(() => import('./customer/CustomerModals').then(m => ({ default: m.CustomerTakeoutModal })));
 
-export function isValidTableFormat(str: string | null): boolean {
-  if (!str) return false;
-  const clean = str.trim().toLowerCase();
-
-  // Special takeout values are valid login table identifiers
-  if (clean === 'takeout' || clean === 'take-out') {
-    return true;
+class ModalErrorBoundary extends React.Component<{ children: React.ReactNode, onClose: () => void }, { hasError: boolean }> {
+  state = { hasError: false };
+  static getDerivedStateFromError() { return { hasError: true }; }
+  componentDidCatch(error: Error) {
+    console.error('[CustomerOrderView] Modal component load failed:', error);
+    this.props.onClose();
+    if (typeof window !== 'undefined') {
+      window.alert('模組載入超時，請重新點擊以重試');
+    }
   }
-
-  // Check if it is a standard table format:
-  const hasDigit = /\d/.test(clean);
-  const isTooLong = clean.length > 8;
-  const hasInvalidWords = ['guest', 'browse', 'admin', 'hack', 'test', 'null', 'undefined'].some(
-    (word) => clean.includes(word)
-  );
-
-  return hasDigit && !isTooLong && !hasInvalidWords;
+  render() { return this.state.hasError ? null : this.props.children; }
 }
-
-import { getMappedTableId } from '../utils/tableUtils';
+import { getMappedTableId, isValidTableFormat } from '../utils/tableUtils';
 export { getMappedTableId };
 
 interface CustomerOrderViewProps {
@@ -745,74 +738,82 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
       id="customer-order-panel"
     >
       {/* Staff Pin Gate Modal */}
-      <Suspense fallback={null}><CustomerStaffPinModal
-        showPasscodeModal={showPasscodeModal}
-        setShowPasscodeModal={setShowPasscodeModal}
-        pincodeInput={pincodeInput}
-        setPincodeInput={setPincodeInput}
-        pincodeError={pincodeError}
-        setPincodeError={setPincodeError}
-        setIsMerchantMode={setIsMerchantMode}
-      /></Suspense>
+      <ModalErrorBoundary onClose={() => setShowPasscodeModal(false)}>
+        <Suspense fallback={null}><CustomerStaffPinModal
+          showPasscodeModal={showPasscodeModal}
+          setShowPasscodeModal={setShowPasscodeModal}
+          pincodeInput={pincodeInput}
+          setPincodeInput={setPincodeInput}
+          pincodeError={pincodeError}
+          setPincodeError={setPincodeError}
+          setIsMerchantMode={setIsMerchantMode}
+        /></Suspense>
+      </ModalErrorBoundary>
 
       {/* Lightbox Zoom Modal */}
-      <Suspense fallback={null}><CustomerLightboxModal
-        activeLightboxImg={activeLightboxImg}
-        setActiveLightboxImg={setActiveLightboxImg}
-      /></Suspense>
+      <ModalErrorBoundary onClose={() => setActiveLightboxImg(null)}>
+        <Suspense fallback={null}><CustomerLightboxModal
+          activeLightboxImg={activeLightboxImg}
+          setActiveLightboxImg={setActiveLightboxImg}
+        /></Suspense>
+      </ModalErrorBoundary>
 
       {/* Takeout Form Modal */}
-      <Suspense fallback={null}><CustomerTakeoutModal
-        showTakeoutFormModal={showTakeoutFormModal}
-        setShowTakeoutFormModal={setShowTakeoutFormModal}
-        takeoutCustomerName={takeoutCustomerName}
-        setTakeoutCustomerName={setTakeoutCustomerName}
-        takeoutPhone={takeoutPhone}
-        setTakeoutPhone={setTakeoutPhone}
-        takeoutPickupTime={takeoutPickupTime}
-        setTakeoutPickupTime={setTakeoutPickupTime}
-        takeoutTimeError={takeoutTimeError}
-        setTakeoutTimeError={setTakeoutTimeError}
-        operatingHours={operatingHours}
-        isCheckoutSubmitting={isCheckoutSubmitting}
-        handleCheckout={handleCheckout}
-        setIsCartOpen={setIsCartOpen}
-      /></Suspense>
+      <ModalErrorBoundary onClose={() => setShowTakeoutFormModal(false)}>
+        <Suspense fallback={null}><CustomerTakeoutModal
+          showTakeoutFormModal={showTakeoutFormModal}
+          setShowTakeoutFormModal={setShowTakeoutFormModal}
+          takeoutCustomerName={takeoutCustomerName}
+          setTakeoutCustomerName={setTakeoutCustomerName}
+          takeoutPhone={takeoutPhone}
+          setTakeoutPhone={setTakeoutPhone}
+          takeoutPickupTime={takeoutPickupTime}
+          setTakeoutPickupTime={setTakeoutPickupTime}
+          takeoutTimeError={takeoutTimeError}
+          setTakeoutTimeError={setTakeoutTimeError}
+          operatingHours={operatingHours}
+          isCheckoutSubmitting={isCheckoutSubmitting}
+          handleCheckout={handleCheckout}
+          setIsCartOpen={setIsCartOpen}
+        /></Suspense>
+      </ModalErrorBoundary>
 
       {/* Reservation Modal */}
-      <Suspense fallback={null}><CustomerReservationModal
-        showReservationModal={showReservationModal}
-        setShowReservationModal={setShowReservationModal}
-        autoOpenReservationModal={autoOpenReservationModal}
-        resCustomerName={resCustomerName}
-        setResCustomerName={setResCustomerName}
-        resPhone={resPhone}
-        setResPhone={setResPhone}
-        resPhoneError={resPhoneError}
-        setResPhoneError={setResPhoneError}
-        resDate={resDate}
-        handleResDateChange={handleResDateChange}
-        todayDateStr={todayDateStr}
-        maxNinetyDaysDateStr={maxNinetyDaysDateStr}
-        resTime={resTime}
-        setResTime={setResTime}
-        isResTimeValid={isResTimeValid}
-        restDays={restDays}
-        generateCandidateSlots={generateCandidateSlots}
-        resGuests={resGuests}
-        setResGuests={setResGuests}
-        reservationAvailabilityInfo={reservationAvailabilityInfo}
-        designatedTablesCapacity={designatedTablesCapacity}
-        tables={tables}
-        resTableNumbers={resTableNumbers}
-        setResTableNumbers={setResTableNumbers}
-        setIsManualTableSelection={setIsManualTableSelection}
-        resNotes={resNotes}
-        setResNotes={setResNotes}
-        resFeedback={resFeedback}
-        resSubmitting={resSubmitting}
-        handleReservationSubmit={handleReservationSubmit}
-      /></Suspense>
+      <ModalErrorBoundary onClose={() => setShowReservationModal(false)}>
+        <Suspense fallback={null}><CustomerReservationModal
+          showReservationModal={showReservationModal}
+          setShowReservationModal={setShowReservationModal}
+          autoOpenReservationModal={autoOpenReservationModal}
+          resCustomerName={resCustomerName}
+          setResCustomerName={setResCustomerName}
+          resPhone={resPhone}
+          setResPhone={setResPhone}
+          resPhoneError={resPhoneError}
+          setResPhoneError={setResPhoneError}
+          resDate={resDate}
+          handleResDateChange={handleResDateChange}
+          todayDateStr={todayDateStr}
+          maxNinetyDaysDateStr={maxNinetyDaysDateStr}
+          resTime={resTime}
+          setResTime={setResTime}
+          isResTimeValid={isResTimeValid}
+          restDays={restDays}
+          generateCandidateSlots={generateCandidateSlots}
+          resGuests={resGuests}
+          setResGuests={setResGuests}
+          reservationAvailabilityInfo={reservationAvailabilityInfo}
+          designatedTablesCapacity={designatedTablesCapacity}
+          tables={tables}
+          resTableNumbers={resTableNumbers}
+          setResTableNumbers={setResTableNumbers}
+          setIsManualTableSelection={setIsManualTableSelection}
+          resNotes={resNotes}
+          setResNotes={setResNotes}
+          resFeedback={resFeedback}
+          resSubmitting={resSubmitting}
+          handleReservationSubmit={handleReservationSubmit}
+        /></Suspense>
+      </ModalErrorBoundary>
 
       {/* Customer Header and Banners */}
       <CustomerHeader
@@ -1260,78 +1261,84 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
       )}
 
       {/* Customizer Modal */}
-      <Suspense fallback={null}><CustomerCustomizerModal
-        selectedDetailItem={selectedDetailItem}
-        setSelectedDetailItem={setSelectedDetailItem}
-        currentLang={currentLang}
-        isSimplifiedMode={isSimplifiedMode}
-        isStoreCurrentlyOpen={effectiveIsStoreCurrentlyOpen}
-        isMerchantMode={isMerchantMode}
-        qty={qty}
-        setQty={setQty}
-        noodleType={noodleType}
-        setNoodleType={setNoodleType}
-        soupBase={soupBase}
-        setSoupBase={setSoupBase}
-        selectedAddOns={selectedAddOns}
-        setSelectedAddOns={setSelectedAddOns}
-        inventoryWarnings={inventoryWarnings}
-        ingredients={ingredients}
-        onToggleMenuItemAvailability={onToggleMenuItemAvailability}
-        onAdjustIngredientStock={onAdjustIngredientStock}
-        handleAddToCart={handleCustomizerAddToCart}
-        setActiveLightboxImg={setActiveLightboxImg}
-      /></Suspense>
+      <ModalErrorBoundary onClose={() => setSelectedDetailItem(null)}>
+        <Suspense fallback={null}><CustomerCustomizerModal
+          selectedDetailItem={selectedDetailItem}
+          setSelectedDetailItem={setSelectedDetailItem}
+          currentLang={currentLang}
+          isSimplifiedMode={isSimplifiedMode}
+          isStoreCurrentlyOpen={effectiveIsStoreCurrentlyOpen}
+          isMerchantMode={isMerchantMode}
+          qty={qty}
+          setQty={setQty}
+          noodleType={noodleType}
+          setNoodleType={setNoodleType}
+          soupBase={soupBase}
+          setSoupBase={setSoupBase}
+          selectedAddOns={selectedAddOns}
+          setSelectedAddOns={setSelectedAddOns}
+          inventoryWarnings={inventoryWarnings}
+          ingredients={ingredients}
+          onToggleMenuItemAvailability={onToggleMenuItemAvailability}
+          onAdjustIngredientStock={onAdjustIngredientStock}
+          handleAddToCart={handleCustomizerAddToCart}
+          setActiveLightboxImg={setActiveLightboxImg}
+        /></Suspense>
+      </ModalErrorBoundary>
 
       {/* Cart Drawer */}
-      <Suspense fallback={null}><CustomerCartDrawer
-        isCartOpen={isCartOpen}
-        setIsCartOpen={setIsCartOpen}
-        cart={cart}
-        menuItems={displayedMenuItems}
-        currentLang={currentLang}
-        isSimplifiedMode={isSimplifiedMode}
-        paymentMethod={paymentMethod}
-        setPaymentMethod={setPaymentMethod}
-        handleUpdateCartQty={handleUpdateCartQty}
-        handleRemoveFromCart={handleRemoveFromCart}
-        cartSubtotal={cartSubtotal}
-        promoCombo={promoCombo}
-        promoComboDiscount={promoComboDiscount}
-        activeCombosAndDiscounts={activeCombosAndDiscounts}
-        expressFee={expressFee}
-        userBalance={userBalance}
-        cartTotal={cartTotal}
-        servicePaused={servicePaused}
-        urlReservationParams={urlReservationParams}
-        isCheckoutSubmitting={isCheckoutSubmitting}
-        handleCheckout={handleCheckout}
-        selectedTable={selectedTable}
-        t={t}
-      /></Suspense>
+      <ModalErrorBoundary onClose={() => setIsCartOpen(false)}>
+        <Suspense fallback={null}><CustomerCartDrawer
+          isCartOpen={isCartOpen}
+          setIsCartOpen={setIsCartOpen}
+          cart={cart}
+          menuItems={displayedMenuItems}
+          currentLang={currentLang}
+          isSimplifiedMode={isSimplifiedMode}
+          paymentMethod={paymentMethod}
+          setPaymentMethod={setPaymentMethod}
+          handleUpdateCartQty={handleUpdateCartQty}
+          handleRemoveFromCart={handleRemoveFromCart}
+          cartSubtotal={cartSubtotal}
+          promoCombo={promoCombo}
+          promoComboDiscount={promoComboDiscount}
+          activeCombosAndDiscounts={activeCombosAndDiscounts}
+          expressFee={expressFee}
+          userBalance={userBalance}
+          cartTotal={cartTotal}
+          servicePaused={servicePaused}
+          urlReservationParams={urlReservationParams}
+          isCheckoutSubmitting={isCheckoutSubmitting}
+          handleCheckout={handleCheckout}
+          selectedTable={selectedTable}
+          t={t}
+        /></Suspense>
+      </ModalErrorBoundary>
 
       {/* Order Tracker and History */}
-      <Suspense fallback={null}><CustomerOrderTracker
-        isOrderHistoryVisible={isOrderHistoryVisible}
-        activeSegmentTab={activeSegmentTab}
-        setActiveSegmentTab={setActiveSegmentTab}
-        clientActiveOrders={clientActiveOrders}
-        currentLang={currentLang}
-        isSimplifiedMode={isSimplifiedMode}
-        categories={categories}
-        displayedMenuItems={displayedMenuItems}
-        popularItemIds={popularItemIds}
-        isStoreCurrentlyOpen={effectiveIsStoreCurrentlyOpen}
-        ratingStates={ratingStates}
-        setRatingStates={setRatingStates}
-        ratingSubmitting={ratingSubmitting}
-        setRatingSubmitting={setRatingSubmitting}
-        showToast={showToast}
-        handleReorderOrder={handleReorderOrder}
-        setSelectedDetailItem={setSelectedDetailItem}
-        handleQuickAddToCart={handleQuickAddToCart}
-        t={t}
-      /></Suspense>
+      <ModalErrorBoundary onClose={() => {}}>
+        <Suspense fallback={null}><CustomerOrderTracker
+          isOrderHistoryVisible={isOrderHistoryVisible}
+          activeSegmentTab={activeSegmentTab}
+          setActiveSegmentTab={setActiveSegmentTab}
+          clientActiveOrders={clientActiveOrders}
+          currentLang={currentLang}
+          isSimplifiedMode={isSimplifiedMode}
+          categories={categories}
+          displayedMenuItems={displayedMenuItems}
+          popularItemIds={popularItemIds}
+          isStoreCurrentlyOpen={effectiveIsStoreCurrentlyOpen}
+          ratingStates={ratingStates}
+          setRatingStates={setRatingStates}
+          ratingSubmitting={ratingSubmitting}
+          setRatingSubmitting={setRatingSubmitting}
+          showToast={showToast}
+          handleReorderOrder={handleReorderOrder}
+          setSelectedDetailItem={setSelectedDetailItem}
+          handleQuickAddToCart={handleQuickAddToCart}
+          t={t}
+        /></Suspense>
+      </ModalErrorBoundary>
     </div>
   );
 };
