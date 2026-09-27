@@ -174,8 +174,7 @@ export function OrderDataProvider({
     handleUpdateTableStatus,
     handleDeleteReservation
   );
-
-  const { handlePlaceOrder } = useOrderSubmit(setOrders, setLocalOrderIds, handleUpdateTableStatus, onRefreshData);
+  const { handlePlaceOrder } = useOrderSubmit(setOrders, setLocalOrderIds);
 
   // Real-time Table Status Auto-Sync based on Orders & Reservations
   useEffect(() => {

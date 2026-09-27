@@ -30,7 +30,7 @@ const CustomerCustomizerModal = lazy(() => import('./customer/CustomerCustomizer
 const CustomerCartDrawer = lazy(() => import('./customer/CustomerCartDrawer').then(m => ({ default: m.CustomerCartDrawer })));
 const CustomerOrderTracker = lazy(() => import('./customer/CustomerOrderTracker').then(m => ({ default: m.CustomerOrderTracker })));
 const CustomerReservationModal = lazy(() => import('./customer/CustomerReservationModal').then(m => ({ default: m.CustomerReservationModal })));
-const CustomerStaffPinModal = lazy(() => import('./customer/CustomerModals').then(m => ({ default: m.CustomerStaffPinModal })));
+const CustomerStaffPinModal = lazy(() => import('./customer/CustomerStaffPinModal').then(m => ({ default: m.CustomerStaffPinModal })));
 const CustomerLightboxModal = lazy(() => import('./customer/CustomerModals').then(m => ({ default: m.CustomerLightboxModal })));
 const CustomerTakeoutModal = lazy(() => import('./customer/CustomerModals').then(m => ({ default: m.CustomerTakeoutModal })));
 
@@ -1317,6 +1317,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
         setActiveSegmentTab={setActiveSegmentTab}
         clientActiveOrders={clientActiveOrders}
         currentLang={currentLang}
+        isSimplifiedMode={isSimplifiedMode}
         categories={categories}
         displayedMenuItems={displayedMenuItems}
         popularItemIds={popularItemIds}

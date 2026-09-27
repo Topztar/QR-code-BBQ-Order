@@ -1,5 +1,6 @@
 import { apiFetch } from "../lib/api";
 import { ErrorBoundary } from './ErrorBoundary';
+import { ChunkErrorBoundary } from './ChunkErrorBoundary';
 import React, { useState, useEffect, useMemo, useCallback, Suspense, lazy } from 'react';
 import { Ingredient, Language, Category, TableConfig, Order, OrderStatus, Reservation, SoldOutType, PrinterConfig, PaidModDetails } from '../types';
 import { getLocalizedText } from '../utils/i18n';
@@ -224,16 +225,13 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   );
 
   const {
-    terminalCart, terminalTable, terminalCategory,
-    isTerminalFullScreen, terminalPage, terminalCartPage,
+    terminalCart, terminalCategory,
+    terminalCartPage,
     setTerminalPage, setTerminalCartPage
   } = useDashboardStore(
     useShallow(state => ({
       terminalCart: state.terminalCart,
-      terminalTable: state.terminalTable,
       terminalCategory: state.terminalCategory,
-      isTerminalFullScreen: state.isTerminalFullScreen,
-      terminalPage: state.terminalPage,
       terminalCartPage: state.terminalCartPage,
       setTerminalPage: state.setTerminalPage,
       setTerminalCartPage: state.setTerminalCartPage
@@ -290,26 +288,21 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
 
   // Table Config States
   const {
-    isTableFormOpen, setIsTableFormOpen, editingTableObj, setEditingTableObj,
-    tableError, setTableError, tableSuccess, setTableSuccess
+    setIsTableFormOpen, setEditingTableObj,
+    setTableError, setTableSuccess
   } = useDashboardStore(
     useShallow(state => ({
-      isTableFormOpen: state.isTableFormOpen,
       setIsTableFormOpen: state.setIsTableFormOpen,
-      editingTableObj: state.editingTableObj,
       setEditingTableObj: state.setEditingTableObj,
-      tableError: state.tableError,
       setTableError: state.setTableError,
-      tableSuccess: state.tableSuccess,
       setTableSuccess: state.setTableSuccess
     }))
   );
   const [takeoutStatus, setTakeoutStatus] = useState({ sequence: 0, lastResetDate: '' });
   const [selectedQrPreviewId, setSelectedQrPreviewId] = useState<string>('1');
   const [copiedTableId, setCopiedTableId] = useState<string | null>(null);
-  const { showBulkDeleteOrdersModal, setShowBulkDeleteOrdersModal } = useDashboardStore(
+  const { setShowBulkDeleteOrdersModal } = useDashboardStore(
     useShallow(state => ({
-      showBulkDeleteOrdersModal: state.showBulkDeleteOrdersModal,
       setShowBulkDeleteOrdersModal: state.setShowBulkDeleteOrdersModal
     }))
   );
@@ -317,24 +310,15 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
 
   // Local reordering states with confirmation buttons to prevent accidental clicks
   const {
-    localCategoryOrder, setLocalCategoryOrder, localMenuItemOrder, setLocalMenuItemOrder,
-    hasUnsavedCategoryOrder, setHasUnsavedCategoryOrder, hasUnsavedMenuItemOrder, setHasUnsavedMenuItemOrder,
-    isCategorySortingMode, setIsCategorySortingMode, isMenuItemSortingMode, setIsMenuItemSortingMode,
+    setLocalCategoryOrder, setLocalMenuItemOrder,
+    hasUnsavedCategoryOrder, hasUnsavedMenuItemOrder,
     stagingPromoCombos, setStagingPromoCombos
   } = useDashboardStore(
     useShallow(state => ({
-      localCategoryOrder: state.localCategoryOrder,
       setLocalCategoryOrder: state.setLocalCategoryOrder,
-      localMenuItemOrder: state.localMenuItemOrder,
       setLocalMenuItemOrder: state.setLocalMenuItemOrder,
       hasUnsavedCategoryOrder: state.hasUnsavedCategoryOrder,
-      setHasUnsavedCategoryOrder: state.setHasUnsavedCategoryOrder,
       hasUnsavedMenuItemOrder: state.hasUnsavedMenuItemOrder,
-      setHasUnsavedMenuItemOrder: state.setHasUnsavedMenuItemOrder,
-      isCategorySortingMode: state.isCategorySortingMode,
-      setIsCategorySortingMode: state.setIsCategorySortingMode,
-      isMenuItemSortingMode: state.isMenuItemSortingMode,
-      setIsMenuItemSortingMode: state.setIsMenuItemSortingMode,
       stagingPromoCombos: state.stagingPromoCombos,
       setStagingPromoCombos: state.setStagingPromoCombos
     }))
@@ -419,25 +403,41 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     checkoutScope?: string;
   } | null>(null);
 
-  const handleExportLast30DaysOrdersCSV = () => {
+  const handleExportLast30DaysOrdersCSV = async () => {
     try {
       setCsvExportError(null);
       setCsvExportSuccess(null);
 
-      // Filter completed orders from the last 30 days
-      const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
-      const filteredOrders = orders.filter((order) => {
-        const orderDate = new Date(order.createdAt).getTime();
-        return order.status === 'completed' && orderDate >= thirtyDaysAgo;
-      });
+      // Attempt true server-side historical query first (up to 1,000 orders spanning 30 days)
+      let candidateOrders: Order[] = [];
+      try {
+        const res = await apiFetch('/api/orders/export?days=30');
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data.orders) && data.orders.length > 0) {
+            candidateOrders = data.orders;
+          }
+        }
+      } catch (networkErr) {
+        console.warn('[ManagerDashboard] Server-side export query failed, falling back to local memory orders cache:', networkErr);
+      }
 
-      if (filteredOrders.length === 0) {
+      // Graceful fallback to client orders cache if server query returned empty or failed
+      if (candidateOrders.length === 0) {
+        const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+        candidateOrders = orders.filter((order) => {
+          const orderDate = new Date(order.createdAt).getTime();
+          return order.status === 'completed' && orderDate >= thirtyDaysAgo;
+        });
+      }
+
+      if (candidateOrders.length === 0) {
         setCsvExportError('在過去 30 天內沒有找到已完成的訂單。 No completed orders found in the last 30 days.');
         return;
       }
 
       // Sort chronological (oldest to newest)
-      const sortedOrders = [...filteredOrders].sort(
+      const sortedOrders = [...candidateOrders].sort(
         (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
       );
 
@@ -1018,7 +1018,6 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   const [manualAdjustNote, setManualAdjustNote] = useState('');
   const [inventoryLogSearch, setInventoryLogSearch] = useState('');
   const [restockAmount, setRestockAmount] = useState<{ [key: string]: number }>({});
-  const [quickRestockItem, setQuickRestockItem] = useState<Ingredient | null>(null);
 
   // Add Ingredient states
   const [newIngId, setNewIngId] = useState('');
@@ -1578,30 +1577,99 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     exportToCSV(flatData, map, `沙貝燒烤-進銷存流帳報表-${new Date().toISOString().split('T')[0]}.csv`);
   };
 
+  // Dynamic aggregation fallback: when backend bootstrap analytics is zeroed, derive real-time metrics from live synced orders & ingredients
+  const effectiveAnalytics = useMemo(() => {
+    if (analytics && analytics.ordersCount > 0 && analytics.totalRevenue > 0) {
+      return analytics;
+    }
+
+    const activeOrders = (orders || []).filter(o => o && o.status !== 'cancelled');
+    const totalRev = activeOrders.reduce((sum, o) => sum + (o?.total || 0), 0);
+    const count = activeOrders.length;
+
+    // Category Sales breakdown
+    const catSalesMap: Record<string, number> = {};
+    activeOrders.forEach(o => {
+      (o.items || []).forEach(it => {
+        const menuItem = menuItems.find(m => m.id === it.menuItemId || m.id === it.id);
+        const catId = menuItem?.category || 'other';
+        const lineTotal = (it.price || 0) * (it.qty || 1);
+        catSalesMap[catId] = (catSalesMap[catId] || 0) + lineTotal;
+      });
+    });
+    const categorySales = Object.entries(catSalesMap)
+      .map(([category, revenue]) => ({ category, revenue }))
+      .sort((a, b) => b.revenue - a.revenue);
+
+    // Hourly distribution
+    const hourMap: Record<string, number> = {};
+    activeOrders.forEach(o => {
+      if (o.createdAt) {
+        const d = new Date(o.createdAt);
+        if (!isNaN(d.getTime())) {
+          const slot = `${d.getHours().toString().padStart(2, '0')}:00`;
+          hourMap[slot] = (hourMap[slot] || 0) + 1;
+        }
+      }
+    });
+    const hourlyDistribution = Object.entries(hourMap)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([timeSlot, ordersCount]) => ({ timeSlot, orders: ordersCount }));
+
+    // Top selling dishes
+    const dishMap: Record<string, number> = {};
+    activeOrders.forEach(o => {
+      (o.items || []).forEach(it => {
+        const dishName = typeof it.name === 'string'
+          ? it.name
+          : (getLocalizedText(it.name, currentLang) || '餐點');
+        dishMap[dishName] = (dishMap[dishName] || 0) + (it.qty || 1);
+      });
+    });
+    const topDishes = Object.entries(dishMap)
+      .map(([name, qty]) => ({ name, qty }))
+      .sort((a, b) => b.qty - a.qty)
+      .slice(0, 12);
+
+    // Stock warnings
+    const stockWarnings = (ingredients || []).filter(
+      ig => typeof ig.stock === 'number' && typeof ig.minThreshold === 'number' && ig.stock <= ig.minThreshold
+    );
+
+    return {
+      totalRevenue: totalRev,
+      ordersCount: count,
+      categorySales,
+      hourlyDistribution,
+      topDishes,
+      stockWarnings,
+    };
+  }, [analytics, orders, menuItems, ingredients, currentLang]);
+
   // Recharts calculations
   const chartCategoryData = useMemo(() => {
-    return analytics.categorySales.map((item) => {
+    return effectiveAnalytics.categorySales.map((item) => {
       const foundCat = categories.find((c) => c.id === item.category);
       return {
-        name: foundCat ? getLocalizedText(foundCat.name, currentLang) : item.category,
+        name: foundCat ? getLocalizedText(foundCat.name, currentLang) : (item.category === 'other' ? '其他餐點' : item.category),
         '營業額 NT$': item.revenue,
       };
     });
-  }, [analytics.categorySales, categories, currentLang]);
+  }, [effectiveAnalytics.categorySales, categories, currentLang]);
 
   const chartHourlyData = useMemo(() => {
-    return analytics.hourlyDistribution.map((item) => ({
+    return effectiveAnalytics.hourlyDistribution.map((item) => ({
       '用餐時段': item.timeSlot,
       '下單數量': item.orders,
     }));
-  }, [analytics.hourlyDistribution]);
+  }, [effectiveAnalytics.hourlyDistribution]);
 
   // Modals triggers utilizing reactive Zustand hook dispatchers
   const triggerAddMenuItemMode = useCallback(() => { setEditingItem(null); setIsDishFormOpen(true); }, [setEditingItem, setIsDishFormOpen]);
   const triggerEditMenuItemMode = useCallback((item: any) => { setEditingItem(item); setIsDishFormOpen(true); }, [setEditingItem, setIsDishFormOpen]);
   const triggerAddCatMode = useCallback(() => { setEditingCategory(null); setIsCatFormOpen(true); }, [setEditingCategory, setIsCatFormOpen]);
   const triggerEditCatMode = useCallback((cat: Category) => { setEditingCategory(cat); setIsCatFormOpen(true); }, [setEditingCategory, setIsCatFormOpen]);
-  const triggerAddTableMode = useCallback(() => { setEditingTableObj(null); setIsTableFormOpen(true); }, [setEditingTableObj, setIsTableFormOpen]);
+
   const triggerEditTableMode = useCallback((tb: TableConfig) => { setEditingTableObj(tb); setIsTableFormOpen(true); }, [setEditingTableObj, setIsTableFormOpen]);
   const triggerAddReservationMode = useCallback(() => { setEditingResObj(null); setIsResFormOpen(true); }, [setEditingResObj, setIsResFormOpen]);
   const triggerEditReservationMode = useCallback((res: Reservation) => { setEditingResObj(res); setIsResFormOpen(true); }, [setEditingResObj, setIsResFormOpen]);
@@ -1646,6 +1714,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
           ))}
         </div>
       )}
+      <ChunkErrorBoundary>
       <Suspense fallback={<TabSuspenseFallback />}>
       {/* ==================== TAB 1: OPERATIONAL ANALYTICS ==================== */}
       {activeSubTab === 'stats' && (
@@ -1653,7 +1722,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
           <Suspense fallback={<TabSuspenseFallback />}>
             <ManagerStatsTab
               currentLang={currentLang}
-              analytics={analytics}
+              analytics={effectiveAnalytics}
               takeoutStatus={takeoutStatus}
               chartCategoryData={chartCategoryData}
               chartHourlyData={chartHourlyData}
@@ -1750,7 +1819,6 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
           restockAmount={restockAmount}
           setRestockAmount={setRestockAmount}
           handleRestockClick={handleRestockClick}
-          setQuickRestockItem={setQuickRestockItem}
 
           manualAdjustId={manualAdjustId}
           setManualAdjustId={setManualAdjustId}
@@ -1934,6 +2002,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
         />
       )}
       </Suspense>
+      </ChunkErrorBoundary>
 
       {/* ========================================================================= */}
       {/* ==================== SCREEN POPUP RESILIENT MODALS ==================== */}

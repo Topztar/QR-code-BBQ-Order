@@ -219,45 +219,15 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
   const [isTranslatingAll, setIsTranslatingAll] = useState(false);
   const [translatingLang, setTranslatingLang] = useState<Language | null>(null);
 
-  // Fallback internal state if not passed from props
-  const [localNames, setLocalNames] = useState<Record<Language, string>>({
-    zh: '',
-    en: '',
-    th: '',
-    ja: '',
-    ko: '',
-    vi: '',
-    ru: '',
-    es: '',
-  });
-  const [localDescs, setLocalDescs] = useState<Record<Language, string>>({
-    zh: '',
-    en: '',
-    th: '',
-    ja: '',
-    ko: '',
-    vi: '',
-    ru: '',
-    es: '',
-  });
-
-  const names = itemNames || localNames;
-  const descs = itemDescs || localDescs;
+  const names = itemNames;
+  const descs = itemDescs;
 
   const handleNameChange = (lang: Language, value: string) => {
-    if (setItemNames) {
-      setItemNames((prev) => ({ ...prev, [lang]: value }));
-    } else {
-      setLocalNames((prev) => ({ ...prev, [lang]: value }));
-    }
+    setItemNames((prev) => ({ ...prev, [lang]: value }));
   };
 
   const handleDescChange = (lang: Language, value: string) => {
-    if (setItemDescs) {
-      setItemDescs((prev) => ({ ...prev, [lang]: value }));
-    } else {
-      setLocalDescs((prev) => ({ ...prev, [lang]: value }));
-    }
+    setItemDescs((prev) => ({ ...prev, [lang]: value }));
   };
 
   const handleAutoTranslateAll = async () => {
@@ -292,11 +262,8 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
         })
       );
 
-      if (setItemNames) setItemNames(updatedNames);
-      else setLocalNames(updatedNames);
-
-      if (setItemDescs) setItemDescs(updatedDescs);
-      else setLocalDescs(updatedDescs);
+      setItemNames(updatedNames);
+      setItemDescs(updatedDescs);
 
 
     } catch (err) {
@@ -444,8 +411,43 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
                         setIsLocalPreviewOnly(false);
 
                         try {
+                          // Client-side image compression
+                          let fileToUpload = file;
+                          try {
+                            const bmp = await createImageBitmap(file);
+                            const canvas = document.createElement('canvas');
+                            let width = bmp.width;
+                            let height = bmp.height;
+                            const MAX_DIM = 1200;
+                            if (width > MAX_DIM || height > MAX_DIM) {
+                              if (width > height) {
+                                height = Math.round((height * MAX_DIM) / width);
+                                width = MAX_DIM;
+                              } else {
+                                width = Math.round((width * MAX_DIM) / height);
+                                height = MAX_DIM;
+                              }
+                            }
+                            canvas.width = width;
+                            canvas.height = height;
+                            const ctx = canvas.getContext('2d');
+                            if (ctx) {
+                              ctx.drawImage(bmp, 0, 0, width, height);
+                              const blob = await new Promise<Blob | null>((resolve) =>
+                                canvas.toBlob(resolve, 'image/jpeg', 0.8)
+                              );
+                              if (blob) {
+                                fileToUpload = new File([blob], cleanFilename, {
+                                  type: 'image/jpeg',
+                                });
+                              }
+                            }
+                          } catch (compErr) {
+                            console.warn('Image compression failed, uploading original', compErr);
+                          }
+
                           const formData = new FormData();
-                          formData.append('file', file);
+                          formData.append('file', fileToUpload);
                           formData.append('folder', 'dishes');
                           formData.append('filename', cleanFilename);
 

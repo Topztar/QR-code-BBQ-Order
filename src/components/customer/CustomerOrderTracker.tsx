@@ -11,6 +11,7 @@ export interface CustomerOrderTrackerProps {
   setActiveSegmentTab: (tab: 'bestsellers' | 'history') => void;
   clientActiveOrders: Order[];
   currentLang: Language;
+  isSimplifiedMode?: boolean;
   categories: Category[];
   displayedMenuItems: MenuItem[];
   popularItemIds?: string[];
@@ -38,6 +39,7 @@ export const CustomerOrderTracker: React.FC<CustomerOrderTrackerProps> = ({
   setActiveSegmentTab,
   clientActiveOrders,
   currentLang,
+  isSimplifiedMode = false,
   categories,
   displayedMenuItems,
   popularItemIds = ['ty-01', 'nd-01', 'sk-02', 'sk-01'],
@@ -732,7 +734,7 @@ export const CustomerOrderTracker: React.FC<CustomerOrderTrackerProps> = ({
                           }}
                           className="w-16 h-16 sm:w-20 sm:h-20 flex-shrink-0 relative bg-zinc-950 border-r border-[#E5B453]/10 overflow-hidden cursor-pointer"
                         >
-                          {item.image ? (
+                          {!isSimplifiedMode && item.image ? (
                             <picture className="w-full h-full block">
                               {item.avifThumbnailUrl && <source srcSet={item.avifThumbnailUrl} type="image/avif" />}
                               <img
@@ -882,7 +884,7 @@ export const CustomerOrderTracker: React.FC<CustomerOrderTrackerProps> = ({
                       onClick={() => setSelectedDetailItem(item)}
                       className="w-full md:w-28 h-28 rounded-xl overflow-hidden relative shrink-0 cursor-pointer bg-neutral-950"
                     >
-                      {item.image ? (
+                      {!isSimplifiedMode && item.image ? (
                         <picture className="w-full h-full block">
                           {item.avifThumbnailUrl && <source srcSet={item.avifThumbnailUrl} type="image/avif" />}
                           <img

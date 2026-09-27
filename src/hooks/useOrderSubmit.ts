@@ -32,9 +32,7 @@ export interface OrderDataPayload {
 
 export function useOrderSubmit(
   setOrders: React.Dispatch<React.SetStateAction<Order[]>>,
-  setLocalOrderIds: React.Dispatch<React.SetStateAction<string[]>>,
-  handleUpdateTableStatus: (id: string, updates: any) => Promise<{ success: boolean }>,
-  onRefreshData?: () => Promise<void>
+  setLocalOrderIds: React.Dispatch<React.SetStateAction<string[]>>
 ) {
   const activeOrderSubmissionsRef = useRef<Set<string>>(new Set());
 

@@ -95,9 +95,18 @@ export default defineConfig(({ mode }) => {
     rollupOptions: {
       output: {
         manualChunks(id) {
-          // Firebase SDK 核心（最大包）單獨隔離，啟用長期快取
-          if (id.includes('node_modules/firebase')) {
-            return 'vendor-firebase';
+          // Firebase SDK 核心細分化，減少初始 precache 體積
+          if (id.includes('node_modules/firebase/app') || id.includes('node_modules/@firebase/app')) {
+            return 'vendor-firebase-app';
+          }
+          if (id.includes('node_modules/firebase/firestore') || id.includes('node_modules/@firebase/firestore')) {
+            return 'vendor-firebase-firestore';
+          }
+          if (id.includes('node_modules/firebase/auth') || id.includes('node_modules/@firebase/auth')) {
+            return 'vendor-firebase-auth';
+          }
+          if (id.includes('node_modules/firebase') || id.includes('node_modules/@firebase')) {
+            return 'vendor-firebase-core';
           }
           // 圖表 / D3 視覺化（僅管理後台需要）
           if (id.includes('node_modules/recharts') || id.includes('node_modules/d3')) {

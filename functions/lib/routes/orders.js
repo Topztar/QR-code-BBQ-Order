@@ -40,6 +40,109 @@ function registerOrdersRoutes(app, ctx) {
             res.status(500).json({ error: '無法取得訂單列表' });
         }
     });
+    get('/analytics', requireStaffAuth, async (req, res) => {
+        try {
+            res.setHeader('Cache-Control', 'private, no-cache, no-store, must-revalidate');
+            const { startDate, endDate, limit } = req.query;
+            const fetchLimit = Math.min(Math.max(Number(limit) || 300, 50), 1000);
+            let query = db.collection('orders')
+                .select('id', 'items', 'total', 'status', 'createdAt');
+            if (typeof startDate === 'string' && startDate.trim()) {
+                query = query.where('createdAt', '>=', startDate.trim());
+            }
+            if (typeof endDate === 'string' && endDate.trim()) {
+                query = query.where('createdAt', '<=', endDate.trim());
+            }
+            let snapshot;
+            try {
+                snapshot = await query.orderBy('createdAt', 'desc').limit(fetchLimit).get();
+            }
+            catch (_err) {
+                snapshot = await query.limit(fetchLimit).get();
+            }
+            const activeOrders = snapshot.docs
+                .map(doc => doc.data())
+                .filter((o) => o && o.status !== 'cancelled');
+            const totalRevenue = activeOrders.reduce((sum, o) => sum + (Number(o?.total) || 0), 0);
+            const ordersCount = activeOrders.length;
+            const catSalesMap = {};
+            const hourMap = {};
+            const dishMap = {};
+            activeOrders.forEach((o) => {
+                if (o.createdAt) {
+                    const d = new Date(o.createdAt);
+                    if (!isNaN(d.getTime())) {
+                        const slot = `${d.getHours().toString().padStart(2, '0')}:00`;
+                        hourMap[slot] = (hourMap[slot] || 0) + 1;
+                    }
+                }
+                (o.items || []).forEach((it) => {
+                    const catId = it.category || 'other';
+                    const lineTotal = (Number(it.price) || 0) * (Number(it.qty) || 1);
+                    catSalesMap[catId] = (catSalesMap[catId] || 0) + lineTotal;
+                    const dishName = typeof it.name === 'string' ? it.name : (it.name?.zh || it.name?.en || '餐點');
+                    dishMap[dishName] = (dishMap[dishName] || 0) + (Number(it.qty) || 1);
+                });
+            });
+            const categorySales = Object.entries(catSalesMap)
+                .map(([category, revenue]) => ({ category, revenue }))
+                .sort((a, b) => b.revenue - a.revenue);
+            const hourlyDistribution = Object.entries(hourMap)
+                .sort(([a], [b]) => a.localeCompare(b))
+                .map(([timeSlot, ordersCountSlot]) => ({ timeSlot, orders: ordersCountSlot }));
+            const topDishes = Object.entries(dishMap)
+                .map(([name, qty]) => ({ name, qty }))
+                .sort((a, b) => b.qty - a.qty)
+                .slice(0, 12);
+            const ingredientsSnap = await db.collection('ingredients').select('name', 'stock', 'minThreshold', 'unit').get();
+            const stockWarnings = ingredientsSnap.docs
+                .map(doc => ({ id: doc.id, ...doc.data() }))
+                .filter(ig => typeof ig.stock === 'number' && typeof ig.minThreshold === 'number' && ig.stock <= ig.minThreshold);
+            res.json({
+                totalRevenue,
+                ordersCount,
+                categorySales,
+                hourlyDistribution,
+                topDishes,
+                stockWarnings,
+                sampleSize: ordersCount,
+                limit: fetchLimit
+            });
+        }
+        catch (error) {
+            console.error('Error computing analytics:', error);
+            sendErrorResponse(res, error, '計算營運統計指標異常');
+        }
+    });
+    get('/orders/export', requireStaffAuth, async (req, res) => {
+        try {
+            res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+            const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 90);
+            const thresholdMs = Date.now() - (days * 24 * 60 * 60 * 1000);
+            const thresholdIso = new Date(thresholdMs).toISOString();
+            let query = db.collection('orders')
+                .where('status', '==', 'completed')
+                .where('createdAt', '>=', thresholdIso);
+            let snapshot;
+            try {
+                snapshot = await query.orderBy('createdAt', 'desc').limit(1000).get();
+            }
+            catch (_idxErr) {
+                snapshot = await query.limit(1000).get();
+            }
+            const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            orders.sort((a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime());
+            res.json({
+                orders,
+                count: orders.length,
+                days
+            });
+        }
+        catch (error) {
+            console.error('Error exporting historical orders:', error);
+            sendErrorResponse(res, error, '匯出歷史訂單數據異常');
+        }
+    });
     get('/print-logs', async (_req, res) => {
         try {
             res.setHeader('Cache-Control', 'private, no-cache, no-store, must-revalidate');

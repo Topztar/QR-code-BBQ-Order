@@ -6,6 +6,8 @@ import { getMaskedEmail } from './ManagerDashboardUtils';
 import VersionInput from './VersionInput';
 import { apiFetch } from '../../lib/api';
 import { memberService } from '../../services/memberService';
+import { TableVirtuoso } from 'react-virtuoso';
+import { isVipMember } from '../../types/points';
 
 interface ManagerMembersTabProps {
   membersList: any[];
@@ -559,7 +561,7 @@ export const ManagerMembersTab: React.FC<ManagerMembersTabProps> = ({
           <div className="bg-black/30 border border-amber-500/20 bg-amber-500/5 rounded-xl p-4">
             <span className="text-[10px] text-[#E5B453] font-bold tracking-widest uppercase block mb-1">👑 VIP 貴賓人數</span>
             <p className="text-2xl font-black text-[#E5B453] font-mono leading-none">
-              {membersList.filter(m => (m.points || 0) >= tempVipThreshold).length} <span className="text-xs font-semibold text-amber-300 font-sans">位 (滿 {tempVipThreshold} 點)</span>
+              {membersList.filter(m => isVipMember(m.points, tempVipThreshold)).length} <span className="text-xs font-semibold text-amber-300 font-sans">位 (滿 {tempVipThreshold} 點)</span>
             </p>
           </div>
           <div className="bg-black/30 border border-white/5 rounded-xl p-4">
@@ -577,62 +579,69 @@ export const ManagerMembersTab: React.FC<ManagerMembersTabProps> = ({
         </div>
 
         {/* Members table */}
-        <div className="overflow-x-auto rounded-xl border border-white/5">
-          <table className="w-full text-xs text-left text-zinc-300">
-            <thead>
-              <tr className="bg-white/5 text-white/50 border-b border-white/5">
+        {/* Members table */}
+        <div className="rounded-xl border border-white/5 bg-black/20">
+          <TableVirtuoso
+            data={membersList}
+            style={{ height: '500px' }}
+            components={{
+              Table: (props) => <table {...props} className="w-full text-xs text-left text-zinc-300" />,
+              TableHead: React.forwardRef((props, ref) => <thead {...props} ref={ref} />),
+              TableRow: (props) => <tr {...props} className="hover:bg-white/[2%] border-b border-white/5" />,
+              TableBody: React.forwardRef((props, ref) => <tbody {...props} ref={ref} className="divide-y divide-white/5" />)
+            }}
+            fixedHeaderContent={() => (
+              <tr className="bg-[#1a1a1a] text-white/50 border-b border-white/5 shadow-md">
                 <th className="py-3 px-4 text-[10px] uppercase font-bold tracking-wider">成員頭像/名稱</th>
                 <th className="py-3 px-4 text-[10px] uppercase font-bold tracking-wider">綁定電子郵箱 Email</th>
                 <th className="py-3 px-4 text-[10px] uppercase font-bold tracking-wider text-center">登載註冊時間</th>
                 <th className="py-3 px-4 text-[10px] uppercase font-bold tracking-wider text-right">當前統計儲值點數</th>
                 <th className="py-3 px-4 text-[10px] uppercase font-bold tracking-wider text-center">手動消點累點變更</th>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-white/5">
-              {membersList.map((m) => (
-                <tr key={m.email} className="hover:bg-white/[2%]">
-                  <td className="py-3.5 px-4 flex items-center space-x-3 text-white font-bold">
-                    <img src={m.avatar} alt="member-avatar" className="w-8 h-8 rounded-full border border-blue-500/20 object-cover" referrerPolicy="no-referrer" />
-                    <div className="flex flex-col text-left">
-                      <div className="flex items-center gap-1.5">
-                        <span>{m.name}</span>
-                        {(m.points || 0) >= tempVipThreshold ? (
-                          <span className="bg-amber-500/20 text-[#E5B453] border border-amber-500/40 text-[9px] font-black px-1.5 py-0.2 rounded-full">
-                            👑 VIP 貴賓 ({Math.round(tempVipDiscountRate * 100)}% 結帳)
-                          </span>
-                        ) : (
-                          <span className="bg-zinc-800 text-zinc-400 text-[9px] font-normal px-1.5 py-0.2 rounded-full">
-                            一般會員
-                          </span>
-                        )}
-                      </div>
+            )}
+            itemContent={(_index, m) => (
+              <>
+                <td className="py-3.5 px-4 flex items-center space-x-3 text-white font-bold">
+                  <img src={m.avatar} alt="member-avatar" className="w-8 h-8 rounded-full border border-blue-500/20 object-cover" referrerPolicy="no-referrer" />
+                  <div className="flex flex-col text-left">
+                    <div className="flex items-center gap-1.5">
+                      <span>{m.name}</span>
+                      {isVipMember(m.points, tempVipThreshold) ? (
+                        <span className="bg-amber-500/20 text-[#E5B453] border border-amber-500/40 text-[9px] font-black px-1.5 py-0.2 rounded-full">
+                          👑 VIP 貴賓 ({Math.round(tempVipDiscountRate * 100)}% 結帳)
+                        </span>
+                      ) : (
+                        <span className="bg-zinc-800 text-zinc-400 text-[9px] font-normal px-1.5 py-0.2 rounded-full">
+                          一般會員
+                        </span>
+                      )}
                     </div>
-                  </td>
-                  <td className="py-3.5 px-4 font-mono text-zinc-400">{getMaskedEmail(m.email)}</td>
-                  <td className="py-3.5 px-4 text-center font-mono text-zinc-500">{m.joinedAt || '2026-06-01'}</td>
-                  <td className="py-3.5 px-4 text-right font-mono text-amber-400 font-black text-sm">{(m.points || 0).toLocaleString()} 點</td>
-                  <td className="py-3.5 px-4 text-center">
-                    <div className="flex justify-center space-x-1.5">
-                      <button
-                        type="button"
-                        onClick={() => handleAdjustPoints(m.email)}
-                        className="bg-blue-600/10 hover:bg-blue-600/20 border border-blue-500/20 text-blue-400 px-2.5 py-1 rounded transition text-[10px] cursor-pointer"
-                      >
-                        加減消點
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteMember(m.email)}
-                        className="bg-rose-600/10 hover:bg-rose-600/20 border border-rose-500/20 text-rose-450 rounded transition text-[10px] cursor-pointer"
-                      >
-                        移除帳戶
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </div>
+                </td>
+                <td className="py-3.5 px-4 font-mono text-zinc-400">{getMaskedEmail(m.email)}</td>
+                <td className="py-3.5 px-4 text-center font-mono text-zinc-500">{m.joinedAt || '2026-06-01'}</td>
+                <td className="py-3.5 px-4 text-right font-mono text-amber-400 font-black text-sm">{(m.points || 0).toLocaleString()} 點</td>
+                <td className="py-3.5 px-4 text-center">
+                  <div className="flex justify-center space-x-1.5">
+                    <button
+                      type="button"
+                      onClick={() => handleAdjustPoints(m.email)}
+                      className="bg-blue-600/10 hover:bg-blue-600/20 border border-blue-500/20 text-blue-400 px-2.5 py-1 rounded transition text-[10px] cursor-pointer"
+                    >
+                      加減消點
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteMember(m.email)}
+                      className="bg-rose-600/10 hover:bg-rose-600/20 border border-rose-500/20 text-rose-450 rounded transition text-[10px] cursor-pointer"
+                    >
+                      移除帳戶
+                    </button>
+                  </div>
+                </td>
+              </>
+            )}
+          />
         </div>
       </div>
 

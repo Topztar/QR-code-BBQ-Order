@@ -44,7 +44,7 @@ interface ManagerStatsTabProps {
   chartHourlyData: any[];
   printLogs: any[];
   fetchPrintLogs: () => void;
-  handleExportLast30DaysOrdersCSV: () => void;
+  handleExportLast30DaysOrdersCSV: () => Promise<void> | void;
   csvExportSuccess: string | null;
   csvExportError: string | null;
   menuItems: any[];
@@ -95,7 +95,7 @@ export const ManagerStatsTab: React.FC<ManagerStatsTabProps> = ({
             營運數據分析與離線對帳管理 (Business Analytics & Offline Accounting)
           </h3>
           <p className="text-xs text-white/40">
-            將過去 30 天內已完成 (Status: Completed) 的所有顧客交易訂單明細匯出為完整的 CSV 檔格式，方便執行會計記帳或損益試算。
+            將過去 30 天內已完成 (Status: Completed) 的所有顧客交易訂單明細匯出為完整的 CSV 檔格式（支援雲端資料庫歷史聚合與離線快取備援），方便執行會計記帳或損益試算。
           </p>
         </div>
         
@@ -126,6 +126,15 @@ export const ManagerStatsTab: React.FC<ManagerStatsTabProps> = ({
           )}
         </div>
       )}
+
+      {/* Live Sync Scope Notice */}
+      <div className="flex items-center justify-between text-[11px] text-zinc-400 bg-white/[0.03] border border-white/5 px-4 py-2 rounded-xl">
+        <span className="flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+          <span>營運指標與圖表數據基於本地即時連線之最新訂單（顯示上限 200 筆）。</span>
+        </span>
+        <span className="font-mono text-zinc-500 text-[10px]">Live Synchronized</span>
+      </div>
 
       {/* Key KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5" id="stats-kpi-grid">
@@ -284,15 +293,19 @@ export const ManagerStatsTab: React.FC<ManagerStatsTabProps> = ({
           <h4 className="font-bold text-sm">🔥 本店熱門人氣銷售排行 (銷量排行 Top Dishes)</h4>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3.5">
-          {analytics.topDishes.map((dish, i) => (
-            <div key={`${dish.name || 'dish'}-${i}`} className="bg-black/30 border border-white/5 p-3 rounded-lg text-center relative overflow-hidden">
-              <span className="absolute top-0 left-0 bg-amber-500 text-black text-[9px] font-black px-1.5 py-0.5 rounded-br">
-                NO.{i + 1}
-              </span>
-              <p className="font-bold text-xs text-white truncate mt-2">{dish.name}</p>
-              <p className="font-mono text-xs text-blue-400 font-extrabold mt-1">{dish.qty} 份</p>
-            </div>
-          ))}
+          {(!analytics.topDishes || analytics.topDishes.length === 0) ? (
+            <p className="text-xs text-white/40 col-span-full py-4 text-center">尚無訂單餐點銷售排行紀錄</p>
+          ) : (
+            analytics.topDishes.map((dish, i) => (
+              <div key={`${dish.name || 'dish'}-${i}`} className="bg-black/30 border border-white/5 p-3 rounded-lg text-center relative overflow-hidden">
+                <span className="absolute top-0 left-0 bg-amber-500 text-black text-[9px] font-black px-1.5 py-0.5 rounded-br">
+                  NO.{i + 1}
+                </span>
+                <p className="font-bold text-xs text-white truncate mt-2">{dish.name}</p>
+                <p className="font-mono text-xs text-blue-400 font-extrabold mt-1">{dish.qty} 份</p>
+              </div>
+            ))
+          )}
         </div>
       </div>
 

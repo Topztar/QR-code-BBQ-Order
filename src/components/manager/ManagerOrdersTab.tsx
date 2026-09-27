@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Trash2, Download, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Order } from '../../types';
+import { apiFetch } from '../../lib/api';
+import { collection, query, orderBy, limit, startAfter, getDocs, where, QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
+import { db } from '../../lib/firebase';
 
 interface ManagerOrdersTabProps {
   setShowBulkDeleteOrdersModal: (show: boolean) => void;
@@ -45,18 +48,91 @@ export const ManagerOrdersTab: React.FC<ManagerOrdersTabProps> = ({
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(20);
 
-  // Reset to page 1 whenever filters change
+  // --- Historical Query Pagination State ---
+  const [historyOrders, setHistoryOrders] = useState<Order[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState<boolean>(false);
+  const [lastDoc, setLastDoc] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
+
+  // Reset to page 1 and clear history whenever filters change
   useEffect(() => {
     setCurrentPage(1);
+    setHistoryOrders([]);
+    setLastDoc(null);
   }, [dateRangeFilter, orderQueryStartDate, orderQueryEndDate, orderQueryKeyword, orderQueryStatus]);
 
-  const totalCount = filteredOrders.length;
+  const handleLoadMoreHistory = async () => {
+    setLoadingHistory(true);
+    try {
+      let q = query(collection(db, 'orders'), orderBy('createdAt', 'desc'), limit(50));
+      
+      // Apply filters if applicable
+      if (dateRangeFilter === 'custom') {
+        if (orderQueryStartDate) q = query(q, where('createdAt', '>=', orderQueryStartDate + 'T00:00:00'));
+        if (orderQueryEndDate) q = query(q, where('createdAt', '<=', orderQueryEndDate + 'T23:59:59'));
+      } else if (dateRangeFilter === 'month') {
+        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
+        q = query(q, where('createdAt', '>=', thirtyDaysAgo));
+      }
+
+      if (orderQueryStatus !== 'all') {
+         q = query(q, where('status', '==', orderQueryStatus));
+      }
+
+      // Cursor pagination
+      if (lastDoc) {
+        q = query(q, startAfter(lastDoc));
+      } else if (filteredOrders.length > 0) {
+        const oldestOrder = filteredOrders[filteredOrders.length - 1];
+        if (oldestOrder.createdAt) {
+          q = query(q, startAfter(oldestOrder.createdAt));
+        }
+      }
+
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        setLastDoc(snap.docs[snap.docs.length - 1]);
+        const fetched = snap.docs.map(d => ({ id: d.id, ...d.data() } as Order));
+        setHistoryOrders(prev => {
+          const existingIds = new Set(prev.map(o => o.id));
+          const newUnique = fetched.filter(o => !existingIds.has(o.id));
+          return [...prev, ...newUnique];
+        });
+      } else {
+        alert('沒有更多符合條件的歷史訂單了 (No more historical orders)。');
+      }
+    } catch (e: any) {
+      console.error(e);
+      alert('載入歷史訂單失敗，請確認是否需要建立索引 (Composite Index)。' + (e.message || ''));
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  // Combine and deduplicate orders
+  const combinedOrders = React.useMemo(() => {
+    const existingIds = new Set(filteredOrders.map(o => o.id));
+    const uniqueHistory = historyOrders.filter(o => !existingIds.has(o.id));
+    // Filter history orders by keyword locally
+    let finalHistory = uniqueHistory;
+    if (orderQueryKeyword.trim()) {
+      const k = orderQueryKeyword.toLowerCase().trim();
+      finalHistory = finalHistory.filter(o => 
+        (o.id && o.id.toLowerCase().includes(k)) || 
+        (o.customerName && o.customerName.toLowerCase().includes(k)) ||
+        (o.tableNumber && o.tableNumber.includes(k))
+      );
+    }
+    const combined = [...filteredOrders, ...finalHistory];
+    return combined.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [filteredOrders, historyOrders, orderQueryKeyword]);
+
+  const totalCount = combinedOrders.length;
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
   const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
 
   const startIndex = (safeCurrentPage - 1) * pageSize;
   const endIndex = Math.min(startIndex + pageSize, totalCount);
-  const paginatedOrders = filteredOrders.slice(startIndex, endIndex);
+  const paginatedOrders = combinedOrders.slice(startIndex, endIndex);
   return (
     <div className="space-y-6 animate-fadeIn text-left" id="subtab-section-orders">
       {/* Preset Buttons & Advanced Filters */}
@@ -86,16 +162,30 @@ export const ManagerOrdersTab: React.FC<ManagerOrdersTabProps> = ({
             <button
               type="button"
               onClick={async () => {
-                if(window.confirm('確定要清除「所有舊的測試訂單」與「暫存快取」嗎？\n這將刪除所有訂單資料且無法復原。')) {
+                if (window.confirm('確定要清除「所有舊的測試訂單」與「暫存快取」嗎？\n這將刪除所有訂單、預約、重置桌席與暫存紀錄，此動作無法復原。')) {
+                  const pin = window.prompt('請輸入員工解鎖 PIN 碼以確認執行清空安全簽核：');
+                  if (!pin || !pin.trim()) {
+                    alert('已取消：必須輸入有效員工 PIN 碼方能授權清除測試數據。');
+                    return;
+                  }
                   try {
-                    await fetch('/api/orders', { method: 'DELETE' });
+                    const res = await apiFetch('/api/admin/clear-test-data', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ pin: pin.trim() })
+                    });
+                    const resData = await res.json().catch(() => ({}));
+                    if (!res.ok) {
+                      alert('清除失敗: ' + (resData.error || '安全 PIN 碼不正確或伺服器處理異常'));
+                      return;
+                    }
                     localStorage.removeItem('sabay_orders_sync_event');
                     localStorage.removeItem('sabay-my-submitted-order-ids');
                     localStorage.removeItem('sabay_offline_queue');
-                    alert('清理完成！系統將重新載入。');
+                    alert('🎯 ' + (resData.message || '清理完成！系統將重新載入。'));
                     window.location.reload();
-                  } catch(e) {
-                    alert('清理失敗: ' + e);
+                  } catch (e: any) {
+                    alert('清理失敗: ' + (e?.message || e));
                   }
                 }
               }}
@@ -308,6 +398,16 @@ export const ManagerOrdersTab: React.FC<ManagerOrdersTabProps> = ({
             </div>
 
             <div className="flex items-center gap-2">
+              {(dateRangeFilter === 'custom' || dateRangeFilter === 'all' || dateRangeFilter === 'month') && (
+                <button
+                  type="button"
+                  onClick={handleLoadMoreHistory}
+                  disabled={loadingHistory}
+                  className="flex items-center gap-1 px-3 py-1 mr-2 rounded bg-[#E5B453]/10 hover:bg-[#E5B453]/20 text-[#E5B453] border border-[#E5B453]/30 transition cursor-pointer font-bold disabled:opacity-50"
+                >
+                  {loadingHistory ? '載入中...' : '☁️ 從雲端載入更早紀錄'}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}

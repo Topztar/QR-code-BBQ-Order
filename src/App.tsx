@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense, useMemo, useCallback } from 'react';
+import { useState, useEffect, lazy, Suspense, useMemo, useCallback, startTransition } from 'react';
 import { Language } from './types';
 import { clearOfflineQueue } from './lib/offlineQueue';
 import { safeStorage } from './lib/safeStorage';
@@ -94,8 +94,10 @@ function AppContent({
     targetTab: 'kitchen' | 'admin' | 'cashier' | 'customer',
     subTab?: 'stats' | 'orders' | 'inventory' | 'menu' | 'members' | 'cashier' | 'printer' | 'options' | 'notifications' | 'eod' | 'terminal'
   ) => {
-    navigateTo(targetPath);
-    setAdminSubTab(subTab);
+    startTransition(() => {
+      navigateTo(targetPath);
+      setAdminSubTab(subTab);
+    });
     if (targetTab !== 'customer') {
       safeStorage.setItem('sabay-staff-active-tab', targetTab);
       if (subTab) {

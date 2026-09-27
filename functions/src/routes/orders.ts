@@ -1,5 +1,5 @@
 import express from 'express';
-import { Firestore } from 'firebase-admin/firestore';
+import { Firestore, Query } from 'firebase-admin/firestore';
 import { Bucket } from '@google-cloud/storage';
 import { validateOrderPayload, validateRatingPayload } from '../validators';
 import { isStoreOpenFromData, createGetCachedSettings } from '../helpers';
@@ -55,6 +55,131 @@ get('/orders', requireStaffAuth, async (_req, res) => {
   } catch (error) {
     console.error('Error fetching orders:', error);
     res.status(500).json({ error: '無法取得訂單列表' });
+  }
+});
+
+// 15b. Historical Operational Analytics Aggregation
+get('/analytics', requireStaffAuth, async (req, res) => {
+  try {
+    res.setHeader('Cache-Control', 'private, no-cache, no-store, must-revalidate');
+    const { startDate, endDate, limit } = req.query;
+    const fetchLimit = Math.min(Math.max(Number(limit) || 300, 50), 1000);
+
+    let query: Query = db.collection('orders')
+      .select('id', 'items', 'total', 'status', 'createdAt');
+
+    if (typeof startDate === 'string' && startDate.trim()) {
+      query = query.where('createdAt', '>=', startDate.trim());
+    }
+    if (typeof endDate === 'string' && endDate.trim()) {
+      query = query.where('createdAt', '<=', endDate.trim());
+    }
+
+    let snapshot;
+    try {
+      snapshot = await query.orderBy('createdAt', 'desc').limit(fetchLimit).get();
+    } catch (_err) {
+      snapshot = await query.limit(fetchLimit).get();
+    }
+
+    const activeOrders = snapshot.docs
+      .map(doc => doc.data() as any)
+      .filter((o: any) => o && o.status !== 'cancelled');
+
+    const totalRevenue = activeOrders.reduce((sum: number, o: any) => sum + (Number(o?.total) || 0), 0);
+    const ordersCount = activeOrders.length;
+
+    // Category Sales breakdown
+    const catSalesMap: Record<string, number> = {};
+    // Hourly distribution
+    const hourMap: Record<string, number> = {};
+    // Top selling dishes
+    const dishMap: Record<string, number> = {};
+
+    activeOrders.forEach((o: any) => {
+      if (o.createdAt) {
+        const d = new Date(o.createdAt);
+        if (!isNaN(d.getTime())) {
+          const slot = `${d.getHours().toString().padStart(2, '0')}:00`;
+          hourMap[slot] = (hourMap[slot] || 0) + 1;
+        }
+      }
+
+      (o.items || []).forEach((it: any) => {
+        const catId = it.category || 'other';
+        const lineTotal = (Number(it.price) || 0) * (Number(it.qty) || 1);
+        catSalesMap[catId] = (catSalesMap[catId] || 0) + lineTotal;
+
+        const dishName = typeof it.name === 'string' ? it.name : (it.name?.zh || it.name?.en || '餐點');
+        dishMap[dishName] = (dishMap[dishName] || 0) + (Number(it.qty) || 1);
+      });
+    });
+
+    const categorySales = Object.entries(catSalesMap)
+      .map(([category, revenue]) => ({ category, revenue }))
+      .sort((a, b) => b.revenue - a.revenue);
+
+    const hourlyDistribution = Object.entries(hourMap)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([timeSlot, ordersCountSlot]) => ({ timeSlot, orders: ordersCountSlot }));
+
+    const topDishes = Object.entries(dishMap)
+      .map(([name, qty]) => ({ name, qty }))
+      .sort((a, b) => b.qty - a.qty)
+      .slice(0, 12);
+
+    // Stock warnings
+    const ingredientsSnap = await db.collection('ingredients').select('name', 'stock', 'minThreshold', 'unit').get();
+    const stockWarnings = ingredientsSnap.docs
+      .map(doc => ({ id: doc.id, ...doc.data() } as any))
+      .filter(ig => typeof ig.stock === 'number' && typeof ig.minThreshold === 'number' && ig.stock <= ig.minThreshold);
+
+    res.json({
+      totalRevenue,
+      ordersCount,
+      categorySales,
+      hourlyDistribution,
+      topDishes,
+      stockWarnings,
+      sampleSize: ordersCount,
+      limit: fetchLimit
+    });
+  } catch (error) {
+    console.error('Error computing analytics:', error);
+    sendErrorResponse(res, error, '計算營運統計指標異常');
+  }
+});
+
+// 15c. Historical Orders CSV Export Endpoint
+get('/orders/export', requireStaffAuth, async (req, res) => {
+  try {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+    const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 90);
+    const thresholdMs = Date.now() - (days * 24 * 60 * 60 * 1000);
+    const thresholdIso = new Date(thresholdMs).toISOString();
+
+    let query: Query = db.collection('orders')
+      .where('status', '==', 'completed')
+      .where('createdAt', '>=', thresholdIso);
+
+    let snapshot;
+    try {
+      snapshot = await query.orderBy('createdAt', 'desc').limit(1000).get();
+    } catch (_idxErr) {
+      snapshot = await query.limit(1000).get();
+    }
+
+    const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    orders.sort((a: any, b: any) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime());
+
+    res.json({
+      orders,
+      count: orders.length,
+      days
+    });
+  } catch (error) {
+    console.error('Error exporting historical orders:', error);
+    sendErrorResponse(res, error, '匯出歷史訂單數據異常');
   }
 });
 

@@ -220,7 +220,7 @@ const SimplifiedDishCard = React.memo<DishCardProps>(({
         </div>
       )}
 
-      {/* Left: Photo */}
+      {/* Left: Zero-Image Accessibility Icon Container */}
       <div
         onClick={(e) => {
           if (item.image) {
@@ -228,43 +228,19 @@ const SimplifiedDishCard = React.memo<DishCardProps>(({
             onOpenLightbox(item.image);
           }
         }}
-        className={`w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 flex-shrink-0 relative bg-zinc-100 border-r border-zinc-200 overflow-hidden ${
+        className={`w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 flex-shrink-0 relative bg-amber-50/80 border-r-2 border-zinc-200 flex flex-col items-center justify-center text-zinc-600 select-none ${
           item.image ? 'cursor-zoom-in' : ''
         }`}
       >
-        {item.image ? (
-          <picture className="w-full h-full block">
-            {item.avifThumbnailUrl && <source srcSet={item.avifThumbnailUrl} type="image/avif" />}
-            <img
-              src={item.thumbnailUrl || item.image}
-              loading="lazy"
-              decoding="async"
-              alt={getLocalizedText(item.name, currentLang) || 'dish'}
-              className="w-full h-full object-cover hover:scale-105 transition duration-300"
-              referrerPolicy="no-referrer"
-              onError={(e) => {
-                (e.target as HTMLElement).style.display = 'none';
-              }}
-            />
-          </picture>
-        ) : (
-          <div className="w-full h-full bg-zinc-50 flex flex-col items-center justify-center text-zinc-400">
-            <span className="text-xl sm:text-2xl">🍲</span>
-            <span className="text-[9px] text-zinc-500 font-bold mt-0.5">
-              {t('noImage') || '無圖'}
-            </span>
-          </div>
-        )}
+        <span className="text-2xl sm:text-3xl" role="img" aria-label="dish-icon">🍲</span>
+        <span className="text-[10px] text-zinc-700 font-extrabold mt-0.5">
+          {item.image ? (t('hasImage') || '🔍 附圖') : (t('noImage') || '純文字')}
+        </span>
         {!item.available && (
           <div className="absolute inset-0 bg-red-650/90 flex items-center justify-center">
             <span className="bg-red-600 text-white text-[10px] font-black px-1.5 py-0.5 rounded shadow-sm">
               {t('soldOut')}
             </span>
-          </div>
-        )}
-        {item.available && item.image && (
-          <div className="absolute top-1 left-1 bg-amber-500 text-black text-[8px] font-black px-1 rounded border border-black uppercase">
-            {t('hasImage') || '配圖'}
           </div>
         )}
       </div>

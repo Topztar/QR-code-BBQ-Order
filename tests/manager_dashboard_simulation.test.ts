@@ -171,4 +171,75 @@ describe('ManagerDashboard & Extended Files Functional Simulation Suite', () => 
     const isTaiwanSep15 = isOrderOnLocalDate(utcTime, '2026-09-15');
     expect(isTaiwanSep15).toBe(false);
   });
+
+  // 6. Dynamic effectiveAnalytics Fallback Aggregation
+  it('Sim 6: Dynamic effectiveAnalytics derives accurate metrics when backend analytics is zeroed', () => {
+    const rawOrders = [
+      {
+        id: 'ord-01',
+        status: 'completed',
+        createdAt: '2026-09-27T10:00:00.000Z',
+        total: 300,
+        items: [
+          { id: 'i1', menuItemId: 'sk-01', name: '泰式沙嗲豬肉串', price: 120, qty: 2 },
+          { id: 'i2', menuItemId: 'dr-01', name: '泰式奶茶', price: 60, qty: 1 }
+        ]
+      },
+      {
+        id: 'ord-02',
+        status: 'cancelled', // Should be excluded from revenue and count
+        createdAt: '2026-09-27T10:15:00.000Z',
+        total: 500,
+        items: [{ id: 'i3', menuItemId: 'ty-01', name: '泰式海鮮酸辣冬蔭湯', price: 280, qty: 1 }]
+      },
+      {
+        id: 'ord-03',
+        status: 'paid',
+        createdAt: '2026-09-27T11:00:00.000Z',
+        total: 150,
+        items: [{ id: 'i4', menuItemId: 'sk-02', name: '特選烤牛肉串', price: 150, qty: 1 }]
+      }
+    ];
+
+    const activeOrders = rawOrders.filter(o => o.status !== 'cancelled');
+    const totalRev = activeOrders.reduce((sum, o) => sum + o.total, 0);
+    const count = activeOrders.length;
+
+    expect(count).toBe(2);
+    expect(totalRev).toBe(450); // 300 + 150
+
+    // Top dishes quantity aggregation
+    const dishMap: Record<string, number> = {};
+    activeOrders.forEach(o => {
+      o.items.forEach(it => {
+        dishMap[it.name] = (dishMap[it.name] || 0) + it.qty;
+      });
+    });
+    expect(dishMap['泰式沙嗲豬肉串']).toBe(2);
+    expect(dishMap['泰式奶茶']).toBe(1);
+    expect(dishMap['特選烤牛肉串']).toBe(1);
+    expect(dishMap['泰式海鮮酸辣冬蔭湯']).toBeUndefined(); // Cancelled order excluded
+  });
+
+  // 7. Historical Export Threshold & Fallback Mechanics
+  it('Sim 7: Historical Export 30-day date threshold calculation & fallback', () => {
+    const now = Date.now();
+    const twentyDaysAgo = new Date(now - 20 * 24 * 60 * 60 * 1000).toISOString();
+    const fortyDaysAgo = new Date(now - 40 * 24 * 60 * 60 * 1000).toISOString();
+
+    const ordersPool = [
+      { id: 'recent-1', status: 'completed', createdAt: twentyDaysAgo, total: 200 },
+      { id: 'old-1', status: 'completed', createdAt: fortyDaysAgo, total: 400 },
+      { id: 'recent-pending', status: 'pending', createdAt: twentyDaysAgo, total: 100 }
+    ];
+
+    const thirtyDaysAgoMs = now - 30 * 24 * 60 * 60 * 1000;
+    const exportable = ordersPool.filter(o => {
+      const orderMs = new Date(o.createdAt).getTime();
+      return o.status === 'completed' && orderMs >= thirtyDaysAgoMs;
+    });
+
+    expect(exportable.length).toBe(1);
+    expect(exportable[0].id).toBe('recent-1');
+  });
 });

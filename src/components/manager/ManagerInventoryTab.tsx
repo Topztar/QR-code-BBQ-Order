@@ -12,7 +12,7 @@ interface ManagerInventoryTabProps {
   restockAmount: { [id: string]: number };
   setRestockAmount: React.Dispatch<React.SetStateAction<{ [id: string]: number }>>;
   handleRestockClick: (id: string) => void;
-  setQuickRestockItem: (item: Ingredient | null) => void;
+
 
   manualAdjustId: string;
   setManualAdjustId: (id: string) => void;
@@ -48,7 +48,6 @@ export const ManagerInventoryTab: React.FC<ManagerInventoryTabProps> = ({
   restockAmount,
   setRestockAmount,
   handleRestockClick,
-  setQuickRestockItem,
 
   manualAdjustId,
   setManualAdjustId,
@@ -140,16 +139,6 @@ export const ManagerInventoryTab: React.FC<ManagerInventoryTabProps> = ({
                       <td className={`py-3 px-3 font-mono font-bold text-sm ${isWarning ? 'text-rose-400 font-extrabold' : 'text-zinc-100'}`}>
                         <div className="flex items-center space-x-1.5">
                           <span>{ig.stock}</span>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setQuickRestockItem(ig);
-                            }}
-                            className="p-1 inline-flex items-center justify-center rounded bg-amber-500/10 hover:bg-amber-500/20 text-[#E5B453] border border-amber-500/25 transition active:scale-90 cursor-pointer shadow-sm"
-                            title="快速補貨 Restock"
-                          >
-                            <Plus size={11} />
-                          </button>
                         </div>
                       </td>
                       <td className="py-3 px-3 font-mono text-zinc-400">{ig.minThreshold}</td>
@@ -228,16 +217,6 @@ export const ManagerInventoryTab: React.FC<ManagerInventoryTabProps> = ({
                     </div>
 
                     <div className="flex items-center gap-1.5 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setQuickRestockItem(ig);
-                        }}
-                        className="h-8 w-8 inline-flex items-center justify-center rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-[#E5B453] border border-amber-500/25 transition active:scale-90 cursor-pointer shadow-sm"
-                        title="快速特定值補貨"
-                      >
-                        <Plus size={13} />
-                      </button>
 
                       <button
                         type="button"

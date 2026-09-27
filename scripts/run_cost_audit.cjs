@@ -112,15 +112,18 @@ try {
 console.log('');
 
 // -------------------------------------------------------------
-// 5. 客戶端訂單監聽與防護審計 (OrderDataContext.tsx & offlineQueue.ts)
+// 5. 客戶端訂單監聽與防護審計 (OrderDataContext.tsx & useLiveOrders.ts & offlineQueue.ts)
 // -------------------------------------------------------------
-console.log('🛡️ 5. 客戶端訂單監聽與防護審計 (OrderDataContext.tsx & offlineQueue.ts)');
+console.log('🛡️ 5. 客戶端訂單監聽與防護審計 (OrderDataContext.tsx & useLiveOrders.ts & offlineQueue.ts)');
 try {
   const orderCtxPath = path.resolve(__dirname, '../src/context/OrderDataContext.tsx');
   const orderCtxContent = fs.readFileSync(orderCtxPath, 'utf8');
+  const liveOrdersPath = path.resolve(__dirname, '../src/hooks/useLiveOrders.ts');
+  const liveOrdersContent = fs.readFileSync(liveOrdersPath, 'utf8');
+  const combinedContent = orderCtxContent + '\n' + liveOrdersContent;
 
-  assert(orderCtxContent.includes("activeTab === 'customer'"), "OrderDataContext.tsx 包含 activeTab === 'customer' 監聽阻斷守衛（避免顧客端建立 Firestore 連線）");
-  assert(orderCtxContent.includes('limit(200)'), "OrderDataContext.tsx 包含 limit(200) 受控監聽限制（防止單一員工頁面超量讀取）");
+  assert(combinedContent.includes("activeTab === 'customer'") || combinedContent.includes("!isStaffView"), "OrderDataContext.tsx / useLiveOrders.ts 包含 監聽阻斷守衛（避免顧客端建立 Firestore 連線）");
+  assert(combinedContent.includes('limit(200)'), "OrderDataContext.tsx / useLiveOrders.ts 包含 limit(200) 受控監聽限制（防止單一員工頁面超量讀取）");
 
   const offlineQueuePath = path.resolve(__dirname, '../src/lib/offlineQueue.ts');
   const offlineQueueContent = fs.readFileSync(offlineQueuePath, 'utf8');

@@ -1,4 +1,5 @@
 import { Order } from '../types';
+import { pointsHelper } from '../types/points';
 
 export interface OrderPricingInput {
   items?: any[];
@@ -150,13 +151,10 @@ export const orderCalculationService = {
   },
 
   calculateVipStatus: (userPoints: number | undefined, vipThreshold: number): { isVip: boolean; pointsToNext: number } => {
-    const points = userPoints || 0;
-    const isVip = points >= vipThreshold;
-    const pointsToNext = Math.max(0, vipThreshold - points);
-    return { isVip, pointsToNext };
+    return pointsHelper.calculateVipStatus(userPoints, vipThreshold);
   },
 
   canRedeemReward: (userPoints: number | undefined, rewardCost: number): boolean => {
-    return (userPoints || 0) >= rewardCost;
+    return pointsHelper.canRedeemReward(userPoints, rewardCost);
   }
 };

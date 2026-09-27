@@ -108,18 +108,20 @@ export const CustomerCustomizerModal: React.FC<CustomerCustomizerModalProps> = (
             : 'bg-[#161616] border-white/10 text-white'
         }`}
       >
-        {/* Pic & Name */}
+        {/* Pic & Name Header */}
         <div
           onClick={() => {
-            if (selectedDetailItem.image) {
+            if (!isSimplifiedMode && selectedDetailItem.image) {
               setActiveLightboxImg(selectedDetailItem.image);
             }
           }}
-          className={`relative w-full aspect-[16/10] sm:aspect-[16/9] bg-neutral-950 shrink-0 overflow-hidden ${
-            selectedDetailItem.image ? 'cursor-zoom-in group' : ''
+          className={`relative w-full shrink-0 overflow-hidden text-left ${
+            isSimplifiedMode
+              ? 'bg-[#1a1a1a] p-5 border-b-4 border-[#FFA500]'
+              : `aspect-[16/10] sm:aspect-[16/9] bg-neutral-950 ${selectedDetailItem.image ? 'cursor-zoom-in group' : ''}`
           }`}
         >
-          {selectedDetailItem.image ? (
+          {!isSimplifiedMode && selectedDetailItem.image ? (
             <>
               <picture className="w-full h-full block">
                 {selectedDetailItem.avifUrl && <source srcSet={selectedDetailItem.avifUrl} type="image/avif" />}
@@ -135,27 +137,39 @@ export const CustomerCustomizerModal: React.FC<CustomerCustomizerModalProps> = (
                 {TRANSLATIONS.clickToZoom?.[currentLang] || '🔍 點擊放大縮放'}
               </div>
             </>
-          ) : (
+          ) : !isSimplifiedMode ? (
             <div className="w-full h-full bg-zinc-900 flex flex-col items-center justify-center text-zinc-500">
               <span className="text-4xl">🍲</span>
               <span className="text-xs text-zinc-400 font-bold mt-1.5">{TRANSLATIONS.noImageAssigned?.[currentLang] || '無餐點照片'}</span>
             </div>
-          )}
+          ) : null}
+
           <button
             id="close-customizer-btn"
             onClick={(e) => {
               e.stopPropagation();
               setSelectedDetailItem(null);
             }}
-            className="absolute top-4 right-4 bg-black/60 text-white hover:text-[#E5B453] p-1.5 rounded-full backdrop-blur-sm transition cursor-pointer z-10"
+            className={`absolute top-4 right-4 p-1.5 rounded-full backdrop-blur-sm transition cursor-pointer z-10 ${
+              isSimplifiedMode
+                ? 'bg-zinc-200 text-black hover:bg-zinc-300'
+                : 'bg-black/60 text-white hover:text-[#E5B453]'
+            }`}
           >
             <X size={18} />
           </button>
-          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/95 via-black/55 to-transparent p-5 text-left">
+          
+          <div
+            className={
+              isSimplifiedMode
+                ? 'w-full pr-8'
+                : 'absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/95 via-black/55 to-transparent p-5 text-left'
+            }
+          >
             <div className="flex items-center gap-2 flex-wrap">
               <h4
                 className={`font-serif tracking-wide ${
-                  isSimplifiedMode ? 'text-white text-xl font-black' : 'text-white text-lg font-bold'
+                  isSimplifiedMode ? 'text-white text-2xl font-black mb-1' : 'text-white text-lg font-bold'
                 }`}
               >
                 {getLocalizedText(selectedDetailItem?.name, currentLang) || ''}
@@ -174,6 +188,18 @@ export const CustomerCustomizerModal: React.FC<CustomerCustomizerModalProps> = (
               <p className="text-xs text-white/60 line-clamp-1 mt-1 font-sans">
                 {getLocalizedText(selectedDetailItem?.description, currentLang)}
               </p>
+            )}
+            {isSimplifiedMode && selectedDetailItem.image && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setActiveLightboxImg(selectedDetailItem.image);
+                }}
+                className="mt-3 bg-[#FFA500] text-black text-xs font-black px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-sm active:scale-95"
+              >
+                <span>🔍 查看實物照片</span>
+              </button>
             )}
           </div>
         </div>

@@ -1,5 +1,5 @@
 import { apiFetch } from "../lib/api";
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback, useDeferredValue } from 'react';
 import {
   Order,
   OrderStatus,
@@ -93,6 +93,8 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
   onToggleOrderItemComplete,
   reservations = [],
 }) => {
+  const deferredOrders = useDeferredValue(orders);
+
   const t = useCallback(
     (key: string): string => {
       return TRANSLATIONS[key]?.[currentLang] || TRANSLATIONS[key]?.zh || key;
@@ -122,8 +124,6 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
 
   // 🍳 Mutex Lock & Role Session Management from OrderDataContext
   const {
-    kdsSession,
-    currentDeviceId,
     isKitchenPreempted,
     handleClaimKitchenRole,
     handleReleaseKitchenRole,
@@ -653,7 +653,7 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
   }, []);
 
   const getTableOccupancyElapsedTime = useCallback((tableNumber: string) => {
-    const tableOrders = orders.filter(
+    const tableOrders = deferredOrders.filter(
       (o) => o.tableNumber === tableNumber && (o.status === 'pending' || o.status === 'preparing')
     );
     if (tableOrders.length === 0) return null;
@@ -678,7 +678,7 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
       oldestOrderId: oldest.id,
       orderCount: tableOrders.length,
     };
-  }, [orders]);
+  }, [deferredOrders]);
 
   const isOrderLateForPrepTime = (order: Order) => {
     const currentWaitMins = (Date.now() - new Date(order.createdAt).getTime()) / 60000;
@@ -703,7 +703,7 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
 
   // Filtered orders
   const filteredOrders = useMemo(() => {
-    return orders
+    return deferredOrders
       .filter((o) => {
         if (filterStatus === 'active') {
           return o.status === 'pending' || o.status === 'confirmed' || o.status === 'preparing' || o.status === 'delivering' || o.status === 'paid';
@@ -723,7 +723,7 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
           o.items.some((it) => getLocalizedText(it.name, 'zh').toLowerCase().includes(q))
         );
       });
-  }, [orders, filterStatus, hideOlderCompleted, searchQuery]);
+  }, [deferredOrders, filterStatus, hideOlderCompleted, searchQuery]);
 
   // Merged dish items
   const mergedDishes = useMemo(() => {
@@ -757,12 +757,12 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
   }, [filteredOrders]);
 
   // Hourly chart data
-  const getHourlyData = useCallback(() => {
+  const hourlyData = useMemo(() => {
     const hourlyMap: Record<number, number> = {};
     for (let i = 11; i <= 22; i++) {
       hourlyMap[i] = 0;
     }
-    orders.forEach((o) => {
+    deferredOrders.forEach((o) => {
       const h = new Date(o.createdAt).getHours();
       if (hourlyMap[h] !== undefined) {
         hourlyMap[h] += 1;
@@ -772,12 +772,11 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
       hour: `${hour}:00`,
       orders: count,
     }));
-  }, [orders]);
+  }, [deferredOrders]);
 
   const maxCount = useMemo(() => {
-    const data = getHourlyData();
-    return Math.max(...data.map((d) => d.orders), 5);
-  }, [getHourlyData]);
+    return Math.max(...hourlyData.map((d) => d.orders), 5);
+  }, [hourlyData]);
 
   const predictionData = useMemo(() => {
     return [
@@ -813,7 +812,7 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
         isCloseToClosing={isCloseToClosing}
         operatingHours={operatingHours}
         getTableOccupancyElapsedTime={getTableOccupancyElapsedTime}
-        orders={orders}
+        orders={deferredOrders}
         printerIp={printerIp}
         setPrintConfirmData={setPrintConfirmData}
         handleItemStatusToggle={handleItemStatusToggle}
@@ -954,8 +953,8 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
         <KdsHourlyChart
           activeChartTab={activeChartTab}
           setActiveChartTab={setActiveChartTab}
-          orders={orders}
-          hourlyData={getHourlyData()}
+          orders={deferredOrders}
+          hourlyData={hourlyData}
           maxCount={maxCount}
           predictionData={predictionData}
           CustomTooltip={CustomTooltip}
