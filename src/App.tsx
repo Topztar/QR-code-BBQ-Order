@@ -41,8 +41,8 @@ export const resilientLazy = <T extends React.ComponentType<any>>(
 const StaffLoginGate = resilientLazy(() => import('./components/StaffLoginGate').then(m => ({ default: m.StaffLoginGate })));
 const StaffPortalContainer = resilientLazy(() => import('./components/StaffPortalContainer'));
 const CustomerOrderView = resilientLazy(() => import('./components/CustomerOrderView').then(m => ({ default: m.CustomerOrderView })));
-const KitchenDisplaySystem = resilientLazy(() => import('./components/KitchenDisplaySystem').then(m => ({ default: m.KitchenDisplaySystem })));
-const ManagerDashboard = resilientLazy(() => import('./components/ManagerDashboard').then(m => ({ default: m.ManagerDashboard })));
+
+
 
 const ViewLoadingFallback = () => (
   <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
