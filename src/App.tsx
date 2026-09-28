@@ -40,7 +40,7 @@ export const resilientLazy = <T extends React.ComponentType<any>>(
 
 const StaffLoginGate = resilientLazy(() => import('./components/StaffLoginGate').then(m => ({ default: m.StaffLoginGate })));
 const StaffPortalContainer = resilientLazy(() => import('./components/StaffPortalContainer'));
-import { CustomerOrderView } from './components/CustomerOrderView';
+const CustomerOrderView = resilientLazy(() => import('./components/CustomerOrderView').then(m => ({ default: m.CustomerOrderView })));
 
 const ViewLoadingFallback = () => (
   <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
@@ -671,38 +671,40 @@ function AppContent({
         ) : (
           <div>
             <ErrorBoundary fallbackTitle="顧客前台載入異常" fallbackMessage="前台點餐畫面載入遇到問題，請點擊下方按鈕重試。">
-              <CustomerOrderView
-                currentLang={lang}
-                menuItems={menuItems}
-                categories={categories}
-                tables={tables}
-                reservations={reservations}
-                onAddReservation={handleAddReservation}
-                onPlaceOrder={handlePlaceOrder}
-                activeOrders={orders}
-                pushNotifications={pushNotifications}
-                onMarkNotificationRead={handleMarkNotificationRead}
-                inventoryWarnings={analytics.stockWarnings}
-                minSpend={minSpend}
-                isOpen={isOpen}
-                customerNotice={customerNotice}
-                operatingHours={operatingHours}
-                restDays={restDays}
-                promoCombo={promoCombo}
-                ingredients={ingredients}
-                onToggleMenuItemAvailability={handleToggleMenuItemAvailability}
-                onAdjustIngredientStock={handleAdjustIngredientStock}
-                popularItemIds={popularItemIds}
-                servicePaused={servicePaused}
-                memberPointsRatio={memberPointsRatio}
-                memberVipThreshold={memberVipThreshold}
-                memberVipDiscountRate={memberVipDiscountRate}
-                memberEnablePointsDiscount={memberEnablePointsDiscount}
-                memberPointsRedeemRate={memberPointsRedeemRate}
-                memberRewards={memberRewards}
-                autoOpenReservationModal={isReserveRoute}
-                isOrderRoute={isOrderRoute}
-              />
+              <Suspense fallback={<ViewLoadingFallback />}>
+                <CustomerOrderView
+                  currentLang={lang}
+                  menuItems={menuItems}
+                  categories={categories}
+                  tables={tables}
+                  reservations={reservations}
+                  onAddReservation={handleAddReservation}
+                  onPlaceOrder={handlePlaceOrder}
+                  activeOrders={orders}
+                  pushNotifications={pushNotifications}
+                  onMarkNotificationRead={handleMarkNotificationRead}
+                  inventoryWarnings={analytics.stockWarnings}
+                  minSpend={minSpend}
+                  isOpen={isOpen}
+                  customerNotice={customerNotice}
+                  operatingHours={operatingHours}
+                  restDays={restDays}
+                  promoCombo={promoCombo}
+                  ingredients={ingredients}
+                  onToggleMenuItemAvailability={handleToggleMenuItemAvailability}
+                  onAdjustIngredientStock={handleAdjustIngredientStock}
+                  popularItemIds={popularItemIds}
+                  servicePaused={servicePaused}
+                  memberPointsRatio={memberPointsRatio}
+                  memberVipThreshold={memberVipThreshold}
+                  memberVipDiscountRate={memberVipDiscountRate}
+                  memberEnablePointsDiscount={memberEnablePointsDiscount}
+                  memberPointsRedeemRate={memberPointsRedeemRate}
+                  memberRewards={memberRewards}
+                  autoOpenReservationModal={isReserveRoute}
+                  isOrderRoute={isOrderRoute}
+                />
+              </Suspense>
             </ErrorBoundary>
           </div>
         )}
