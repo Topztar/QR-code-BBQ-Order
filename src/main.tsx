@@ -35,6 +35,7 @@ if (typeof window !== 'undefined') {
         caches.keys().then((names) => names.forEach((n) => caches.delete(n))).catch(() => {});
       }
       const url = new URL(window.location.href);
+      url.searchParams.set('v', now.toString());
       url.searchParams.set('_v', now.toString());
       window.location.replace(url.toString());
     }

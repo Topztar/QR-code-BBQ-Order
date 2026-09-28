@@ -11,12 +11,17 @@ export const useAdminHotkey = (
 ) => {
   const [isTriggered, setIsTriggered] = useState(false);
 
+  const ctrlReq = secretKeyCombo.ctrl ?? true;
+  const shiftReq = secretKeyCombo.shift ?? true;
+  const altReq = secretKeyCombo.alt ?? false;
+  const targetKey = secretKeyCombo.key.toLowerCase();
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      const matchCtrl = secretKeyCombo.ctrl ? (event.ctrlKey || event.metaKey) : (!event.ctrlKey && !event.metaKey);
-      const matchShift = secretKeyCombo.shift ? event.shiftKey : !event.shiftKey;
-      const matchAlt = secretKeyCombo.alt ? event.altKey : !event.altKey;
-      const matchKey = event.key.toLowerCase() === secretKeyCombo.key.toLowerCase();
+      const matchCtrl = ctrlReq ? (event.ctrlKey || event.metaKey) : (!event.ctrlKey && !event.metaKey);
+      const matchShift = shiftReq ? event.shiftKey : !event.shiftKey;
+      const matchAlt = altReq ? event.altKey : !event.altKey;
+      const matchKey = event.key.toLowerCase() === targetKey;
 
       if (matchCtrl && matchShift && matchAlt && matchKey) {
         event.preventDefault();
@@ -31,7 +36,7 @@ export const useAdminHotkey = (
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [secretKeyCombo, onTrigger]);
+  }, [ctrlReq, shiftReq, altReq, targetKey, onTrigger]);
 
   return isTriggered;
 };

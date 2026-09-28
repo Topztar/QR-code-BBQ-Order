@@ -1,4 +1,4 @@
-import { Order, Reservation } from '../../types';
+import { Reservation } from '../../types';
 import { orderCalculationService } from '../../services/orderCalculationService';
 import { getTaiwanDateString, isSameTaiwanDate } from '../../utils/dateUtils';
 

@@ -27,7 +27,7 @@
     "site": "sabay-bbq-order",
     "public": "dist",
     "predeploy": [
-      "npm run predeploy"
+      "npm run build"
     ],
     "ignore": [
       "firebase.json",

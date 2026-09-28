@@ -3,7 +3,7 @@ import { MenuItem, Ingredient, Category, TableConfig, OperatingHourSlot, Reserva
 import { evaluateDishAvailability } from '../utils/menuAvailability';
 import { apiFetch } from '../lib/api';
 import { db, isFirebaseSyncEnabled, startFirebaseSync, stopFirebaseSync } from '../lib/firebase';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { collection, onSnapshot, query, limit } from 'firebase/firestore';
 import { INITIAL_MENU, INITIAL_CATEGORIES, loadData } from '../data';
 import { addRequestToQueue } from '../lib/offlineQueue';
 import { validateTableMonopoly } from '../utils/reservationValidator';
@@ -416,7 +416,7 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
 
     if (syncActive && isFirebaseSyncEnabled() && activeTab !== 'customer') {
       try {
-        unsubscribeIngredients = onSnapshot(collection(db, "ingredients"), (snapshot) => {
+        unsubscribeIngredients = onSnapshot(query(collection(db, "ingredients"), limit(150)), (snapshot) => {
           const updatedIngredients = snapshot.docs.map(doc => doc.data() as Ingredient);
           setIngredients(updatedIngredients);
         }, (error) => {

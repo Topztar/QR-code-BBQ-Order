@@ -31,8 +31,7 @@ export const CashierOrderSidebar: React.FC<CashierOrderSidebarProps> = ({
     cashierListFilter,
     setCashierListFilter,
     selectedCashierOrderId,
-    simulatedElapsedOrders,
-    setCopiedGoogleLinkNotice
+    simulatedElapsedOrders
   } = useDashboardStore();
 
   const filteredCashierOrders = useMemo(() => {

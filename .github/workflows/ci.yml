@@ -28,7 +28,13 @@ jobs:
       - name: Install Functions Dependencies
         run: cd functions && npm ci
 
-      - name: Run Type Checking and Build
+      - name: Run Custom Quality Gate Audits (Security, Perf, Cost)
+        run: |
+          npm run audit:security
+          npm run audit:perf
+          npm run audit:cost
+
+      - name: Run Type Checking, Tests and Build
         run: npm run lint && npm run test && npm run build
 
       - name: Verify Bundle Size Limits

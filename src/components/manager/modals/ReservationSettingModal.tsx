@@ -62,8 +62,8 @@ export const ReservationSettingModal: React.FC<ReservationSettingModalProps> = (
     resNoInput, setResNoInput,
     generatedResLink, setGeneratedResLink,
     copiedLinkNotice, setCopiedLinkNotice,
-    resError, setResError,
-    resSuccess, setResSuccess,
+    resError,
+    resSuccess,
     managerResAvailability,
     managerDesignatedCapacity,
     handleReservationSaveSubmit

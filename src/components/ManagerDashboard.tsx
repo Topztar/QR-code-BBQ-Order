@@ -1,7 +1,7 @@
 import { apiFetch } from "../lib/api";
 import { ErrorBoundary } from './ErrorBoundary';
 import { ChunkErrorBoundary } from './ChunkErrorBoundary';
-import React, { useState, useEffect, useMemo, useCallback, Suspense, lazy } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, Suspense } from 'react';
 import { resilientLazy } from '../App';
 import { Ingredient, Language, Category, TableConfig, Order, OrderStatus, Reservation, SoldOutType, PrinterConfig, PaidModDetails } from '../types';
 import { getLocalizedText } from '../utils/i18n';

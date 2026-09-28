@@ -95,6 +95,10 @@ export default defineConfig(({ mode }) => {
     rollupOptions: {
       output: {
         manualChunks(id) {
+          // React 生態系核心 (React, React-DOM) 獨立穩定 Vendor Chunk
+          if (id.includes('node_modules/react/') || id.includes('node_modules/react-dom/') || id.includes('node_modules/scheduler/')) {
+            return 'vendor-react';
+          }
           // Firebase SDK 核心細分化，減少初始 precache 體積
           if (id.includes('node_modules/firebase/app') || id.includes('node_modules/@firebase/app')) {
             return 'vendor-firebase-app';

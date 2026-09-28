@@ -29,6 +29,7 @@ import {
 } from './hardware/printerDriver';
 import { sendReservationNotifications, sendTestNotification } from './functions/src/services/notification';
 import { orderCalculationService } from './src/services/orderCalculationService';
+import { getTaiwanDateString, getTaiwanTimeParts } from './src/utils/dateUtils';
 
 import { initFirebaseStorage, gcsBucket, app, PORT } from './src/server/init';
 import { setupMiddleware, createRateLimiter } from './src/server/middleware';
@@ -415,15 +416,7 @@ export function calculatePromoDiscount(items: any[]): number {
   return orderCalculationService.calculatePromoComboDiscount(items, combos, liveMenu);
 }
 
-function getTaiwanDateString(timestamp?: number): string {
-  const date = timestamp ? new Date(timestamp) : new Date();
-  const utc = date.getTime() + (date.getTimezoneOffset() * 60000);
-  const localDate = new Date(utc + (3600000 * 8));
-  const year = localDate.getFullYear();
-  const month = String(localDate.getMonth() + 1).padStart(2, '0');
-  const dayOfMonth = String(localDate.getDate()).padStart(2, '0');
-  return `${year}-${month}-${dayOfMonth}`;
-}
+
 
 
 const sortByOrderIndex = (a: any, b: any) => (a.orderIndex ?? 9999) - (b.orderIndex ?? 9999);
@@ -674,20 +667,13 @@ function cleanupUnlistedReservationData() {
 
 function isStoreOpen(timestamp?: number, isReservation: boolean = false): boolean {
   if (liveServicePaused) return false;
-  const date = timestamp ? new Date(timestamp) : new Date();
-  const utc = date.getTime() + (date.getTimezoneOffset() * 60000);
-  const localDate = new Date(utc + (3600000 * 8));
-  
-  const taiwanDateString = getTaiwanDateString(timestamp);
+  const { dateStr: taiwanDateString, dayOfWeek: day, hours: hour, minutes: minute } = getTaiwanTimeParts(timestamp ? new Date(timestamp) : new Date());
 
   // Check if today is a public holiday / rest day
   if (liveRestDays.includes(taiwanDateString)) {
     return false;
   }
 
-  const day = localDate.getDay(); // 0 is Sunday, ..., 6 is Saturday
-  const hour = localDate.getHours();
-  const minute = localDate.getMinutes();
   const currentTotalMinutes = hour * 60 + minute;
 
   let open = false;

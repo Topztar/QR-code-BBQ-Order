@@ -10,7 +10,6 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { RestaurantDataProvider, useRestaurantData } from './context/RestaurantDataContext';
 import { OrderDataProvider, useOrderData } from './context/OrderDataContext';
 import { PrinterDataProvider, usePrinterData } from './context/PrinterDataContext';
-import { StaffLoginGate } from './components/StaffLoginGate';
 import { useAdminHotkey } from './hooks/useAdminHotkey';
 
 // Wrapper for lazy loading with retry to prevent chunk load errors causing black screens
@@ -67,6 +66,7 @@ export const resilientLazy = <T extends React.ComponentType<any>>(
 const CustomerOrderView = resilientLazy(() => import('./components/CustomerOrderView').then(m => ({ default: m.CustomerOrderView })));
 const KitchenDisplaySystem = resilientLazy(() => import('./components/KitchenDisplaySystem').then(m => ({ default: m.KitchenDisplaySystem })));
 const ManagerDashboard = resilientLazy(() => import('./components/ManagerDashboard').then(m => ({ default: m.ManagerDashboard })));
+const StaffLoginGate = resilientLazy(() => import('./components/StaffLoginGate').then(m => ({ default: m.StaffLoginGate })));
 
 const ViewLoadingFallback = () => (
   <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
@@ -195,7 +195,14 @@ function AppContent({
 
   // Keyboard hotkeys for switching staff workspace tabs instantly (Ctrl+1 to Ctrl+5)
   useEffect(() => {
+    if (!isStaff) return;
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore hotkeys when user is actively typing in input or textarea
+      const targetTag = (e.target as HTMLElement)?.tagName;
+      if (targetTag === 'INPUT' || targetTag === 'TEXTAREA' || (e.target as HTMLElement)?.isContentEditable) {
+        return;
+      }
+
       if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey) {
         if (e.key === '1') {
           e.preventDefault();
@@ -216,8 +223,10 @@ function AppContent({
       }
     };
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleStaffTabSwitch]);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isStaff, handleStaffTabSwitch]);
 
   // Context consumers
   const {
@@ -664,16 +673,18 @@ function AppContent({
                 </p>
               </div>
               <ErrorBoundary fallbackTitle="員工登入門戶載入異常" fallbackMessage="安全驗證門戶載入遇到問題，請點擊下方按鈕重試。">
-                <StaffLoginGate
-                  onLoginSuccess={() => {
-                    setIsStaff(true);
-                    handleStaffTabSwitch('/admin?tab=stats', 'admin', 'stats');
-                  }}
-                  onCancel={() => {
-                    setActiveTab('customer');
-                    navigateTo('/');
-                  }}
-                />
+                <Suspense fallback={<ViewLoadingFallback />}>
+                  <StaffLoginGate
+                    onLoginSuccess={() => {
+                      setIsStaff(true);
+                      handleStaffTabSwitch('/admin?tab=stats', 'admin', 'stats');
+                    }}
+                    onCancel={() => {
+                      setActiveTab('customer');
+                      navigateTo('/');
+                    }}
+                  />
+                </Suspense>
               </ErrorBoundary>
             </div>
           ) : (
@@ -780,7 +791,7 @@ function AppContent({
           )
         ) : (
           <div>
-            <ErrorBoundary>
+            <ErrorBoundary fallbackTitle="顧客前台載入異常" fallbackMessage="前台點餐畫面載入遇到問題，請點擊下方按鈕重試。">
               <Suspense fallback={<ViewLoadingFallback />}>
                 <CustomerOrderView
                   currentLang={lang}

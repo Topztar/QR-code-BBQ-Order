@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertTriangle, Package, Plus, Download } from 'lucide-react';
+import { AlertTriangle, Package, Download } from 'lucide-react';
 import { Ingredient } from '../../types';
 import { getLocalizedText } from '../../utils/i18n';
 

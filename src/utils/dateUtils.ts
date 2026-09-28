@@ -1,5 +1,5 @@
-export function getTaiwanDateString(d: Date | string = new Date()): string {
-  const dateObj = typeof d === 'string' ? new Date(d) : d;
+export function getTaiwanDateString(d: Date | string | number = new Date()): string {
+  const dateObj = typeof d === 'number' ? new Date(d) : (typeof d === 'string' ? new Date(d) : d);
   if (isNaN(dateObj.getTime())) return '';
   return new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Taipei',
@@ -9,8 +9,8 @@ export function getTaiwanDateString(d: Date | string = new Date()): string {
   }).format(dateObj);
 }
 
-export function getTaiwanTimeParts(d: Date | string = new Date()) {
-  const dateObj = typeof d === 'string' ? new Date(d) : d;
+export function getTaiwanTimeParts(d: Date | string | number = new Date()) {
+  const dateObj = typeof d === 'number' ? new Date(d) : (typeof d === 'string' ? new Date(d) : d);
   if (isNaN(dateObj.getTime())) {
     return { year: 0, month: 0, date: 0, dayOfWeek: 0, hours: 0, minutes: 0, dateStr: '' };
   }
@@ -30,7 +30,7 @@ export function getTaiwanTimeParts(d: Date | string = new Date()) {
   };
 }
 
-export function isSameTaiwanDate(d1: Date | string, d2: Date | string): boolean {
+export function isSameTaiwanDate(d1: Date | string | number, d2: Date | string | number): boolean {
   if (!d1 || !d2) return false;
   return getTaiwanDateString(d1) === getTaiwanDateString(d2);
 }
