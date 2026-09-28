@@ -33,6 +33,45 @@ export function registerSettingsRoutes(app: express.Application, ctx: RouteConte
   const put: RouteRegister = (routePath, ...handlers) => app.put([`/api${routePath}`, routePath], ...handlers);
   const del: RouteRegister = (routePath, ...handlers) => app.delete([`/api${routePath}`, routePath], ...handlers);
 
+// ⚡ /settings/public — 公開設定聚合端點 (10分鐘 CDN 邊緣快取，0 Function 喚醒成本)
+// 整合所有低頻更新的公開設定，單次請求取代 6 個獨立 API 呼叫
+get('/settings/public', async (_req, res) => {
+  try {
+    // 10分鐘 CDN 邊緣快取：靜態設定幾乎不變動，大幅節省 Function 計費
+    res.setHeader('Cache-Control', 'public, max-age=120, s-maxage=600, stale-while-revalidate=1800');
+    const sysData = await getCachedSettings();
+    const isOpen = sysData ? isStoreOpenFromData(sysData) : true;
+    const defaultOptionRules = [
+      { id: 'rule-1784360566576', name: '加河粉', category: '加配料', price: 20 },
+      { id: 'rule-1784360574891', name: '加米線', category: '加配料', price: 20 },
+      { id: 'rule-1784360613823', name: '升級套餐(烤蔬菜+泰奶一杯)', category: '加配料', price: 140 }
+    ];
+    res.json({
+      minSpend: sysData?.liveMinSpendPerPerson ?? 200,
+      operatingHours: {
+        slots: sysData?.liveOperatingHours || [],
+        restDays: sysData?.liveRestDays || [],
+        isOpen
+      },
+      customerNotice: sysData?.liveCustomerNotice || '',
+      servicePaused: sysData?.liveServicePaused || false,
+      promoCombo: sysData?.livePromoCombo || { enabled: false, requiredQty: 0, discountAmount: 0, eligibleItemIds: [] },
+      popularItemIds: sysData?.livePopularItemIds || [],
+      optionRules: sysData?.liveOptionRules || defaultOptionRules,
+      membersConfig: {
+        pointsRatio: sysData?.liveMemberPointsRatio ?? 20,
+        vipThreshold: sysData?.liveMemberVipThreshold ?? 1000,
+        vipDiscountRate: sysData?.liveMemberVipDiscountRate ?? 0.9,
+        enablePointsDiscount: sysData?.liveMemberEnablePointsDiscount ?? true,
+        pointsRedeemRate: sysData?.liveMemberPointsRedeemRate ?? 1,
+        rewards: sysData?.liveMemberRewards || []
+      }
+    });
+  } catch (error) {
+    sendErrorResponse(res, error, '公開設定聚合載入失敗');
+  }
+});
+
 get('/settings/service-pause', async (_req, res) => {
   try {
     res.setHeader('Cache-Control', 'public, max-age=30, s-maxage=300, stale-while-revalidate=600');

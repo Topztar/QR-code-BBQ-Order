@@ -359,20 +359,41 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
         }
       } else {
         const syncEnabled = isFirebaseSyncEnabled();
+        // ⚡ 輕量刷新週期：並行拉取桌位 + 公開設定聚合 (CDN s-maxage=600)
+        // /api/settings/public 已由 Firebase Hosting CDN 在邊緣快取 10 分鐘，0 Function 喚醒成本
         const fetchPromises: Promise<Response>[] = [
           safeFetch('/api/tables', []),
-          safeFetch('/api/settings/service-pause', { servicePaused: false }),
+          safeFetch('/api/settings/public', null),
           syncEnabled ? Promise.resolve({ ok: true, json: async () => null } as unknown as Response) : safeFetch('/api/ingredients', [])
         ];
 
         const results = await Promise.all(fetchPromises);
         const tablesData = await safeJson(results[0], []);
-        const servicePauseData = await safeJson(results[1], { servicePaused: false });
+        const publicSettingsData = await safeJson(results[1], null);
         const ingData = await safeJson(results[2], []);
 
         if (Array.isArray(tablesData)) setTables(tablesData);
         if (!syncEnabled && Array.isArray(ingData) && activeTab !== 'customer') setIngredients(ingData);
-        if (servicePauseData) setServicePaused(!!servicePauseData.servicePaused);
+        if (publicSettingsData) {
+          if (publicSettingsData.servicePaused !== undefined) setServicePaused(!!publicSettingsData.servicePaused);
+          if (publicSettingsData.minSpend !== undefined) setMinSpend(publicSettingsData.minSpend);
+          if (publicSettingsData.customerNotice !== undefined) setCustomerNotice(publicSettingsData.customerNotice);
+          if (publicSettingsData.promoCombo) setPromoCombo(publicSettingsData.promoCombo);
+          if (Array.isArray(publicSettingsData.popularItemIds)) setPopularItemIds(publicSettingsData.popularItemIds);
+          if (publicSettingsData.operatingHours) {
+            if (publicSettingsData.operatingHours.slots) setOperatingHours(publicSettingsData.operatingHours.slots);
+            if (publicSettingsData.operatingHours.restDays) setRestDays(publicSettingsData.operatingHours.restDays);
+            if (publicSettingsData.operatingHours.isOpen !== undefined) setIsOpen(!!publicSettingsData.operatingHours.isOpen);
+          }
+          if (publicSettingsData.membersConfig) {
+            if (publicSettingsData.membersConfig.pointsRatio !== undefined) setMemberPointsRatio(publicSettingsData.membersConfig.pointsRatio);
+            if (publicSettingsData.membersConfig.vipThreshold !== undefined) setMemberVipThreshold(publicSettingsData.membersConfig.vipThreshold);
+            if (publicSettingsData.membersConfig.vipDiscountRate !== undefined) setMemberVipDiscountRate(publicSettingsData.membersConfig.vipDiscountRate);
+            if (publicSettingsData.membersConfig.enablePointsDiscount !== undefined) setMemberEnablePointsDiscount(publicSettingsData.membersConfig.enablePointsDiscount);
+            if (publicSettingsData.membersConfig.pointsRedeemRate !== undefined) setMemberPointsRedeemRate(publicSettingsData.membersConfig.pointsRedeemRate);
+            if (publicSettingsData.membersConfig.rewards) setMemberRewards(publicSettingsData.membersConfig.rewards);
+          }
+        }
       }
     } catch (err: any) {
       console.warn('[Sabay Sync] Fetch error, attempting offline data fallback:', err);
