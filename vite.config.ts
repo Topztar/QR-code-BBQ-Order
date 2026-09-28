@@ -43,8 +43,6 @@ export default defineConfig(({ mode }) => {
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,webp,avif,woff,woff2,json}'],
         globIgnores: [
-          '**/ManagerDashboard*',
-          '**/vendor-charts*',
           '**/data.json'
         ],
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5MB limits for firebase SDK chunks
@@ -108,6 +106,9 @@ export default defineConfig(({ mode }) => {
           }
           if (id.includes('node_modules/firebase/auth') || id.includes('node_modules/@firebase/auth')) {
             return 'vendor-firebase-auth';
+          }
+          if (id.includes('node_modules/firebase/database') || id.includes('node_modules/@firebase/database')) {
+            return 'vendor-firebase-database';
           }
           if (id.includes('node_modules/firebase') || id.includes('node_modules/@firebase')) {
             return 'vendor-firebase-core';

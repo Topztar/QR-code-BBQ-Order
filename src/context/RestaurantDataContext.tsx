@@ -301,9 +301,9 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
               stopFirebaseSync();
             }
           }
-          if (bootstrapData.ingredients) setIngredients(bootstrapData.ingredients);
+          if (bootstrapData.ingredients && activeTab !== 'customer') setIngredients(bootstrapData.ingredients);
           if (bootstrapData.tables) setTables(bootstrapData.tables);
-          if (bootstrapData.reservations) setReservations(bootstrapData.reservations);
+          if (bootstrapData.reservations && activeTab !== 'customer') setReservations(bootstrapData.reservations);
           
           // ⚡ 動態狀態優先覆蓋：即時 /api/store-status 覆蓋長效快取之 bootstrap.servicePaused
           if (storeStatusData && storeStatusData.servicePaused !== undefined) {
@@ -371,7 +371,7 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
         const ingData = await safeJson(results[2], []);
 
         if (Array.isArray(tablesData)) setTables(tablesData);
-        if (!syncEnabled && Array.isArray(ingData)) setIngredients(ingData);
+        if (!syncEnabled && Array.isArray(ingData) && activeTab !== 'customer') setIngredients(ingData);
         if (servicePauseData) setServicePaused(!!servicePauseData.servicePaused);
       }
     } catch (err: any) {
@@ -398,29 +398,48 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
     };
     window.addEventListener('online', handleOnline);
 
-    let pollingTimer: NodeJS.Timeout | null = null;
-    if (activeTab !== 'customer') {
-      pollingTimer = setInterval(() => {
-        fetchData(false);
-      }, 30000);
-    }
+    // No polling needed; rely on realtime listeners.
 
     return () => {
       window.removeEventListener('online', handleOnline);
-      if (pollingTimer) clearInterval(pollingTimer);
     };
   }, [activeTab]);
 
   useEffect(() => {
     let unsubscribeIngredients = () => {};
+    let unsubscribeMenu = () => {};
+    let unsubscribeCategories = () => {};
+    let unsubscribeTables = () => {};
 
     if (syncActive && isFirebaseSyncEnabled() && activeTab !== 'customer') {
       try {
+        // Ingredients listener
         unsubscribeIngredients = onSnapshot(query(collection(db, "ingredients"), limit(150)), (snapshot) => {
           const updatedIngredients = snapshot.docs.map(doc => doc.data() as Ingredient);
           setIngredients(updatedIngredients);
         }, (error) => {
           console.warn('[Firebase Sync] Ingredients listener paused/disabled:', error);
+        });
+        // Menu listener
+        unsubscribeMenu = onSnapshot(collection(db, "menu"), (snapshot) => {
+          const items = snapshot.docs.map(doc => doc.data() as MenuItem);
+          setMenuItems(enrichMenuItems(items));
+        }, (error) => {
+          console.warn('[Firebase Sync] Menu listener paused/disabled:', error);
+        });
+        // Categories listener
+        unsubscribeCategories = onSnapshot(collection(db, "categories"), (snapshot) => {
+          const cats = snapshot.docs.map(doc => doc.data() as Category);
+          setCategories(enrichCategories(cats));
+        }, (error) => {
+          console.warn('[Firebase Sync] Categories listener paused/disabled:', error);
+        });
+        // Tables listener
+        unsubscribeTables = onSnapshot(collection(db, "tables"), (snapshot) => {
+          const tbls = snapshot.docs.map(doc => doc.data() as TableConfig);
+          setTables(tbls);
+        }, (error) => {
+          console.warn('[Firebase Sync] Tables listener paused/disabled:', error);
         });
       } catch (e) {
         console.warn('[Firebase Sync] Realtime listener initialization skipped:', e);
@@ -429,6 +448,9 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
 
     return () => {
       unsubscribeIngredients();
+      unsubscribeMenu();
+      unsubscribeCategories();
+      unsubscribeTables();
     };
   }, [activeTab, syncActive]);
 

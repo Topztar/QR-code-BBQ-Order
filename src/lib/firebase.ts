@@ -1,6 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getFunctions, connectFunctionsEmulator } from "firebase/functions";
-import { getAuth, signInWithCustomToken, connectAuthEmulator, type User } from 'firebase/auth';
+import type { User } from 'firebase/auth';
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, memoryLocalCache, connectFirestoreEmulator, getFirestore, Firestore, enableNetwork } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
@@ -62,41 +61,54 @@ try {
   }
 }
 
-import { getDatabase, type Database, connectDatabaseEmulator } from 'firebase/database';
-
 export const db = firestoreInstance;
-export const auth = getAuth(app);
-export const functions = getFunctions(app, 'asia-east1');
 
-let rtdbInstance: Database | null = null;
-const rtdbUrl = (firebaseConfig as any).databaseURL || (import.meta as any).env?.VITE_FIREBASE_DATABASE_URL;
-
-if (rtdbUrl) {
+let rtdbInstance: any = null;
+export const getLazyRtdb = async () => {
+  if (rtdbInstance) return rtdbInstance;
+  const rtdbUrl = (firebaseConfig as any).databaseURL || (import.meta as any).env?.VITE_FIREBASE_DATABASE_URL;
+  if (!rtdbUrl) return null;
+  
   try {
+    const { getDatabase, connectDatabaseEmulator } = await import('firebase/database');
     rtdbInstance = getDatabase(app, rtdbUrl);
+    const isEmulatorMode = (import.meta as any).env?.VITE_USE_FIREBASE_EMULATOR === 'true';
     if (isEmulatorMode) {
       connectDatabaseEmulator(rtdbInstance, 'localhost', 9000);
     }
   } catch (err) {
     console.warn('[Firebase] Realtime Database init warning:', err);
   }
-}
-
-export const rtdb = rtdbInstance;
+  return rtdbInstance;
+};
 
 if (isEmulatorMode) {
-  try {
-    connectAuthEmulator(auth, 'http://localhost:9099', { disableWarnings: true });
-    connectFunctionsEmulator(functions, 'localhost', 5001);
-    console.log('[Firebase] Connected to Local Auth (9099) & Functions (5001) Emulators.');
-  } catch (emuErr) {
-    console.warn('[Firebase] Emulator connection warning:', emuErr);
-  }
+  // Auth emulator will be connected lazily when auth is requested
+  console.log('[Firebase] Running in emulator mode.');
 }
 
+let authInstance: any = null;
+
+const getLazyAuth = async () => {
+  if (authInstance) return authInstance;
+  const { getAuth, connectAuthEmulator } = await import('firebase/auth');
+  authInstance = getAuth(app);
+  if (isEmulatorMode) {
+    try {
+      connectAuthEmulator(authInstance, 'http://localhost:9099', { disableWarnings: true });
+      console.log('[Firebase] Connected to Local Auth (9099) Emulator.');
+    } catch (emuErr) {
+      console.warn('[Firebase] Auth Emulator connection warning:', emuErr);
+    }
+  }
+  return authInstance;
+};
+
 export const authenticateFirebaseCustomToken = async (token: string) => {
-  if (!token || !auth) return;
+  if (!token) return;
   try {
+    const { signInWithCustomToken } = await import('firebase/auth');
+    const auth = await getLazyAuth();
     // 🛡️ 不再早期返回：允許過期 Token 重新簽入，防止 F5 重載後 auth 過期導致 permission-denied 循環
     await signInWithCustomToken(auth, token);
     console.log('[Firebase Auth] Authenticated staff with Custom Token successfully!');
@@ -110,6 +122,7 @@ export const authenticateFirebaseCustomToken = async (token: string) => {
  * 超時 3 秒保底，避免離線或 IndexedDB 損壞時永久阻塞
  */
 export const ensureFirebaseAuthReady = async (timeoutMs = 3000): Promise<User | null> => {
+  const auth = await getLazyAuth();
   if (!auth) return null;
   if (auth.currentUser) return auth.currentUser;
   try {

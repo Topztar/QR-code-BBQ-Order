@@ -99,15 +99,22 @@
     }
     </script>
     <script>
-      // Global error listener to automatically reload with cache-busting ONLY if a JS script or critical stylesheet fails
+      // Global error listener to automatically reload with cache-busting ONLY if a critical local asset fails
       window.addEventListener('error', function(e) {
         if (e.target && (e.target.tagName === 'SCRIPT' || (e.target.tagName === 'LINK' && e.target.rel === 'stylesheet'))) {
           const src = e.target.src || e.target.href;
-          if (src && !src.includes('analytics') && !src.includes('googletagmanager')) {
-            console.warn('[Sabay] Critical resource load failed:', src);
-            const url = new URL(window.location.href);
-            if (!url.searchParams.has('_cb')) {
-              url.searchParams.set('_cb', Date.now().toString());
+          // Only trigger for local assets (our app JS/CSS), ignore Google Fonts or external trackers
+          if (src && src.startsWith(window.location.origin)) {
+            console.warn('[Sabay] Critical local resource load failed:', src);
+            
+            const key = 'sabay_chunk_recovery_lock';
+            const lastRetry = parseInt(window.sessionStorage.getItem(key) || '0', 10);
+            const now = Date.now();
+            
+            if (now - lastRetry > 10000) { // 10s debounce, shared with chunkRecovery
+              window.sessionStorage.setItem(key, now.toString());
+              const url = new URL(window.location.href);
+              url.searchParams.set('_v', now.toString());
               window.location.replace(url.toString());
             }
           }
@@ -117,14 +124,7 @@
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/src/main.tsx" onerror="
-      console.warn('Main script loading failed. Attempting force reload with cache busting...');
-      const url = new URL(window.location.href);
-      if (!url.searchParams.has('_cb')) {
-        url.searchParams.set('_cb', Date.now().toString());
-        window.location.replace(url.toString());
-      }
-    "></script>
+    <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
 

@@ -1,5 +1,4 @@
-import { rtdb } from './firebase';
-import { ref, onValue, onDisconnect, set, serverTimestamp } from 'firebase/database';
+import { getLazyRtdb } from './firebase';
 
 export interface KdsPresenceSession {
   activeKitchenDeviceId: string | null;
@@ -10,19 +9,22 @@ export interface KdsPresenceSession {
 /**
  * Checks if Firebase Realtime Database Presence is supported in the current environment
  */
-export function isRtdbPresenceSupported(): boolean {
+export async function isRtdbPresenceSupported(): Promise<boolean> {
+  const rtdb = await getLazyRtdb();
   return !!rtdb;
 }
 
 /**
  * Subscribes to real-time KDS presence session in RTDB
  */
-export function subscribeKdsPresence(
+export async function subscribeKdsPresence(
   onSessionChange: (session: KdsPresenceSession | null) => void
-): () => void {
+): Promise<() => void> {
+  const rtdb = await getLazyRtdb();
   if (!rtdb) return () => {};
 
   try {
+    const { ref, onValue } = await import('firebase/database');
     const presenceRef = ref(rtdb, 'kds_session');
     const unsubscribe = onValue(presenceRef, (snapshot) => {
       if (snapshot.exists()) {
@@ -46,9 +48,11 @@ export function subscribeKdsPresence(
  * When the browser tab closes or TCP connection drops, Firebase backend automatically clears the lock.
  */
 export async function claimKdsPresence(deviceId: string): Promise<boolean> {
+  const rtdb = await getLazyRtdb();
   if (!rtdb) return false;
 
   try {
+    const { ref, onDisconnect, set, serverTimestamp } = await import('firebase/database');
     const presenceRef = ref(rtdb, 'kds_session');
     const onDisconnectRef = onDisconnect(presenceRef);
     
@@ -73,9 +77,11 @@ export async function claimKdsPresence(deviceId: string): Promise<boolean> {
  * Voluntarily releases the kitchen role in Realtime Database
  */
 export async function releaseKdsPresence(deviceId: string): Promise<void> {
+  const rtdb = await getLazyRtdb();
   if (!rtdb) return;
 
   try {
+    const { ref, onDisconnect, set } = await import('firebase/database');
     const presenceRef = ref(rtdb, 'kds_session');
     const onDisconnectRef = onDisconnect(presenceRef);
     await onDisconnectRef.cancel();

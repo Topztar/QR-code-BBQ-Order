@@ -1,5 +1,6 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
+import { attemptChunkRecovery } from '../lib/chunkRecovery';
 
 interface Props {
   children: ReactNode;
@@ -37,11 +38,7 @@ export class ChunkErrorBoundary extends Component<Props, State> {
       error.message?.includes('loading chunk');
 
     if (isChunk) {
-      console.warn('[ChunkErrorBoundary] Chunk load error detected. Attempting automatic reload...');
-      if (!sessionStorage.getItem('chunk_error_reloaded')) {
-        sessionStorage.setItem('chunk_error_reloaded', 'true');
-        window.location.reload();
-      }
+      attemptChunkRecovery(error, 'ChunkErrorBoundary');
     }
   }
 

@@ -7,6 +7,7 @@ coverage/
 persisted_state.json
 .git.corrupt/
 dist/
+.firebase/
 LPT1
 *-report.json
 *-eslint.json

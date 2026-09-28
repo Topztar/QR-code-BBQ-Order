@@ -2,13 +2,14 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import { RootErrorBoundary } from './components/RootErrorBoundary';
+import { attemptChunkRecovery } from './lib/chunkRecovery';
 import './index.css';
 
 // Global error and unhandled promise rejection resilience handlers
 if (typeof window !== 'undefined') {
   // Vite built-in event for dynamic import chunk load failures caused by new deployments
   window.addEventListener('vite:preloadError', (event: any) => {
-    console.warn('[Vite PreloadError] Dynamic chunk load failed after deployment. Reloading with cache bust:', event);
+    event.preventDefault();
     
     // 📊 Telemetry / Analytics Data Point
     try {
@@ -25,30 +26,20 @@ if (typeof window !== 'undefined') {
       // Ignore stringify errors in telemetry
     }
 
-    event.preventDefault();
-    const key = 'sabay_vite_preload_reload';
-    const last = parseInt(sessionStorage.getItem(key) || '0', 10);
-    const now = Date.now();
-    if (now - last > 10000) {
-      sessionStorage.setItem(key, now.toString());
-      if ('caches' in window) {
-        caches.keys().then((names) => names.forEach((n) => caches.delete(n))).catch(() => {});
-      }
-      const url = new URL(window.location.href);
-      url.searchParams.set('v', now.toString());
-      url.searchParams.set('_v', now.toString());
-      window.location.replace(url.toString());
-    }
+    attemptChunkRecovery(event, 'vite:preloadError');
   });
 
   window.addEventListener('unhandledrejection', (event) => {
-    console.warn('[Global UnhandledRejection] Non-blocking caught promise error:', event.reason);
-    // Prevent unhandledrejection crashes in sandboxed webviews
-    event.preventDefault();
+    const isBenign = event.reason?.message?.includes('ResizeObserver') || event.reason?.message?.includes('play() can only be initiated by a user gesture');
+    if (isBenign) {
+      event.preventDefault();
+      return;
+    }
+    console.error('[Global UnhandledRejection] Promise error:', event.reason);
   });
 
   window.addEventListener('error', (event) => {
-    console.warn('[Global WindowError] Caught unhandled runtime error:', event.message || event.error);
+    console.error('[Global WindowError] Caught unhandled runtime error:', event.message || event.error);
   });
 }
 
@@ -65,11 +56,15 @@ createRoot(document.getElementById('root')!).render(
 // 延遲註冊 Service Worker，確保不影響首屏載入速度
 if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
   let refreshing = false;
+  let reloadTimeout: any = null;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     if (!refreshing) {
       refreshing = true;
       console.log('[PWA] Service Worker controller changed. Reloading page to apply new assets...');
-      window.location.reload();
+      if (reloadTimeout) clearTimeout(reloadTimeout);
+      reloadTimeout = setTimeout(() => {
+        window.location.reload();
+      }, 500); // Debounce to allow cache registration to stabilize
     }
   });
 

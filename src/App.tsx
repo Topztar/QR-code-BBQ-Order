@@ -9,21 +9,16 @@ import { ChefHat, Smartphone, BarChart3, UtensilsCrossed, LogOut, Lock, Eye, Eye
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { RestaurantDataProvider, useRestaurantData } from './context/RestaurantDataContext';
 import { OrderDataProvider, useOrderData } from './context/OrderDataContext';
-import { PrinterDataProvider, usePrinterData } from './context/PrinterDataContext';
 import { useAdminHotkey } from './hooks/useAdminHotkey';
+import { attemptChunkRecovery } from './lib/chunkRecovery';
 
 // Wrapper for lazy loading with retry to prevent chunk load errors causing black screens
 export const resilientLazy = <T extends React.ComponentType<any>>(
   componentImport: () => Promise<{ default: T }>
 ) =>
   lazy(async () => {
-    const key = 'sabay_chunk_retry_timestamp';
-    const lastRetry = parseInt(window.sessionStorage.getItem(key) || '0', 10);
-    const now = Date.now();
-
     try {
       const component = await componentImport();
-      window.sessionStorage.removeItem(key);
       return component;
     } catch (error: any) {
       const isChunkError =
@@ -31,42 +26,21 @@ export const resilientLazy = <T extends React.ComponentType<any>>(
         error?.message?.includes('Unexpected token') ||
         error?.name === 'ChunkLoadError';
 
-      if (isChunkError && now - lastRetry > 10000) { // 10 seconds debounce
-        console.warn(`[Sabay BBQ Diagnostics] Component chunk load failed. Purging stale cache & reloading:`, error);
-        window.sessionStorage.setItem(key, now.toString());
-
-        // Purge CacheStorage & update Service Workers
-        if ('caches' in window) {
-          try {
-            const cacheNames = await caches.keys();
-            await Promise.all(cacheNames.map((name) => caches.delete(name)));
-          } catch (_) {}
+      if (isChunkError) {
+        const reloaded = await attemptChunkRecovery(error, 'resilientLazy');
+        if (reloaded) {
+          // If we dispatched a reload, wait briefly to let the browser navigate away.
+          // If navigation is blocked or canceled, we reject so the ErrorBoundary can show a fallback.
+          await new Promise(resolve => setTimeout(resolve, 3000));
         }
-        if ('serviceWorker' in navigator) {
-          try {
-            const regs = await navigator.serviceWorker.getRegistrations();
-            for (const reg of regs) {
-              await reg.update();
-            }
-          } catch (_) {}
-        }
-
-        // Use a cache-busting URL parameter
-        const url = new URL(window.location.href);
-        url.searchParams.set('_v', now.toString());
-        window.location.replace(url.toString());
-        
-        // Return a promise that never resolves, so Suspense keeps showing fallback while reloading
-        return new Promise<{ default: T }>(() => {}); 
       }
-      throw error;
+      throw error; // Throw so Suspense doesn't hang forever
     }
   });
 
-const CustomerOrderView = resilientLazy(() => import('./components/CustomerOrderView').then(m => ({ default: m.CustomerOrderView })));
-const KitchenDisplaySystem = resilientLazy(() => import('./components/KitchenDisplaySystem').then(m => ({ default: m.KitchenDisplaySystem })));
-const ManagerDashboard = resilientLazy(() => import('./components/ManagerDashboard').then(m => ({ default: m.ManagerDashboard })));
 const StaffLoginGate = resilientLazy(() => import('./components/StaffLoginGate').then(m => ({ default: m.StaffLoginGate })));
+const StaffPortalContainer = resilientLazy(() => import('./components/StaffPortalContainer'));
+import { CustomerOrderView } from './components/CustomerOrderView';
 
 const ViewLoadingFallback = () => (
   <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
@@ -301,14 +275,6 @@ function AppContent({
     handleSendPromoPush,
     handleMarkNotificationRead,
   } = useOrderData();
-
-  const {
-    printerIp,
-    printLogs,
-    handleUpdatePrinterIp,
-    handleClearPrintLogs,
-    handlePrintTestPage,
-  } = usePrinterData();
 
   return (
     <div className="min-h-screen bg-[#0F0F0F] text-white flex flex-col font-sans">
@@ -654,10 +620,10 @@ function AppContent({
           </div>
         )}
 
-        {loading ? (
+        {loading && isAtStaffPath ? (
           <div className="flex flex-col items-center justify-center py-24 space-y-4">
             <div className="w-10 h-10 border-4 border-[#E5B453] border-t-transparent rounded-full animate-spin"></div>
-            <p className="text-white/50 font-bold text-sm">沙貝燒烤 雲端主機連線中...</p>
+            <p className="text-white/50 font-bold text-sm">沙貝管理終端 安全連線中...</p>
           </div>
         ) : isAtStaffPath ? (
           !isStaff ? (
@@ -691,100 +657,13 @@ function AppContent({
             <div>
               <ErrorBoundary fallbackTitle="系統視圖載入異常" fallbackMessage="視圖載入遇到問題，請點擊下方按鈕重試。">
                 <Suspense fallback={<ViewLoadingFallback />}>
-                  {activeTab === 'kitchen' ? (
-                    <KitchenDisplaySystem
-                      currentLang={lang}
-                      orders={orders}
-                      onUpdateOrderStatus={handleUpdateOrderStatus}
-                      printLogs={printLogs}
-                      onClearPrintLogs={handleClearPrintLogs}
-                      printerIp={printerIp}
-                      onUpdatePrinterIp={handleUpdatePrinterIp}
-                      onPrintTestPage={handlePrintTestPage}
-                      onUpdateTableNumber={handleUpdateTableNumber}
-                      onUpdateQuickNotes={handleUpdateQuickNotes}
-                      onToggleOrderFlag={handleToggleOrderFlag}
-                      tables={tables}
-                      menuItems={menuItems}
-                      categories={categories}
-                      onToggleMenuItemAvailability={handleToggleMenuItemAvailability}
-                      ingredients={ingredients}
-                      onAdjustIngredientStock={handleAdjustIngredientStock}
-                      operatingHours={operatingHours}
-                      servicePaused={servicePaused}
-                      onToggleServicePause={handleToggleServicePause}
-                      onToggleOrderItemComplete={handleToggleOrderItemComplete}
-                      reservations={reservations}
-                    />
-                  ) : (
-                    <ManagerDashboard
-                      currentLang={lang}
-                      analytics={analytics}
-                      ingredients={ingredients}
-                      orders={orders}
-                      onUpdateOrderStatus={handleUpdateOrderStatus}
-                      onRestock={handleRestock}
-                      onToggleMenuItemAvailability={handleToggleMenuItemAvailability}
-                      onSendPromoPush={handleSendPromoPush}
-                      menuItems={menuItems}
-                      onAddMenuItem={handleAddMenuItem}
-                      onEditMenuItem={handleEditMenuItem}
-                      onDeleteMenuItem={handleDeleteMenuItem}
-                      categories={categories}
-                      onAddCategory={handleAddCategory}
-                      onEditCategory={handleEditCategory}
-                      onDeleteCategory={handleDeleteCategory}
-                      onReorderCategories={handleReorderCategories}
-                      onReorderMenuItems={handleReorderMenuItems}
-                      tables={tables}
-                      onAddTable={handleAddTable}
-                      onEditTable={handleEditTable}
-                      onDeleteTable={handleDeleteTable}
-                      onUpdateTableStatus={handleUpdateTableStatus}
-                      reservations={reservations}
-                      onAddReservation={handleAddReservation}
-                      onEditReservation={handleUpdateReservation}
-                      onDeleteReservation={handleDeleteReservation}
-                      onPayOrder={handlePayOrder}
-                      onBulkPayOrders={handleBulkPayOrders}
-                      onPlaceOrder={handlePlaceOrder}
-                      onDeleteOrder={handleDeleteOrder}
-                      onUpdateTableNumber={handleUpdateTableNumber}
-                      onUpdateOrderItems={handleUpdateOrderItems}
-                      defaultSubTab={adminSubTab || (activeTab === 'cashier' ? 'cashier' : 'stats')}
-                      onSubTabChange={(subTab) => {
-                        setAdminSubTab(subTab);
-                        safeStorage.setItem('sabay-staff-subtab', subTab);
-                        safeStorage.setItem('sabay-staff-active-tab', 'admin');
-                        window.history.replaceState({}, '', `/admin?tab=${subTab}`);
-                      }}
-                      minSpend={minSpend}
-                      onUpdateMinSpend={handleUpdateMinSpend}
-                      promoCombo={promoCombo}
-                      onSavePromoCombo={handleSavePromoComboConfig}
-                      operatingHours={operatingHours}
-                      restDays={restDays}
-                      isOpen={isOpen}
-                      onUpdateOperatingHours={handleUpdateOperatingHours}
-                      customerNotice={customerNotice}
-                      onUpdateCustomerNotice={handleUpdateCustomerNotice}
-                      staffPin={staffPin}
-                      popularItemIds={popularItemIds}
-                      onUpdatePopularItemIds={handleUpdatePopularItemIds}
-                      printerIp={printerIp}
-                      onPrintTestPage={handlePrintTestPage}
-                      onAddIngredient={handleAddIngredient}
-                      servicePaused={servicePaused}
-                      onToggleServicePause={handleToggleServicePause}
-                      memberPointsRatio={memberPointsRatio}
-                      memberVipThreshold={memberVipThreshold}
-                      memberVipDiscountRate={memberVipDiscountRate}
-                      memberEnablePointsDiscount={memberEnablePointsDiscount}
-                      memberPointsRedeemRate={memberPointsRedeemRate}
-                      memberRewards={memberRewards}
-                      onUpdateMemberConfig={fetchData}
-                    />
-                  )}
+                  <StaffPortalContainer
+                    activeTab={activeTab as 'kitchen' | 'admin' | 'cashier'}
+                    lang={lang}
+                    adminSubTab={adminSubTab}
+                    setAdminSubTab={setAdminSubTab}
+                    staffPin={staffPin}
+                  />
                 </Suspense>
               </ErrorBoundary>
             </div>
@@ -792,40 +671,38 @@ function AppContent({
         ) : (
           <div>
             <ErrorBoundary fallbackTitle="顧客前台載入異常" fallbackMessage="前台點餐畫面載入遇到問題，請點擊下方按鈕重試。">
-              <Suspense fallback={<ViewLoadingFallback />}>
-                <CustomerOrderView
-                  currentLang={lang}
-                  menuItems={menuItems}
-                  categories={categories}
-                  tables={tables}
-                  reservations={reservations}
-                  onAddReservation={handleAddReservation}
-                  onPlaceOrder={handlePlaceOrder}
-                  activeOrders={orders}
-                  pushNotifications={pushNotifications}
-                  onMarkNotificationRead={handleMarkNotificationRead}
-                  inventoryWarnings={analytics.stockWarnings}
-                  minSpend={minSpend}
-                  isOpen={isOpen}
-                  customerNotice={customerNotice}
-                  operatingHours={operatingHours}
-                  restDays={restDays}
-                  promoCombo={promoCombo}
-                  ingredients={ingredients}
-                  onToggleMenuItemAvailability={handleToggleMenuItemAvailability}
-                  onAdjustIngredientStock={handleAdjustIngredientStock}
-                  popularItemIds={popularItemIds}
-                  servicePaused={servicePaused}
-                  memberPointsRatio={memberPointsRatio}
-                  memberVipThreshold={memberVipThreshold}
-                  memberVipDiscountRate={memberVipDiscountRate}
-                  memberEnablePointsDiscount={memberEnablePointsDiscount}
-                  memberPointsRedeemRate={memberPointsRedeemRate}
-                  memberRewards={memberRewards}
-                  autoOpenReservationModal={isReserveRoute}
-                  isOrderRoute={isOrderRoute}
-                />
-              </Suspense>
+              <CustomerOrderView
+                currentLang={lang}
+                menuItems={menuItems}
+                categories={categories}
+                tables={tables}
+                reservations={reservations}
+                onAddReservation={handleAddReservation}
+                onPlaceOrder={handlePlaceOrder}
+                activeOrders={orders}
+                pushNotifications={pushNotifications}
+                onMarkNotificationRead={handleMarkNotificationRead}
+                inventoryWarnings={analytics.stockWarnings}
+                minSpend={minSpend}
+                isOpen={isOpen}
+                customerNotice={customerNotice}
+                operatingHours={operatingHours}
+                restDays={restDays}
+                promoCombo={promoCombo}
+                ingredients={ingredients}
+                onToggleMenuItemAvailability={handleToggleMenuItemAvailability}
+                onAdjustIngredientStock={handleAdjustIngredientStock}
+                popularItemIds={popularItemIds}
+                servicePaused={servicePaused}
+                memberPointsRatio={memberPointsRatio}
+                memberVipThreshold={memberVipThreshold}
+                memberVipDiscountRate={memberVipDiscountRate}
+                memberEnablePointsDiscount={memberEnablePointsDiscount}
+                memberPointsRedeemRate={memberPointsRedeemRate}
+                memberRewards={memberRewards}
+                autoOpenReservationModal={isReserveRoute}
+                isOrderRoute={isOrderRoute}
+              />
             </ErrorBoundary>
           </div>
         )}
@@ -930,23 +807,12 @@ function OrderDataConsumerWrapper({
       handleUpdateTableStatus={handleUpdateTableStatus}
       onRefreshData={fetchData}
     >
-      {activeTab !== 'customer' ? (
-        <PrinterDataProvider activeTab={activeTab}>
-          <AppContent
-            activeTab={activeTab}
-            setActiveTab={setActiveTab}
-            currentPath={currentPath}
-            navigateTo={navigateTo}
-          />
-        </PrinterDataProvider>
-      ) : (
-        <AppContent
-          activeTab={activeTab}
-          setActiveTab={setActiveTab}
-          currentPath={currentPath}
-          navigateTo={navigateTo}
-        />
-      )}
+      <AppContent
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        currentPath={currentPath}
+        navigateTo={navigateTo}
+      />
     </OrderDataProvider>
   );
 }

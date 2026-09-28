@@ -33,25 +33,40 @@ export function useKdsMutexSession(
   }, [activeTab]);
 
   useEffect(() => {
-    if (isRtdbPresenceSupported()) {
-      const unsubscribeRtdb = subscribeKdsPresence((presenceSession) => {
-        if (presenceSession) {
-          const formatted: KdsSession = {
-            activeKitchenDeviceId: presenceSession.activeKitchenDeviceId,
-            claimedAt: presenceSession.claimedAt,
-            lastHeartbeat: presenceSession.updatedAt,
-            leaseExpiresAt: null
-          };
-          setKdsSession(formatted);
-          if (currentRoleRef.current === 'kitchen' && formatted.activeKitchenDeviceId && formatted.activeKitchenDeviceId !== currentDeviceId) {
-            setIsKitchenPreempted(true);
+    if (activeTab === 'customer') return;
+
+    let rtdbUnsubscribe: any = null;
+    let isCancelled = false;
+
+    isRtdbPresenceSupported().then(supported => {
+      if (isCancelled) return;
+      if (supported) {
+        subscribeKdsPresence((presenceSession) => {
+          if (presenceSession) {
+            const formatted: KdsSession = {
+              activeKitchenDeviceId: presenceSession.activeKitchenDeviceId,
+              claimedAt: presenceSession.claimedAt,
+              lastHeartbeat: presenceSession.updatedAt,
+              leaseExpiresAt: null
+            };
+            setKdsSession(formatted);
+            if (currentRoleRef.current === 'kitchen' && formatted.activeKitchenDeviceId && formatted.activeKitchenDeviceId !== currentDeviceId) {
+              setIsKitchenPreempted(true);
+            }
+          } else {
+            setKdsSession(null);
           }
-        } else {
-          setKdsSession(null);
-        }
-      });
-      return () => unsubscribeRtdb();
-    }
+        }).then(unsub => {
+          if (isCancelled) unsub();
+          else rtdbUnsubscribe = unsub;
+        });
+      }
+    });
+
+    return () => {
+      isCancelled = true;
+      if (rtdbUnsubscribe) rtdbUnsubscribe();
+    };
 
     if (!db || !syncActive) return;
 
@@ -76,7 +91,7 @@ export function useKdsMutexSession(
         try { unsubscribeSession(); } catch (_) {}
       }, 0);
     };
-  }, [syncActive, currentDeviceId]);
+  }, [syncActive, currentDeviceId, activeTab]);
 
   useEffect(() => {
     if (activeTab !== 'kitchen') return;
@@ -94,12 +109,11 @@ export function useKdsMutexSession(
     window.addEventListener('beforeunload', handleBeforeUnload);
     window.addEventListener('pagehide', handleBeforeUnload);
 
-    if (isRtdbPresenceSupported()) {
-      return () => {
-        window.removeEventListener('beforeunload', handleBeforeUnload);
-        window.removeEventListener('pagehide', handleBeforeUnload);
-      };
-    }
+    isRtdbPresenceSupported().then(supported => {
+      if (supported) {
+        // Handled by beforeunload above
+      }
+    });
 
     const heartbeatInterval = setInterval(async () => {
       if (!isNetworkOnline) return;
@@ -127,7 +141,8 @@ export function useKdsMutexSession(
 
   const handleClaimKitchenRole = useCallback(async (force: boolean = false): Promise<{ success: boolean; conflict?: boolean; activeKitchenDeviceId?: string }> => {
     try {
-      if (isRtdbPresenceSupported()) {
+      const supported = await isRtdbPresenceSupported();
+      if (supported) {
         await claimKdsPresence(currentDeviceId);
       }
 
@@ -155,7 +170,8 @@ export function useKdsMutexSession(
 
   const handleReleaseKitchenRole = useCallback(async () => {
     try {
-      if (isRtdbPresenceSupported()) {
+      const supported = await isRtdbPresenceSupported();
+      if (supported) {
         await releaseKdsPresence(currentDeviceId);
       }
       await apiFetch('/api/kds/release-kitchen', {
