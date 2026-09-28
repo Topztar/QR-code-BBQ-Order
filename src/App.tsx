@@ -45,6 +45,7 @@ const KitchenDisplaySystem = resilientLazy(() => import('./components/KitchenDis
 const ManagerDashboard = resilientLazy(() => import('./components/ManagerDashboard').then(m => ({ default: m.ManagerDashboard })));
 
 const ViewLoadingFallback = () => (
+  <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
     <div className="w-10 h-10 border-3 border-[#E5B453]/20 border-t-[#E5B453] rounded-full animate-spin" />
     <p className="text-xs text-[#E5B453]/80 font-mono tracking-widest uppercase animate-pulse">
       載入中 Loading System...
