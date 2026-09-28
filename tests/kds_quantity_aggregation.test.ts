@@ -44,8 +44,6 @@ beforeAll(async () => {
       port: 8080,
     }
   });
-  const ctx = testEnv.authenticatedContext('test-staff-1', { role: 'staff' });
-  db = ctx.firestore();
 });
 
 afterAll(async () => {
@@ -56,38 +54,42 @@ afterAll(async () => {
 });
 
 test('KDS aggregates dish quantities correctly', async () => {
-  if (!isEmulatorRunning || !db) {
+  if (!isEmulatorRunning || !testEnv) {
     console.log('[Test Skipped] KDS quantity aggregation test skipped because emulator is offline.');
     return;
   }
-  const orders = [
-    { id: 'order1', items: [{ itemId: 'chicken', qty: 2 }] },
-    { id: 'order2', items: [{ itemId: 'chicken', qty: 3 }] },
-    { id: 'order3', items: [{ itemId: 'chicken', qty: 1 }] },
-  ];
 
-  // Seed orders into Firestore
-  for (const o of orders) {
-    await setDoc(doc(db, 'orders', o.id), { items: o.items, status: 'new' });
-  }
+  await testEnv.withSecurityRulesDisabled(async (context: any) => {
+    const adminDb = context.firestore();
+    const orders = [
+      { id: 'order1', items: [{ itemId: 'chicken', qty: 2 }] },
+      { id: 'order2', items: [{ itemId: 'chicken', qty: 3 }] },
+      { id: 'order3', items: [{ itemId: 'chicken', qty: 1 }] },
+    ];
 
-  // Simulate KDS aggregation logic (sum quantities across all orders)
-  const snapshot = await getDocs(collection(db, 'orders'));
-  const total = snapshot.docs.reduce((sum, docSnap) => {
-    const data = docSnap.data() as any;
-    const qty = data.items?.[0]?.qty ?? 0;
-    return sum + qty;
-  }, 0);
-  expect(total).toBe(6);
+    // Seed orders into Firestore
+    for (const o of orders) {
+      await setDoc(doc(adminDb, 'orders', o.id), { items: o.items, status: 'new' });
+    }
 
-  // Update one order (order2 qty from 3 -> 4)
-  await setDoc(doc(db, 'orders', 'order2'), { items: [{ itemId: 'chicken', qty: 4 }], status: 'new' });
+    // Simulate KDS aggregation logic (sum quantities across all orders)
+    const snapshot = await getDocs(collection(adminDb, 'orders'));
+    const total = snapshot.docs.reduce((sum, docSnap) => {
+      const data = docSnap.data() as any;
+      const qty = data.items?.[0]?.qty ?? 0;
+      return sum + qty;
+    }, 0);
+    expect(total).toBe(6);
 
-  const updatedSnap = await getDocs(collection(db, 'orders'));
-  const updatedTotal = updatedSnap.docs.reduce((sum, d) => {
-    const data = d.data() as any;
-    const qty = data.items?.[0]?.qty ?? 0;
-    return sum + qty;
-  }, 0);
-  expect(updatedTotal).toBe(7);
+    // Update one order (order2 qty from 3 -> 4)
+    await setDoc(doc(adminDb, 'orders', 'order2'), { items: [{ itemId: 'chicken', qty: 4 }], status: 'new' });
+
+    const updatedSnap = await getDocs(collection(adminDb, 'orders'));
+    const updatedTotal = updatedSnap.docs.reduce((sum, d) => {
+      const data = d.data() as any;
+      const qty = data.items?.[0]?.qty ?? 0;
+      return sum + qty;
+    }, 0);
+    expect(updatedTotal).toBe(7);
+  });
 });

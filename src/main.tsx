@@ -9,6 +9,22 @@ if (typeof window !== 'undefined') {
   // Vite built-in event for dynamic import chunk load failures caused by new deployments
   window.addEventListener('vite:preloadError', (event: any) => {
     console.warn('[Vite PreloadError] Dynamic chunk load failed after deployment. Reloading with cache bust:', event);
+    
+    // 📊 Telemetry / Analytics Data Point
+    try {
+      console.error(JSON.stringify({
+        level: 'critical',
+        type: 'telemetry_event',
+        event: 'vite:preloadError',
+        url: window.location.href,
+        userAgent: navigator.userAgent,
+        timestamp: new Date().toISOString(),
+        error_details: event.message || 'Chunk load failed'
+      }));
+    } catch (e) {
+      // Ignore stringify errors in telemetry
+    }
+
     event.preventDefault();
     const key = 'sabay_vite_preload_reload';
     const last = parseInt(sessionStorage.getItem(key) || '0', 10);
