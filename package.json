@@ -18,7 +18,8 @@
     "audit:cost": "node scripts/run_cost_audit.cjs",
     "audit:all": "node scripts/run_all_checks.cjs",
     "audit:e2e": "node scripts/run_e2e_qa_audit.cjs",
-    "predeploy": "npm test && npm run audit:e2e"
+    "clean:artifacts": "node scripts/post_test_hygiene.cjs",
+    "predeploy": "npm test && npm run audit:e2e && npm run clean:artifacts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

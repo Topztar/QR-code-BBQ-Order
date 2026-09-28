@@ -11,6 +11,7 @@ import { RestaurantDataProvider, useRestaurantData } from './context/RestaurantD
 import { OrderDataProvider, useOrderData } from './context/OrderDataContext';
 import { PrinterDataProvider, usePrinterData } from './context/PrinterDataContext';
 import { StaffLoginGate } from './components/StaffLoginGate';
+import { useAdminHotkey } from './hooks/useAdminHotkey';
 
 // Wrapper for lazy loading with retry to prevent chunk load errors causing black screens
 export const resilientLazy = <T extends React.ComponentType<any>>(
@@ -184,6 +185,13 @@ function AppContent({
       search.get('action') === 'order'
     );
   }, [currentPath]);
+
+  // Hidden backdoor hotkey for non-staff to access the staff login gate securely
+  useAdminHotkey({ ctrl: true, shift: true, key: 'l' }, () => {
+    if (!isStaff) {
+      handleStaffTabSwitch('/admin?tab=stats', 'admin', 'stats');
+    }
+  });
 
   // Keyboard hotkeys for switching staff workspace tabs instantly (Ctrl+1 to Ctrl+5)
   useEffect(() => {

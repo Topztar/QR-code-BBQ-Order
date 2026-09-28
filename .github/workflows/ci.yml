@@ -41,3 +41,6 @@ jobs:
           else
             echo "✅ Server bundle size is within acceptable threshold (< 350KB)"
           fi
+
+      - name: Post-Test Hygiene (Clean Artifacts)
+        run: npm run clean:artifacts

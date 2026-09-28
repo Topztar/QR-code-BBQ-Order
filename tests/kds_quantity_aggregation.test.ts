@@ -44,7 +44,7 @@ beforeAll(async () => {
       port: 8080,
     }
   });
-  const ctx = testEnv.unauthenticatedContext();
+  const ctx = testEnv.authenticatedContext('test-staff-1', { role: 'staff' });
   db = ctx.firestore();
 });
 

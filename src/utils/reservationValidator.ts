@@ -120,6 +120,19 @@ export function getAvailableReservationSlots(
   return baseSlots;
 }
 
+function addCalendarDays(dateStr: string, days: number): string {
+  const [year, month, day] = dateStr.split('-').map(Number);
+
+  const date = new Date(Date.UTC(year, month - 1, day));
+  date.setUTCDate(date.getUTCDate() + days);
+
+  return [
+    date.getUTCFullYear(),
+    String(date.getUTCMonth() + 1).padStart(2, '0'),
+    String(date.getUTCDate()).padStart(2, '0'),
+  ].join('-');
+}
+
 /**
  * Finds the earliest reservable date and slot starting from referenceDate.
  * If today has valid slots >= 4h, returns today + first slot.
@@ -131,19 +144,29 @@ export function getEarliestReservableOption(
   referenceDate: Date = new Date()
 ): { date: string; time: string } {
   const todayStr = formatDateStr(referenceDate);
-  const todaySlots = getAvailableReservationSlots(todayStr, operatingHours, restDays, referenceDate);
+  const todaySlots = getAvailableReservationSlots(
+    todayStr,
+    operatingHours,
+    restDays,
+    referenceDate
+  );
+
   if (todaySlots.length > 0) {
     return { date: todayStr, time: todaySlots[0] };
   }
 
-  // Search forward up to 90 days
   for (let i = 1; i <= 90; i++) {
-    const nextD = new Date(referenceDate);
-    nextD.setDate(referenceDate.getDate() + i);
-    const nextDateStr = formatDateStr(nextD);
+    const nextDateStr = addCalendarDays(todayStr, i);
+
     if (restDays && restDays.includes(nextDateStr)) continue;
 
-    const slots = getAvailableReservationSlots(nextDateStr, operatingHours, restDays, referenceDate);
+    const slots = getAvailableReservationSlots(
+      nextDateStr,
+      operatingHours,
+      restDays,
+      referenceDate
+    );
+
     if (slots.length > 0) {
       return { date: nextDateStr, time: slots[0] };
     }
