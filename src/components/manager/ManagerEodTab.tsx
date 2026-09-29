@@ -7,9 +7,9 @@ import { apiFetch } from '../../lib/api';
 import { printViaBridge } from '../../lib/posBridgeClient';
 import {
   getLocalDateString,
-  isOrderOnLocalDate,
-  calculateOrderTotalWithPayment
+  isOrderOnLocalDate
 } from './ManagerDashboardUtils';
+import { orderCalculationService } from '../../services/orderCalculationService';
 import { PrinterConfig } from '../../types';
 
 const localStorage = safeStorage;
@@ -64,11 +64,11 @@ export const ManagerEodTab: React.FC<ManagerEodTabProps> = ({
   const paidOrders = dailyOrders.filter(o => o.isPaid);
   const unpaidOrders = dailyOrders.filter(o => !o.isPaid && o.status !== 'cancelled');
 
-  const totalRev = paidOrders.reduce((sum, ord) => sum + calculateOrderTotalWithPayment(ord, menuItems).total, 0);
-  const cashSum = paidOrders.filter(o => o.paymentMethod === 'cash').reduce((sum, ord) => sum + calculateOrderTotalWithPayment(ord, menuItems).total, 0);
-  const creditSum = paidOrders.filter(o => o.paymentMethod === 'credit').reduce((sum, ord) => sum + calculateOrderTotalWithPayment(ord, menuItems).total, 0);
-  const twqrSum = paidOrders.filter(o => o.paymentMethod === 'twqr').reduce((sum, ord) => sum + calculateOrderTotalWithPayment(ord, menuItems).total, 0);
-  const memberSum = paidOrders.filter(o => o.paymentMethod === 'member').reduce((sum, ord) => sum + calculateOrderTotalWithPayment(ord, menuItems).total, 0);
+  const totalRev = paidOrders.reduce((sum, ord) => sum + orderCalculationService.calculateOrderPricing(ord, menuItems).total, 0);
+  const cashSum = paidOrders.filter(o => o.paymentMethod === 'cash').reduce((sum, ord) => sum + orderCalculationService.calculateOrderPricing(ord, menuItems).total, 0);
+  const creditSum = paidOrders.filter(o => o.paymentMethod === 'credit').reduce((sum, ord) => sum + orderCalculationService.calculateOrderPricing(ord, menuItems).total, 0);
+  const twqrSum = paidOrders.filter(o => o.paymentMethod === 'twqr').reduce((sum, ord) => sum + orderCalculationService.calculateOrderPricing(ord, menuItems).total, 0);
+  const memberSum = paidOrders.filter(o => o.paymentMethod === 'member').reduce((sum, ord) => sum + orderCalculationService.calculateOrderPricing(ord, menuItems).total, 0);
 
   // Calculate quantities of each item sold ON THIS SETTLEMENT DAY
   const itemQuants: { [name: string]: { zh: string; qty: number } } = {};
@@ -325,7 +325,7 @@ ${ingredientLines || '  (尚無庫存異動記錄)'}
                 </div>
               ) : (
                 unpaidOrders.map(ord => {
-                  const ordTot = calculateOrderTotalWithPayment(ord, menuItems).total;
+                  const ordTot = orderCalculationService.calculateOrderPricing(ord, menuItems).total;
                   return (
                     <div key={ord.id} className="p-3 bg-zinc-900/80 rounded-lg border border-white/5 text-xs text-zinc-300 space-y-2">
                       <div className="flex justify-between items-center">

@@ -15,12 +15,7 @@ export const getMaskedEmail = (email: string | null | undefined): string => {
 };
 
 
-/** @deprecated Use orderCalculationService.computeOrderItemUnitPrice directly */
-export const computeOrderItemUnitPrice = orderCalculationService.computeOrderItemUnitPrice;
-/** @deprecated Use orderCalculationService.computeOrderItemsSubtotal directly */
-export const computeOrderItemsSubtotal = orderCalculationService.computeOrderItemsSubtotal;
-/** @deprecated Use orderCalculationService.calculateOrderPricing directly */
-export const calculateOrderTotalWithPayment = orderCalculationService.calculateOrderPricing;
+// Deprecated wrappers removed during Phase 1.2 refactoring
 export const getLocalDateString = getTaiwanDateString;
 export const isOrderOnLocalDate = (createdAt: string | undefined | null, targetDateStr: string): boolean => {
   if (!createdAt) return false;

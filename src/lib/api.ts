@@ -1,6 +1,9 @@
 import { getToken } from 'firebase/app-check';
 import { appCheck } from './firebase';
 
+let _cachedAppCheckToken: string | null = null;
+let _appCheckTokenExpiry: number = 0;
+
 export const getAuthHeader = async (opts: { skipAuth?: boolean } = {}) => {
   const headers: Record<string, string> = {};
   if (!opts.skipAuth) {
@@ -10,8 +13,13 @@ export const getAuthHeader = async (opts: { skipAuth?: boolean } = {}) => {
 
   if (appCheck) {
     try {
-      const appCheckTokenResponse = await getToken(appCheck, false);
-      headers['X-Firebase-AppCheck'] = appCheckTokenResponse.token;
+      const now = Date.now();
+      if (!_cachedAppCheckToken || now > _appCheckTokenExpiry) {
+        const appCheckTokenResponse = await getToken(appCheck, false);
+        _cachedAppCheckToken = appCheckTokenResponse.token;
+        _appCheckTokenExpiry = now + 55 * 60 * 1000;
+      }
+      headers['X-Firebase-AppCheck'] = _cachedAppCheckToken;
     } catch (err) {
       console.warn('App Check Token 獲取失敗', err);
     }

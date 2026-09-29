@@ -5,7 +5,8 @@ import { getLocalizedText } from '../../../utils/i18n';
 import { ConfirmActionModalConfig } from './ConfirmActionModal';
 import { PaidModDetails } from '../../../types';
 import { memberService } from '../../../services/memberService';
-import { getMaskedEmail, computeOrderItemUnitPrice, computeOrderItemsSubtotal } from '../ManagerDashboardUtils';
+import { getMaskedEmail } from '../ManagerDashboardUtils';
+import { orderCalculationService } from '../../../services/orderCalculationService';
 
 export interface OrderDetailDrilldownModalProps {
   selectedOrder: Order | null;
@@ -364,7 +365,7 @@ ${customerDetails}
                           it.customization?.notes ? `客備：${it.customization?.notes}` : ''
                         ].filter(Boolean).join(' / ');
 
-                        const effectiveUnitPrice = computeOrderItemUnitPrice(it, menuItems);
+                        const effectiveUnitPrice = orderCalculationService.computeOrderItemUnitPrice(it, menuItems);
                         const itemRowTotal = effectiveUnitPrice * (it.qty || 0);
 
                         return (
@@ -436,7 +437,7 @@ ${customerDetails}
                     <div className="border-t border-white/10 pt-4 space-y-2.5 text-xs font-sans">
                       <div className="flex justify-between text-zinc-400">
                         <span>餐點客用金額小計 Subtotal</span>
-                        <span className="font-mono text-white">NT$ {computeOrderItemsSubtotal(selectedOrder.items || [], menuItems).toLocaleString()}</span>
+                        <span className="font-mono text-white">NT$ {orderCalculationService.computeOrderItemsSubtotal(selectedOrder.items || [], menuItems).toLocaleString()}</span>
                       </div>
                       <div className="flex justify-between text-zinc-400">
                         <span>刷卡等計10%客用服務費 Charge</span>

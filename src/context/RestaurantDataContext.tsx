@@ -442,21 +442,21 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
           console.warn('[Firebase Sync] Ingredients listener paused/disabled:', error);
         });
         // Menu listener
-        unsubscribeMenu = onSnapshot(collection(db, "menu"), (snapshot) => {
+        unsubscribeMenu = onSnapshot(query(collection(db, "menu"), limit(300)), (snapshot) => {
           const items = snapshot.docs.map(doc => doc.data() as MenuItem);
           setMenuItems(enrichMenuItems(items));
         }, (error) => {
           console.warn('[Firebase Sync] Menu listener paused/disabled:', error);
         });
         // Categories listener
-        unsubscribeCategories = onSnapshot(collection(db, "categories"), (snapshot) => {
+        unsubscribeCategories = onSnapshot(query(collection(db, "categories"), limit(50)), (snapshot) => {
           const cats = snapshot.docs.map(doc => doc.data() as Category);
           setCategories(enrichCategories(cats));
         }, (error) => {
           console.warn('[Firebase Sync] Categories listener paused/disabled:', error);
         });
         // Tables listener
-        unsubscribeTables = onSnapshot(collection(db, "tables"), (snapshot) => {
+        unsubscribeTables = onSnapshot(query(collection(db, "tables"), limit(50)), (snapshot) => {
           const tbls = snapshot.docs.map(doc => doc.data() as TableConfig);
           setTables(tbls);
         }, (error) => {

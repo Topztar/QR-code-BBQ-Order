@@ -3,7 +3,8 @@
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { memberService, MEMBERS_STORAGE_KEY } from '../src/services/memberService';
-import { getMaskedEmail, calculateOrderTotalWithPayment } from '../src/components/manager/ManagerDashboardUtils';
+import { getMaskedEmail } from '../src/components/manager/ManagerDashboardUtils';
+import { orderCalculationService } from '../src/services/orderCalculationService';
 
 describe('Manager Dashboard Refactoring & Security Tests', () => {
   beforeEach(() => {
@@ -131,7 +132,7 @@ describe('Manager Dashboard Refactoring & Security Tests', () => {
       ];
 
       // Credit card order: subtotal 1000 + 10% service charge 100 = 1100
-      const creditPricing = calculateOrderTotalWithPayment({
+      const creditPricing = orderCalculationService.calculateOrderPricing({
         items: mockItems as any,
         paymentMethod: 'credit',
       });
@@ -140,7 +141,7 @@ describe('Manager Dashboard Refactoring & Security Tests', () => {
       expect(creditPricing.total).toBe(1100);
 
       // TWQR order: subtotal 1000 + 10% service charge 100 = 1100
-      const twqrPricing = calculateOrderTotalWithPayment({
+      const twqrPricing = orderCalculationService.calculateOrderPricing({
         items: mockItems as any,
         paymentMethod: 'twqr',
       });
@@ -148,7 +149,7 @@ describe('Manager Dashboard Refactoring & Security Tests', () => {
       expect(twqrPricing.total).toBe(1100);
 
       // Cash order: subtotal 1000, no service charge = 1000
-      const cashPricing = calculateOrderTotalWithPayment({
+      const cashPricing = orderCalculationService.calculateOrderPricing({
         items: mockItems as any,
         paymentMethod: 'cash',
       });
@@ -161,7 +162,7 @@ describe('Manager Dashboard Refactoring & Security Tests', () => {
         { id: '1', menuItemId: 'm1', name: { zh: '牛排', en: 'BBQ Ribs' }, price: 600, qty: 1, customization: {} },
       ];
 
-      const discounted = calculateOrderTotalWithPayment({
+      const discounted = orderCalculationService.calculateOrderPricing({
         items: mockItems as any,
         paymentMethod: 'cash',
         discount: 100,

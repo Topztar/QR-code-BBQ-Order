@@ -1,7 +1,7 @@
 import React from 'react';
 import { User, Phone, Clock, FileText } from 'lucide-react';
 import { Order } from '../../types';
-import { calculateOrderTotalWithPayment } from './ManagerDashboardUtils';
+import { orderCalculationService } from '../../services/orderCalculationService';
 
 export interface TakeoutLiveCardProps {
   order: Order;
@@ -18,7 +18,7 @@ export const TakeoutLiveCard: React.FC<TakeoutLiveCardProps> = React.memo(({
   onSelectOrder,
   onOpenDetailModal,
 }) => {
-  const tCalculated = calculateOrderTotalWithPayment(tOrder, menuItems);
+  const tCalculated = orderCalculationService.calculateOrderPricing(tOrder, menuItems);
   const tTotal = tCalculated.total;
   const isReady = tOrder.status === 'completed';
   const isPreparing = tOrder.status === 'preparing';

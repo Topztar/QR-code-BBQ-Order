@@ -1,7 +1,7 @@
 import React from 'react';
 import { User, Phone, Clock } from 'lucide-react';
 import { Order, Language } from '../../types';
-import { calculateOrderTotalWithPayment } from './ManagerDashboardUtils';
+import { orderCalculationService } from '../../services/orderCalculationService';
 import { getLocalizedText } from '../../utils/i18n';
 
 export interface CashierOrderCardProps {
@@ -34,7 +34,7 @@ export const CashierOrderCard: React.FC<CashierOrderCardProps> = React.memo(({
   const isCompletedInKitchen = order.status === 'completed';
   const isDineIn = !(order.tableNumber && String(order.tableNumber || '').includes('外帶'));
   const orderGuests = order.guestCount || 1;
-  const orderCalculated = calculateOrderTotalWithPayment(order, menuItems);
+  const orderCalculated = orderCalculationService.calculateOrderPricing(order, menuItems);
   const orderDisplayTotal = orderCalculated.total;
   const avgAmt = orderDisplayTotal / orderGuests;
   const orderCreatedAtTime = new Date(order.createdAt).getTime();

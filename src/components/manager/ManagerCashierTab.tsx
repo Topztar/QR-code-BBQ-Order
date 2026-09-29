@@ -4,7 +4,7 @@ import { CashierCheckoutPanel } from './cashier/CashierCheckoutPanel';
 import { CashierOrderSidebar } from './cashier/CashierOrderSidebar';
 import { CashierFloorPlan } from './cashier/CashierFloorPlan';
 import { useDashboardStore } from '../../stores/dashboard/useDashboardStore';
-import { computeOrderItemsSubtotal } from './ManagerDashboardUtils';
+import { orderCalculationService } from '../../services/orderCalculationService';
 import { isReservationUpcoming } from '../../context/RestaurantDataContext';
 
 import {
@@ -14,10 +14,6 @@ import {
 import { useTableLayout } from '../../hooks/useTableLayout';
 import { Language, Category, TableConfig, Order, Reservation } from '../../types';
 import { getLocalizedText } from '../../utils/i18n';
-import {
-  calculateOrderTotalWithPayment,
-  computeOrderItemUnitPrice
-} from './ManagerDashboardUtils';
 
 // ============================================================
 // ManagerCashierTab — 收銀結帳系統 Tab
@@ -357,7 +353,7 @@ export const ManagerCashierTab: React.FC<ManagerCashierTabProps> = (props) => {
     if (!cashierSelectedOrder) return { subtotal: 0, discount: 0, surcharge: 0, total: 0 };
     
     const sub = cashierMergedOrders.reduce((sum, o) => {
-      const itemsSub = computeOrderItemsSubtotal(o.items || [], menuItems);
+      const itemsSub = orderCalculationService.computeOrderItemsSubtotal(o.items || [], menuItems);
       return sum + (itemsSub > 0 ? itemsSub : (o.subtotal || 0));
     }, 0);
     
@@ -670,7 +666,7 @@ export const ManagerCashierTab: React.FC<ManagerCashierTabProps> = (props) => {
                       {(() => {
                         const isDineIn = !(cashierSelectedOrder.tableNumber && String(cashierSelectedOrder.tableNumber || '').includes('外帶'));
                         const orderGuests = cashierSelectedOrder.guestCount || 1;
-                        const selOrderCalcs = calculateOrderTotalWithPayment(cashierSelectedOrder, menuItems);
+                        const selOrderCalcs = orderCalculationService.calculateOrderPricing(cashierSelectedOrder, menuItems);
                         const selOrderDisplayTotal = selOrderCalcs.total;
                         const avgAmt = selOrderDisplayTotal / orderGuests;
                         const orderCreatedAtTime = new Date(cashierSelectedOrder.createdAt).getTime();
@@ -763,7 +759,7 @@ export const ManagerCashierTab: React.FC<ManagerCashierTabProps> = (props) => {
                                 </div>
                                 <div className="text-[11px] font-mono font-bold text-amber-400 mt-2 pt-1 border-t border-white/5 flex justify-between items-center">
                                   <span className="text-[10px] text-zinc-500 font-sans">本單金額:</span>
-                                  <span>NT$ {calculateOrderTotalWithPayment(cashierSelectedOrder, menuItems).total.toLocaleString()}</span>
+                                  <span>NT$ {orderCalculationService.calculateOrderPricing(cashierSelectedOrder, menuItems).total.toLocaleString()}</span>
                                 </div>
                               </button>
 
@@ -792,7 +788,7 @@ export const ManagerCashierTab: React.FC<ManagerCashierTabProps> = (props) => {
                                   </div>
                                   <div className="text-[11px] font-mono font-bold text-amber-400 mt-2 pt-1 border-t border-white/5 flex justify-between items-center">
                                     <span className="text-[10px] text-zinc-500 font-sans">同桌合計:</span>
-                                    <span>NT$ {sameTableOrders.reduce((sum, o) => sum + calculateOrderTotalWithPayment(o, menuItems).total, 0).toLocaleString()}</span>
+                                    <span>NT$ {sameTableOrders.reduce((sum, o) => sum + orderCalculationService.calculateOrderPricing(o, menuItems).total, 0).toLocaleString()}</span>
                                   </div>
                                 </button>
                               )}
@@ -822,7 +818,7 @@ export const ManagerCashierTab: React.FC<ManagerCashierTabProps> = (props) => {
                                   </div>
                                   <div className="text-[11px] font-mono font-bold text-amber-400 mt-2 pt-1 border-t border-white/5 flex justify-between items-center">
                                     <span className="text-[10px] text-zinc-500 font-sans">跨桌合計:</span>
-                                    <span>NT$ {allConnectedOrders.reduce((sum, o) => sum + calculateOrderTotalWithPayment(o, menuItems).total, 0).toLocaleString()}</span>
+                                    <span>NT$ {allConnectedOrders.reduce((sum, o) => sum + orderCalculationService.calculateOrderPricing(o, menuItems).total, 0).toLocaleString()}</span>
                                   </div>
                                 </button>
                               )}
@@ -897,7 +893,7 @@ export const ManagerCashierTab: React.FC<ManagerCashierTabProps> = (props) => {
                                   {allConnectedOrders.map((candidate) => {
                                     const isChecked = cashierSelectedMergeOrderIds.includes(candidate.id);
                                     const isMainSelected = candidate.id === cashierSelectedOrder.id;
-                                    const candCalculated = calculateOrderTotalWithPayment(candidate, menuItems);
+                                    const candCalculated = orderCalculationService.calculateOrderPricing(candidate, menuItems);
                                     const candSubtotal = candCalculated.total;
                                     const isSameTable = candidate.tableNumber === cashierSelectedOrder.tableNumber;
                                     
@@ -1099,7 +1095,7 @@ export const ManagerCashierTab: React.FC<ManagerCashierTabProps> = (props) => {
                                   const pName = it.name ? (typeof it.name === 'object' ? ((getLocalizedText(it.name, currentLang) || '未命名')) : it.name) : '未命名';
                                   const dish = menuItems.find((m: any) => m.id === it.menuItemId);
                                   const baseUnitPrice = dish ? dish.price : (it.price || 0);
-                                  const effectiveUnitPrice = computeOrderItemUnitPrice(it, menuItems);
+                                  const effectiveUnitPrice = orderCalculationService.computeOrderItemUnitPrice(it, menuItems);
                                   const itemRowTotal = effectiveUnitPrice * (it.qty || 0);
 
                                   const spicinessName = ['不辣', '辣味'][it.customization?.spiciness || 0];
@@ -2194,7 +2190,7 @@ export const ManagerCashierTab: React.FC<ManagerCashierTabProps> = (props) => {
 
                 {/* Financial Summary & Actions */}
                 {(() => {
-                  const calculated = calculateOrderTotalWithPayment(takeoutDetailModalOrder, menuItems);
+                  const calculated = orderCalculationService.calculateOrderPricing(takeoutDetailModalOrder, menuItems);
                   const total = calculated.total;
 
                   return (

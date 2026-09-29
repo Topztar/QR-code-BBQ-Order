@@ -1,11 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import {
   getMaskedEmail,
-  computeOrderItemUnitPrice,
-  computeOrderItemsSubtotal,
   isOrderOnLocalDate,
   generateReservationNo,
 } from '../src/components/manager/ManagerDashboardUtils';
+import { orderCalculationService } from '../src/services/orderCalculationService';
 
 describe('ManagerDashboard & Extended Files Functional Simulation Suite', () => {
   const mockMenu = [
@@ -60,10 +59,10 @@ describe('ManagerDashboard & Extended Files Functional Simulation Suite', () => 
       }
     ];
 
-    const unitPrice1 = computeOrderItemUnitPrice(items[0], mockMenu);
+    const unitPrice1 = orderCalculationService.computeOrderItemUnitPrice(items[0], mockMenu);
     expect(unitPrice1).toBe(120 + 10 + 20); // 150
 
-    const subtotal = computeOrderItemsSubtotal(items, mockMenu);
+    const subtotal = orderCalculationService.computeOrderItemsSubtotal(items, mockMenu);
     expect(subtotal).toBe(150 * 3 + 60 * 2); // 450 + 120 = 570
   });
 
@@ -92,7 +91,7 @@ describe('ManagerDashboard & Extended Files Functional Simulation Suite', () => 
 
     const mergedOrders = [order1, order2];
     const combinedSubtotal = mergedOrders.reduce((sum, o) => {
-      const itemsSub = computeOrderItemsSubtotal(o.items, mockMenu);
+      const itemsSub = orderCalculationService.computeOrderItemsSubtotal(o.items, mockMenu);
       return sum + (itemsSub > 0 ? itemsSub : o.subtotal);
     }, 0);
     expect(combinedSubtotal).toBe(360); // 240 + 120
@@ -139,7 +138,7 @@ describe('ManagerDashboard & Extended Files Functional Simulation Suite', () => 
     }).filter(it => it.qty > 0);
 
     expect(updatedItems.length).toBe(1); // Only sk-01 remains
-    const newSubtotal = computeOrderItemsSubtotal(updatedItems, mockMenu);
+    const newSubtotal = orderCalculationService.computeOrderItemsSubtotal(updatedItems, mockMenu);
     expect(newSubtotal).toBe(240);
 
     const totalDiff = newSubtotal - originalOrder.total;

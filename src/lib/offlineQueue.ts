@@ -204,6 +204,18 @@ async function executeRequest(item: QueuedRequest): Promise<Response> {
 let isQueuePaused = false;
 let isExecutingQueue = false; // Mutex to prevent overlapping drain loops
 
+let queueBroadcast: BroadcastChannel | null = null;
+if (typeof window !== 'undefined') {
+  queueBroadcast = new BroadcastChannel('sabay_queue_lock');
+  queueBroadcast.onmessage = (event) => {
+    if (event.data === 'queue_start') {
+      isExecutingQueue = true; // Lock set by another tab
+    } else if (event.data === 'queue_end') {
+      isExecutingQueue = false; // Lock released by another tab
+    }
+  };
+}
+
 export function isOfflineQueuePaused(): boolean {
   return isQueuePaused;
 }
@@ -235,6 +247,7 @@ export async function processOfflineQueue(onProgress?: (msg: string) => void): P
   let failureCount = 0;
 
   isExecutingQueue = true;
+  if (queueBroadcast) queueBroadcast.postMessage('queue_start');
   try {
     const queue = getOfflineQueue();
     if (queue.length === 0) {
@@ -381,6 +394,7 @@ export async function processOfflineQueue(onProgress?: (msg: string) => void): P
 
   } finally {
     isExecutingQueue = false;
+    if (queueBroadcast) queueBroadcast.postMessage('queue_end');
   }
 
   return { successCount, failureCount };

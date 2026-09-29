@@ -14,7 +14,7 @@ import {
   printViaBridge,
   DEFAULT_POS_BRIDGE_URL
 } from '../lib/posBridgeClient';
-import { DEFAULT_RECIPE_COMPOSITION_MAP } from '../config/recipeMap';
+// removed recipeMap import
 const ManagerStatsTab = resilientLazy(() => import('./manager/ManagerStatsTab').then(m => ({ default: m.ManagerStatsTab })));
 const ManagerOrdersTab = resilientLazy(() => import('./manager/ManagerOrdersTab').then(m => ({ default: m.ManagerOrdersTab })));
 const ManagerInventoryTab = resilientLazy(() => import('./manager/ManagerInventoryTab').then(m => ({ default: m.ManagerInventoryTab })));
@@ -42,9 +42,9 @@ const localStorage = safeStorage;
 
 import {
   getMaskedEmail,
-  calculateOrderTotalWithPayment,
   exportToCSV,
 } from './manager/ManagerDashboardUtils';
+import { orderCalculationService } from '../services/orderCalculationService';
 import { memberService } from '../services/memberService';
 import { unlockAudio, playOrderChimeSound } from '../utils/kdsAudio';
 
@@ -673,7 +673,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     }
 
     // Recompute total & diff
-    const pricing = calculateOrderTotalWithPayment({
+    const pricing = orderCalculationService.calculateOrderPricing({
       ...selectedOrder,
       items: updatedItems,
       discount: selectedOrder.discount || 0
@@ -831,7 +831,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     await onUpdateOrderItems(selectedOrder.id, updatedItems);
     
     // Also update selectedOrder local modal state to prevent lag
-    const pricing = calculateOrderTotalWithPayment({
+    const pricing = orderCalculationService.calculateOrderPricing({
       ...selectedOrder,
       items: updatedItems,
       discount: selectedOrder.discount || 0
@@ -878,7 +878,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     // Sync with backend
     await onUpdateOrderItems(selectedOrder.id, updatedItems);
 
-    const pricing = calculateOrderTotalWithPayment({
+    const pricing = orderCalculationService.calculateOrderPricing({
       ...selectedOrder,
       items: updatedItems,
       discount: selectedOrder.discount || 0
@@ -1678,7 +1678,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
 
 
   // Ingredient Recipe Maps definition for local recipe cards auditing 
-  const recipeCompositionMap = DEFAULT_RECIPE_COMPOSITION_MAP;
+  const recipeCompositionMap: { [dishId: string]: { name: string; qty: string }[] } = {};
 
   return (
     <div className="space-y-6 text-white" id="manager-dashboard-container">
