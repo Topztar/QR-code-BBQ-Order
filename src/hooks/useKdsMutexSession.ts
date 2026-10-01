@@ -68,29 +68,6 @@ export function useKdsMutexSession(
       if (rtdbUnsubscribe) rtdbUnsubscribe();
     };
 
-    if (!db || !syncActive) return;
-
-    const sessionDocRef = doc(db, 'settings', 'kds_session');
-    const unsubscribeSession = onSnapshot(sessionDocRef, (snap) => {
-      if (snap.exists()) {
-        const data = snap.data() as KdsSession;
-        setKdsSession(data);
-
-        if (currentRoleRef.current === 'kitchen' && data.activeKitchenDeviceId && data.activeKitchenDeviceId !== currentDeviceId) {
-          setIsKitchenPreempted(true);
-        }
-      } else {
-        setKdsSession(null);
-      }
-    }, (err) => {
-      console.warn('[KDS Session Snapshot Note]', err);
-    });
-
-    return () => {
-      setTimeout(() => {
-        try { unsubscribeSession(); } catch (_) {}
-      }, 0);
-    };
   }, [syncActive, currentDeviceId, activeTab]);
 
   useEffect(() => {
@@ -109,11 +86,6 @@ export function useKdsMutexSession(
     window.addEventListener('beforeunload', handleBeforeUnload);
     window.addEventListener('pagehide', handleBeforeUnload);
 
-    isRtdbPresenceSupported().then(supported => {
-      if (supported) {
-        // Handled by beforeunload above
-      }
-    });
 
     const heartbeatInterval = setInterval(async () => {
       if (!isNetworkOnline) return;

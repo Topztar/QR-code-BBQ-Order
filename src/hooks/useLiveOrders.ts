@@ -74,6 +74,8 @@ class BoundedSet<T> {
   }
 }
 
+const getIsOnline = () => typeof navigator !== 'undefined' ? navigator.onLine : true;
+
 export function useLiveOrders(
   activeTab: string,
   currentDeviceId: string,
@@ -85,6 +87,10 @@ export function useLiveOrders(
   handleDeleteReservation?: (id: string) => Promise<{ success: boolean; error?: string }>
 ) {
   const [orders, setOrders] = useState<Order[]>([]);
+  const ordersRef = useRef(orders);
+  useEffect(() => {
+    ordersRef.current = orders;
+  }, [orders]);
   const recentStatusTransitionsRef = useRef<Map<string, RecentOrderTransition>>(new Map());
   const deletedOrderIdsRef = useRef<BoundedSet<string>>(new BoundedSet(1000));
   const isStaffView = activeTab !== 'customer';
@@ -364,7 +370,7 @@ export function useLiveOrders(
 
   const handleUpdateOrderStatus = async (orderId: string, status: OrderStatus) => {
     const description = `更新 🥢 訂單 #${orderId.replace('offline_temp_', '離線')} 狀態至「${status}」`;
-    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+    const isOnline = getIsOnline();
     
     broadcastOrderEvent({ type: 'ORDER_UPDATED', orderId, updates: { status } });
 
@@ -404,7 +410,7 @@ export function useLiveOrders(
 
   const handleToggleOrderItemComplete = async (orderId: string, itemId: string, isCompleted: boolean, isPrepared?: boolean) => {
     const description = `更新 🥢 訂單 #${orderId.replace('offline_temp_', '離線')} 內單一商品狀態`;
-    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+    const isOnline = getIsOnline();
     
     let nextStatus: OrderStatus | undefined;
     let nextItems: any[] = [];
@@ -479,7 +485,7 @@ export function useLiveOrders(
 
   const handleUpdateTableNumber = async (orderId: string, tableNumber: string) => {
     const description = `修改 🥢 訂單 #${orderId.replace('offline_temp_', '離線')} 的桌號至 ${tableNumber} 桌`;
-    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+    const isOnline = getIsOnline();
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, tableNumber, isOfflinePending: !isOnline } : o));
     
     broadcastOrderEvent({ type: 'ORDER_UPDATED', orderId, updates: { tableNumber } });
@@ -514,7 +520,7 @@ export function useLiveOrders(
 
   const handleUpdateQuickNotes = async (orderId: string, quickNotes: string) => {
     const description = `更新 🥢 訂單 #${orderId.replace('offline_temp_', '離線')} 備註: "${quickNotes}"`;
-    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+    const isOnline = getIsOnline();
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, quickNotes, isOfflinePending: !isOnline } : o));
 
     broadcastOrderEvent({ type: 'ORDER_UPDATED', orderId, updates: { quickNotes } });
@@ -549,7 +555,7 @@ export function useLiveOrders(
 
   const handleToggleOrderFlag = async (orderId: string, isFlagged: boolean, flagReason: string) => {
     const description = `設定 🥢 訂單 #${orderId.replace('offline_temp_', '離線')} 關注旗幟 ${isFlagged ? 'ON' : 'OFF'}`;
-    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+    const isOnline = getIsOnline();
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, isFlagged, flagReason, isOfflinePending: !isOnline } : o));
 
     broadcastOrderEvent({ type: 'ORDER_UPDATED', orderId, updates: { isFlagged, flagReason } });
@@ -585,7 +591,7 @@ export function useLiveOrders(
 
   const handleUpdateOrderItems = async (orderId: string, items: any[], refundLogs?: any[]) => {
     const description = `調整 🥢 訂單 #${orderId.replace('offline_temp_', '離線')} 品項數量`;
-    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+    const isOnline = getIsOnline();
     let computedPricing = { subtotal: 0, serviceCharge: 0, discount: 0, total: 0 };
     setOrders(prev => prev.map(o => {
       if (o.id !== orderId) return o;
@@ -645,10 +651,10 @@ export function useLiveOrders(
     },
     skipRefresh?: boolean
   ) => {
-    const isOnline = navigator.onLine;
+    const isOnline = getIsOnline();
     const description = `結帳 🥢 訂單 #${orderId.replace('offline_temp_', '離線')}`;
     
-    const targetOrder = orders.find(o => o.id === orderId);
+    const targetOrder = ordersRef.current.find(o => o.id === orderId);
     const resolvedStatus: OrderStatus = (targetOrder?.status === 'completed' || targetOrder?.status === 'cancelled')
       ? targetOrder.status
       : 'paid';
@@ -659,7 +665,7 @@ export function useLiveOrders(
 
     if (targetOrder) {
       if (targetOrder.tableNumber && targetOrder.tableNumber !== '外帶' && targetOrder.tableNumber !== 'takeout') {
-        const remainingUnpaid = orders.filter(o => o.tableNumber === targetOrder.tableNumber && o.id !== orderId && !o.isPaid && o.status !== 'cancelled');
+        const remainingUnpaid = ordersRef.current.filter(o => o.tableNumber === targetOrder.tableNumber && o.id !== orderId && !o.isPaid && o.status !== 'cancelled');
         if (remainingUnpaid.length === 0) {
           handleUpdateTableStatus(targetOrder.tableNumber, {
             status: 'cleaning',
@@ -712,7 +718,7 @@ export function useLiveOrders(
     skipRefresh?: boolean
   ): Promise<{ success: boolean }> => {
     if (!orderIds || orderIds.length === 0) return { success: false };
-    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+    const isOnline = getIsOnline();
     const description = `批次結帳 🥢 ${orderIds.length} 筆訂單`;
 
     setOrders(prev => prev.map(o => {
@@ -729,7 +735,7 @@ export function useLiveOrders(
     }));
 
     orderIds.forEach(orderId => {
-      const targetOrder = orders.find(o => o.id === orderId);
+      const targetOrder = ordersRef.current.find(o => o.id === orderId);
       const resolvedStatus: OrderStatus = (targetOrder?.status === 'completed' || targetOrder?.status === 'cancelled') ? targetOrder.status : 'paid';
 
       broadcastOrderEvent({ type: 'ORDER_UPDATED', orderId, updates: { isPaid: true, status: resolvedStatus } });
@@ -748,13 +754,13 @@ export function useLiveOrders(
       checkoutData.tableNumbers.forEach(t => candidateTableNumbers.add(t));
     }
     orderIds.forEach(id => {
-      const ord = orders.find(o => o.id === id);
+      const ord = ordersRef.current.find(o => o.id === id);
       if (ord?.tableNumber) candidateTableNumbers.add(ord.tableNumber);
     });
 
     candidateTableNumbers.forEach(tblId => {
       if (tblId && !tblId.includes('外帶') && tblId.toLowerCase() !== 'takeout') {
-        const remainingUnpaid = orders.filter(
+        const remainingUnpaid = ordersRef.current.filter(
           o => o.tableNumber === tblId && !orderIds.includes(o.id) && !o.isPaid && o.status !== 'cancelled'
         );
         if (remainingUnpaid.length === 0) {
@@ -802,7 +808,7 @@ export function useLiveOrders(
 
   const handleDeleteOrder = async (orderId: string) => {
     const description = `刪除 🥢 訂單 #${orderId.replace('offline_temp_', '離線')}`;
-    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+    const isOnline = getIsOnline();
     deletedOrderIdsRef.current.add(orderId);
     setOrders(prev => prev.filter(o => o.id !== orderId));
 

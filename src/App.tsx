@@ -798,7 +798,7 @@ function OrderDataConsumerWrapper({
   currentPath: string;
   navigateTo: (path: string) => void;
 }) {
-  const { tables, setTables, reservations, handleDeleteReservation, handleUpdateTableStatus, fetchData } = useRestaurantData();
+  const { tables, setTables, reservations, handleDeleteReservation, handleUpdateTableStatus, fetchData, menuItems } = useRestaurantData();
 
   return (
     <OrderDataProvider
@@ -806,6 +806,7 @@ function OrderDataConsumerWrapper({
       currentPath={currentPath}
       tables={tables}
       setTables={setTables}
+      menuItems={menuItems}
       reservations={reservations}
       handleDeleteReservation={handleDeleteReservation}
       handleUpdateTableStatus={handleUpdateTableStatus}

@@ -1,5 +1,5 @@
-import { useRef } from 'react';
-import { Order, OrderItem } from '../types';
+import { useRef, useState } from 'react';
+import { Order, OrderItem, MenuItem } from '../types';
 import { apiFetch } from '../lib/api';
 import { addRequestToQueue } from '../lib/offlineQueue';
 import { safeStorage } from '../lib/safeStorage';
@@ -32,8 +32,16 @@ export interface OrderDataPayload {
 
 export function useOrderSubmit(
   setOrders: React.Dispatch<React.SetStateAction<Order[]>>,
-  setLocalOrderIds: React.Dispatch<React.SetStateAction<string[]>>
+  menuItems: MenuItem[] = []
 ) {
+  const [, setLocalOrderIds] = useState<string[]>(() => {
+    try {
+      const stored = safeStorage.getItem('sabay-my-submitted-order-ids');
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
   const activeOrderSubmissionsRef = useRef<Set<string>>(new Set());
 
   const handlePlaceOrder = async (orderData: OrderDataPayload) => {
@@ -56,7 +64,7 @@ export function useOrderSubmit(
       items: orderData.items,
       paymentMethod: orderData.paymentMethod,
       isPaid: false
-    });
+    }, menuItems);
     const tempId = `ord_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     const description = `桌號 🥢 ${orderData.tableNumber || '外帶'} • 點購 ${orderData.items.length} 份餐點 (金額: $${pricing.total})`;
 

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
-import { Order, OrderItem, TableConfig, Reservation, OrderStatus, KdsSession } from '../types';
+import { Order, OrderItem, MenuItem, TableConfig, Reservation, OrderStatus, KdsSession } from '../types';
 import { apiFetch } from '../lib/api';
 import { safeStorage } from '../lib/safeStorage';
 import { QueuedRequest } from '../lib/offlineQueue';
@@ -94,6 +94,7 @@ interface ProviderProps {
   tables: TableConfig[];
   setTables: React.Dispatch<React.SetStateAction<TableConfig[]>>;
   reservations: Reservation[];
+  menuItems?: MenuItem[];
   handleDeleteReservation: (id: string) => Promise<{ success: boolean; error?: string }>;
   handleUpdateTableStatus: (id: string, updates: Partial<Omit<TableConfig, 'id' | 'qrCodeUrl'>>) => Promise<{ success: boolean }>;
   onRefreshData?: () => Promise<void>;
@@ -106,20 +107,12 @@ export function OrderDataProvider({
   tables,
   setTables,
   reservations,
+  menuItems = [],
   handleDeleteReservation,
   handleUpdateTableStatus,
   onRefreshData,
 }: ProviderProps) {
   const [pushNotifications, setPushNotifications] = useState<any[]>([]);
-  const [, setLocalOrderIds] = useState<string[]>(() => {
-    try {
-      const stored = safeStorage.getItem('sabay-my-submitted-order-ids');
-      return stored ? JSON.parse(stored) : [];
-    } catch {
-      return [];
-    }
-  });
-
   const [syncActive, setSyncActive] = useState<boolean>(() => isFirebaseSyncEnabled());
 
   useEffect(() => {
@@ -174,7 +167,15 @@ export function OrderDataProvider({
     handleUpdateTableStatus,
     handleDeleteReservation
   );
-  const { handlePlaceOrder } = useOrderSubmit(setOrders, setLocalOrderIds);
+  const { handlePlaceOrder } = useOrderSubmit(setOrders, menuItems);
+
+  const tableStatusOrdersSignature = useMemo(() => {
+    return orders
+      .filter(o => o.tableNumber && o.status !== 'cancelled')
+      .map(o => `${o.id}:${o.tableNumber}:${o.status}:${o.isPaid}`)
+      .sort()
+      .join('|');
+  }, [orders]);
 
   // Real-time Table Status Auto-Sync based on Orders & Reservations
   useEffect(() => {
@@ -271,7 +272,7 @@ export function OrderDataProvider({
     checkAndSyncTables();
     const interval = setInterval(checkAndSyncTables, 15000);
     return () => clearInterval(interval);
-  }, [orders, reservations, tables?.length, setTables]);
+  }, [tableStatusOrdersSignature, reservations, tables?.length, setTables]);
 
   const handleSendPromoPush = async (notif: { title: string; message: string; badge: string }) => {
     try {
@@ -280,9 +281,6 @@ export function OrderDataProvider({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(notif),
       });
-      if (onRefreshData) {
-        await onRefreshData();
-      }
     } catch (err) {
       console.error('[Sabay Push delivery failed]', err);
     }

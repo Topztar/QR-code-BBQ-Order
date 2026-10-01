@@ -2,6 +2,7 @@ import express from 'express';
 import { doc, deleteDoc } from 'firebase/firestore';
 import { Order, OrderItem, MenuItem, TableConfig, Reservation } from '../../types';
 import { orderCalculationService } from '../../services/orderCalculationService';
+import { validateOrderPayload } from '../../../functions/src/validators';
 
 export interface OrderRouteContext {
   getLiveOrders: () => Order[];
@@ -95,6 +96,12 @@ export function registerOrdersRoutes(app: express.Express, ctx: OrderRouteContex
 
   // 3. Place New Order
   app.post('/api/orders', rateLimiter, (req, res) => {
+    const valResult = validateOrderPayload(req.body);
+    if (!valResult.isValid) {
+      return res.status(400).json({ error: valResult.error });
+    }
+    const safePayload = valResult.sanitizedData || req.body;
+
     const {
       tableNumber,
       items,
@@ -111,7 +118,9 @@ export function registerOrdersRoutes(app: express.Express, ctx: OrderRouteContex
       source,
       utm_medium,
       notificationSent
-    } = req.body;
+    } = safePayload;
+    // Replace items with sanitized ones to ensure qty/quantity are parsed
+    const sanitizedItems = safePayload.items;
 
     const liveOrders = getLiveOrders();
     const liveTables = getLiveTables();
@@ -167,14 +176,12 @@ export function registerOrdersRoutes(app: express.Express, ctx: OrderRouteContex
       }
     }
 
-    if (!items || items.length === 0) {
-      return res.status(400).json({ error: 'Order must contain at least one item' });
-    }
+    // validateOrderPayload already ensures items is non-empty array
 
     // Validate that each ordered item's MenuItem is available (not sold out)
     const todayStr = getTaiwanDateString();
     const unavailableItems: string[] = [];
-    for (const orderItem of items as any[]) {
+    for (const orderItem of sanitizedItems) {
       const dish = liveMenu.find(m => m.id === orderItem.menuItemId);
       if (!dish) {
         unavailableItems.push(orderItem.name?.zh || '未知菜品');
@@ -208,7 +215,7 @@ export function registerOrdersRoutes(app: express.Express, ctx: OrderRouteContex
 
     // Calculation parameters
     let subtotal = 0;
-    const processedItems = (items as OrderItem[]).map((item, index) => {
+    const processedItems = (sanitizedItems as OrderItem[]).map((item, index) => {
       const finalItemPrice = orderCalculationService.computeOrderItemUnitPrice(item, liveMenu);
       const itemCost = finalItemPrice * item.qty;
       subtotal += itemCost;
