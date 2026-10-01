@@ -98,24 +98,4 @@ export async function setIdbItem<T>(key: string, value: T): Promise<boolean> {
   }
 }
 
-export async function removeIdbItem(key: string): Promise<boolean> {
-  try {
-    const db = await openIdb();
-    if (!db) return false;
 
-    return new Promise((resolve) => {
-      try {
-        const tx = db.transaction(STORE_NAME, 'readwrite');
-        const store = tx.objectStore(STORE_NAME);
-        const req = store.delete(key);
-
-        req.onsuccess = () => resolve(true);
-        req.onerror = () => resolve(false);
-      } catch {
-        resolve(false);
-      }
-    });
-  } catch {
-    return false;
-  }
-}

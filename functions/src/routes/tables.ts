@@ -4,6 +4,7 @@ import { Bucket } from '@google-cloud/storage';
 import { validateReservationPayload } from '../validators';
 import { createGetCachedSettings } from '../helpers';
 import { invalidatePublicBootstrapCache } from './bootstrap';
+import { getStoredActiveToken } from '../auth';
 
 // ============================================================
 // TABLES 路由模組
@@ -151,7 +152,25 @@ post('/reservations', reservationRateLimiter, async (req, res) => {
   // 4-Hour advance rule for same-day reservations
   const todayNow = new Date();
   const todayDateStr = `${todayNow.getFullYear()}-${String(todayNow.getMonth() + 1).padStart(2, '0')}-${String(todayNow.getDate()).padStart(2, '0')}`;
-  if (data.date && data.date.trim() === todayDateStr && !(req.body as any).isStaffOverride) {
+  
+  let validStaffOverride = false;
+  if ((req.body as any).isStaffOverride) {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split('Bearer ')[1]?.trim();
+      if (token) {
+        const storedAuth = await getStoredActiveToken(db);
+        if (storedAuth && storedAuth.token === token) {
+           const nowMs = Date.now();
+           if (!storedAuth.expiresAt || nowMs <= storedAuth.expiresAt) {
+             validStaffOverride = true;
+           }
+        }
+      }
+    }
+  }
+
+  if (data.date && data.date.trim() === todayDateStr && !validStaffOverride) {
     const targetMins = parseTimeToMinutes(data.time);
     const currentMins = todayNow.getHours() * 60 + todayNow.getMinutes();
     if (targetMins < currentMins + 240) {

@@ -547,18 +547,13 @@ ${customerDetails}
     if (paymentMethod !== undefined) {
       order.paymentMethod = paymentMethod;
     }
-    if (total !== undefined) {
-      order.total = total;
-    }
-    if (serviceCharge !== undefined) {
-      order.serviceCharge = serviceCharge;
-    }
-    if (subtotal !== undefined) {
-      order.subtotal = subtotal;
-    }
-    if (discount !== undefined) {
-      (order as any).discount = discount;
-    }
+    
+    const pricing = orderCalculationService.calculateOrderPricing(order as any, getLiveMenu());
+    order.subtotal = pricing.subtotal;
+    order.serviceCharge = pricing.serviceCharge;
+    (order as any).discount = pricing.discount;
+    order.total = pricing.total;
+    
     order.isPaid = isPaid !== undefined ? !!isPaid : true;
 
     // Transition status to 'paid' so KDS keeps showing the order until kitchen marks it as completed

@@ -649,7 +649,6 @@ export function useLiveOrders(
       checkoutRecord?: any;
       isPaid?: boolean;
     },
-    skipRefresh?: boolean
   ) => {
     const isOnline = getIsOnline();
     const description = `結帳 🥢 訂單 #${orderId.replace('offline_temp_', '離線')}`;
@@ -714,8 +713,7 @@ export function useLiveOrders(
       changeAmount?: number;
       tableNumbers?: string[];
       checkoutRecord?: any;
-    },
-    skipRefresh?: boolean
+    }
   ): Promise<{ success: boolean }> => {
     if (!orderIds || orderIds.length === 0) return { success: false };
     const isOnline = getIsOnline();

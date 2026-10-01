@@ -39,7 +39,8 @@ const auth_1 = require("firebase-admin/auth");
 const crypto = __importStar(require("crypto"));
 const auth_2 = require("../auth");
 function registerStaffRoutes(app, ctx) {
-    const { db, requireStaffAuth, sendErrorResponse } = ctx;
+    const { db, requireStaffAuth, sendErrorResponse, createRateLimiter } = ctx;
+    const pinRateLimiter = createRateLimiter(6, 60 * 1000, '員工 PIN 驗證');
     const get = (routePath, ...handlers) => app.get([`/api${routePath}`, routePath], ...handlers);
     const post = (routePath, ...handlers) => app.post([`/api${routePath}`, routePath], ...handlers);
     const put = (routePath, ...handlers) => app.put([`/api${routePath}`, routePath], ...handlers);
@@ -59,7 +60,7 @@ function registerStaffRoutes(app, ctx) {
     get('/staff/verify', requireStaffAuth, (_req, res) => {
         res.json({ valid: true });
     });
-    post('/staff/pin/check-path', async (req, res) => {
+    post('/staff/pin/check-path', pinRateLimiter, async (req, res) => {
         const { pathPin } = req.body;
         if (!pathPin) {
             return res.status(400).json({ valid: false, error: 'Missing pathPin' });
@@ -89,7 +90,7 @@ function registerStaffRoutes(app, ctx) {
             return res.status(500).json({ valid: false, error: 'Internal server error' });
         }
     });
-    post('/staff/pin/verify', async (req, res) => {
+    post('/staff/pin/verify', pinRateLimiter, async (req, res) => {
         const { pin } = req.body;
         if (!pin || typeof pin !== 'string') {
             return res.status(400).json({ success: false, error: '請輸入有效的 6 位數金鑰' });

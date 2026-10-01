@@ -2,6 +2,7 @@ import React, { Component, useState, useEffect } from 'react';
 import { Category, Ingredient, Language } from '../../../types';
 import { getLocalizedText, translateTextToLanguage } from '../../../utils/i18n';
 import { getAuthHeader } from '../../../lib/api';
+import { useModalEscape } from '../../../hooks/useModalEscape';
 
 const ALL_LANGUAGES: Language[] = ['zh', 'en', 'th', 'ja', 'ko', 'vi', 'ru', 'es'];
 
@@ -133,6 +134,8 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
   categories,
   ingredients,
 }) => {
+  useModalEscape(isOpen, onClose);
+
   const [itemNames, setItemNames] = useState<Record<Language, string>>({ zh: '', en: '', th: '', ja: '', ko: '', vi: '', ru: '', es: '' });
   const [itemDescs, setItemDescs] = useState<Record<Language, string>>({ zh: '', en: '', th: '', ja: '', ko: '', vi: '', ru: '', es: '' });
   const [itemCategory, setItemCategory] = useState('skewers');

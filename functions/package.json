@@ -2,7 +2,7 @@
   "name": "functions",
   "version": "1.0.1",
   "scripts": {
-    "build": "tsc",
+    "build": "node -e \"fs.rmSync('lib', { recursive: true, force: true })\" && tsc",
     "serve": "npm run build && firebase emulators:start --only functions",
     "shell": "npm run build && firebase functions:shell",
     "start": "npm run shell",

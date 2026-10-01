@@ -45,7 +45,7 @@ export interface ManagerCashierTabProps {
   onDeleteReservation?: (id: string) => Promise<{ success: boolean; error?: string }>;
   onDeleteTable: (id: string) => Promise<{ success: boolean; error?: string }>;
   onUpdateOrderItems?: (orderId: string, items: any[]) => Promise<void>;
-  onPayOrder?: (orderId: string, paymentData: any, skipRefresh?: boolean) => Promise<void>;
+  onPayOrder?: (orderId: string, paymentData: any) => Promise<void>;
   onBulkPayOrders?: (
     orderIds: string[],
     checkoutData: {
@@ -58,8 +58,7 @@ export interface ManagerCashierTabProps {
       changeAmount?: number;
       tableNumbers?: string[];
       checkoutRecord?: any;
-    },
-    skipRefresh?: boolean
+    }
   ) => Promise<{ success: boolean }>;
 
   // --- Computed / Derived ---

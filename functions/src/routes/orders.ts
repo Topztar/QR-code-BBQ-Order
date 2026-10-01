@@ -488,7 +488,7 @@ put('/orders/:id/flag', requireStaffAuth, async (req, res) => {
 
 put('/orders/:id/items', requireStaffAuth, async (req, res) => {
   const id = req.params.id as string;
-  const { items, refundLogs } = req.body;
+  const { items, refundLogs, expectedVersion } = req.body;
   try {
     const orderRef = db.collection('orders').doc(id);
     let updatePayload: Record<string, any> = {};
@@ -499,6 +499,10 @@ put('/orders/:id/items', requireStaffAuth, async (req, res) => {
         throw new Error('Order not found');
       }
       const orderData = orderSnap.data() || {};
+      const currentVersion = orderData.version || 0;
+      if (typeof expectedVersion === 'number' && expectedVersion < currentVersion) {
+        throw new Error('CONCURRENCY_CONFLICT:訂單已被他人更新，請重新載入後再試！');
+      }
       const isPaidOrCancelled = orderData.status === 'paid' || orderData.status === 'cancelled' || orderData.isPaid;
       const hasValidRefundLogs = Array.isArray(refundLogs) && refundLogs.length > 0;
       if (isPaidOrCancelled && !hasValidRefundLogs) {
@@ -515,7 +519,8 @@ put('/orders/:id/items', requireStaffAuth, async (req, res) => {
         discount: pricing.discount,
         total: pricing.total,
         totalAmount: pricing.total,
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
+        version: currentVersion + 1
       };
       if (refundLogs) {
         updatePayload.refundLogs = refundLogs;
@@ -525,6 +530,9 @@ put('/orders/:id/items', requireStaffAuth, async (req, res) => {
 
     res.json({ id, ...updatePayload });
   } catch (error: any) {
+    if (error?.message?.startsWith('CONCURRENCY_CONFLICT:')) {
+      return res.status(409).json({ error: error.message.replace('CONCURRENCY_CONFLICT:', '') });
+    }
     if (error?.message?.startsWith('ORDER_LOCKED:')) {
       return res.status(409).json({ error: error.message.replace('ORDER_LOCKED:', '') });
     }
@@ -547,6 +555,9 @@ put('/orders/:id/checkout', requireStaffAuth, async (req, res) => {
       if (!orderDoc.exists) throw new Error('Order not found');
       
       const orderData = orderDoc.data();
+      if (orderData?.isPaid || orderData?.status === 'paid') {
+        throw new Error('DOUBLE_PAY_PREVENTED:訂單已結帳，不可重複付款');
+      }
       const currentStatus = orderData?.status;
       resolvedStatus = (currentStatus === 'completed' || currentStatus === 'cancelled') ? currentStatus : 'paid';
 
@@ -589,7 +600,10 @@ put('/orders/:id/checkout', requireStaffAuth, async (req, res) => {
     });
 
     res.json({ id, ...req.body, isPaid: true, status: resolvedStatus });
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.message?.startsWith('DOUBLE_PAY_PREVENTED:')) {
+      return res.status(409).json({ error: error.message.replace('DOUBLE_PAY_PREVENTED:', '') });
+    }
     res.status(500).send(error);
   }
 });

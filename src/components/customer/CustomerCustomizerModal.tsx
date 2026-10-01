@@ -4,6 +4,7 @@ import { getLocalizedText } from '../../utils/i18n';
 import { TRANSLATIONS } from '../../data';
 import { X, ShoppingCart, Clock, AlertTriangle, Check } from 'lucide-react';
 import { orderCalculationService } from '../../services/orderCalculationService';
+import { useModalEscape } from '../../hooks/useModalEscape';
 
 export interface CustomerCustomizerModalProps {
   selectedDetailItem: MenuItem | null;
@@ -94,6 +95,8 @@ export const CustomerCustomizerModal: React.FC<CustomerCustomizerModalProps> = (
   handleAddToCart,
   setActiveLightboxImg,
 }) => {
+  useModalEscape(!!selectedDetailItem, () => setSelectedDetailItem(null));
+
   if (!selectedDetailItem) return null;
 
   return (

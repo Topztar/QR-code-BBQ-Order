@@ -2,6 +2,7 @@ import React from 'react';
 import { safeStorage } from '../../lib/safeStorage';
 import { sanitizePhoneDigits, isValidTaiwanPhone, TAIWAN_PHONE_ERROR_MSG } from '../../utils/phoneValidator';
 import { getTaiwanTimeParts } from '../../utils/dateUtils';
+import { useModalEscape } from '../../hooks/useModalEscape';
 
 const localStorage = safeStorage;
 
@@ -15,6 +16,8 @@ export const CustomerLightboxModal: React.FC<CustomerLightboxModalProps> = ({
   activeLightboxImg,
   setActiveLightboxImg,
 }) => {
+  useModalEscape(!!activeLightboxImg, () => setActiveLightboxImg(null));
+
   if (!activeLightboxImg) return null;
 
   return (
@@ -87,6 +90,11 @@ export const CustomerTakeoutModal: React.FC<CustomerTakeoutModalProps> = ({
   handleCheckout,
   setIsCartOpen,
 }) => {
+  useModalEscape(showTakeoutFormModal, () => {
+    setShowTakeoutFormModal(false);
+    if (setIsCartOpen) setIsCartOpen(true);
+  });
+
   if (!showTakeoutFormModal) return null;
 
   // Helper to compute available pickup time slots based on general operating hours

@@ -5,6 +5,66 @@ import { apiFetch } from '../../lib/api';
 import { Clock, Check, Star, Sparkles, Flame, ShoppingCart } from 'lucide-react';
 import { orderCalculationService } from '../../services/orderCalculationService';
 
+const statusColors: Record<string, string> = {
+  pending: 'text-amber-400 border-amber-400/20 bg-amber-400/5',
+  confirmed: 'text-sky-400 border-sky-400/20 bg-sky-400/5',
+  preparing: 'text-blue-400 border-blue-400/20 bg-blue-400/5',
+  delivering: 'text-violet-400 border-violet-400/20 bg-violet-400/5',
+  completed: 'text-emerald-400 border-emerald-400/20 bg-emerald-400/5',
+  cancelled: 'text-rose-400 border-rose-400/20 bg-rose-400/5',
+};
+
+const statusLabels: Record<string, Record<string, string>> = {
+  pending: {
+    zh: '⏳ 候餐排隊中',
+    en: 'Pending',
+    ko: 'Pending',
+    ja: 'Pending',
+    th: 'Pending',
+    vi: '⏳ Đang chờ xếp món',
+  },
+  confirmed: {
+    zh: '✅ 店家已確認接單',
+    en: 'Order Confirmed',
+    ko: 'Order Confirmed',
+    ja: 'Order Confirmed',
+    th: 'Order Confirmed',
+    vi: '✅ Cửa hàng đã xác nhận',
+  },
+  preparing: {
+    zh: '🍳 師傅大火製餐中',
+    en: 'Cooking',
+    ko: 'Cooking',
+    ja: 'Cooking',
+    th: 'Cooking',
+    vi: '🍳 Đầu bếp đang chế biến',
+  },
+  delivering: {
+    zh: '🚀 出餐上桌中',
+    en: 'Delivering',
+    ko: 'Delivering',
+    ja: 'Delivering',
+    th: 'Delivering',
+    vi: '🚀 Đang giao món',
+  },
+  completed: {
+    zh: '✅ 餐點已上齊 (待結帳)',
+    en: 'Dished Up',
+    ko: 'Dished Up',
+    ja: 'Dished Up',
+    th: 'Dished Up',
+    vi: '✅ Món ăn đã sẵn sàng (Chờ thanh toán)',
+  },
+  cancelled: {
+    zh: '❌ 訂單已撤銷',
+    en: 'Cancelled',
+    ko: 'Cancelled',
+    ja: 'Cancelled',
+    th: 'Cancelled',
+    vi: '❌ Đơn hàng đã hủy',
+  },
+};
+
 export interface CustomerOrderTrackerProps {
   isOrderHistoryVisible: boolean;
   activeSegmentTab: 'bestsellers' | 'history';
@@ -107,65 +167,7 @@ export const CustomerOrderTracker: React.FC<CustomerOrderTrackerProps> = ({
 
                     <div className="space-y-3">
                       {liveQueueOrders.map((order) => {
-                        const statusColors = {
-                          pending: 'text-amber-400 border-amber-400/20 bg-amber-400/5',
-                          confirmed: 'text-sky-400 border-sky-400/20 bg-sky-400/5',
-                          preparing: 'text-blue-400 border-blue-400/20 bg-blue-400/5',
-                          delivering: 'text-violet-400 border-violet-400/20 bg-violet-400/5',
-                          completed: 'text-emerald-400 border-emerald-400/20 bg-emerald-400/5',
-                          cancelled: 'text-rose-400 border-rose-400/20 bg-rose-400/5',
-                        };
 
-                        const statusLabels: Record<string, Record<string, string>> = {
-                          pending: {
-                            zh: '⏳ 候餐排隊中',
-                            en: 'Pending',
-                            ko: 'Pending',
-                            ja: 'Pending',
-                            th: 'Pending',
-                            vi: '⏳ Đang chờ xếp món',
-                          },
-                          confirmed: {
-                            zh: '✅ 店家已確認接單',
-                            en: 'Order Confirmed',
-                            ko: 'Order Confirmed',
-                            ja: 'Order Confirmed',
-                            th: 'Order Confirmed',
-                            vi: '✅ Cửa hàng đã xác nhận',
-                          },
-                          preparing: {
-                            zh: '🍳 師傅大火製餐中',
-                            en: 'Cooking',
-                            ko: 'Cooking',
-                            ja: 'Cooking',
-                            th: 'Cooking',
-                            vi: '🍳 Đầu bếp đang chế biến',
-                          },
-                          delivering: {
-                            zh: '🚀 出餐上桌中',
-                            en: 'Delivering',
-                            ko: 'Delivering',
-                            ja: 'Delivering',
-                            th: 'Delivering',
-                            vi: '🚀 Đang giao món',
-                          },
-                          completed: {
-                            zh: '✅ 餐點已上齊 (待結帳)',
-                            en: 'Dished Up',
-                            ko: 'Dished Up',
-                            ja: 'Dished Up',
-                            th: 'Dished Up',
-                            vi: '✅ Món ăn đã sẵn sàng (Chờ thanh toán)',
-                          },
-                          cancelled: {
-                            zh: '❌ 訂單已撤銷',
-                            en: 'Cancelled',
-                            ko: 'Cancelled',
-                            ja: 'Cancelled',
-                            th: 'Cancelled',
-                            vi: '❌ Đơn hàng đã hủy',
-                          },
-                        };
 
                         return (
                           <div

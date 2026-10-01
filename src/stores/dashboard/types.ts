@@ -88,7 +88,7 @@ export interface CashierSlice {
   showCheckoutConfirm: boolean;
   setShowCheckoutConfirm: (val: boolean) => void;
   
-  resetCashierState: () => void;
+
 }
 
 export interface TerminalSlice {

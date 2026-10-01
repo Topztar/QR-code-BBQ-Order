@@ -35,8 +35,7 @@ interface ManagerEodTabProps {
       total?: number;
       discount?: number;
       isPaid?: boolean;
-    },
-    skipRefresh?: boolean
+    }
   ) => Promise<void>;
   setPrintConfirmData: (data: any) => void;
 }

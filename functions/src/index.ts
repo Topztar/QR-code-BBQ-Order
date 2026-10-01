@@ -9,7 +9,7 @@ import { getStorage } from 'firebase-admin/storage';
 import { getAppCheck } from 'firebase-admin/app-check';
 import express from 'express';
 
-setGlobalOptions({ maxInstances: 10, minInstances: 0, memory: "256MiB", region: "asia-east1", concurrency: 80, timeoutSeconds: 30, invoker: 'public' });
+setGlobalOptions({ maxInstances: 10, minInstances: 0, memory: "512MiB", region: "asia-east1", concurrency: 40, timeoutSeconds: 30, invoker: 'public' });
 import cors from 'cors';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 

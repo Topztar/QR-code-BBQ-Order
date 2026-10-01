@@ -2,6 +2,7 @@ import React from 'react';
 import { TableConfig } from '../../types';
 import { Calendar, Check, AlertTriangle, Loader2 } from 'lucide-react';
 import { sanitizePhoneDigits } from '../../utils/phoneValidator';
+import { useModalEscape } from '../../hooks/useModalEscape';
 
 export interface CustomerReservationModalProps {
   showReservationModal: boolean;
@@ -77,6 +78,8 @@ export const CustomerReservationModal: React.FC<CustomerReservationModalProps> =
   resSubmitting,
   handleReservationSubmit,
 }) => {
+  useModalEscape(showReservationModal, () => setShowReservationModal(false));
+
   if (!showReservationModal) return null;
 
   return (

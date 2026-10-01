@@ -22,7 +22,8 @@ export interface RouteContext {
 }
 
 export function registerStaffRoutes(app: express.Application, ctx: RouteContext) {
-  const { db, requireStaffAuth, sendErrorResponse } = ctx;
+  const { db, requireStaffAuth, sendErrorResponse, createRateLimiter } = ctx;
+  const pinRateLimiter = createRateLimiter(6, 60 * 1000, '員工 PIN 驗證');
 
   // 雙路徑路由包裝器
   const get: RouteRegister = (routePath, ...handlers) => app.get([`/api${routePath}`, routePath], ...handlers);
@@ -50,7 +51,7 @@ get('/staff/verify', requireStaffAuth, (_req, res) => {
   res.json({ valid: true });
 });
 
-post('/staff/pin/check-path', async (req, res) => {
+post('/staff/pin/check-path', pinRateLimiter, async (req, res) => {
   const { pathPin } = req.body;
   if (!pathPin) {
     return res.status(400).json({ valid: false, error: 'Missing pathPin' });
@@ -84,7 +85,7 @@ post('/staff/pin/check-path', async (req, res) => {
   }
 });
 
-post('/staff/pin/verify', async (req, res) => {
+post('/staff/pin/verify', pinRateLimiter, async (req, res) => {
   const { pin } = req.body;
   if (!pin || typeof pin !== 'string') {
     return res.status(400).json({ success: false, error: '請輸入有效的 6 位數金鑰' });

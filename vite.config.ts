@@ -43,7 +43,15 @@ export default defineConfig(({ mode }) => {
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,webp,avif,woff,woff2,json}'],
         globIgnores: [
-          '**/data.json'
+          '**/data.json',
+          '**/vendor-charts*',
+          '**/vendor-firebase-database*',
+          '**/vendor-firebase-auth*',
+          '**/Manager*',
+          '**/KitchenDisplaySystem*',
+          '**/StaffPortalContainer*',
+          '**/StaffLoginGate*',
+          '**/posBridgeClient*'
         ],
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5MB limits for firebase SDK chunks
         runtimeCaching: [

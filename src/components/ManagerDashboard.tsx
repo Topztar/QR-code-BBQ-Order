@@ -95,8 +95,7 @@ interface ManagerDashboardProps {
       changeAmount?: number;
       checkoutRecord?: any;
       isPaid?: boolean;
-    },
-    skipRefresh?: boolean
+    }
   ) => Promise<void>;
   onBulkPayOrders?: (
     orderIds: string[],
@@ -110,8 +109,7 @@ interface ManagerDashboardProps {
       changeAmount?: number;
       tableNumbers?: string[];
       checkoutRecord?: any;
-    },
-    skipRefresh?: boolean
+    }
   ) => Promise<{ success: boolean }>;
   defaultSubTab?: 'stats' | 'orders' | 'inventory' | 'menu' | 'members' | 'cashier' | 'printer' | 'options' | 'notifications' | 'eod' | 'terminal';
   onSubTabChange?: (subTab: 'stats' | 'orders' | 'inventory' | 'menu' | 'members' | 'cashier' | 'printer' | 'options' | 'notifications' | 'eod' | 'terminal') => void;

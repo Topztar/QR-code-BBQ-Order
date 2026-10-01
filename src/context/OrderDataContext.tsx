@@ -55,8 +55,7 @@ export interface OrderDataContextType {
       changeAmount?: number;
       checkoutRecord?: any;
       isPaid?: boolean;
-    },
-    skipRefresh?: boolean
+    }
   ) => Promise<void>;
   handleBulkPayOrders: (
     orderIds: string[],
@@ -70,8 +69,7 @@ export interface OrderDataContextType {
       changeAmount?: number;
       tableNumbers?: string[];
       checkoutRecord?: any;
-    },
-    skipRefresh?: boolean
+    }
   ) => Promise<{ success: boolean }>;
   handleDeleteOrder: (orderId: string) => Promise<{ success: boolean }>;
   handleForceSync: () => Promise<void>;

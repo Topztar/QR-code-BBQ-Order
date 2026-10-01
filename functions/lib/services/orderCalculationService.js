@@ -39,6 +39,30 @@ exports.orderCalculationService = {
             return sum + exports.orderCalculationService.computeOrderItemUnitPrice(it, menuItemsList) * (Number(it.qty || it.quantity) || 1);
         }, 0);
     },
+    calculateOrderPricing: (order, menuItemsList = []) => {
+        if (!order)
+            return { subtotal: 0, serviceCharge: 0, discount: 0, total: 0 };
+        const itemsSub = exports.orderCalculationService.computeOrderItemsSubtotal(order.items || [], menuItemsList);
+        const isPaid = order.isPaid === true || order.status === 'paid' || order.status === 'completed';
+        const subtotal = (isPaid && order.subtotal !== undefined && order.subtotal !== null && order.subtotal > 0)
+            ? Math.max(order.subtotal, itemsSub)
+            : (itemsSub > 0 ? itemsSub : (order.subtotal || 0));
+        const pm = order.paymentMethod;
+        const isCreditOrTwqr = pm === 'credit' || pm === 'twqr';
+        const defaultSvc = isCreditOrTwqr ? Math.round(subtotal * 0.1) : 0;
+        const serviceCharge = (typeof order.serviceCharge === 'number' && order.serviceCharge > 0) ? order.serviceCharge : defaultSvc;
+        const discount = order.discount || 0;
+        let total = Math.max(0, subtotal + serviceCharge - discount);
+        if (isPaid && typeof order.total === 'number' && !isNaN(order.total) && order.total > 0) {
+            if (isCreditOrTwqr && (order.serviceCharge === 0 || order.serviceCharge === undefined) && order.total === subtotal) {
+                total = order.total + defaultSvc;
+            }
+            else {
+                total = order.total;
+            }
+        }
+        return { subtotal, serviceCharge, discount, total };
+    },
     calculatePromoComboDiscount: (items, combos = [], menuItemsList = []) => {
         if (!Array.isArray(combos) || combos.length === 0 || !Array.isArray(items) || items.length === 0) {
             return 0;
@@ -68,47 +92,6 @@ exports.orderCalculationService = {
             }
             return totalDiscount;
         }, 0);
-    },
-    calculateOrderPricing: (order, menuItemsList = []) => {
-        if (!order)
-            return { subtotal: 0, serviceCharge: 0, discount: 0, total: 0 };
-        const itemsSub = exports.orderCalculationService.computeOrderItemsSubtotal(order.items || [], menuItemsList);
-        const isPaid = order.isPaid === true || order.status === 'paid' || order.status === 'completed';
-        const subtotal = (isPaid && order.subtotal !== undefined && order.subtotal !== null && order.subtotal > 0)
-            ? Math.max(order.subtotal, itemsSub)
-            : (itemsSub > 0 ? itemsSub : (order.subtotal || 0));
-        const pm = order.paymentMethod;
-        const isCreditOrTwqr = pm === 'credit' || pm === 'twqr';
-        const defaultSvc = isCreditOrTwqr ? Math.round(subtotal * 0.1) : 0;
-        const serviceCharge = (typeof order.serviceCharge === 'number' && order.serviceCharge > 0) ? order.serviceCharge : defaultSvc;
-        const discount = order.discount || 0;
-        let total = Math.max(0, subtotal + serviceCharge - discount);
-        if (isPaid && typeof order.total === 'number' && !isNaN(order.total) && order.total > 0) {
-            if (isCreditOrTwqr && (order.serviceCharge === 0 || order.serviceCharge === undefined) && order.total === subtotal) {
-                total = order.total + defaultSvc;
-            }
-            else {
-                total = order.total;
-            }
-        }
-        return { subtotal, serviceCharge, discount, total };
-    },
-    getTaiwanLocalDateString: (d = new Date()) => {
-        const dateObj = typeof d === 'string' ? new Date(d) : d;
-        if (isNaN(dateObj.getTime()))
-            return '';
-        return new Intl.DateTimeFormat('en-CA', {
-            timeZone: 'Asia/Taipei',
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit'
-        }).format(dateObj);
-    },
-    isOrderInTaiwanDate: (createdAt, targetDateStr) => {
-        if (!createdAt)
-            return false;
-        const twDate = exports.orderCalculationService.getTaiwanLocalDateString(createdAt);
-        return twDate === targetDateStr;
     }
 };
 //# sourceMappingURL=orderCalculationService.js.map

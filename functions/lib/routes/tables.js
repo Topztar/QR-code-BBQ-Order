@@ -5,6 +5,7 @@ exports.registerTablesRoutes = registerTablesRoutes;
 const validators_1 = require("../validators");
 const helpers_1 = require("../helpers");
 const bootstrap_1 = require("./bootstrap");
+const auth_1 = require("../auth");
 let cachedTablesData = null;
 const TABLES_CACHE_TTL_MS = 10 * 1000;
 function invalidateTablesCache() {
@@ -124,7 +125,23 @@ function registerTablesRoutes(app, ctx) {
         }
         const todayNow = new Date();
         const todayDateStr = `${todayNow.getFullYear()}-${String(todayNow.getMonth() + 1).padStart(2, '0')}-${String(todayNow.getDate()).padStart(2, '0')}`;
-        if (data.date && data.date.trim() === todayDateStr && !req.body.isStaffOverride) {
+        let validStaffOverride = false;
+        if (req.body.isStaffOverride) {
+            const authHeader = req.headers.authorization;
+            if (authHeader && authHeader.startsWith('Bearer ')) {
+                const token = authHeader.split('Bearer ')[1]?.trim();
+                if (token) {
+                    const storedAuth = await (0, auth_1.getStoredActiveToken)(db);
+                    if (storedAuth && storedAuth.token === token) {
+                        const nowMs = Date.now();
+                        if (!storedAuth.expiresAt || nowMs <= storedAuth.expiresAt) {
+                            validStaffOverride = true;
+                        }
+                    }
+                }
+            }
+        }
+        if (data.date && data.date.trim() === todayDateStr && !validStaffOverride) {
             const targetMins = parseTimeToMinutes(data.time);
             const currentMins = todayNow.getHours() * 60 + todayNow.getMinutes();
             if (targetMins < currentMins + 240) {

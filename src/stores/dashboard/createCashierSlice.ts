@@ -106,14 +106,4 @@ export const createCashierSlice: StateCreator<
   showCheckoutConfirm: false,
   setShowCheckoutConfirm: (val) => set({ showCheckoutConfirm: val }),
 
-  resetCashierState: () => set({
-    cashierDiscountType: 'none',
-    cashierDiscountFlat: 0,
-    cashierDiscountRate: 0,
-    cashierSurchargeType: 'none',
-    cashierSurchargeFlat: 0,
-    cashierSurchargeRate: 0,
-    cashierCashReceived: 0,
-    cashierSelectedMergeOrderIds: [],
-  }),
 });

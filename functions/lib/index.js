@@ -48,7 +48,7 @@ const admin = __importStar(require("firebase-admin"));
 const storage_1 = require("firebase-admin/storage");
 const app_check_1 = require("firebase-admin/app-check");
 const express_1 = __importDefault(require("express"));
-(0, v2_1.setGlobalOptions)({ maxInstances: 10, minInstances: 0, memory: "256MiB", region: "asia-east1", concurrency: 80, timeoutSeconds: 30, invoker: 'public' });
+(0, v2_1.setGlobalOptions)({ maxInstances: 10, minInstances: 0, memory: "512MiB", region: "asia-east1", concurrency: 40, timeoutSeconds: 30, invoker: 'public' });
 const cors_1 = __importDefault(require("cors"));
 const firestore_2 = require("firebase-admin/firestore");
 process.on('unhandledRejection', (reason, promise) => {

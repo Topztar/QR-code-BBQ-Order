@@ -21,7 +21,7 @@ import { createServer as createViteServer } from 'vite';
 import { Order, Ingredient, MenuItem, Category, TableConfig, OperatingHourSlot, Reservation } from './src/types';
 import fs from 'fs';
 const dataJson = JSON.parse(fs.readFileSync('./public/data.json', 'utf-8'));
-const { INITIAL_MENU, INITIAL_INGREDIENTS, INITIAL_CATEGORIES, INGREDIENT_RECIPE_MAP } = dataJson;
+const { INITIAL_MENU, INITIAL_INGREDIENTS, INITIAL_CATEGORIES } = dataJson;
 import {
   triggerRealCashDrawer,
   printKitchenTicket,
@@ -29,6 +29,7 @@ import {
 } from './hardware/printerDriver';
 import { sendReservationNotifications, sendTestNotification } from './functions/src/services/notification';
 import { orderCalculationService } from './src/services/orderCalculationService';
+import { processAndSaveImage } from './src/lib/server/imageProcessing';
 import { getTaiwanDateString, getTaiwanTimeParts } from './src/utils/dateUtils';
 
 import { initFirebaseStorage, gcsBucket, app, PORT } from './src/server/init';
@@ -1537,82 +1538,7 @@ app.get(['/api/images/:path(*)', '/api/images'], async (req, res) => {
 });
 
 // Helper to process and output WebP/AVIF multi-spec images in local server
-async function processLocalAndSaveImage(buffer: Buffer, targetFolder: string, rawFilename: string) {
-  if (buffer.length > 10 * 1024 * 1024) {
-    throw new Error('圖片大小超出 10MB 上限 (Max 10MB)');
-  }
 
-  const timestamp = Date.now();
-  const nameWithoutExt = rawFilename.replace(/[^a-zA-Z0-9._-]/g, '').replace(/\.[^/.]+$/, '') || `dish-${timestamp}`;
-  const cleanFolder = targetFolder.replace(/[^a-zA-Z0-9_-]/g, '') || 'dishes';
-
-  const versionedFilename = `${nameWithoutExt}-${timestamp}.webp`;
-  const thumbFilename = `${nameWithoutExt}-${timestamp}-thumb.webp`;
-  const avifFilename = `${nameWithoutExt}-${timestamp}.avif`;
-  const thumbAvifFilename = `${nameWithoutExt}-${timestamp}-thumb.avif`;
-
-  const targetPath = `${cleanFolder}/${versionedFilename}`;
-  const thumbTargetPath = `${cleanFolder}/${thumbFilename}`;
-  const avifTargetPath = `${cleanFolder}/${avifFilename}`;
-  const thumbAvifTargetPath = `${cleanFolder}/${thumbAvifFilename}`;
-
-  // 1. 並行生成 WebP (800px / 200px) 與 AVIF (800px / 200px) 四重規格
-  const [webpBuffer, thumbWebpBuffer, avifBuffer, thumbAvifBuffer] = await Promise.all([
-    sharp(buffer).resize(800, null, { withoutEnlargement: true }).webp({ quality: 80 }).toBuffer(),
-    sharp(buffer).resize(200, 200, { fit: 'cover' }).webp({ quality: 70 }).toBuffer(),
-    sharp(buffer).resize(800, null, { withoutEnlargement: true }).avif({ quality: 75, effort: 4 }).toBuffer(),
-    sharp(buffer).resize(200, 200, { fit: 'cover' }).avif({ quality: 65, effort: 4 }).toBuffer()
-  ]);
-
-  if (gcsBucket) {
-    const webpMetadata = { contentType: 'image/webp', cacheControl: 'public, max-age=31536000, immutable' };
-    const avifMetadata = { contentType: 'image/avif', cacheControl: 'public, max-age=31536000, immutable' };
-
-    await Promise.all([
-      gcsBucket.file(targetPath).save(webpBuffer, { metadata: webpMetadata, resumable: false }),
-      gcsBucket.file(thumbTargetPath).save(thumbWebpBuffer, { metadata: webpMetadata, resumable: false }),
-      gcsBucket.file(avifTargetPath).save(avifBuffer, { metadata: avifMetadata, resumable: false }),
-      gcsBucket.file(thumbAvifTargetPath).save(thumbAvifBuffer, { metadata: avifMetadata, resumable: false })
-    ]);
-
-    return {
-      success: true,
-      url: `/api/images/${targetPath}`,
-      thumbnailUrl: `/api/images/${thumbTargetPath}`,
-      avifUrl: `/api/images/${avifTargetPath}`,
-      avifThumbnailUrl: `/api/images/${thumbAvifTargetPath}`,
-      path: targetPath,
-      thumbPath: thumbTargetPath,
-      avifPath: avifTargetPath,
-      thumbAvifPath: thumbAvifTargetPath,
-      filename: versionedFilename,
-      size: webpBuffer.length,
-      thumbSize: thumbWebpBuffer.length,
-      avifSize: avifBuffer.length,
-      thumbAvifSize: thumbAvifBuffer.length,
-      contentType: 'image/webp'
-    };
-  } else {
-    // Local fallback when GCS is not configured
-    return {
-      success: true,
-      url: `data:image/webp;base64,${webpBuffer.toString('base64')}`,
-      thumbnailUrl: `data:image/webp;base64,${thumbWebpBuffer.toString('base64')}`,
-      avifUrl: `data:image/avif;base64,${avifBuffer.toString('base64')}`,
-      avifThumbnailUrl: `data:image/avif;base64,${thumbAvifBuffer.toString('base64')}`,
-      path: targetPath,
-      thumbPath: thumbTargetPath,
-      avifPath: avifTargetPath,
-      thumbAvifPath: thumbAvifTargetPath,
-      filename: versionedFilename,
-      size: webpBuffer.length,
-      thumbSize: thumbWebpBuffer.length,
-      avifSize: avifBuffer.length,
-      thumbAvifSize: thumbAvifBuffer.length,
-      contentType: 'image/webp'
-    };
-  }
-}
 
 // Upload image to Google Cloud Storage (雙模式：支援 multipart/form-data 二進位串流 與 JSON Base64 向下相容)
 app.post('/api/images/upload', async (req, res) => {
@@ -1760,7 +1686,7 @@ app.post('/api/images/upload', async (req, res) => {
             if (!fileBuffer || fileBuffer.length === 0) {
               return res.status(400).json({ error: '未接收到有效圖片檔案 (Missing file)' });
             }
-            const result = await processLocalAndSaveImage(fileBuffer, targetFolder, rawFilename);
+            const result = await processAndSaveImage(fileBuffer, targetFolder, rawFilename, gcsBucket, true);
             return res.json(result);
           }
         } catch (err: any) {
@@ -1796,7 +1722,7 @@ app.post('/api/images/upload', async (req, res) => {
 
     const buffer = Buffer.from(base64Clean, 'base64');
     const targetFilename = filename ? filename.replace(/[^a-zA-Z0-9._-]/g, '') : `dish-${Date.now()}.webp`;
-    const result = await processLocalAndSaveImage(buffer, folder, targetFilename);
+    const result = await processAndSaveImage(buffer, folder, targetFilename, gcsBucket, true);
     return res.json(result);
   } catch (error: any) {
     console.error('[Sabay Storage Upload Error]:', error);

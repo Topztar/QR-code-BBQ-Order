@@ -17,8 +17,8 @@ export interface CashierCheckoutPanelProps {
   cashierSelectedOrder: Order;
   cashierMergedOrders: Order[];
   cashierCalculatedTotals: { subtotal: number; discount: number; surcharge: number; total: number; };
-  onPayOrder?: (orderId: string, paymentData: any, skipRefresh?: boolean) => Promise<void>;
-  onBulkPayOrders?: (orderIds: string[], checkoutData: any, skipRefresh?: boolean) => Promise<{ success: boolean }>;
+  onPayOrder?: (orderId: string, paymentData: any) => Promise<void>;
+  onBulkPayOrders?: (orderIds: string[], checkoutData: any) => Promise<{ success: boolean }>;
   onUpdateTableStatus?: (id: string, updates: any) => Promise<{ success: boolean; error?: string }>;
   setCheckoutSuccessData?: (data: any) => void;
 }
@@ -151,7 +151,7 @@ export const CashierCheckoutPanel: React.FC<CashierCheckoutPanelProps> = ({
         // Fallback: Update all merged orders as paid!
         for (let i = 0; i < staticMergedOrders.length; i++) {
           const ord = staticMergedOrders[i];
-          const skipRefresh = i < staticMergedOrders.length - 1;
+          
 
           if (ord.id === cashierSelectedOrder.id) {
             await onPayOrder(cashierSelectedOrder.id, {
@@ -162,7 +162,7 @@ export const CashierCheckoutPanel: React.FC<CashierCheckoutPanelProps> = ({
               total: cashierCalculatedTotals.total,
               isPaid: true,
               checkoutRecord: dbPostRecord
-            }, skipRefresh);
+            });
           } else {
             await onPayOrder(ord.id, {
               paymentMethod: cashierPaymentMethod,
@@ -171,7 +171,7 @@ export const CashierCheckoutPanel: React.FC<CashierCheckoutPanelProps> = ({
               discount: 0,
               total: 0,
               isPaid: true
-            }, skipRefresh);
+            });
           }
         }
 

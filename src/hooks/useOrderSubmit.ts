@@ -34,14 +34,16 @@ export function useOrderSubmit(
   setOrders: React.Dispatch<React.SetStateAction<Order[]>>,
   menuItems: MenuItem[] = []
 ) {
-  const [, setLocalOrderIds] = useState<string[]>(() => {
+  const addLocalOrderId = (id: string) => {
     try {
       const stored = safeStorage.getItem('sabay-my-submitted-order-ids');
-      return stored ? JSON.parse(stored) : [];
-    } catch {
-      return [];
+      const list = stored ? JSON.parse(stored) : [];
+      list.push(id);
+      safeStorage.setItem('sabay-my-submitted-order-ids', JSON.stringify(list));
+    } catch (e) {
+      console.error('Failed to save local order id', e);
     }
-  });
+  };
   const activeOrderSubmissionsRef = useRef<Set<string>>(new Set());
 
   const handlePlaceOrder = async (orderData: OrderDataPayload) => {
@@ -105,11 +107,7 @@ export function useOrderSubmit(
       
       const offlineOrder = { ...baseOrder, isOfflinePending: true };
       setOrders((prev) => [offlineOrder, ...prev]);
-      setLocalOrderIds((prev) => {
-        const updated = [...prev, tempId];
-        safeStorage.setItem('sabay-my-submitted-order-ids', JSON.stringify(updated));
-        return updated;
-      });
+      addLocalOrderId(tempId);
       activeOrderSubmissionsRef.current.delete(clientOrderId);
       return offlineOrder;
     }
@@ -149,11 +147,7 @@ export function useOrderSubmit(
       }
 
       setOrders((prev) => [completedOrder, ...prev.filter(o => o.id !== completedOrder.id && o.id !== baseOrder.id)]);
-      setLocalOrderIds((prev) => {
-        const updated = [...prev, completedOrder.id];
-        safeStorage.setItem('sabay-my-submitted-order-ids', JSON.stringify(updated));
-        return updated;
-      });
+      addLocalOrderId(completedOrder.id);
 
       // 🧹 若伺服器指派了新的正式單號 (例如 LM-1001)，先廣播刪除臨時單以防止其他分頁 (KDS / 收銀) 重複顯示
       if (completedOrder.id !== baseOrder.id) {
@@ -173,11 +167,7 @@ export function useOrderSubmit(
       if (!navigator.onLine || err?.name === 'AbortError' || err?.message?.includes('Failed to fetch')) {
         addRequestToQueue('/api/orders', 'POST', orderPayload, description);
         setOrders((prev) => [baseOrder, ...prev.filter(o => o.id !== baseOrder.id)]);
-        setLocalOrderIds((prev) => {
-          const updated = [...prev, tempId];
-          safeStorage.setItem('sabay-my-submitted-order-ids', JSON.stringify(updated));
-          return updated;
-        });
+        addLocalOrderId(tempId);
         return baseOrder;
       }
       throw err;

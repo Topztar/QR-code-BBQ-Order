@@ -3,86 +3,12 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.processAndSaveImage = processAndSaveImage;
 exports.registerMenuRoutes = registerMenuRoutes;
-const sharp_1 = __importDefault(require("sharp"));
 const busboy_1 = __importDefault(require("busboy"));
 const validators_1 = require("../validators");
 const helpers_1 = require("../helpers");
 const bootstrap_1 = require("./bootstrap");
-async function processAndSaveImage(buffer, targetFolder, rawFilename, storageBucket) {
-    if (buffer.length > 10 * 1024 * 1024) {
-        throw new Error('圖片大小超出 10MB 上限 (Max 10MB)');
-    }
-    const timestamp = Date.now();
-    const nameWithoutExt = rawFilename.replace(/\.[^/.]+$/, '');
-    const cleanFolder = targetFolder.replace(/[^a-zA-Z0-9_-]/g, '') || 'dishes';
-    const versionedFilename = `${nameWithoutExt}-${timestamp}.webp`;
-    const thumbFilename = `${nameWithoutExt}-${timestamp}-thumb.webp`;
-    const avifFilename = `${nameWithoutExt}-${timestamp}.avif`;
-    const thumbAvifFilename = `${nameWithoutExt}-${timestamp}-thumb.avif`;
-    const targetPath = `${cleanFolder}/${versionedFilename}`;
-    const thumbTargetPath = `${cleanFolder}/${thumbFilename}`;
-    const avifTargetPath = `${cleanFolder}/${avifFilename}`;
-    const thumbAvifTargetPath = `${cleanFolder}/${thumbAvifFilename}`;
-    const [webpBuffer, thumbWebpBuffer, avifBuffer, thumbAvifBuffer] = await Promise.all([
-        (0, sharp_1.default)(buffer)
-            .resize(800, null, { withoutEnlargement: true })
-            .webp({ quality: 80 })
-            .toBuffer(),
-        (0, sharp_1.default)(buffer)
-            .resize(200, 200, { fit: 'cover' })
-            .webp({ quality: 70 })
-            .toBuffer(),
-        (0, sharp_1.default)(buffer)
-            .resize(800, null, { withoutEnlargement: true })
-            .avif({ quality: 75, effort: 4 })
-            .toBuffer(),
-        (0, sharp_1.default)(buffer)
-            .resize(200, 200, { fit: 'cover' })
-            .avif({ quality: 65, effort: 4 })
-            .toBuffer()
-    ]);
-    const webpMetadata = {
-        contentType: 'image/webp',
-        cacheControl: 'public, max-age=31536000, immutable'
-    };
-    const avifMetadata = {
-        contentType: 'image/avif',
-        cacheControl: 'public, max-age=31536000, immutable'
-    };
-    const file = storageBucket.file(targetPath);
-    const thumbFile = storageBucket.file(thumbTargetPath);
-    const avifFile = storageBucket.file(avifTargetPath);
-    const thumbAvifFile = storageBucket.file(thumbAvifTargetPath);
-    await Promise.all([
-        file.save(webpBuffer, { metadata: webpMetadata, resumable: false }),
-        thumbFile.save(thumbWebpBuffer, { metadata: webpMetadata, resumable: false }),
-        avifFile.save(avifBuffer, { metadata: avifMetadata, resumable: false }),
-        thumbAvifFile.save(thumbAvifBuffer, { metadata: avifMetadata, resumable: false })
-    ]);
-    const publicUrl = `https://firebasestorage.googleapis.com/v0/b/${storageBucket.name}/o/${encodeURIComponent(targetPath)}?alt=media`;
-    const publicThumbUrl = `https://firebasestorage.googleapis.com/v0/b/${storageBucket.name}/o/${encodeURIComponent(thumbTargetPath)}?alt=media`;
-    const publicAvifUrl = `https://firebasestorage.googleapis.com/v0/b/${storageBucket.name}/o/${encodeURIComponent(avifTargetPath)}?alt=media`;
-    const publicThumbAvifUrl = `https://firebasestorage.googleapis.com/v0/b/${storageBucket.name}/o/${encodeURIComponent(thumbAvifTargetPath)}?alt=media`;
-    return {
-        success: true,
-        url: publicUrl,
-        thumbnailUrl: publicThumbUrl,
-        avifUrl: publicAvifUrl,
-        avifThumbnailUrl: publicThumbAvifUrl,
-        path: targetPath,
-        thumbPath: thumbTargetPath,
-        avifPath: avifTargetPath,
-        thumbAvifPath: thumbAvifTargetPath,
-        filename: versionedFilename,
-        size: webpBuffer.length,
-        thumbSize: thumbWebpBuffer.length,
-        avifSize: avifBuffer.length,
-        thumbAvifSize: thumbAvifBuffer.length,
-        contentType: 'image/webp'
-    };
-}
+const imageProcessing_1 = require("../services/imageProcessing");
 function registerMenuRoutes(app, ctx) {
     const { db, storageBucket, requireStaffAuth, createRateLimiter, sendErrorResponse } = ctx;
     const get = (routePath, ...handlers) => app.get([`/api${routePath}`, routePath], ...handlers);
@@ -140,7 +66,7 @@ function registerMenuRoutes(app, ctx) {
                         return res.status(400).json({ error: `不支援的圖片格式 (${fileMime})，僅允許 JPEG, PNG, WEBP, GIF` });
                     }
                     try {
-                        const result = await processAndSaveImage(fileBuffer, targetFolder, rawFilename, storageBucket);
+                        const result = await (0, imageProcessing_1.processAndSaveImage)(fileBuffer, targetFolder, rawFilename, storageBucket);
                         return res.json(result);
                     }
                     catch (err) {
@@ -166,7 +92,7 @@ function registerMenuRoutes(app, ctx) {
             }
             const { base64Clean, targetFolder, targetFilename: rawFilename } = validation.sanitizedData;
             const buffer = Buffer.from(base64Clean, 'base64');
-            const result = await processAndSaveImage(buffer, targetFolder, rawFilename, storageBucket);
+            const result = await (0, imageProcessing_1.processAndSaveImage)(buffer, targetFolder, rawFilename, storageBucket);
             return res.json(result);
         }
         catch (error) {
