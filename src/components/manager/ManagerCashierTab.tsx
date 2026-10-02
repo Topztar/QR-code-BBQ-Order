@@ -1522,13 +1522,13 @@ export const ManagerCashierTab: React.FC<ManagerCashierTabProps> = (props) => {
                         <input
                           type="text"
                           readOnly
-                          value={`${typeof window !== 'undefined' ? window.location.origin : 'https://sabay-bbq-order.web.app'}/reserve`}
+                          value={`${typeof window !== 'undefined' ? window.location.origin : 'https://sabay-bbq-order.web.app'}/reserve?source=google_business&utm_medium=organic`}
                           className="flex-1 bg-zinc-950 border border-white/15 rounded-lg px-3 py-2 text-xs text-amber-300 font-mono"
                         />
                         <button
                           type="button"
                           onClick={() => {
-                            const link = `${typeof window !== 'undefined' ? window.location.origin : 'https://sabay-bbq-order.web.app'}/reserve`;
+                            const link = `${typeof window !== 'undefined' ? window.location.origin : 'https://sabay-bbq-order.web.app'}/reserve?source=google_business&utm_medium=organic`;
                             navigator.clipboard.writeText(link);
                             setCopiedGoogleLinkNotice('reserve');
                             setTimeout(() => setCopiedGoogleLinkNotice(null), 3000);
@@ -1538,7 +1538,7 @@ export const ManagerCashierTab: React.FC<ManagerCashierTabProps> = (props) => {
                           {copiedGoogleLinkNotice === 'reserve' ? '✅ 已複製！' : '📋 複製連結'}
                         </button>
                         <a
-                          href={`${typeof window !== 'undefined' ? window.location.origin : 'https://sabay-bbq-order.web.app'}/reserve`}
+                          href={`${typeof window !== 'undefined' ? window.location.origin : 'https://sabay-bbq-order.web.app'}/reserve?source=google_business&utm_medium=organic`}
                           target="_blank"
                           rel="noreferrer"
                           className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 border border-white/10 text-white font-bold text-xs rounded-lg transition active:scale-95 cursor-pointer whitespace-nowrap"
@@ -1566,13 +1566,13 @@ export const ManagerCashierTab: React.FC<ManagerCashierTabProps> = (props) => {
                         <input
                           type="text"
                           readOnly
-                          value={`${typeof window !== 'undefined' ? window.location.origin : 'https://sabay-bbq-order.web.app'}/order`}
+                          value={`${typeof window !== 'undefined' ? window.location.origin : 'https://sabay-bbq-order.web.app'}/order?source=google_business&utm_medium=organic`}
                           className="flex-1 bg-zinc-950 border border-white/15 rounded-lg px-3 py-2 text-xs text-cyan-300 font-mono"
                         />
                         <button
                           type="button"
                           onClick={() => {
-                            const link = `${typeof window !== 'undefined' ? window.location.origin : 'https://sabay-bbq-order.web.app'}/order`;
+                            const link = `${typeof window !== 'undefined' ? window.location.origin : 'https://sabay-bbq-order.web.app'}/order?source=google_business&utm_medium=organic`;
                             navigator.clipboard.writeText(link);
                             setCopiedGoogleLinkNotice('order');
                             setTimeout(() => setCopiedGoogleLinkNotice(null), 3000);
@@ -1582,7 +1582,7 @@ export const ManagerCashierTab: React.FC<ManagerCashierTabProps> = (props) => {
                           {copiedGoogleLinkNotice === 'order' ? '✅ 已複製！' : '📋 複製連結'}
                         </button>
                         <a
-                          href={`${typeof window !== 'undefined' ? window.location.origin : 'https://sabay-bbq-order.web.app'}/order`}
+                          href={`${typeof window !== 'undefined' ? window.location.origin : 'https://sabay-bbq-order.web.app'}/order?source=google_business&utm_medium=organic`}
                           target="_blank"
                           rel="noreferrer"
                           className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 border border-white/10 text-white font-bold text-xs rounded-lg transition active:scale-95 cursor-pointer whitespace-nowrap"

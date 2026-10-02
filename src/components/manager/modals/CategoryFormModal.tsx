@@ -1,5 +1,6 @@
 
 import { Category } from '../../../types';
+import { useModalEscape } from '../../../hooks/useModalEscape';
 
 export interface CategoryFormModalProps {
   isOpen: boolean;
@@ -74,12 +75,30 @@ export const CategoryFormModal: React.FC<CategoryFormModalProps> = ({
       showOnCustomer: catShowOnCustomer
     });
   };
+
+  const isDirty = editingCategory
+    ? (catNameZh !== (editingCategory.name.zh || '') || catNameEn !== (editingCategory.name.en || '') || catNameTh !== (editingCategory.name.th || '') || catNameJa !== (editingCategory.name.ja || '') || catNameKo !== (editingCategory.name.ko || '') || catNameVi !== (editingCategory.name.vi || '') || catNameRu !== (editingCategory.name.ru || '') || catNameEs !== (editingCategory.name.es || '') || catShowOnCustomer !== (editingCategory.showOnCustomerPage !== false))
+    : (catId !== '' || catNameZh !== '' || catNameEn !== '' || catNameTh !== '' || catNameJa !== '' || catNameKo !== '' || catNameVi !== '' || catNameRu !== '' || catNameEs !== '' || !catShowOnCustomer);
+
+  const handleSafeClose = () => {
+    if (isDirty) {
+      if (window.confirm('您有未儲存的變更，確定要關閉嗎？ (Unsaved changes will be lost)')) {
+        onClose();
+      }
+    } else {
+      onClose();
+    }
+  };
+
+  useModalEscape(isOpen, onClose, isDirty);
+
   if (!isOpen) return null;
 
   return (
     <div
+      role="dialog" aria-modal="true"
       className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 text-xs font-sans animate-fadeIn"
-      onClick={onClose}
+      onClick={handleSafeClose}
     >
       <form
         onSubmit={handleFormSubmit}
@@ -93,7 +112,7 @@ export const CategoryFormModal: React.FC<CategoryFormModalProps> = ({
           </h3>
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleSafeClose}
             className="text-white/40 hover:text-white text-base font-mono cursor-pointer"
           >
             ✕

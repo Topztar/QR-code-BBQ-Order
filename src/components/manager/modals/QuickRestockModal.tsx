@@ -1,7 +1,27 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Component } from 'react';
 import { Sparkles } from 'lucide-react';
 import { Ingredient } from '../../../types';
 import { getLocalizedText } from '../../../utils/i18n';
+import { useModalEscape } from '../../../hooks/useModalEscape';
+
+class ModalErrorBoundary extends Component<{children: React.ReactNode, onClose: () => void}, {hasError: boolean}> {
+  state = { hasError: false };
+  static getDerivedStateFromError() { return { hasError: true }; }
+  componentDidCatch(error: any, errorInfo: any) { console.error("Modal Render Error:", error, errorInfo); }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[10000] flex items-center justify-center p-4 text-xs font-sans">
+          <div className="bg-zinc-900 border border-rose-500/50 rounded-2xl p-6 max-w-md w-full text-center space-y-4 shadow-2xl">
+            <h3 className="text-base font-bold text-rose-400">彈出視窗載入發生異常</h3>
+            <button type="button" onClick={this.props.onClose} className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-lg transition">關閉視窗 Close</button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 export interface QuickRestockModalProps {
   item: Ingredient | null;
@@ -48,12 +68,28 @@ export const QuickRestockModal: React.FC<QuickRestockModalProps> = ({
     }
   };
 
+  const isDirty = qty !== '';
+
+  const handleSafeClose = () => {
+    if (isDirty) {
+      if (window.confirm('您有未儲存的變更，確定要關閉嗎？ (Unsaved changes will be lost)')) {
+        onClose();
+      }
+    } else {
+      onClose();
+    }
+  };
+
+  useModalEscape(!!item, handleSafeClose, isDirty);
+
   return (
-    <div
-      className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 text-xs font-sans"
-      id="quick-restock-dialog"
-      onClick={onClose}
-    >
+    <ModalErrorBoundary onClose={onClose}>
+      <div
+        role="dialog" aria-modal="true"
+        className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 text-xs font-sans"
+        id="quick-restock-dialog"
+        onClick={handleSafeClose}
+      >
       <div
         className="bg-[#121212] border border-white/10 rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl relative text-left"
         onClick={(e) => e.stopPropagation()}
@@ -135,7 +171,7 @@ export const QuickRestockModal: React.FC<QuickRestockModalProps> = ({
         <div className="flex justify-end space-x-2 p-5 border-t border-white/5 bg-zinc-900/40 text-xs">
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleSafeClose}
             className="px-4 py-1.5 hover:bg-white/5 border border-white/10 rounded font-bold transition active:scale-95 cursor-pointer text-white"
           >
             取消
@@ -149,7 +185,8 @@ export const QuickRestockModal: React.FC<QuickRestockModalProps> = ({
             {isSubmitting ? '處理中...' : '確認進補'}
           </button>
         </div>
+        </div>
       </div>
-    </div>
+    </ModalErrorBoundary>
   );
 };

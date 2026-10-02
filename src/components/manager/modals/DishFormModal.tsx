@@ -134,7 +134,7 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
   categories,
   ingredients,
 }) => {
-  useModalEscape(isOpen, onClose);
+  const [isDirty, setIsDirty] = useState(false);
 
   const [itemNames, setItemNames] = useState<Record<Language, string>>({ zh: '', en: '', th: '', ja: '', ko: '', vi: '', ru: '', es: '' });
   const [itemDescs, setItemDescs] = useState<Record<Language, string>>({ zh: '', en: '', th: '', ja: '', ko: '', vi: '', ru: '', es: '' });
@@ -170,6 +170,7 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
         setIsTakeoutAvailable(editingItem.isTakeoutAvailable || false);
         setCustomAddOns(editingItem.customAddOns || []);
         setItemRecipe(editingItem.recipe || []);
+        setIsDirty(false);
       } else {
         setItemNames({ zh: '', en: '', th: '', ja: '', ko: '', vi: '', ru: '', es: '' });
         setItemDescs({ zh: '', en: '', th: '', ja: '', ko: '', vi: '', ru: '', es: '' });
@@ -186,8 +187,47 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
       }
       setNewRecipeIngId('');
       setNewRecipeAmount('1');
+      if (!editingItem) setIsDirty(false);
     }
   }, [isOpen, editingItem]);
+
+  // Compute isDirty dynamically
+  useEffect(() => {
+    if (!isOpen) return;
+    const initialNames = editingItem ? (editingItem.names || { zh: editingItem.name?.zh || editingItem.name || '', en: editingItem.name?.en || '', th: '', ja: '', ko: '', vi: '', ru: '', es: '' }) : { zh: '', en: '', th: '', ja: '', ko: '', vi: '', ru: '', es: '' };
+    const initialDescs = editingItem ? (editingItem.descriptions || { zh: editingItem.description?.zh || editingItem.description || '', en: editingItem.description?.en || '', th: '', ja: '', ko: '', vi: '', ru: '', es: '' }) : { zh: '', en: '', th: '', ja: '', ko: '', vi: '', ru: '', es: '' };
+    const initialCategory = editingItem?.category || 'skewers';
+    const initialPrice = editingItem?.price || 100;
+    const initialImage = editingItem?.image || '';
+    const initialIsNotSpicy = editingItem?.isNotSpicy || false;
+    const initialIsTakeoutAvailable = editingItem?.isTakeoutAvailable || false;
+    const initialCustomAddOns = editingItem?.customAddOns || [];
+    const initialRecipe = editingItem?.recipe || [];
+
+    const dirty = JSON.stringify(itemNames) !== JSON.stringify(initialNames) ||
+      JSON.stringify(itemDescs) !== JSON.stringify(initialDescs) ||
+      itemCategory !== initialCategory ||
+      itemPrice !== initialPrice ||
+      itemImage !== initialImage ||
+      isNotSpicy !== initialIsNotSpicy ||
+      isTakeoutAvailable !== initialIsTakeoutAvailable ||
+      JSON.stringify(customAddOns) !== JSON.stringify(initialCustomAddOns) ||
+      JSON.stringify(itemRecipe) !== JSON.stringify(initialRecipe);
+    
+    setIsDirty(dirty);
+  }, [itemNames, itemDescs, itemCategory, itemPrice, itemImage, isNotSpicy, isTakeoutAvailable, customAddOns, itemRecipe, isOpen, editingItem]);
+
+  const handleSafeClose = () => {
+    if (isDirty) {
+      if (window.confirm('您有未儲存的變更，確定要關閉嗎？ (Unsaved changes will be lost)')) {
+        onClose();
+      }
+    } else {
+      onClose();
+    }
+  };
+
+  useModalEscape(isOpen, onClose, isDirty);
 
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -307,7 +347,7 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
 
   return (
     <ModalErrorBoundary onClose={onClose}>
-      <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 text-xs font-sans" onClick={onClose}>
+      <div role="dialog" aria-modal="true" className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 text-xs font-sans" onClick={handleSafeClose}>
         <form onSubmit={handleFormSubmit} className="bg-[#121212] border border-white/10 rounded-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
           {/* Modal Header */}
           <div className="p-5 pb-3 border-b border-white/5 flex-shrink-0">
@@ -973,7 +1013,7 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
           </div>
           {/* Modal Fixed Footer */}
           <div className="flex justify-end space-x-2 p-5 border-t border-white/5 bg-zinc-900/40 flex-shrink-0">
-            <button type="button" onClick={onClose} className="px-4 py-2 hover:bg-white/5 border border-white/10 rounded-lg font-bold transition active:scale-95 cursor-pointer text-white">取消</button>
+            <button type="button" onClick={handleSafeClose} className="px-4 py-2 hover:bg-white/5 border border-white/10 rounded-lg font-bold transition active:scale-95 cursor-pointer text-white">取消</button>
             <button
               type="submit"
               disabled={isUploadingImage}

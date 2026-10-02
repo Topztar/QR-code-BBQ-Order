@@ -476,14 +476,26 @@ function registerOrdersRoutes(app, ctx) {
                     updatedAt: new Date().toISOString()
                 });
                 if (tableRef && tableSnap && tableSnap.exists) {
-                    t.update(tableRef, {
-                        status: 'cleaning',
-                        preservedFor: '',
-                        cleaningStartedAt: new Date().toISOString()
-                    });
+                    let shouldReleaseTable = true;
+                    const tblId = tableSnap.id;
+                    const unpaidQuery = db.collection('orders')
+                        .where('tableNumber', '==', tblId)
+                        .where('isPaid', '==', false);
+                    const unpaidSnap = await t.get(unpaidQuery);
+                    const otherUnpaid = unpaidSnap.docs.filter(d => d.id !== id && d.data().status !== 'cancelled');
+                    if (otherUnpaid.length > 0) {
+                        shouldReleaseTable = false;
+                    }
+                    if (shouldReleaseTable) {
+                        t.update(tableRef, {
+                            status: 'cleaning',
+                            preservedFor: '',
+                            cleaningStartedAt: new Date().toISOString()
+                        });
+                    }
                 }
                 if (checkoutRecord && typeof checkoutRecord === 'object') {
-                    const txId = checkoutRecord.id || `TX-${Date.now()}`;
+                    const txId = `TX-${id}`;
                     const checkoutRef = db.collection('checkouts').doc(txId);
                     t.set(checkoutRef, {
                         ...checkoutRecord,
@@ -518,74 +530,85 @@ function registerOrdersRoutes(app, ctx) {
                     }
                 });
             }
-            const orderRefs = orderIds.map(id => db.collection('orders').doc(id));
-            const orderDocs = await db.getAll(...orderRefs);
-            for (const orderDoc of orderDocs) {
-                if (!orderDoc.exists)
-                    continue;
-                const id = orderDoc.id;
-                const orderRef = orderDoc.ref;
-                const orderData = orderDoc.data();
-                const currentStatus = orderData?.status;
-                const resolvedStatus = (currentStatus === 'completed' || currentStatus === 'cancelled') ? currentStatus : 'paid';
-                resolvedOrderStatuses[id] = resolvedStatus;
-                batch.update(orderRef, {
-                    paymentMethod: paymentMethod || 'cash',
-                    cashTendered: cashTendered || 0,
-                    changeAmount: changeAmount || 0,
-                    isPaid: true,
-                    status: resolvedStatus,
-                    updatedAt: new Date().toISOString()
-                });
-                if (orderData?.tableNumber && !String(orderData.tableNumber).includes('外帶') && String(orderData.tableNumber).toLowerCase() !== 'takeout') {
-                    tableSet.add(String(orderData.tableNumber).trim());
-                }
-                if (orderData?.reservationNo) {
-                    const resQuery = await db.collection('reservations').where('reservationNo', '==', orderData.reservationNo).get();
-                    if (!resQuery.empty) {
-                        for (const doc of resQuery.docs) {
-                            batch.delete(db.collection('reservations').doc(doc.id));
-                        }
+            await db.runTransaction(async (transaction) => {
+                const orderRefs = orderIds.map(id => db.collection('orders').doc(id));
+                const orderDocs = await transaction.getAll(...orderRefs);
+                const reservationDocsToDelete = [];
+                const tablesToClear = [];
+                for (const orderDoc of orderDocs) {
+                    if (!orderDoc.exists)
+                        continue;
+                    const orderData = orderDoc.data();
+                    if (orderData?.tableNumber && !String(orderData.tableNumber).includes('外帶') && String(orderData.tableNumber).toLowerCase() !== 'takeout') {
+                        tableSet.add(String(orderData.tableNumber).trim());
                     }
-                    else {
-                        const resDoc = await db.collection('reservations').doc(orderData.reservationNo).get();
-                        if (resDoc.exists) {
-                            batch.delete(db.collection('reservations').doc(orderData.reservationNo));
+                }
+                for (const orderDoc of orderDocs) {
+                    if (!orderDoc.exists)
+                        continue;
+                    const orderData = orderDoc.data();
+                    if (orderData?.reservationNo) {
+                        const resQuery = await transaction.get(db.collection('reservations').where('reservationNo', '==', orderData.reservationNo));
+                        if (!resQuery.empty) {
+                            for (const doc of resQuery.docs) {
+                                reservationDocsToDelete.push(db.collection('reservations').doc(doc.id));
+                            }
+                        }
+                        else {
+                            const resRef = db.collection('reservations').doc(orderData.reservationNo);
+                            const resDoc = await transaction.get(resRef);
+                            if (resDoc.exists)
+                                reservationDocsToDelete.push(resRef);
                         }
                     }
                 }
-            }
-            for (const tblId of tableSet) {
-                try {
-                    const unpaidSnap = await db.collection('orders')
-                        .where('tableNumber', '==', tblId)
-                        .where('isPaid', '==', false)
-                        .get();
+                for (const tblId of tableSet) {
+                    const unpaidSnap = await transaction.get(db.collection('orders').where('tableNumber', '==', tblId).where('isPaid', '==', false));
                     const otherUnpaid = unpaidSnap.docs.filter(doc => !orderIds.includes(doc.id) && doc.data().status !== 'cancelled');
                     if (otherUnpaid.length === 0) {
-                        const tableRef = db.collection('tables').doc(tblId);
-                        batch.update(tableRef, {
-                            status: 'cleaning',
-                            preservedFor: '',
-                            mergedWith: '',
-                            cleaningStartedAt: new Date().toISOString()
-                        });
+                        tablesToClear.push(db.collection('tables').doc(tblId));
                     }
                 }
-                catch (tblErr) {
-                    console.warn(`[bulk-checkout] Failed to check table status for table ${tblId}:`, tblErr);
+                for (const orderDoc of orderDocs) {
+                    if (!orderDoc.exists)
+                        continue;
+                    const id = orderDoc.id;
+                    const orderRef = orderDoc.ref;
+                    const orderData = orderDoc.data();
+                    const currentStatus = orderData?.status;
+                    const resolvedStatus = (currentStatus === 'completed' || currentStatus === 'cancelled') ? currentStatus : 'paid';
+                    resolvedOrderStatuses[id] = resolvedStatus;
+                    transaction.update(orderRef, {
+                        paymentMethod: paymentMethod || 'cash',
+                        cashTendered: cashTendered || 0,
+                        changeAmount: changeAmount || 0,
+                        isPaid: true,
+                        status: resolvedStatus,
+                        updatedAt: new Date().toISOString()
+                    });
                 }
-            }
-            if (checkoutRecord && typeof checkoutRecord === 'object') {
-                const txId = checkoutRecord.id || `TX-${Date.now()}`;
-                const checkoutRef = db.collection('checkouts').doc(txId);
-                batch.set(checkoutRef, {
-                    ...checkoutRecord,
-                    id: txId,
-                    checkoutTime: checkoutRecord.checkoutTime || new Date().toISOString()
-                });
-            }
-            await batch.commit();
+                for (const resRef of reservationDocsToDelete) {
+                    transaction.delete(resRef);
+                }
+                for (const tableRef of tablesToClear) {
+                    transaction.update(tableRef, {
+                        status: 'cleaning',
+                        preservedFor: '',
+                        mergedWith: '',
+                        cleaningStartedAt: new Date().toISOString()
+                    });
+                }
+                if (checkoutRecord && typeof checkoutRecord === 'object') {
+                    const stableId = orderIds.length > 0 ? orderIds[0] : Date.now();
+                    const txId = `TX-bulk-${stableId}`;
+                    const checkoutRef = db.collection('checkouts').doc(txId);
+                    transaction.set(checkoutRef, {
+                        ...checkoutRecord,
+                        id: txId,
+                        checkoutTime: checkoutRecord.checkoutTime || new Date().toISOString()
+                    });
+                }
+            });
             res.json({
                 success: true,
                 processedCount: orderIds.length,

@@ -29,6 +29,17 @@ export async function processAndSaveImage(
     throw new Error('圖片大小超出 10MB 上限 (Max 10MB)');
   }
 
+  // Format probe for magic-byte parity (QA-31 / QA-32)
+  try {
+    const metadata = await sharp(buffer).metadata();
+    const allowedFormats = ['jpeg', 'jpg', 'png', 'webp', 'avif', 'heif', 'gif', 'tiff'];
+    if (!metadata.format || !allowedFormats.includes(metadata.format)) {
+      throw new Error(`不支援的圖片格式: ${metadata.format || 'unknown'}`);
+    }
+  } catch (error: any) {
+    throw new Error(`圖片解析失敗或格式不支援: ${error.message}`);
+  }
+
   const timestamp = Date.now();
   const nameWithoutExt = rawFilename.replace(/[^a-zA-Z0-9._-]/g, '').replace(/\.[^/.]+$/, '') || `img-${timestamp}`;
   const cleanFolder = targetFolder.replace(/[^a-zA-Z0-9_-]/g, '') || 'dishes';

@@ -568,9 +568,12 @@ ${customerDetails}
       if (tb) {
         if (order.isPaid) {
           if (!isTakeoutTable(tblId) && tblId !== '') {
-            tb.status = 'cleaning';
-            tb.preservedFor = '';
-            tb.cleaningStartedAt = new Date().toISOString();
+            const unpaidSiblings = liveOrders.filter(o => String(o.tableNumber).trim() === tblId && !o.isPaid && o.status !== 'cancelled' && o.id !== id);
+            if (unpaidSiblings.length === 0) {
+              tb.status = 'cleaning';
+              tb.preservedFor = '';
+              tb.cleaningStartedAt = new Date().toISOString();
+            }
           } else {
             tb.status = 'available';
             tb.preservedFor = '';

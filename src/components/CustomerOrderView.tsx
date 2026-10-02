@@ -12,6 +12,7 @@ import {
 } from '../types';
 import { TRANSLATIONS } from '../data';
 import { ShoppingCart, ChevronRight, ArrowUp, Sparkles } from 'lucide-react';
+import { resilientLazy } from '../App';
 import { getLocalizedText } from '../utils/i18n';
 import { isValidTaiwanPhone, TAIWAN_PHONE_ERROR_MSG, sanitizePhoneDigits } from '../utils/phoneValidator';
 import {
@@ -26,25 +27,40 @@ import { getTaiwanTimeParts } from '../utils/dateUtils';
 import { CustomerHeader } from './customer/CustomerHeader';
 import { CustomerCategoryTabs } from './customer/CustomerCategoryTabs';
 import { CustomerMenuGrid } from './customer/CustomerMenuGrid';
-const CustomerCustomizerModal = lazy(() => import('./customer/CustomerCustomizerModal').then(m => ({ default: m.CustomerCustomizerModal })));
-const CustomerCartDrawer = lazy(() => import('./customer/CustomerCartDrawer').then(m => ({ default: m.CustomerCartDrawer })));
-const CustomerOrderTracker = lazy(() => import('./customer/CustomerOrderTracker').then(m => ({ default: m.CustomerOrderTracker })));
-const CustomerReservationModal = lazy(() => import('./customer/CustomerReservationModal').then(m => ({ default: m.CustomerReservationModal })));
-const CustomerStaffPinModal = lazy(() => import('./customer/CustomerStaffPinModal').then(m => ({ default: m.CustomerStaffPinModal })));
-const CustomerLightboxModal = lazy(() => import('./customer/CustomerModals').then(m => ({ default: m.CustomerLightboxModal })));
-const CustomerTakeoutModal = lazy(() => import('./customer/CustomerModals').then(m => ({ default: m.CustomerTakeoutModal })));
+const CustomerCustomizerModal = resilientLazy(() => import('./customer/CustomerCustomizerModal').then(m => ({ default: m.CustomerCustomizerModal })));
+const CustomerCartDrawer = resilientLazy(() => import('./customer/CustomerCartDrawer').then(m => ({ default: m.CustomerCartDrawer })));
+const CustomerOrderTracker = resilientLazy(() => import('./customer/CustomerOrderTracker').then(m => ({ default: m.CustomerOrderTracker })));
+const CustomerReservationModal = resilientLazy(() => import('./customer/CustomerReservationModal').then(m => ({ default: m.CustomerReservationModal })));
+const CustomerStaffPinModal = resilientLazy(() => import('./customer/CustomerStaffPinModal').then(m => ({ default: m.CustomerStaffPinModal })));
+const CustomerLightboxModal = resilientLazy(() => import('./customer/CustomerModals').then(m => ({ default: m.CustomerLightboxModal })));
+const CustomerTakeoutModal = resilientLazy(() => import('./customer/CustomerModals').then(m => ({ default: m.CustomerTakeoutModal })));
 
-class ModalErrorBoundary extends React.Component<{ children: React.ReactNode, onClose: () => void }, { hasError: boolean }> {
+class ModalErrorBoundary extends React.Component<{ children: React.ReactNode, onClose: () => void, isInline?: boolean }, { hasError: boolean }> {
   state = { hasError: false };
   static getDerivedStateFromError() { return { hasError: true }; }
   componentDidCatch(error: Error) {
     console.error('[CustomerOrderView] Modal component load failed:', error);
-    this.props.onClose();
-    if (typeof window !== 'undefined') {
-      window.alert('模組載入超時，請重新點擊以重試');
+    if (!this.props.isInline) {
+      this.props.onClose();
+      if (typeof window !== 'undefined') {
+        window.alert('模組載入超時，請重新點擊以重試');
+      }
     }
   }
-  render() { return this.state.hasError ? null : this.props.children; }
+  render() { 
+    if (this.state.hasError) {
+      if (this.props.isInline) {
+        return (
+          <div className="p-4 bg-zinc-900 border border-white/10 rounded-2xl flex flex-col items-center justify-center space-y-3">
+            <span className="text-zinc-400 text-sm">歷史紀錄模組載入失敗</span>
+            <button type="button" onClick={() => this.setState({ hasError: false })} className="px-4 py-2 bg-amber-500/20 text-amber-400 text-xs font-bold rounded-xl hover:bg-amber-500/30">重試載入</button>
+          </div>
+        );
+      }
+      return null;
+    }
+    return this.props.children; 
+  }
 }
 import { getMappedTableId, isValidTableFormat } from '../utils/tableUtils';
 export { getMappedTableId };
@@ -1316,7 +1332,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
       </ModalErrorBoundary>
 
       {/* Order Tracker and History */}
-      <ModalErrorBoundary onClose={() => {}}>
+      <ModalErrorBoundary onClose={() => {}} isInline={true}>
         <Suspense fallback={null}><CustomerOrderTracker
           isOrderHistoryVisible={isOrderHistoryVisible}
           activeSegmentTab={activeSegmentTab}

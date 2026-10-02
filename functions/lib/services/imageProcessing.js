@@ -9,6 +9,16 @@ async function processAndSaveImage(buffer, targetFolder, rawFilename, storageBuc
     if (buffer.length > 10 * 1024 * 1024) {
         throw new Error('圖片大小超出 10MB 上限 (Max 10MB)');
     }
+    try {
+        const metadata = await (0, sharp_1.default)(buffer).metadata();
+        const allowedFormats = ['jpeg', 'jpg', 'png', 'webp', 'avif', 'heif', 'gif', 'tiff'];
+        if (!metadata.format || !allowedFormats.includes(metadata.format)) {
+            throw new Error(`不支援的圖片格式: ${metadata.format || 'unknown'}`);
+        }
+    }
+    catch (error) {
+        throw new Error(`圖片解析失敗或格式不支援: ${error.message}`);
+    }
     const timestamp = Date.now();
     const nameWithoutExt = rawFilename.replace(/[^a-zA-Z0-9._-]/g, '').replace(/\.[^/.]+$/, '') || `img-${timestamp}`;
     const cleanFolder = targetFolder.replace(/[^a-zA-Z0-9_-]/g, '') || 'dishes';

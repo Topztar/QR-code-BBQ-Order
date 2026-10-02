@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { Component } from 'react';
 import { safeStorage } from '../../lib/safeStorage';
 import { sanitizePhoneDigits, isValidTaiwanPhone, TAIWAN_PHONE_ERROR_MSG } from '../../utils/phoneValidator';
 import { getTaiwanTimeParts } from '../../utils/dateUtils';
@@ -6,7 +6,27 @@ import { useModalEscape } from '../../hooks/useModalEscape';
 
 const localStorage = safeStorage;
 
-
+class ModalErrorBoundary extends Component<{children: React.ReactNode, onClose: () => void, isInline?: boolean}, {hasError: boolean}> {
+  state = { hasError: false };
+  static getDerivedStateFromError() { return { hasError: true }; }
+  componentDidCatch(error: any, errorInfo: any) { console.error("Modal Render Error:", error, errorInfo); }
+  render() {
+    if (this.state.hasError) {
+      if (this.props.isInline) {
+        return <button onClick={() => this.setState({ hasError: false })} className="text-xs bg-rose-500/10 text-rose-400 px-3 py-1.5 rounded-lg border border-rose-500/20 m-2">重試載入</button>;
+      }
+      return (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[10000] flex items-center justify-center p-4 text-xs font-sans">
+          <div className="bg-zinc-900 border border-rose-500/50 rounded-2xl p-6 max-w-md w-full text-center space-y-4 shadow-2xl">
+            <h3 className="text-base font-bold text-rose-400">彈出視窗載入發生異常</h3>
+            <button type="button" onClick={this.props.onClose} className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-lg transition">關閉視窗 Close</button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 export interface CustomerLightboxModalProps {
   activeLightboxImg: string | null;
   setActiveLightboxImg: (img: string | null) => void;
@@ -21,11 +41,13 @@ export const CustomerLightboxModal: React.FC<CustomerLightboxModalProps> = ({
   if (!activeLightboxImg) return null;
 
   return (
-    <div
-      className="fixed inset-0 bg-black/95 z-[100] flex flex-col items-center justify-center p-4 transition-all duration-300 animate-fade-in"
-      onClick={() => setActiveLightboxImg(null)}
-      style={{ contentVisibility: 'auto' }}
-    >
+    <ModalErrorBoundary onClose={() => setActiveLightboxImg(null)}>
+      <div
+        role="dialog" aria-modal="true"
+        className="fixed inset-0 bg-black/95 z-[100] flex flex-col items-center justify-center p-4 transition-all duration-300 animate-fade-in"
+        onClick={() => setActiveLightboxImg(null)}
+        style={{ contentVisibility: 'auto' }}
+      >
       {/* Top Info Bar */}
       <div className="absolute top-4 left-4 right-4 flex items-center justify-between z-50 text-white font-sans pointer-events-none">
         <div className="bg-black/60 px-3.5 py-1.5 rounded-full text-xs font-bold backdrop-blur-md flex items-center gap-1.5 border border-white/5 shadow-lg">
@@ -53,7 +75,8 @@ export const CustomerLightboxModal: React.FC<CustomerLightboxModalProps> = ({
       <p className="text-zinc-400 text-[11px] font-sans mt-4 text-center select-none bg-black/40 px-3 py-1 rounded-full backdrop-blur-xs border border-white/5">
         💡 本照片已自動進行向量與點陣雙重高畫質等比例縮放，完美適應您目前的螢幕尺寸及視窗解析度。
       </p>
-    </div>
+      </div>
+    </ModalErrorBoundary>
   );
 };
 
@@ -160,7 +183,11 @@ export const CustomerTakeoutModal: React.FC<CustomerTakeoutModalProps> = ({
   });
 
   return (
-    <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-[60] flex items-center justify-center p-4 overflow-y-auto animate-fadeIn">
+    <ModalErrorBoundary onClose={() => setShowTakeoutFormModal(false)}>
+      <div 
+        role="dialog" aria-modal="true"
+        className="fixed inset-0 bg-black/85 backdrop-blur-sm z-[60] flex items-center justify-center p-4 overflow-y-auto animate-fadeIn"
+      >
       <div className="bg-[#121824] border border-blue-500/25 rounded-2xl w-full max-w-md shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]">
         <div className="p-4 border-b border-blue-500/20 bg-black/20 shrink-0">
           <h3 className="text-base font-black text-white flex items-center gap-2">
@@ -339,6 +366,7 @@ export const CustomerTakeoutModal: React.FC<CustomerTakeoutModalProps> = ({
           </div>
         </form>
       </div>
-    </div>
+      </div>
+    </ModalErrorBoundary>
   );
 };

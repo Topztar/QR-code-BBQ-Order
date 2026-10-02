@@ -162,8 +162,7 @@ export function OrderDataProvider({
     syncActive,
     tables,
     reservations,
-    handleUpdateTableStatus,
-    handleDeleteReservation
+    handleUpdateTableStatus
   );
   const { handlePlaceOrder } = useOrderSubmit(setOrders, menuItems);
 

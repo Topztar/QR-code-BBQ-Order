@@ -364,14 +364,24 @@ function registerSettingsRoutes(app, ctx) {
                 liveTakeoutSeq: 0,
                 liveStaffPin: firestore_1.FieldValue.delete()
             }, { merge: true });
-            await credsRef.set({
-                staffPinHash: (0, auth_1.hashPin)('952788'),
-                updatedAt: new Date().toISOString(),
-                failedAttempts: 0,
-                lockedUntil: null
-            }, { merge: true });
+            const pinResetAllowed = process.env.ALLOW_PIN_RESET === 'true';
+            if (pinResetAllowed) {
+                await credsRef.set({
+                    staffPinHash: (0, auth_1.hashPin)('952788'),
+                    updatedAt: new Date().toISOString(),
+                    failedAttempts: 0,
+                    lockedUntil: null
+                }, { merge: true });
+            }
+            else {
+                await credsRef.set({
+                    updatedAt: new Date().toISOString(),
+                    failedAttempts: 0,
+                    lockedUntil: null
+                }, { merge: true });
+            }
             (0, auth_1.invalidateAuthCache)();
-            res.json({ success: true, message: '已成功清除系統內所有測試單據、顧客預約、桌位佔用，並將登入密碼重設為預設值 952788！' });
+            res.json({ success: true, message: pinResetAllowed ? '已成功清除系統內所有測試單據、顧客預約、桌位佔用，並將登入密碼重設為預設值 952788！' : '已成功清除系統內所有測試單據、顧客預約、桌位佔用！(安全密碼維持不變)' });
         }
         catch (error) {
             console.error('Error clearing test data:', error);

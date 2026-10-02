@@ -16,7 +16,7 @@ service cloud.firestore {
 
     // 3. ingredients (原料/庫存) - 前端唯讀，庫存扣減由後端安全計算
     match /ingredients/{id} {
-      allow read: if true;
+      allow read: if request.auth != null;
       allow write: if false;
     }
 

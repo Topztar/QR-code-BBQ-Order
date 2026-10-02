@@ -1,6 +1,26 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Component } from 'react';
 import { Plus } from 'lucide-react';
 import { memberService } from '../../../services/memberService';
+import { useModalEscape } from '../../../hooks/useModalEscape';
+
+class ModalErrorBoundary extends Component<{children: React.ReactNode, onClose: () => void}, {hasError: boolean}> {
+  state = { hasError: false };
+  static getDerivedStateFromError() { return { hasError: true }; }
+  componentDidCatch(error: any, errorInfo: any) { console.error("Modal Render Error:", error, errorInfo); }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[10000] flex items-center justify-center p-4 text-xs font-sans">
+          <div className="bg-zinc-900 border border-rose-500/50 rounded-2xl p-6 max-w-md w-full text-center space-y-4 shadow-2xl">
+            <h3 className="text-base font-bold text-rose-400">彈出視窗載入發生異常</h3>
+            <button type="button" onClick={this.props.onClose} className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-lg transition">關閉視窗 Close</button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 export interface AddMemberModalProps {
   isOpen: boolean;
@@ -18,6 +38,20 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({
   const [balance, setBalance] = useState<string>('0');
   const [points, setPoints] = useState<string>('0');
   const [error, setError] = useState<string | null>(null);
+
+  const isDirty = name !== '' || email !== '' || balance !== '0' || points !== '0';
+
+  const handleSafeClose = () => {
+    if (isDirty) {
+      if (window.confirm('您有未儲存的變更，確定要關閉嗎？ (Unsaved changes will be lost)')) {
+        onClose();
+      }
+    } else {
+      onClose();
+    }
+  };
+
+  useModalEscape(isOpen, onClose, isDirty);
 
   useEffect(() => {
     if (isOpen) {
@@ -67,11 +101,14 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({
   };
 
   return (
-    <div
-      className="fixed inset-0 bg-black/85 backdrop-blur-md z-[10000] flex items-center justify-center p-4 text-xs font-sans animate-fadeIn"
-      id="add-member-modal-container"
-    >
-      <div className="bg-[#18181A] border border-white/10 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl animate-scaleUp text-left">
+    <ModalErrorBoundary onClose={onClose}>
+      <div
+        role="dialog" aria-modal="true"
+        className="fixed inset-0 bg-black/85 backdrop-blur-md z-[10000] flex items-center justify-center p-4 text-xs font-sans animate-fadeIn"
+        id="add-member-modal-container"
+        onClick={handleSafeClose}
+      >
+        <div className="bg-[#18181A] border border-white/10 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl animate-scaleUp text-left" onClick={(e) => e.stopPropagation()}>
         <div className="p-6 space-y-4">
           <div className="flex items-center space-x-2.5 text-[#E5B453]">
             <Plus size={22} className="shrink-0 animate-bounce" />
@@ -157,7 +194,7 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({
           <div className="flex justify-end space-x-2 pt-2 border-t border-white/5">
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleSafeClose}
               className="px-4 py-2 bg-zinc-900 hover:bg-zinc-850 border border-white/5 text-zinc-300 font-extrabold rounded-lg transition active:scale-95 cursor-pointer text-[11px]"
             >
               取消 Cancel
@@ -171,7 +208,8 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({
             </button>
           </div>
         </div>
+        </div>
       </div>
-    </div>
+    </ModalErrorBoundary>
   );
 };

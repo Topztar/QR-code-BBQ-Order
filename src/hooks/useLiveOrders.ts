@@ -83,8 +83,7 @@ export function useLiveOrders(
   syncActive: boolean,
   tables: TableConfig[],
   reservations: Reservation[],
-  handleUpdateTableStatus: (id: string, updates: Partial<Omit<TableConfig, 'id' | 'qrCodeUrl'>>) => Promise<{ success: boolean }>,
-  handleDeleteReservation?: (id: string) => Promise<{ success: boolean; error?: string }>
+  handleUpdateTableStatus: (id: string, updates: Partial<Omit<TableConfig, 'id' | 'qrCodeUrl'>>) => Promise<{ success: boolean }>
 ) {
   const [orders, setOrders] = useState<Order[]>([]);
   const ordersRef = useRef(orders);
@@ -129,7 +128,7 @@ export function useLiveOrders(
           recentStatusTransitionsRef.current.delete(ord.id);
         } else {
           reconciled.status = transition.status;
-          reconciled.isOfflinePending = false;
+          reconciled.isOfflinePending = true;
         }
       }
 
@@ -356,10 +355,16 @@ export function useLiveOrders(
       }, 15000);
     }
 
+    const handleOnline = () => {
+      if (!isCancelled) fetchOrdersFromApi();
+    };
+    window.addEventListener('online', handleOnline);
+
     return () => {
       isCancelled = true;
       if (reconnectTimer) clearTimeout(reconnectTimer);
       if (fallbackPollInterval) clearInterval(fallbackPollInterval);
+      window.removeEventListener('online', handleOnline);
       setTimeout(() => {
         try {
           unsubscribeOrders();

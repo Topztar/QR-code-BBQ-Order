@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { Component, useState } from 'react';
 import { TableConfig, Reservation } from '../../../types';
 import { sanitizePhoneDigits } from '../../../utils/phoneValidator';
 
@@ -10,6 +10,27 @@ export interface ReservationSettingModalProps {
   reservations: Reservation[];
   onAddReservation?: (res: any) => Promise<{ success: boolean; error?: string }>;
   onEditReservation?: (id: string, updates: Partial<Reservation>) => Promise<{ success: boolean; error?: string }>;
+}
+
+import { useModalEscape } from '../../../hooks/useModalEscape';
+
+class ModalErrorBoundary extends Component<{children: React.ReactNode, onClose: () => void}, {hasError: boolean}> {
+  state = { hasError: false };
+  static getDerivedStateFromError() { return { hasError: true }; }
+  componentDidCatch(error: any, errorInfo: any) { console.error("Modal Render Error:", error, errorInfo); }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[10000] flex items-center justify-center p-4 text-xs font-sans">
+          <div className="bg-zinc-900 border border-rose-500/50 rounded-2xl p-6 max-w-md w-full text-center space-y-4 shadow-2xl">
+            <h3 className="text-base font-bold text-rose-400">彈出視窗載入發生異常</h3>
+            <button type="button" onClick={this.props.onClose} className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-lg transition">關閉視窗 Close</button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
 }
 
 import { useReservationForm } from '../../../hooks/useReservationForm';
@@ -89,13 +110,17 @@ export const ReservationSettingModal: React.FC<ReservationSettingModalProps> = (
     return slots.includes(resTimeInput);
   }, [resDateInput, resTimeInput, generateCandidateSlots]);
 
+  useModalEscape(isOpen, onClose);
+
   if (!isOpen) return null;
 
   return (
-    <div
-      className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 text-xs font-sans animate-fadeIn"
-      onClick={onClose}
-    >
+    <ModalErrorBoundary onClose={onClose}>
+      <div
+        role="dialog" aria-modal="true"
+        className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 text-xs font-sans animate-fadeIn"
+        onClick={onClose}
+      >
       <form
         onSubmit={(e) => handleReservationSaveSubmit(e, onClose)}
         className="bg-[#121212] border border-white/10 rounded-2xl w-full max-w-xl max-h-[90vh] flex flex-col overflow-hidden animate-scaleUp"
@@ -487,6 +512,7 @@ export const ReservationSettingModal: React.FC<ReservationSettingModalProps> = (
           </button>
         </div>
       </form>
-    </div>
+      </div>
+    </ModalErrorBoundary>
   );
 };

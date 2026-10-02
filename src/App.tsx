@@ -161,11 +161,11 @@ function AppContent({
   }, [currentPath]);
 
   // Hidden backdoor hotkey for non-staff to access the staff login gate securely
-  useAdminHotkey({ ctrl: true, shift: true, key: 'l' }, () => {
+  useAdminHotkey({ ctrl: true, shift: true, key: 'l' }, useCallback(() => {
     if (!isStaff) {
       handleStaffTabSwitch('/admin?tab=stats', 'admin', 'stats');
     }
-  });
+  }, [isStaff, handleStaffTabSwitch]));
 
   // Keyboard hotkeys for switching staff workspace tabs instantly (Ctrl+1 to Ctrl+5)
   useEffect(() => {

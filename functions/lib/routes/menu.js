@@ -65,6 +65,12 @@ function registerMenuRoutes(app, ctx) {
                     if (!allowedMimes.includes(fileMime)) {
                         return res.status(400).json({ error: `不支援的圖片格式 (${fileMime})，僅允許 JPEG, PNG, WEBP, GIF` });
                     }
+                    const hex = fileBuffer.toString('hex', 0, 12).toUpperCase();
+                    const isValidMagic = hex.startsWith('FFD8') || hex.startsWith('89504E47') || hex.startsWith('47494638') ||
+                        hex.includes('57454250') || hex.includes('66747970') || hex.includes('61766966');
+                    if (!isValidMagic) {
+                        return res.status(400).json({ error: 'INVALID_MAGIC_BYTES: 檔案內容不符圖片格式特徵' });
+                    }
                     try {
                         const result = await (0, imageProcessing_1.processAndSaveImage)(fileBuffer, targetFolder, rawFilename, storageBucket);
                         return res.json(result);

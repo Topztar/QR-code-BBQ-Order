@@ -6,7 +6,7 @@ import { Bucket } from '@google-cloud/storage';
 import { validateImageUploadPayload, sanitizeString } from '../validators';
 import { cachedMenu, cachedCategories, setCachedMenu, setCachedCategories, CACHE_TTL_MS, processMenuItemSoldOut, cleanupStorageImage } from '../helpers';
 import { invalidatePublicBootstrapCache } from './bootstrap';
-
+import { processAndSaveImage } from '../services/imageProcessing';
 // ============================================================
 // MENU 路由模組
 // ============================================================
@@ -25,7 +25,7 @@ export interface RouteContext {
  * 🚀 processAndSaveImage — 使用 sharp 同步輸出 WebP 與次世代 AVIF 雙格式（包含 800px 高清大圖與 200px 列表縮圖）並儲存至 Cloud Storage
  * (Enforces cacheControl: 'public, max-age=31536000, immutable')
  */
-import { processAndSaveImage } from '../services/imageProcessing';
+
 
 export function registerMenuRoutes(app: express.Application, ctx: RouteContext) {
   const { db, storageBucket, requireStaffAuth, createRateLimiter, sendErrorResponse } = ctx;
@@ -94,6 +94,13 @@ export function registerMenuRoutes(app: express.Application, ctx: RouteContext) 
           const allowedMimes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
           if (!allowedMimes.includes(fileMime)) {
             return res.status(400).json({ error: `不支援的圖片格式 (${fileMime})，僅允許 JPEG, PNG, WEBP, GIF` });
+          }
+
+          const hex = fileBuffer.toString('hex', 0, 12).toUpperCase();
+          const isValidMagic = hex.startsWith('FFD8') || hex.startsWith('89504E47') || hex.startsWith('47494638') ||
+                          hex.includes('57454250') || hex.includes('66747970') || hex.includes('61766966');
+          if (!isValidMagic) {
+            return res.status(400).json({ error: 'INVALID_MAGIC_BYTES: 檔案內容不符圖片格式特徵' });
           }
 
           try {

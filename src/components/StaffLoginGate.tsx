@@ -87,7 +87,7 @@ export const StaffLoginGate: React.FC<StaffLoginGateProps> = ({ onLoginSuccess, 
 
       <form onSubmit={handleSubmit} className="space-y-3">
         {/* Dots representing passcode */}
-        <div className="flex justify-center space-x-3.5 py-1.5">
+        <div className="flex justify-center space-x-3.5 py-1.5" role="status" aria-label={`已輸入 ${pin.length} 位密碼`}>
           {[0, 1, 2, 3, 4, 5].map(i => (
             <div
               key={i}
@@ -114,6 +114,7 @@ export const StaffLoginGate: React.FC<StaffLoginGateProps> = ({ onLoginSuccess, 
               key={num}
               type="button"
               id={`pinpad-${num}`}
+              aria-label={num}
               onClick={() => handleNumberClick(num)}
               className="bg-white/5 hover:bg-white/10 active:bg-white/15 h-12 rounded-2xl text-lg font-bold font-mono transition cursor-pointer select-none"
             >
@@ -123,6 +124,7 @@ export const StaffLoginGate: React.FC<StaffLoginGateProps> = ({ onLoginSuccess, 
           <button
             type="button"
             id="pinpad-clear"
+            aria-label="清除密碼"
             onClick={handleClear}
             className="text-xs text-white/45 bg-white/2 hover:bg-white/5 rounded-2xl hover:text-white font-semibold cursor-pointer transition select-none"
           >
@@ -131,6 +133,7 @@ export const StaffLoginGate: React.FC<StaffLoginGateProps> = ({ onLoginSuccess, 
           <button
             type="button"
             id="pinpad-0"
+            aria-label="0"
             onClick={() => handleNumberClick('0')}
             className="bg-white/5 hover:bg-white/10 active:bg-white/15 h-12 rounded-2xl text-lg font-bold font-mono transition cursor-pointer select-none"
           >
@@ -139,6 +142,7 @@ export const StaffLoginGate: React.FC<StaffLoginGateProps> = ({ onLoginSuccess, 
           <button
             type="button"
             id="pinpad-back"
+            aria-label="刪除最後一位密碼"
             onClick={handleBackspace}
             className="text-xs text-white/45 bg-white/2 hover:bg-white/5 rounded-2xl hover:text-white font-semibold cursor-pointer transition select-none"
           >

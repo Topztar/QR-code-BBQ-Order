@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { Component } from 'react';
 import { Minus, Plus, Coins } from 'lucide-react';
 import { Order, OrderStatus, Language, TableConfig } from '../../../types';
 import { getLocalizedText } from '../../../utils/i18n';
@@ -7,6 +7,26 @@ import { PaidModDetails } from '../../../types';
 import { memberService } from '../../../services/memberService';
 import { getMaskedEmail } from '../ManagerDashboardUtils';
 import { orderCalculationService } from '../../../services/orderCalculationService';
+import { useModalEscape } from '../../../hooks/useModalEscape';
+
+class ModalErrorBoundary extends Component<{children: React.ReactNode, onClose: () => void}, {hasError: boolean}> {
+  state = { hasError: false };
+  static getDerivedStateFromError() { return { hasError: true }; }
+  componentDidCatch(error: any, errorInfo: any) { console.error("Modal Render Error:", error, errorInfo); }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[10000] flex items-center justify-center p-4 text-xs font-sans">
+          <div className="bg-zinc-900 border border-rose-500/50 rounded-2xl p-6 max-w-md w-full text-center space-y-4 shadow-2xl">
+            <h3 className="text-base font-bold text-rose-400">彈出視窗載入發生異常</h3>
+            <button type="button" onClick={this.props.onClose} className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-lg transition">關閉視窗 Close</button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 export interface OrderDetailDrilldownModalProps {
   selectedOrder: Order | null;
@@ -59,9 +79,17 @@ export const OrderDetailDrilldownModal: React.FC<OrderDetailDrilldownModalProps>
 }) => {
   if (!selectedOrder) return null;
 
+  useModalEscape(!!selectedOrder, () => setSelectedOrder(null));
+
   return (
-<div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" id="order-detail-drilldown-modal" onClick={() => setSelectedOrder(null)}>
-          <div className="bg-[#121212] border border-white/10 rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden text-left" onClick={(e) => e.stopPropagation()}>
+    <ModalErrorBoundary onClose={() => setSelectedOrder(null)}>
+      <div 
+        role="dialog" aria-modal="true"
+        className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" 
+        id="order-detail-drilldown-modal" 
+        onClick={() => setSelectedOrder(null)}
+      >
+        <div className="bg-[#121212] border border-white/10 rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden text-left" onClick={(e) => e.stopPropagation()}>
             {/* Header */}
             <div className="bg-white/5 px-6 py-4 border-b border-white/10 flex items-center justify-between">
               <div className="flex items-center space-x-3">
@@ -976,5 +1004,6 @@ ${customerDetails}
             </div>
           </div>
         </div>
+    </ModalErrorBoundary>
   );
 };

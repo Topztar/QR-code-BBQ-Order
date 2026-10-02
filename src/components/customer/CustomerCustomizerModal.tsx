@@ -1,10 +1,32 @@
-import React from 'react';
+import React, { Component } from 'react';
 import { MenuItem, CustomAddOn, Language, Ingredient, SoldOutType } from '../../types';
 import { getLocalizedText } from '../../utils/i18n';
 import { TRANSLATIONS } from '../../data';
 import { X, ShoppingCart, Clock, AlertTriangle, Check } from 'lucide-react';
 import { orderCalculationService } from '../../services/orderCalculationService';
 import { useModalEscape } from '../../hooks/useModalEscape';
+
+class ModalErrorBoundary extends Component<{children: React.ReactNode, onClose: () => void, isInline?: boolean}, {hasError: boolean}> {
+  state = { hasError: false };
+  static getDerivedStateFromError() { return { hasError: true }; }
+  componentDidCatch(error: any, errorInfo: any) { console.error("Modal Render Error:", error, errorInfo); }
+  render() {
+    if (this.state.hasError) {
+      if (this.props.isInline) {
+        return <button onClick={() => this.setState({ hasError: false })} className="text-xs bg-rose-500/10 text-rose-400 px-3 py-1.5 rounded-lg border border-rose-500/20 m-2">重試載入</button>;
+      }
+      return (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[10000] flex items-center justify-center p-4 text-xs font-sans">
+          <div className="bg-zinc-900 border border-rose-500/50 rounded-2xl p-6 max-w-md w-full text-center space-y-4 shadow-2xl">
+            <h3 className="text-base font-bold text-rose-400">彈出視窗載入發生異常</h3>
+            <button type="button" onClick={this.props.onClose} className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-lg transition">關閉視窗 Close</button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 export interface CustomerCustomizerModalProps {
   selectedDetailItem: MenuItem | null;
@@ -100,10 +122,12 @@ export const CustomerCustomizerModal: React.FC<CustomerCustomizerModalProps> = (
   if (!selectedDetailItem) return null;
 
   return (
-    <div
-      className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in"
-      id="item-customizer-modal"
-    >
+    <ModalErrorBoundary onClose={() => setSelectedDetailItem(null)}>
+      <div
+        role="dialog" aria-modal="true"
+        className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in"
+        id="item-customizer-modal"
+      >
       <div
         className={`rounded-3xl w-full max-w-md overflow-hidden shadow-2xl flex flex-col max-h-[90vh] border-4 transition-all duration-300 ${
           isSimplifiedMode
@@ -659,6 +683,7 @@ export const CustomerCustomizerModal: React.FC<CustomerCustomizerModalProps> = (
           )}
         </div>
       </div>
-    </div>
+      </div>
+    </ModalErrorBoundary>
   );
 };

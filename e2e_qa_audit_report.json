@@ -1,0 +1,54 @@
+{
+  "timestamp": "2026-10-02T20:50:14.391Z",
+  "domains": {
+    "domain1": {
+      "status": "FAIL",
+      "error": "net::ERR_CONNECTION_REFUSED at http://localhost:3000/?table=1"
+    },
+    "domain2": {
+      "status": "FAIL",
+      "error": "net::ERR_CONNECTION_REFUSED at http://localhost:3000/kitchen"
+    },
+    "domain3": {
+      "status": "FAIL",
+      "error": "net::ERR_CONNECTION_REFUSED at http://localhost:3000/cashier"
+    },
+    "domain4": {
+      "status": "FAIL",
+      "error": "fetch failed"
+    },
+    "domain5": {
+      "status": "FAIL",
+      "error": "fetch failed"
+    },
+    "domain6": {
+      "status": "FAIL",
+      "error": "fetch failed"
+    },
+    "domain7": {
+      "status": "FAIL",
+      "error": "fetch failed"
+    },
+    "domain8": {
+      "status": "PASS",
+      "evidence": "Settlement endpoint verified."
+    },
+    "domain9": {
+      "status": "FAIL",
+      "error": "net::ERR_CONNECTION_REFUSED at http://localhost:3000/admin?tab=menu"
+    },
+    "domain10": {
+      "status": "FAIL",
+      "error": "fetch failed"
+    },
+    "domain11": {
+      "status": "FAIL",
+      "error": "net::ERR_CONNECTION_REFUSED at http://localhost:3000/cashier"
+    }
+  },
+  "cleanup": {
+    "testOrdersRemoved": 0,
+    "testReservationsRemoved": 0,
+    "seedFixturesIntact": true
+  }
+}

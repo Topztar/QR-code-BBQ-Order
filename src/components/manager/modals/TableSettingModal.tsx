@@ -1,5 +1,6 @@
 
 import { TableConfig } from '../../../types';
+import { useModalEscape } from '../../../hooks/useModalEscape';
 
 export interface TableSettingModalProps {
   isOpen: boolean;
@@ -46,12 +47,30 @@ export const TableSettingModal: React.FC<TableSettingModalProps> = ({
       maxCapacity: tableMaxCapacityInput
     });
   };
+
+  const isDirty = editingTableObj
+    ? (tableIdInput !== editingTableObj.id || tableQrUrlInput !== (editingTableObj.qrCodeUrl || '') || tableMaxCapacityInput !== String(editingTableObj.maxCapacity || 4))
+    : (tableIdInput !== '' || tableQrUrlInput !== '' || tableMaxCapacityInput !== '4');
+
+  const handleSafeClose = () => {
+    if (isDirty) {
+      if (window.confirm('您有未儲存的變更，確定要關閉嗎？ (Unsaved changes will be lost)')) {
+        onClose();
+      }
+    } else {
+      onClose();
+    }
+  };
+
+  useModalEscape(isOpen, onClose, isDirty);
+
   if (!isOpen) return null;
 
   return (
     <div
+      role="dialog" aria-modal="true"
       className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center text-xs font-sans animate-fadeIn"
-      onClick={onClose}
+      onClick={handleSafeClose}
     >
       <form
         onSubmit={handleFormSubmit}
@@ -65,7 +84,7 @@ export const TableSettingModal: React.FC<TableSettingModalProps> = ({
           </h3>
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleSafeClose}
             className="text-white/40 hover:text-white text-base font-mono cursor-pointer"
           >
             ✕

@@ -112,7 +112,7 @@ export const CashierCheckoutPanel: React.FC<CashierCheckoutPanelProps> = ({
         amountPaid: cashierPaymentMethod === 'cash' ? cashierCashReceived : cashierCalculatedTotals.total,
         changeProvided: change,
         paymentMethod: cashierPaymentMethod,
-        staffPin: staffPin || '070718',
+        staffPin: staffPin || '',
         checkoutTime: new Date().toISOString()
       };
 

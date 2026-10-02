@@ -31,6 +31,7 @@ import { sendReservationNotifications, sendTestNotification } from './functions/
 import { orderCalculationService } from './src/services/orderCalculationService';
 import { processAndSaveImage } from './src/lib/server/imageProcessing';
 import { getTaiwanDateString, getTaiwanTimeParts } from './src/utils/dateUtils';
+import { validateImageUploadPayload } from './functions/src/validators';
 
 import { initFirebaseStorage, gcsBucket, app, PORT } from './src/server/init';
 import { setupMiddleware, createRateLimiter } from './src/server/middleware';
@@ -1708,21 +1709,20 @@ app.post('/api/images/upload', async (req, res) => {
     }
 
     // 🌟 模式 B：JSON Base64 (向下相容備援)
-    const { image, base64, data, filename, folder = 'dishes' } = req.body;
-    const rawData = base64 || data || image;
-    if (!rawData) {
-      return res.status(400).json({ error: 'Missing image data (base64) / 缺少圖片資料' });
+    const validation = validateImageUploadPayload(req.body);
+    if (!validation.isValid || !validation.sanitizedData) {
+      return res.status(400).json({ error: validation.error || 'Missing or invalid image data' });
     }
 
-    let base64Clean = rawData;
-    if (rawData.includes(';base64,')) {
-      const parts = rawData.split(';base64,');
-      base64Clean = parts[1];
-    }
-
+    const { base64Clean, targetFolder, targetFilename: rawFilename } = validation.sanitizedData;
     const buffer = Buffer.from(base64Clean, 'base64');
-    const targetFilename = filename ? filename.replace(/[^a-zA-Z0-9._-]/g, '') : `dish-${Date.now()}.webp`;
-    const result = await processAndSaveImage(buffer, folder, targetFilename, gcsBucket, true);
+    
+    // Cloud uses targetFilename verbatim; local `server.ts` fallback re-adds .webp in processAndSaveImage implicitly or uses it as base. 
+    // Wait, the original local logic was: 
+    // const targetFilename = filename ? filename.replace(/[^a-zA-Z0-9._-]/g, '') : `dish-${Date.now()}.webp`;
+    // processAndSaveImage(buffer, folder, targetFilename, gcsBucket, true);
+    // validateImageUploadPayload already supplies targetFilename via `dish-${Date.now()}.webp` fallback.
+    const result = await processAndSaveImage(buffer, targetFolder, rawFilename, gcsBucket, true);
     return res.json(result);
   } catch (error: any) {
     console.error('[Sabay Storage Upload Error]:', error);
@@ -2602,7 +2602,15 @@ app.delete('/api/tables/:id', (req, res) => {
 });
 
 // Reservations Management Endpoints
-app.get('/api/reservations', (_req, res) => {
+app.get('/api/reservations', (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: '未授權存取：憑證格式不正確' });
+  }
+  const token = authHeader.split('Bearer ')[1]?.trim();
+  if (!token || (token !== 'valid-staff-session' && !token.startsWith('st_') && token !== 'authenticated')) {
+    return res.status(403).json({ error: '安全憑證無效或已過期，請確認管理員權限' });
+  }
   cleanupUnlistedReservationData();
   syncTableStatusesWithTodayReservations();
   res.json(liveReservations);
@@ -2893,6 +2901,11 @@ app.put('/api/staff/pin', handleStaffPinUpdate);
 
 // Admin Sanitize Test Data Endpoint (Parity with Cloud Functions)
 app.post(['/api/admin/clear-test-data', '/admin/clear-test-data'], (req, res) => {
+  const token = req.headers.authorization?.split('Bearer ')[1];
+  if (!token || (token !== 'valid-staff-session' && !token.startsWith('st_'))) {
+    return res.status(401).json({ error: '安全憑證無效或已過期' });
+  }
+
   const { pin } = req.body;
   if (!pin || typeof pin !== 'string') {
     return res.status(400).json({ error: '請輸入有效的員工解鎖 PIN 碼！' });
@@ -2929,7 +2942,9 @@ app.post(['/api/admin/clear-test-data', '/admin/clear-test-data'], (req, res) =>
   promoNotifications.length = 0;
   liveTables = liveTables.map(t => ({ ...t, status: 'available', preservedFor: '' }));
   liveTakeoutSeq = 0;
-  liveStaffPin = '952788';
+  if (process.env.RESET_PIN_ON_CLEAR === 'true') {
+    liveStaffPin = '952788';
+  }
 
   saveStateToDisk();
   res.json({

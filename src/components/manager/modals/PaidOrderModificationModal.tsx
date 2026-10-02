@@ -1,6 +1,26 @@
-import React from 'react';
+import React, { Component } from 'react';
 import { Language, PaidModDetails } from '../../../types';
 import { getLocalizedText } from '../../../utils/i18n';
+import { useModalEscape } from '../../../hooks/useModalEscape';
+
+class ModalErrorBoundary extends Component<{children: React.ReactNode, onClose: () => void}, {hasError: boolean}> {
+  state = { hasError: false };
+  static getDerivedStateFromError() { return { hasError: true }; }
+  componentDidCatch(error: any, errorInfo: any) { console.error("Modal Render Error:", error, errorInfo); }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[10000] flex items-center justify-center p-4 text-xs font-sans">
+          <div className="bg-zinc-900 border border-rose-500/50 rounded-2xl p-6 max-w-md w-full text-center space-y-4 shadow-2xl">
+            <h3 className="text-base font-bold text-rose-400">彈出視窗載入發生異常</h3>
+            <button type="button" onClick={this.props.onClose} className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-lg transition">關閉視窗 Close</button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 export interface PaidOrderModificationModalProps {
   paidModDetails: PaidModDetails | null;
@@ -29,9 +49,29 @@ export const PaidOrderModificationModal: React.FC<PaidOrderModificationModalProp
 }) => {
   if (!paidModDetails) return null;
 
+  const isDirty = modReason !== '' || modNotes !== '' || modPin !== '';
+
+  const handleSafeClose = () => {
+    if (isDirty) {
+      if (window.confirm('您有未儲存的變更，確定要關閉嗎？ (Unsaved changes will be lost)')) {
+        onClose();
+      }
+    } else {
+      onClose();
+    }
+  };
+
+  useModalEscape(!!paidModDetails, onClose, isDirty);
+
   return (
-    <div className="fixed inset-0 bg-black/95 backdrop-blur-md z-[60] flex items-center justify-center p-4" id="paid-order-mod-modal">
-      <div className="bg-[#18181b] border border-[#E5B453]/40 rounded-2xl w-full max-w-md p-6 space-y-5 text-left shadow-2xl">
+    <ModalErrorBoundary onClose={onClose}>
+      <div 
+        role="dialog" aria-modal="true"
+        className="fixed inset-0 bg-black/95 backdrop-blur-md z-[60] flex items-center justify-center p-4" 
+        id="paid-order-mod-modal"
+        onClick={handleSafeClose}
+      >
+        <div className="bg-[#18181b] border border-[#E5B453]/40 rounded-2xl w-full max-w-md p-6 space-y-5 text-left shadow-2xl" onClick={(e) => e.stopPropagation()}>
         {/* Title block */}
         <div className="space-y-1">
           <span className="bg-rose-500/10 text-rose-400 border border-rose-500/20 px-2.5 py-1 rounded text-[10px] font-black uppercase tracking-wider block w-fit">
@@ -124,7 +164,7 @@ export const PaidOrderModificationModal: React.FC<PaidOrderModificationModalProp
         <div className="flex space-x-2 pt-2">
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleSafeClose}
             className="flex-1 py-2 border border-white/10 rounded-xl hover:bg-white/5 text-zinc-300 font-bold transition text-xs cursor-pointer text-center"
           >
             取消
@@ -137,7 +177,8 @@ export const PaidOrderModificationModal: React.FC<PaidOrderModificationModalProp
             📝 核准並對沖登錄流水賬
           </button>
         </div>
+        </div>
       </div>
-    </div>
+    </ModalErrorBoundary>
   );
 };

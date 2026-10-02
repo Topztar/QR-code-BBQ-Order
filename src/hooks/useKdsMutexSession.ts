@@ -2,8 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { KdsSession } from '../types';
 import { safeStorage } from '../lib/safeStorage';
 import { apiFetch } from '../lib/api';
-import { db } from '../lib/firebase';
-import { doc, onSnapshot } from 'firebase/firestore';
+
 import { isRtdbPresenceSupported, subscribeKdsPresence, claimKdsPresence, releaseKdsPresence } from '../lib/kdsPresence';
 
 export function useKdsMutexSession(
