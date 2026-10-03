@@ -410,6 +410,8 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
     }
   };
 
+  const isStaffView = activeTab !== 'customer';
+
   useEffect(() => {
     fetchData();
 
@@ -424,7 +426,7 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
     return () => {
       window.removeEventListener('online', handleOnline);
     };
-  }, [activeTab]);
+  }, [isStaffView]);
 
   useEffect(() => {
     let unsubscribeIngredients = () => {};
@@ -432,7 +434,7 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
     let unsubscribeCategories = () => {};
     let unsubscribeTables = () => {};
 
-    if (syncActive && isFirebaseSyncEnabled() && activeTab !== 'customer') {
+    if (syncActive && isFirebaseSyncEnabled() && isStaffView) {
       try {
         // Ingredients listener
         unsubscribeIngredients = onSnapshot(query(collection(db, "ingredients"), limit(150)), (snapshot) => {
@@ -466,10 +468,9 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
               // Merge tables onSnapshot with optimistic state instead of wholesale overwrite (S-05)
               return {
                 ...inc,
-                status: local.isOfflinePending ? local.status : (local.status || inc.status),
+                status: local.status || inc.status,
                 cleaningStartedAt: local.cleaningStartedAt || inc.cleaningStartedAt,
-                preservedFor: local.preservedFor || inc.preservedFor,
-                isOfflinePending: local.isOfflinePending
+                preservedFor: local.preservedFor || inc.preservedFor
               };
             });
           });
@@ -487,7 +488,7 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
       unsubscribeCategories();
       unsubscribeTables();
     };
-  }, [activeTab, syncActive]);
+  }, [isStaffView, syncActive]);
 
   // 🛡️ 效能優化：已移除每 10 秒發起 Firestore 寫入的 checkUpcomingInterval 輪詢。
   // 改由純函數 isReservationUpcoming 在前端動態計算，杜絕全體客戶端同時產生的海量寫入與 bootstrap 重讀。
@@ -826,7 +827,7 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
 
   const handleUpdateTableStatus = async (id: string, updates: Partial<Omit<TableConfig, 'id' | 'qrCodeUrl'>>) => {
     const description = `變更 🥢 ${id} 桌狀態 -> ${updates.status || '設定項目'}`;
-    setTables(prev => prev.map(t => t.id === id ? { ...t, ...updates, isOfflinePending: true } : t));
+    setTables(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
 
     if (!navigator.onLine) {
       addRequestToQueue(`/api/tables/${encodeURIComponent(id)}`, 'PUT', updates, description);

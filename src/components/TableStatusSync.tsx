@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo } from 'react';
 import { useOrderData } from '../context/OrderDataContext';
 import { useRestaurantData } from '../context/RestaurantDataContext';
+import { deriveTableStatuses } from '@sabay/shared';
 
 export function TableStatusSync() {
   const { tables, setTables, reservations } = useRestaurantData();
@@ -30,78 +31,15 @@ export function TableStatusSync() {
       const todayStr = formatter.format(now);
 
       setTables(prevTables => {
-        let hasChanges = false;
-        const newTables = prevTables.map(tb => {
-          const tblId = String(tb.id).trim();
+        const { tables: newTables } = deriveTableStatuses(
+          prevTables,
+          orders,
+          reservations,
+          nowMs,
+          todayStr
+        );
 
-          const activeOrders = orders.filter(o => 
-            String(o.tableNumber).trim() === tblId && 
-            o.status !== 'cancelled'
-          );
-
-          const unpaidActiveOrders = activeOrders.filter(o => !o.isPaid && o.status !== 'completed' && o.status !== 'paid');
-
-          if (unpaidActiveOrders.length > 0) {
-            const targetStatus: 'pending_checkout' | 'in_use' = tb.status === 'pending_checkout' ? 'pending_checkout' : 'in_use';
-            if (tb.status !== targetStatus || tb.preservedFor || tb.cleaningStartedAt) {
-              hasChanges = true;
-              return { ...tb, status: targetStatus, preservedFor: '', cleaningStartedAt: null };
-            }
-            return tb;
-          }
-
-          if (tb.status === 'in_use' || tb.status === 'pending_checkout') {
-            hasChanges = true;
-            return {
-              ...tb,
-              status: 'cleaning' as const,
-              cleaningStartedAt: tb.cleaningStartedAt || new Date().toISOString()
-            };
-          }
-
-          if (tb.status === 'cleaning') {
-            let cleaningStartMs = tb.cleaningStartedAt ? new Date(tb.cleaningStartedAt).getTime() : 0;
-            if (!cleaningStartMs || isNaN(cleaningStartMs)) {
-              const latestOrder = activeOrders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
-              if (latestOrder && latestOrder.createdAt) {
-                cleaningStartMs = new Date(latestOrder.createdAt).getTime();
-              } else {
-                cleaningStartMs = nowMs;
-              }
-            }
-
-            if (nowMs - cleaningStartMs >= 15 * 60 * 1000) {
-              const todayPendingRes = reservations.find(r => 
-                String(r.tableNumber).trim() === tblId &&
-                (r.status === 'pending' || r.status === 'upcoming' || r.status === 'confirmed') &&
-                r.date.trim() === todayStr
-              );
-
-              if (todayPendingRes) {
-                hasChanges = true;
-                return {
-                  ...tb,
-                  status: 'preserved' as const,
-                  preservedFor: todayPendingRes.customerName,
-                  cleaningStartedAt: null
-                };
-              }
-
-              hasChanges = true;
-              return {
-                ...tb,
-                status: 'available' as const,
-                preservedFor: '',
-                cleaningStartedAt: null
-              };
-            }
-
-            return tb;
-          }
-
-          return tb;
-        });
-
+        const hasChanges = JSON.stringify(prevTables) !== JSON.stringify(newTables);
         return hasChanges ? newTables : prevTables;
       });
     };

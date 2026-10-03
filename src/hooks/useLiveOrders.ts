@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+﻿import { useState, useEffect, useRef, useCallback } from 'react';
 import { Order, OrderStatus, TableConfig, Reservation } from '../types';
 import { orderCalculationService } from '@sabay/shared';
 import { apiFetch } from '../lib/api';
@@ -7,7 +7,7 @@ import { collection, onSnapshot, query, limit, where, orderBy } from 'firebase/f
 import { getOfflineQueue, addRequestToQueue, removeOrderRequestsFromQueue, processOfflineQueue } from '../lib/offlineQueue';
 import { safeStorage } from '../lib/safeStorage';
 
-// 🚀 0 雲端成本跨分頁即時廣播頻道 (Zero-Cost Local Cross-Tab Sync)
+// ?? 0 ?�端?�本跨�??�即?�廣?�頻??(Zero-Cost Local Cross-Tab Sync)
 let ordersBroadcastChannel: BroadcastChannel | null = null;
 if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
   try {
@@ -117,11 +117,11 @@ export function useLiveOrders(
 
       if (transition.status) {
         if (ord.status === transition.status) {
-          reconciled.isOfflinePending = false;
+          
           recentStatusTransitionsRef.current.delete(ord.id);
         } else {
           reconciled.status = transition.status;
-          reconciled.isOfflinePending = true;
+          
         }
       }
 
@@ -277,7 +277,7 @@ export function useLiveOrders(
             snapshot.docChanges().forEach(change => {
               if (change.type === 'added') {
                 const ord = { id: change.doc.id, ...change.doc.data() } as Order;
-                if (ord.status === 'pending' || ord.status === 'confirmed') {
+                if (ord.status === 'pending' || ord.status === 'pending_kitchen_verification' || ord.status === 'confirmed') {
                   newlyAdded.push(ord);
                 }
               }
@@ -367,14 +367,14 @@ export function useLiveOrders(
   }, [isStaffView, syncActive, reconcileOrders]);
 
   const handleUpdateOrderStatus = async (orderId: string, status: OrderStatus) => {
-    const description = `更新 🥢 訂單 #${orderId.replace('offline_temp_', '離線')} 狀態至「${status}」`;
+    const description = `?�新 ?�� 訂單 #${orderId.replace('offline_temp_', '?��?')} ?�?�至??{status}?�`;
     const isOnline = getIsOnline();
     
     broadcastOrderEvent({ type: 'ORDER_UPDATED', orderId, updates: { status } });
 
     if (!isOnline || orderId.startsWith('offline_temp_')) {
       addRequestToQueue(`/api/orders/${orderId}/status`, 'PUT', { status }, description);
-      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status, isOfflinePending: true } : o));
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status } : o));
       return;
     }
 
@@ -386,7 +386,7 @@ export function useLiveOrders(
       timestamp: Date.now()
     });
 
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status, isOfflinePending: false } : o));
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status } : o));
 
     try {
       const res = await apiFetch(`/api/orders/${orderId}/status`, {
@@ -407,7 +407,7 @@ export function useLiveOrders(
   };
 
   const handleToggleOrderItemComplete = async (orderId: string, itemId: string, isCompleted: boolean, isPrepared?: boolean) => {
-    const description = `更新 🥢 訂單 #${orderId.replace('offline_temp_', '離線')} 內單一商品狀態`;
+    const description = `?�新 ?�� 訂單 #${orderId.replace('offline_temp_', '?��?')} ?�單一?��??�?�`;
     const isOnline = getIsOnline();
     
     let nextStatus: OrderStatus | undefined;
@@ -426,7 +426,7 @@ export function useLiveOrders(
         const allCompleted = updatedItems.every(item => item.isCompleted);
         const status = allCompleted && o.status !== 'paid' ? 'completed' : (o.status === 'completed' ? 'preparing' : o.status);
         nextStatus = status;
-        return { ...o, items: updatedItems, status, isOfflinePending: !isOnline };
+        return { ...o, items: updatedItems, status };
       }
       return o;
     }));
@@ -462,12 +462,12 @@ export function useLiveOrders(
       });
       if (res.ok) {
         const updatedOrder = await res.json();
-        setOrders(prev => prev.map(o => o.id === orderId ? { ...updatedOrder, isOfflinePending: false } : o));
+        setOrders(prev => prev.map(o => o.id === orderId ? { ...updatedOrder } : o));
       } else if (res.status === 409) {
         const errData = await res.json().catch(() => ({}));
         recentStatusTransitionsRef.current.delete(orderId);
         if (errData.currentOrder) {
-          setOrders(prev => prev.map(o => o.id === orderId ? { ...errData.currentOrder, isOfflinePending: false } : o));
+          setOrders(prev => prev.map(o => o.id === orderId ? { ...errData.currentOrder } : o));
         }
       } else {
         addRequestToQueue(`/api/orders/${orderId}/items/${itemId}/complete`, 'PUT', { isCompleted, isPrepared, expectedVersion, modifier }, description);
@@ -482,9 +482,9 @@ export function useLiveOrders(
   };
 
   const handleUpdateTableNumber = async (orderId: string, tableNumber: string) => {
-    const description = `修改 🥢 訂單 #${orderId.replace('offline_temp_', '離線')} 的桌號至 ${tableNumber} 桌`;
+    const description = `修改 ?�� 訂單 #${orderId.replace('offline_temp_', '?��?')} ?��??�至 ${tableNumber} 桌`;
     const isOnline = getIsOnline();
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, tableNumber, isOfflinePending: !isOnline } : o));
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, tableNumber } : o));
     
     broadcastOrderEvent({ type: 'ORDER_UPDATED', orderId, updates: { tableNumber } });
 
@@ -517,9 +517,9 @@ export function useLiveOrders(
   };
 
   const handleUpdateQuickNotes = async (orderId: string, quickNotes: string) => {
-    const description = `更新 🥢 訂單 #${orderId.replace('offline_temp_', '離線')} 備註: "${quickNotes}"`;
+    const description = `?�新 ?�� 訂單 #${orderId.replace('offline_temp_', '?��?')} ?�註: "${quickNotes}"`;
     const isOnline = getIsOnline();
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, quickNotes, isOfflinePending: !isOnline } : o));
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, quickNotes } : o));
 
     broadcastOrderEvent({ type: 'ORDER_UPDATED', orderId, updates: { quickNotes } });
 
@@ -552,9 +552,9 @@ export function useLiveOrders(
   };
 
   const handleToggleOrderFlag = async (orderId: string, isFlagged: boolean, flagReason: string) => {
-    const description = `設定 🥢 訂單 #${orderId.replace('offline_temp_', '離線')} 關注旗幟 ${isFlagged ? 'ON' : 'OFF'}`;
+    const description = `設�? ?�� 訂單 #${orderId.replace('offline_temp_', '?��?')} ?�注?��? ${isFlagged ? 'ON' : 'OFF'}`;
     const isOnline = getIsOnline();
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, isFlagged, flagReason, isOfflinePending: !isOnline } : o));
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, isFlagged, flagReason } : o));
 
     broadcastOrderEvent({ type: 'ORDER_UPDATED', orderId, updates: { isFlagged, flagReason } });
 
@@ -588,7 +588,7 @@ export function useLiveOrders(
   };
 
   const handleUpdateOrderItems = async (orderId: string, items: any[], refundLogs?: any[]) => {
-    const description = `調整 🥢 訂單 #${orderId.replace('offline_temp_', '離線')} 品項數量`;
+    const description = `調整 ?�� 訂單 #${orderId.replace('offline_temp_', '?��?')} ?��??��?`;
     const isOnline = getIsOnline();
     let computedPricing = { subtotal: 0, serviceCharge: 0, discount: 0, total: 0 };
     setOrders(prev => prev.map(o => {
@@ -598,7 +598,7 @@ export function useLiveOrders(
         ...o,
         items,
         ...computedPricing,
-        isOfflinePending: !isOnline
+        
       };
     }));
 
@@ -649,14 +649,14 @@ export function useLiveOrders(
     },
   ) => {
     const isOnline = getIsOnline();
-    const description = `結帳 🥢 訂單 #${orderId.replace('offline_temp_', '離線')}`;
+    const description = `結帳 ?�� 訂單 #${orderId.replace('offline_temp_', '?��?')}`;
     
     const targetOrder = ordersRef.current.find(o => o.id === orderId);
     const resolvedStatus: OrderStatus = (targetOrder?.status === 'completed' || targetOrder?.status === 'cancelled')
       ? targetOrder.status
       : 'paid';
 
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, isPaid: true, status: resolvedStatus, isOfflinePending: !isOnline } : o));
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, isPaid: true, status: resolvedStatus } : o));
 
     broadcastOrderEvent({ type: 'ORDER_UPDATED', orderId, updates: { isPaid: true, status: resolvedStatus, ...(checkoutData || {}) } });
 
@@ -715,7 +715,7 @@ export function useLiveOrders(
   ): Promise<{ success: boolean }> => {
     if (!orderIds || orderIds.length === 0) return { success: false };
     const isOnline = getIsOnline();
-    const description = `批次結帳 🥢 ${orderIds.length} 筆訂單`;
+    const description = `?�次結帳 ?�� ${orderIds.length} 筆�??�`;
 
     setOrders(prev => prev.map(o => {
       if (orderIds.includes(o.id)) {
@@ -724,7 +724,7 @@ export function useLiveOrders(
           ...o,
           isPaid: true,
           status: resolvedStatus,
-          isOfflinePending: !isOnline
+          
         };
       }
       return o;
@@ -803,7 +803,7 @@ export function useLiveOrders(
   };
 
   const handleDeleteOrder = async (orderId: string) => {
-    const description = `刪除 🥢 訂單 #${orderId.replace('offline_temp_', '離線')}`;
+    const description = `?�除 ?�� 訂單 #${orderId.replace('offline_temp_', '?��?')}`;
     const isOnline = getIsOnline();
     deletedOrderIdsRef.current.add(orderId);
     setOrders(prev => prev.filter(o => o.id !== orderId));

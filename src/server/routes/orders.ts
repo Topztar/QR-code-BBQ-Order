@@ -259,7 +259,7 @@ export function registerOrdersRoutes(app: express.Express, ctx: OrderRouteContex
       discount: promoDiscount,
       serviceCharge,
       total,
-      status: 'pending',
+      status: (req.body.status && VALID_ORDER_STATUSES.includes(req.body.status)) ? req.body.status : 'pending',
       createdAt: new Date().toISOString(),
       customerName: customerName || '現場貴賓',
       customerAvatar: customerAvatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=120&h=120&q=80',
@@ -340,7 +340,7 @@ export function registerOrdersRoutes(app: express.Express, ctx: OrderRouteContex
     const livePrinterIp = getLivePrinterIp();
 
     // 🛡️ 狀態值白名單驗證，防止任意字串注入
-    const VALID_ORDER_STATUSES = ['pending', 'confirmed', 'preparing', 'delivering', 'paid', 'completed', 'cancelled'];
+    const VALID_ORDER_STATUSES = ['pending', 'confirmed', 'pending_kitchen_verification', 'preparing', 'delivering', 'paid', 'completed', 'cancelled'];
     if (!status || !VALID_ORDER_STATUSES.includes(status)) {
       return res.status(400).json({ error: `無效的訂單狀態值: ${status}` });
     }
@@ -356,7 +356,7 @@ export function registerOrdersRoutes(app: express.Express, ctx: OrderRouteContex
     }
 
     // Trigger printing when confirmed by backend/staff (transitions from pending or confirmed to preparing)
-    if (status === 'preparing' && (order.status === 'pending' || order.status === 'confirmed')) {
+    if (status === 'preparing' && (order.status === 'pending' || order.status === 'pending_kitchen_verification' || order.status === 'confirmed')) {
       const kitchenDetails = order.items.map(it => {
         const spec = [
           it.customization?.spiciness === 0 ? '不辣' : (it.customization?.spiciness === 1 ? '小辣' : (it.customization?.spiciness === 2 ? '中辣' : '泰辣(+10)')),
@@ -1008,6 +1008,11 @@ ${customerDetails}
     const netSubtotal = Math.max(0, subtotal - promoDiscount);
     order.serviceCharge = (order.paymentMethod === 'credit' || order.paymentMethod === 'twqr') ? Math.round(subtotal * 0.1) : 0;
     order.total = netSubtotal + order.serviceCharge;
+
+    // Phase 3: Force kitchen verification when staff modifies items
+    if (['pending', 'confirmed', 'preparing'].includes(order.status)) {
+      order.status = 'pending_kitchen_verification';
+    }
 
     order.version = currentVersion + 1;
     (order as any).updatedAt = new Date().toISOString();

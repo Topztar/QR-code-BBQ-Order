@@ -2,8 +2,10 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { KdsSession } from '../types';
 import { safeStorage } from '../lib/safeStorage';
 import { apiFetch } from '../lib/api';
+import { db, isFirebaseSyncEnabled } from '../lib/firebase';
+import { doc, onSnapshot } from 'firebase/firestore';
 
-import { isRtdbPresenceSupported, subscribeKdsPresence, claimKdsPresence, releaseKdsPresence } from '../lib/kdsPresence';
+import { isRtdbPresenceSupported, claimKdsPresence, releaseKdsPresence } from '../lib/kdsPresence';
 
 export function useKdsMutexSession(
   activeTab: string,
@@ -33,40 +35,36 @@ export function useKdsMutexSession(
 
   useEffect(() => {
     if (activeTab === 'customer') return;
-
-    let rtdbUnsubscribe: any = null;
+    let unsubscribeFirestore = () => {};
     let isCancelled = false;
 
-    isRtdbPresenceSupported().then(supported => {
-      if (isCancelled) return;
-      if (supported) {
-        subscribeKdsPresence((presenceSession) => {
-          if (presenceSession) {
-            const formatted: KdsSession = {
-              activeKitchenDeviceId: presenceSession.activeKitchenDeviceId,
-              claimedAt: presenceSession.claimedAt,
-              lastHeartbeat: presenceSession.updatedAt,
-              leaseExpiresAt: null
-            };
-            setKdsSession(formatted);
-            if (currentRoleRef.current === 'kitchen' && formatted.activeKitchenDeviceId && formatted.activeKitchenDeviceId !== currentDeviceId) {
-              setIsKitchenPreempted(true);
-            }
-          } else {
-            setKdsSession(null);
+    if (isFirebaseSyncEnabled()) {
+      unsubscribeFirestore = onSnapshot(doc(db, 'kds_presence', 'kitchen'), (snapshot) => {
+        if (isCancelled) return;
+        if (snapshot.exists()) {
+          const data = snapshot.data();
+          const formatted: KdsSession = {
+            activeKitchenDeviceId: data.activeKitchenDeviceId || null,
+            claimedAt: data.claimedAt || null,
+            lastHeartbeat: data.lastHeartbeat || null,
+            leaseExpiresAt: data.leaseExpiresAt || null
+          };
+          setKdsSession(formatted);
+          if (currentRoleRef.current === 'kitchen' && formatted.activeKitchenDeviceId && formatted.activeKitchenDeviceId !== currentDeviceId) {
+            setIsKitchenPreempted(true);
           }
-        }).then(unsub => {
-          if (isCancelled) unsub();
-          else rtdbUnsubscribe = unsub;
-        });
-      }
-    });
+        } else {
+          setKdsSession(null);
+        }
+      }, (error) => {
+        console.warn('[KDS Presence] Firestore subscription error:', error);
+      });
+    }
 
     return () => {
       isCancelled = true;
-      if (rtdbUnsubscribe) rtdbUnsubscribe();
+      unsubscribeFirestore();
     };
-
   }, [syncActive, currentDeviceId, activeTab]);
 
   useEffect(() => {

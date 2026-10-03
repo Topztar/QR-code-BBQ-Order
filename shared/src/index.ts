@@ -183,3 +183,103 @@ export const PRINTER_CONSTANTS = {
   CONNECTION_TIMEOUT_MS: 3000
 };
 
+export function deriveTableStatuses(
+  tables: any[],
+  orders: any[],
+  reservations: any[],
+  nowMs: number,
+  todayStr: string
+): { tables: any[]; reservations: any[] } {
+  const now = new Date(nowMs);
+  
+  const newTables = tables.map(tb => ({ ...tb }));
+  const newReservations = reservations.map(r => ({ ...r }));
+
+  newReservations.forEach(res => {
+    if (res.status === 'confirmed') {
+      const [year, month, day] = res.date.split('-').map(Number);
+      const [hour, minute] = res.time.split(':').map(Number);
+      if (!isNaN(year) && !isNaN(month) && !isNaN(day) && !isNaN(hour) && !isNaN(minute)) {
+        const resDateTime = new Date(year, month - 1, day, hour, minute);
+        const diffMinutes = (resDateTime.getTime() - now.getTime()) / (1000 * 60);
+        if (diffMinutes > -120 && diffMinutes <= 60) {
+          res.status = 'upcoming';
+        }
+      }
+    }
+  });
+
+  newTables.forEach(tb => {
+    const tblId = tb.id.toString().trim();
+    
+    // Find active orders for this table (not cancelled)
+    const activeOrders = orders.filter(o => 
+      String(o.tableNumber).trim() === tblId && 
+      o.status !== 'cancelled'
+    );
+
+    const unpaidActiveOrders = activeOrders.filter(o => !o.isPaid && o.status !== 'completed' && o.status !== 'paid');
+
+    if (unpaidActiveOrders.length > 0) {
+      if (tb.status !== 'pending_checkout') {
+        tb.status = 'in_use';
+        tb.preservedFor = '';
+        tb.cleaningStartedAt = null;
+      }
+      return;
+    }
+
+    // If table was in_use or pending_checkout but has no unpaid active orders left
+    if (tb.status === 'in_use' || tb.status === 'pending_checkout') {
+      tb.status = 'cleaning';
+      if (!tb.cleaningStartedAt) {
+        tb.cleaningStartedAt = new Date(nowMs).toISOString();
+      }
+      return;
+    }
+
+    // 15-min cleaning buffer check: auto-switch to available if no new orders received
+    if (tb.status === 'cleaning') {
+      let cleaningStartMs = tb.cleaningStartedAt ? new Date(tb.cleaningStartedAt).getTime() : 0;
+      
+      // If cleaningStartedAt is missing, check latest paid order timestamp as fallback
+      if (!cleaningStartMs || isNaN(cleaningStartMs)) {
+        const latestOrder = activeOrders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+        if (latestOrder && latestOrder.createdAt) {
+          cleaningStartMs = new Date(latestOrder.createdAt).getTime();
+        } else {
+          cleaningStartMs = nowMs;
+          tb.cleaningStartedAt = new Date(cleaningStartMs).toISOString();
+        }
+      }
+
+      // If 15 minutes (15 * 60 * 1000 ms) have passed without new unpaid orders
+      if (nowMs - cleaningStartMs >= 15 * 60 * 1000) {
+        tb.status = 'available';
+        tb.cleaningStartedAt = null;
+      } else {
+        // Still within the 15-minute cleaning buffer
+        return;
+      }
+    }
+
+    // Find pending or upcoming reservation for THIS TABLE for TODAY
+    const todayPendingRes = newReservations.find(r => 
+      String(r.tableNumber).trim() === tblId &&
+      (r.status === 'pending' || r.status === 'upcoming' || r.status === 'confirmed') &&
+      r.date.trim() === todayStr
+    );
+
+    if (todayPendingRes) {
+      tb.status = 'preserved';
+      tb.preservedFor = `${todayPendingRes.customerName} (${todayPendingRes.time})`;
+    } else {
+      if (tb.status === 'preserved') {
+        tb.status = 'available';
+        tb.preservedFor = '';
+      }
+    }
+  });
+
+  return { tables: newTables, reservations: newReservations };
+}

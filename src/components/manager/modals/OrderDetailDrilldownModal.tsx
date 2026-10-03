@@ -237,6 +237,7 @@ export const OrderDetailDrilldownModal: React.FC<OrderDetailDrilldownModalProps>
                     {[
                       { status: 'pending', label: '⏳ 待處理 Pending', color: 'hover:bg-amber-500/20 text-amber-400 border-amber-500/30' },
                       { status: 'confirmed', label: '✅ 已確認 Confirmed', color: 'hover:bg-sky-500/20 text-sky-400 border-sky-500/30' },
+                      { status: 'pending_kitchen_verification', label: '👀 待廚房確認接收 Awaiting Kitchen', color: 'hover:bg-amber-500/20 text-amber-300 border-amber-500/30' },
                       { status: 'preparing', label: '🍳 準備中 Preparing', color: 'hover:bg-blue-500/20 text-blue-400 border-blue-500/30' },
                       { status: 'delivering', label: '🚀 出餐上桌中 Delivering', color: 'hover:bg-violet-500/20 text-violet-400 border-violet-500/30' },
                       { status: 'paid', label: '💳 已結帳 Paid', color: 'hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },

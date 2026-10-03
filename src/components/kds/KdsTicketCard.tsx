@@ -222,7 +222,7 @@ export const KdsTicketCard: React.FC<KdsTicketCardProps> = React.memo(({
               ? 'border-red-500 ring-2 ring-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.5)]'
               : lateCheck.isLate
                 ? 'animate-red-breathing-glow border-red-500 ring-2 ring-red-500/35 shadow-[0_0_15px_rgba(239,68,68,0.35)] font-bold'
-                : order.status === 'pending'
+                : order.status === 'pending' || order.status === 'pending_kitchen_verification'
                   ? 'border-amber-400 ring-2 ring-amber-400/60 animate-pulse bg-gradient-to-b from-amber-950/40 via-[#161616] to-[#161616] shadow-[0_0_25px_rgba(245,158,11,0.45)] font-bold'
                   : order.status === 'confirmed'
                     ? 'border-sky-400 ring-2 ring-sky-400/50 bg-gradient-to-b from-sky-950/30 via-[#161616] to-[#161616] shadow-[0_0_20px_rgba(56,189,248,0.35)] font-bold'
@@ -493,10 +493,10 @@ ${specLines}
             <div className="text-center w-full">
               <span
                 className={`text-[9px] font-bold tracking-wider block font-sans uppercase ${
-                  order.status === 'pending' ? 'text-[#E5B453]' : 'text-sky-450'
+                  ['pending', 'pending_kitchen_verification'].includes(order.status) ? 'text-[#E5B453]' : 'text-sky-450'
                 }`}
               >
-                {order.status === 'pending' ? t('pendingWaitState') : t('prepState')}
+                {['pending', 'pending_kitchen_verification'].includes(order.status) ? t('pendingWaitState') : t('prepState')}
               </span>
               <span
                 className={`inline-flex items-center gap-1 text-[11px] font-black font-mono px-1.5 py-0.5 rounded border mt-0.5 ${elapsed.style}`}
@@ -504,7 +504,7 @@ ${specLines}
                 <Clock size={10} className={elapsed.mins > 30 ? 'animate-pulse' : ''} />
                 <span>{elapsed.text}</span>
               </span>
-              {order.status === 'pending' && elapsed.mins > 30 && (
+              {['pending', 'pending_kitchen_verification'].includes(order.status) && elapsed.mins > 30 && (
                 <div className="text-[8px] text-red-500 font-extrabold mt-0.5 animate-pulse uppercase tracking-tight">
                   ⚠️ 嚴重超時 Overdue
                 </div>
@@ -925,7 +925,7 @@ ${specLines}
               </div>
 
               <div className="flex space-x-1.5">
-                {order.status === 'pending' && (
+                {['pending', 'pending_kitchen_verification'].includes(order.status) && (
                   <>
                     <button
                       id={`kds-accept-btn-${order.id}`}

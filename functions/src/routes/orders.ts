@@ -426,7 +426,7 @@ put('/orders/:id/status', requireStaffAuth, async (req, res) => {
   const id = req.params.id as string;
   const { status } = req.body;
   
-  const allowedStatuses = ['pending', 'confirmed', 'preparing', 'delivering', 'completed', 'cancelled', 'paid'];
+  const allowedStatuses = ['pending', 'confirmed', 'pending_kitchen_verification', 'preparing', 'delivering', 'completed', 'cancelled', 'paid'];
   if (!allowedStatuses.includes(status)) {
     return res.status(400).json({ error: '無效的訂單狀態' });
   }
@@ -524,12 +524,19 @@ put('/orders/:id/items', requireStaffAuth, async (req, res) => {
         ...orderData,
         items
       });
+      let newStatus = orderData.status;
+      // Phase 3: Force kitchen verification when staff modifies items
+      if (['pending', 'confirmed', 'preparing'].includes(orderData.status)) {
+        newStatus = 'pending_kitchen_verification';
+      }
+
       updatePayload = {
         items,
         subtotal: pricing.subtotal,
         serviceCharge: pricing.serviceCharge,
         discount: pricing.discount,
         total: pricing.total,
+        status: newStatus,
         updatedAt: new Date().toISOString(),
         version: currentVersion + 1
       };
@@ -893,7 +900,7 @@ post('/kds/claim-kitchen', requireStaffAuth, async (req, res) => {
     return res.status(400).json({ error: '缺少有效的設備識別碼 (deviceId is required)' });
   }
 
-  const kdsSessionRef = db.collection('settings').doc('kds_session');
+  const kdsSessionRef = db.collection('kds_presence').doc('kitchen');
   const LEASE_DURATION_MS = 45 * 1000; // 45 秒租約過期門檻
 
   try {
@@ -951,7 +958,7 @@ post('/kds/heartbeat', requireStaffAuth, async (req, res) => {
     return res.status(400).json({ error: '缺少有效的設備識別碼 (deviceId is required)' });
   }
 
-  const kdsSessionRef = db.collection('settings').doc('kds_session');
+  const kdsSessionRef = db.collection('kds_presence').doc('kitchen');
   const LEASE_DURATION_MS = 45 * 1000;
 
   try {
@@ -1000,7 +1007,7 @@ post('/kds/release-kitchen', requireStaffAuth, async (req, res) => {
     return res.status(400).json({ error: '缺少有效的設備識別碼 (deviceId is required)' });
   }
 
-  const kdsSessionRef = db.collection('settings').doc('kds_session');
+  const kdsSessionRef = db.collection('kds_presence').doc('kitchen');
 
   try {
     await db.runTransaction(async (t) => {
@@ -1027,42 +1034,14 @@ post('/kds/release-kitchen', requireStaffAuth, async (req, res) => {
 // 24. Delete Order
 
 del('/orders/:id', requireStaffAuth, async (req, res) => {
-  const id = req.params.id as string;
-  try {
-    await db.collection('orders').doc(id).delete();
-    res.json({ success: true });
-  } catch (error) {
-    res.status(500).send(error);
-  }
+  // Phase 2 Hardening: Block physical deletion of orders from standard staff API
+  return res.status(403).json({ error: '安全限制：禁止實體刪除訂單，請使用作廢/軟刪除或透過 Admin SDK 處理' });
 });
 
 // 24.1. Bulk Delete Historical Orders (Admin SDK batch deletion)
 post('/orders/bulk-delete', requireStaffAuth, async (req, res) => {
-  const { thresholdDate } = req.body;
-  if (!thresholdDate || typeof thresholdDate !== 'string') {
-    return res.status(400).json({ error: '無效的截止日期格式 (thresholdDate is required)' });
-  }
-  try {
-    const snapshot = await db.collection('orders')
-      .where('createdAt', '<', thresholdDate)
-      .limit(450)
-      .get();
-
-    if (snapshot.empty) {
-      return res.json({ success: true, deletedCount: 0, message: '沒有符合條件的歷史訂單' });
-    }
-
-    const batch = db.batch();
-    snapshot.docs.forEach((d) => {
-      batch.delete(d.ref);
-    });
-
-    await batch.commit();
-    res.json({ success: true, deletedCount: snapshot.size });
-  } catch (error) {
-    console.error('[bulk-delete orders error]', error);
-    res.status(500).json({ error: '批量刪除訂單失敗' });
-  }
+  // Phase 2 Hardening: Block physical deletion of orders from standard staff API
+  return res.status(403).json({ error: '安全限制：禁止實體刪除訂單，請使用作廢/軟刪除或透過 Admin SDK 處理' });
 });
 
 // --- Print Logs API ---

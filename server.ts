@@ -1,4 +1,4 @@
-import { PRINTER_CONSTANTS } from '@sabay/shared';
+import { PRINTER_CONSTANTS, orderCalculationService, deriveTableStatuses } from '@sabay/shared';
 // ============================================================================
 // ⚠️ ARCHITECTURE DIRECTIVE: LOCAL DEVELOPMENT / MOCK SERVER ONLY
 // ============================================================================
@@ -35,7 +35,7 @@ import {
   printCustomerReceipt
 } from './hardware/printerDriver';
 import { sendReservationNotifications, sendTestNotification } from './functions/src/services/notification';
-import { orderCalculationService } from '@sabay/shared';
+
 import { processAndSaveImage } from './src/lib/server/imageProcessing';
 import { getTaiwanDateString, getTaiwanTimeParts } from './src/utils/dateUtils';
 import { validateImageUploadPayload } from './functions/src/validators';
@@ -543,98 +543,37 @@ function syncTableStatusesWithTodayReservations() {
   const todayStr = getTaiwanDateString();
   if (!liveTables || liveTables.length === 0) return;
 
-  // Run the upcoming status check inline to ensure live updates on sync calls for CONFIRMED reservations
-  const now = new Date();
-  liveReservations.forEach(res => {
-    if (res.status === 'confirmed') {
-      const [year, month, day] = res.date.split('-').map(Number);
-      const [hour, minute] = res.time.split(':').map(Number);
-      if (!isNaN(year) && !isNaN(month) && !isNaN(day) && !isNaN(hour) && !isNaN(minute)) {
-        const resDateTime = new Date(year, month - 1, day, hour, minute);
-        const diffMinutes = (resDateTime.getTime() - now.getTime()) / (1000 * 60);
-        if (diffMinutes > -120 && diffMinutes <= 60) {
-          res.status = 'upcoming';
-          console.log(`[Sync Auto-Check] Automatically marked confirmed reservation ${res.id} (${res.customerName}) as upcoming.`);
-        }
+  const nowMs = Date.now();
+  const { tables: updatedTables, reservations: updatedReservations } = deriveTableStatuses(
+    liveTables,
+    liveOrders,
+    liveReservations,
+    nowMs,
+    todayStr
+  );
+
+  // Update liveTables
+  updatedTables.forEach(updatedTb => {
+    const origTb = liveTables.find(t => t.id === updatedTb.id);
+    if (origTb) {
+      const statusChangedToAvailable = origTb.status !== 'available' && updatedTb.status === 'available';
+      Object.assign(origTb, updatedTb);
+      
+      if (statusChangedToAvailable && tableCheckoutTimeouts.has(origTb.id.toString().trim())) {
+        clearTimeout(tableCheckoutTimeouts.get(origTb.id.toString().trim())!);
+        tableCheckoutTimeouts.delete(origTb.id.toString().trim());
       }
     }
   });
 
-  liveTables.forEach(tb => {
-    const tblId = tb.id.toString().trim();
-    
-    // Find active orders for this table (not cancelled)
-    const activeOrders = liveOrders.filter(o => 
-      String(o.tableNumber).trim() === tblId && 
-      o.status !== 'cancelled'
-    );
-
-    const unpaidActiveOrders = activeOrders.filter(o => !o.isPaid && o.status !== 'completed' && o.status !== 'paid');
-
-    if (unpaidActiveOrders.length > 0) {
-      if (tb.status !== 'pending_checkout') {
-        tb.status = 'in_use';
-        tb.preservedFor = '';
-        tb.cleaningStartedAt = null;
+  // Update liveReservations
+  updatedReservations.forEach(updatedRes => {
+    const origRes = liveReservations.find(r => r.id === updatedRes.id);
+    if (origRes && origRes.status !== updatedRes.status) {
+      if (updatedRes.status === 'upcoming' && origRes.status === 'confirmed') {
+        console.log(`[Sync Auto-Check] Automatically marked confirmed reservation ${origRes.id} (${origRes.customerName}) as upcoming.`);
       }
-      return;
-    }
-
-    // If table was in_use or pending_checkout but has no unpaid active orders left
-    if (tb.status === 'in_use' || tb.status === 'pending_checkout') {
-      tb.status = 'cleaning';
-      if (!tb.cleaningStartedAt) {
-        tb.cleaningStartedAt = new Date().toISOString();
-      }
-      return;
-    }
-
-    // 15-min cleaning buffer check: auto-switch to available if no new orders received
-    if (tb.status === 'cleaning') {
-      const nowMs = Date.now();
-      let cleaningStartMs = tb.cleaningStartedAt ? new Date(tb.cleaningStartedAt).getTime() : 0;
-      
-      // If cleaningStartedAt is missing, check latest paid order timestamp as fallback
-      if (!cleaningStartMs || isNaN(cleaningStartMs)) {
-        const latestOrder = activeOrders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
-        if (latestOrder && latestOrder.createdAt) {
-          cleaningStartMs = new Date(latestOrder.createdAt).getTime();
-        } else {
-          cleaningStartMs = nowMs;
-          tb.cleaningStartedAt = new Date(cleaningStartMs).toISOString();
-        }
-      }
-
-      // If 15 minutes (15 * 60 * 1000 ms) have passed without new unpaid orders
-      if (nowMs - cleaningStartMs >= 15 * 60 * 1000) {
-        console.log(`[Table Auto-Release] Table #${tblId} 15-min cleaning buffer completed. Auto-switching to available.`);
-        tb.status = 'available';
-        tb.cleaningStartedAt = null;
-        if (tableCheckoutTimeouts.has(tblId)) {
-          clearTimeout(tableCheckoutTimeouts.get(tblId)!);
-          tableCheckoutTimeouts.delete(tblId);
-        }
-      } else {
-        // Still within the 15-minute cleaning buffer
-        return;
-      }
-    }
-
-    // Find pending or upcoming reservation for THIS TABLE for TODAY
-    const todayPendingRes = liveReservations.find(r => 
-      String(r.tableNumber).trim() === tblId &&
-      (r.status === 'pending' || r.status === 'upcoming' || r.status === 'confirmed') &&
-      r.date.trim() === todayStr
-    );
-
-    if (todayPendingRes) {
-      tb.status = 'preserved';
-      tb.preservedFor = `${todayPendingRes.customerName} (${todayPendingRes.time})`;
-    } else {
-      if (tb.status === 'preserved') {
-        tb.status = 'available';
-        tb.preservedFor = '';
-      }
+      Object.assign(origRes, updatedRes);
     }
   });
 }

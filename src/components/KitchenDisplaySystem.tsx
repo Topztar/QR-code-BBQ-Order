@@ -357,8 +357,8 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
       if (isUnseen) {
         seenOrderIdsRef.current.add(order.id);
 
-        // 僅當訂單時間超越歷史水位線，且狀態為 pending/confirmed 時，才判定為真正的新單
-        if ((order.status === 'pending' || order.status === 'confirmed') && orderTime > currentWatermark) {
+        // 僅當訂單時間超越歷史水位線，且狀態為 pending/confirmed/pending_kitchen_verification 時，才判定為真正的新單
+        if ((order.status === 'pending' || order.status === 'confirmed' || order.status === 'pending_kitchen_verification') && orderTime > currentWatermark) {
           newPendingOrders.push(order);
           if (orderTime > updatedWatermark) {
             updatedWatermark = orderTime;
@@ -389,7 +389,7 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
   useEffect(() => {
     // Only check active orders
     const lateCount = orders.filter((o) => {
-      if (o.status !== 'pending' && o.status !== 'preparing') return false;
+      if (!['pending', 'pending_kitchen_verification', 'preparing'].includes(o.status)) return false;
       const waitMins = (Date.now() - new Date(o.createdAt).getTime()) / 60000;
       return waitMins >= 30; // 30 mins threshold
     }).length;
@@ -654,7 +654,7 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
 
   const getTableOccupancyElapsedTime = useCallback((tableNumber: string) => {
     const tableOrders = deferredOrders.filter(
-      (o) => o.tableNumber === tableNumber && (o.status === 'pending' || o.status === 'preparing')
+      (o) => o.tableNumber === tableNumber && (o.status === 'pending' || o.status === 'pending_kitchen_verification' || o.status === 'preparing')
     );
     if (tableOrders.length === 0) return null;
 
@@ -695,7 +695,7 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
     return deferredOrders
       .filter((o) => {
         if (filterStatus === 'active') {
-          return o.status === 'pending' || o.status === 'confirmed' || o.status === 'preparing' || o.status === 'delivering' || o.status === 'paid';
+          return o.status === 'pending' || o.status === 'confirmed' || o.status === 'pending_kitchen_verification' || o.status === 'preparing' || o.status === 'delivering' || o.status === 'paid';
         }
         if (hideOlderCompleted && (o.status === 'completed' || o.status === 'cancelled')) {
           const diffMins = (Date.now() - new Date(o.createdAt).getTime()) / 60000;

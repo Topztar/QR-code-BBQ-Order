@@ -61,7 +61,7 @@ export interface OrderItem {
   isCompleted?: boolean;
 }
 
-export type OrderStatus = 'pending' | 'confirmed' | 'preparing' | 'delivering' | 'paid' | 'completed' | 'cancelled';
+export type OrderStatus = 'pending' | 'confirmed' | 'pending_kitchen_verification' | 'preparing' | 'delivering' | 'paid' | 'completed' | 'cancelled';
 
 export type PaymentMethod = 'cash' | 'credit' | 'member' | 'twqr' | string;
 
@@ -114,7 +114,7 @@ export interface Order {
   };
   rating?: number;
   feedback?: string;
-  isOfflinePending?: boolean;
+
   clientOrderId?: string;
   reservationNo?: string;
   reservationDate?: string;
@@ -171,7 +171,7 @@ export interface TableConfig {
   mergedWith?: string;
   positionX?: number;
   positionY?: number;
-  isOfflinePending?: boolean;
+
   maxCapacity?: number;
   cleaningStartedAt?: string | null;
 }

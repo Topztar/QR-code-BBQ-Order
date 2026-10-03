@@ -74,7 +74,7 @@ export function useOrderSubmit(
       tableNumber: orderData.tableNumber,
       items: orderData.items,
       paymentMethod: orderData.paymentMethod,
-      status: 'pending',
+      status: orderPayload.source === 'pos' ? 'pending_kitchen_verification' : 'pending',
       createdAt: new Date().toISOString(),
       subtotal: pricing.subtotal,
       serviceCharge: pricing.serviceCharge,
@@ -90,7 +90,6 @@ export function useOrderSubmit(
       reservationTime: orderPayload.reservationTime,
       customerPhone: orderPayload.customerPhone,
       takeoutInfo: orderPayload.takeoutInfo,
-      isOfflinePending: false,
       source: orderPayload.source || 'direct',
       utm_medium: orderPayload.utm_medium,
       notificationSent: false,
@@ -103,7 +102,7 @@ export function useOrderSubmit(
       console.log('[Sabay Offline] Intercepting order submission offline...');
       addRequestToQueue('/api/orders', 'POST', orderPayload, description);
       
-      const offlineOrder = { ...baseOrder, isOfflinePending: true };
+      const offlineOrder = { ...baseOrder };
       setOrders((prev) => [offlineOrder, ...prev]);
       addLocalOrderId(tempId);
       activeOrderSubmissionsRef.current.delete(clientOrderId);

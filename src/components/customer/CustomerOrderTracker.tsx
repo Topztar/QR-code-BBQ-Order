@@ -7,6 +7,7 @@ import { orderCalculationService } from '@sabay/shared';
 
 const statusColors: Record<string, string> = {
   pending: 'text-amber-400 border-amber-400/20 bg-amber-400/5',
+  pending_kitchen_verification: 'text-amber-300 border-amber-300/20 bg-amber-300/5',
   confirmed: 'text-sky-400 border-sky-400/20 bg-sky-400/5',
   preparing: 'text-blue-400 border-blue-400/20 bg-blue-400/5',
   delivering: 'text-violet-400 border-violet-400/20 bg-violet-400/5',
@@ -22,6 +23,14 @@ const statusLabels: Record<string, Record<string, string>> = {
     ja: 'Pending',
     th: 'Pending',
     vi: '⏳ Đang chờ xếp món',
+  },
+  pending_kitchen_verification: {
+    zh: '👀 廚房確認接收中',
+    en: 'Awaiting Kitchen',
+    ko: 'Awaiting Kitchen',
+    ja: 'Awaiting Kitchen',
+    th: 'Awaiting Kitchen',
+    vi: '👀 Chờ xác nhận bếp',
   },
   confirmed: {
     zh: '✅ 店家已確認接單',

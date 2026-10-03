@@ -1,74 +1,102 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // 1. menu (菜單) - 前端公開唯讀，修改一律經由後端 API 驗證
+
+    // ==========================================
+    // 🛡️ 輔助鑑權函數 (Authentication Helpers)
+    // ==========================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // 驗證店內授權人員：相容 Cloud Functions 發放之 staff 宣告與標準 admin 宣告
+    function isStaffOrAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.staff == true || 
+        request.auth.token.admin == true
+      );
+    }
+
+    // ==========================================
+    // 1. 公開唯讀資料 (Public Read-Only)
+    // 菜單、分類、桌況允許前端顧客即時同步，寫入嚴格封鎖
+    // ==========================================
     match /menu/{id} {
       allow read: if true;
       allow write: if false;
     }
 
-    // 2. categories (分類) - 前端唯讀
     match /categories/{id} {
       allow read: if true;
       allow write: if false;
     }
 
-    // 3. ingredients (原料/庫存) - 前端唯讀，庫存扣減由後端安全計算
-    match /ingredients/{id} {
-      allow read: if request.auth != null;
-      allow write: if false;
-    }
-
-    // 4. tables (桌位狀態) - 前端公開唯讀
     match /tables/{id} {
       allow read: if true;
       allow write: if false;
     }
 
-    // 5. orders (訂單) - 前端唯讀即時監聽（需已驗證身分），建立與結帳一律由後端原子事務執行
+    // ==========================================
+    // 2. 員工專用資料 (Staff-Only Realtime Sync)
+    // 訂單與庫存：僅限持有 staff/admin 自訂憑證的員工監聽
+    // 寫入一律由後端原子事務處理，徹底防範價格與狀態竄改
+    // ==========================================
     match /orders/{id} {
-      allow read: if request.auth != null;
+      allow read: if isStaffOrAdmin();
       allow write: if false;
     }
 
-    // 6. reservations (預約) - 嚴格保護客戶個資與聯絡電話，僅限後端 Cloud Functions 驗證與存取
-    match /reservations/{id} {
-      allow read, write: if false;
+    match /ingredients/{id} {
+      allow read: if isStaffOrAdmin();
+      allow write: if false;
     }
 
-    // 7. checkouts (收銀結帳紀錄) - 嚴格禁止前端存取，僅限 Cloud Functions Admin SDK
-    match /checkouts/{id} {
-      allow read, write: if false;
+    match /kds_presence/{id} {
+      allow read: if isStaffOrAdmin();
+      allow write: if false;
     }
 
-    // 8. settings (公開營運設定) - 前端唯讀，防止篡改全店營運與系統設定
+    // ==========================================
+    // 3. 後端專用資料 (Backend-Only Collections)
+    // 前端一律禁止存取，完全經由 Cloud Functions 驗證與 Admin SDK 操作
+    // ==========================================
+    // 營運設定（內含 liveStaffPin 明文及印表機 IP）
     match /settings/{id} {
-      allow read: if true;
-      allow write: if false;
+      allow read, write: if false;
     }
 
-    // 9. secrets & security (私密敏感設定、員工 PIN 雜湊、金鑰) - 嚴格封鎖前端讀寫
+    // 系統憑證、工作階段與密鑰雜湊
     match /secrets/{id} {
       allow read, write: if false;
     }
 
-    // 10. _ratelimits (分散式速率限制內部記錄) - 嚴格封鎖前端讀寫
+    // 顧客預約（防範外部 DoS 灌票與個資窺探）
+    match /reservations/{id} {
+      allow read, write: if false;
+    }
+
+    // 收銀結帳紀錄
+    match /checkouts/{id} {
+      allow read, write: if false;
+    }
+
+    // 分散式限流與冪等性記錄
     match /_ratelimits/{id} {
       allow read, write: if false;
     }
 
-    // 10.1 _idempotency_keys (分散式冪等性鍵內部記錄) - 嚴格封鎖前端讀寫，僅限 Cloud Functions 事務操作
     match /_idempotency_keys/{id} {
       allow read, write: if false;
     }
 
-    // 11. test (測試連線用 - 生產環境停用)
+    // 測試端點關閉
     match /test/{id} {
       allow read, write: if false;
     }
 
-    // 12. 全域預設安全防護：未明確定義規則之所有路徑，一律嚴格拒絕存取
+    // ==========================================
+    // 4. 全域預設安全防線 (Global Default Deny)
+    // ==========================================
     match /{document=**} {
       allow read, write: if false;
     }
