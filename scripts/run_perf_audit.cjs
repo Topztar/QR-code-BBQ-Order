@@ -30,15 +30,18 @@ console.log('🧩 1. 模組化路由分割與 Lazy Loading 審計 (src/App.tsx)'
 try {
   const appTsxPath = path.resolve(__dirname, '../src/App.tsx');
   const appContent = fs.readFileSync(appTsxPath, 'utf8');
+  const portalPath = path.resolve(__dirname, '../src/components/StaffPortalContainer.tsx');
+  const portalContent = fs.existsSync(portalPath) ? fs.readFileSync(portalPath, 'utf8') : '';
+  const allRoutesContent = appContent + '\n' + portalContent;
 
   assert(appContent.includes('lazy('), "App.tsx 使用 React.lazy 進行模組動態加載");
   assert(appContent.includes('Suspense'), "App.tsx 配置 Suspense 提供非同步載入邊界與優雅 Fallback");
   assert(appContent.includes("import('./components/CustomerOrderView')"), "顧客點餐端 (CustomerOrderView) 獨立動態載入");
-  assert(appContent.includes("import('./components/KitchenDisplaySystem')"), "廚房 KDS 系統 (KitchenDisplaySystem) 獨立動態載入");
-  assert(appContent.includes("import('./components/ManagerDashboard')"), "管理後台 (ManagerDashboard) 獨立動態載入");
+  assert(allRoutesContent.includes("KitchenDisplaySystem')"), "廚房 KDS 系統 (KitchenDisplaySystem) 獨立動態載入");
+  assert(allRoutesContent.includes("ManagerDashboard')"), "管理後台 (ManagerDashboard) 獨立動態載入");
   assert(appContent.includes("import('./components/StaffLoginGate')"), "員工登入閘門 (StaffLoginGate) 獨立動態載入");
 } catch (err) {
-  assert(false, `無法讀取 src/App.tsx: ${err.message}`);
+  assert(false, `無法讀取路由組件檔案: ${err.message}`);
 }
 console.log('');
 

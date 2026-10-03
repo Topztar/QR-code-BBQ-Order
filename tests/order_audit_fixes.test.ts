@@ -95,5 +95,49 @@ describe('Order Audit Fixes Tests', () => {
     expect(pendJson.subtotal).toBe(400);
     expect(pendJson.total).toBe(400);
   });
+
+  it('registerOrdersRoutes GET /api/orders/history-check should apply historyRateLimiter middleware', () => {
+    const testApp = express();
+    let limiterCalled = false;
+    const mockHistoryLimiter: express.RequestHandler = (req, res, next) => {
+      limiterCalled = true;
+      next();
+    };
+
+    registerOrdersRoutes(testApp, {
+      getLiveOrders: () => [],
+      setLiveOrders: () => {},
+      getLiveTables: () => [],
+      getLiveMenu: () => [],
+      getLiveReservations: () => [],
+      getLivePrinterIp: () => '127.0.0.1',
+      getLivePrinterSettings: () => ({ bill: {} }),
+      getPrintLogs: () => [],
+      getFirestoreDb: () => null,
+      isStoreOpen: () => true,
+      getTaiwanDateString: () => '2026-09-18',
+      calculatePromoDiscount: () => 0,
+      triggerCashDrawerOpen: async () => ({ success: true, log: '' }),
+      saveStateToDisk: () => {},
+      historyRateLimiter: mockHistoryLimiter,
+    });
+
+    const routeLayer = testApp._router.stack.find((l: any) => l.route && l.route.path === '/api/orders/history-check' && l.route.methods.get);
+    expect(routeLayer).toBeDefined();
+    expect(routeLayer.route.stack.length).toBeGreaterThanOrEqual(2);
+
+    let nextCalled = false;
+    routeLayer.route.stack[0].handle({ query: {} }, {}, () => { nextCalled = true; });
+    expect(limiterCalled).toBe(true);
+    expect(nextCalled).toBe(true);
+  });
+
+  it('functions/src/routes/orders.ts should configure historyRateLimiter on /orders/history-check', async () => {
+    const fs = await import('fs');
+    const path = await import('path');
+    const code = fs.readFileSync(path.resolve(__dirname, '../functions/src/routes/orders.ts'), 'utf8');
+    expect(code).toContain("const historyRateLimiter = createRateLimiter(10, 60 * 1000, '歷史訂單查詢');");
+    expect(code).toContain("get('/orders/history-check', historyRateLimiter, async (req, res) => {");
+  });
 });
 

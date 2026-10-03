@@ -25,6 +25,7 @@ export function registerOrdersRoutes(app: express.Application, ctx: RouteContext
   const getCachedSettings = createGetCachedSettings(db);
   const orderRateLimiter = createRateLimiter(20, 60 * 1000, '訂單提交');
   const ratingRateLimiter = createRateLimiter(15, 60 * 1000, '訂單評價');
+  const historyRateLimiter = createRateLimiter(10, 60 * 1000, '歷史訂單查詢');
 
   // 雙路徑路由包裝器
   const get: RouteRegister = (routePath, ...handlers) => app.get([`/api${routePath}`, routePath], ...handlers);
@@ -33,7 +34,7 @@ export function registerOrdersRoutes(app: express.Application, ctx: RouteContext
   const del: RouteRegister = (routePath, ...handlers) => app.delete([`/api${routePath}`, routePath], ...handlers);
 
   // 1. History Check
-  get('/orders/history-check', async (req, res) => {
+  get('/orders/history-check', historyRateLimiter, async (req, res) => {
     try {
       const { tableNumber, memberName } = req.query;
       const tableStr = tableNumber ? String(tableNumber).trim() : '';

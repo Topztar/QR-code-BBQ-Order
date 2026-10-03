@@ -21,6 +21,7 @@ export interface OrderRouteContext {
   saveStateToDisk: () => void;
   orderRateLimiter?: express.RequestHandler;
   ratingRateLimiter?: express.RequestHandler;
+  historyRateLimiter?: express.RequestHandler;
 }
 
 import { getMappedTableId, isTakeoutTable } from '../../utils/tableUtils';
@@ -46,15 +47,17 @@ export function registerOrdersRoutes(app: express.Express, ctx: OrderRouteContex
     triggerCashDrawerOpen,
     saveStateToDisk,
     orderRateLimiter,
-    ratingRateLimiter
+    ratingRateLimiter,
+    historyRateLimiter
   } = ctx;
 
   const noopMiddleware: express.RequestHandler = (_req, _res, next) => next();
   const rateLimiter = orderRateLimiter || noopMiddleware;
   const ratingLimiter = ratingRateLimiter || noopMiddleware;
+  const historyLimiter = historyRateLimiter || noopMiddleware;
 
   // 1. History Check
-  app.get('/api/orders/history-check', (req, res) => {
+  app.get('/api/orders/history-check', historyLimiter, (req, res) => {
     try {
       const { tableNumber, memberName } = req.query;
       const tableStr = tableNumber ? String(tableNumber).trim() : '';

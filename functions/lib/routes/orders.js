@@ -9,11 +9,12 @@ function registerOrdersRoutes(app, ctx) {
     const getCachedSettings = (0, helpers_1.createGetCachedSettings)(db);
     const orderRateLimiter = createRateLimiter(20, 60 * 1000, '訂單提交');
     const ratingRateLimiter = createRateLimiter(15, 60 * 1000, '訂單評價');
+    const historyRateLimiter = createRateLimiter(10, 60 * 1000, '歷史訂單查詢');
     const get = (routePath, ...handlers) => app.get([`/api${routePath}`, routePath], ...handlers);
     const post = (routePath, ...handlers) => app.post([`/api${routePath}`, routePath], ...handlers);
     const put = (routePath, ...handlers) => app.put([`/api${routePath}`, routePath], ...handlers);
     const del = (routePath, ...handlers) => app.delete([`/api${routePath}`, routePath], ...handlers);
-    get('/orders/history-check', async (req, res) => {
+    get('/orders/history-check', historyRateLimiter, async (req, res) => {
         try {
             const { tableNumber, memberName } = req.query;
             const tableStr = tableNumber ? String(tableNumber).trim() : '';

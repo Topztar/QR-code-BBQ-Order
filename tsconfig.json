@@ -18,6 +18,9 @@
     "paths": {
       "@/*": [
         "./*"
+      ],
+      "@sabay/shared": [
+        "./shared/src/index.ts"
       ]
     },
     "types": [
