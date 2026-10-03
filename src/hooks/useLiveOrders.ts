@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Order, OrderStatus, TableConfig, Reservation } from '../types';
-import { orderCalculationService } from '../services/orderCalculationService';
+import { orderCalculationService } from '@sabay/shared';
 import { apiFetch } from '../lib/api';
 import { db, isFirebaseSyncEnabled, ensureFirebaseAuthReady } from '../lib/firebase';
 import { collection, onSnapshot, query, limit, where, orderBy } from 'firebase/firestore';
@@ -81,8 +81,6 @@ export function useLiveOrders(
   currentDeviceId: string,
   isNetworkOnline: boolean,
   syncActive: boolean,
-  tables: TableConfig[],
-  reservations: Reservation[],
   handleUpdateTableStatus: (id: string, updates: Partial<Omit<TableConfig, 'id' | 'qrCodeUrl'>>) => Promise<{ success: boolean }>
 ) {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -93,11 +91,6 @@ export function useLiveOrders(
   const recentStatusTransitionsRef = useRef<Map<string, RecentOrderTransition>>(new Map());
   const deletedOrderIdsRef = useRef<BoundedSet<string>>(new BoundedSet(1000));
   const isStaffView = activeTab !== 'customer';
-  
-  const reservationsRef = useRef(reservations);
-  useEffect(() => {
-    reservationsRef.current = reservations;
-  }, [reservations]);
 
   const reconcileOrders = useCallback((incomingOrders: Order[]): Order[] => {
     if (!Array.isArray(incomingOrders)) return [];

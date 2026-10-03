@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { orderCalculationService } from '../src/services/orderCalculationService';
+import { orderCalculationService } from '@sabay/shared';
 import { validateReservationPayload, validateOrderPayload } from '../functions/src/validators';
 
 describe('Firebase-Hosted E2E 12-Workflow Simulation Suite', () => {
@@ -139,7 +139,7 @@ describe('Firebase-Hosted E2E 12-Workflow Simulation Suite', () => {
       customerName: 'Google Order #G-8812',
       customerPhone: '0911223344',
       items: [
-        { name: '招牌泰式烤肉盤', quantity: 1, price: 380 }
+        { name: '招牌泰式烤肉盤', qty: 1, price: 380 }
       ]
     };
 

@@ -9,7 +9,7 @@ export interface OrderPricingInput {
   paymentMethod?: string;
 }
 
-export const orderCalculationService = {
+const orderCalculationService = {
   computeOrderItemUnitPrice: (it: any, menuItemsList: any[] = []): number => {
     if (!it) return 0;
     const baseP = Number(it.price) || 0;
@@ -47,7 +47,7 @@ export const orderCalculationService = {
   computeOrderItemsSubtotal: (items: any[], menuItemsList: any[] = []): number => {
     if (!items || !Array.isArray(items)) return 0;
     return items.reduce((sum: number, it: any) => {
-      return sum + orderCalculationService.computeOrderItemUnitPrice(it, menuItemsList) * (Number(it.qty || it.quantity) || 1);
+      return sum + orderCalculationService.computeOrderItemUnitPrice(it, menuItemsList) * (Number(it.qty) || 1);
     }, 0);
   },
 
@@ -109,7 +109,7 @@ export const orderCalculationService = {
             : !isBeverageOrTopup;
 
         if (isEligible) {
-          return count + (Number(item.qty || item.quantity) || 1);
+          return count + (Number(item.qty) || 1);
         }
         return count;
       }, 0);
@@ -120,5 +120,53 @@ export const orderCalculationService = {
       }
       return totalDiscount;
     }, 0);
+  },
+  
+  calculateVipStatus(userPoints: number, vipThreshold: number = 300) {
+    const isVip = userPoints >= vipThreshold;
+    return {
+      isVip,
+      pointsToNext: isVip ? 0 : vipThreshold - userPoints
+    };
+  },
+
+  canRedeemReward(userPoints: number, itemCost: number) {
+    return userPoints >= itemCost;
   }
 };
+export { orderCalculationService };
+
+export function checkItemCompleteConcurrency(
+  expectedVersion: number | undefined | null,
+  currentVersion: number,
+  lastUpdatedByRole: string | undefined | null,
+  modifierRole: string | undefined | null
+): { hasConflict: boolean; errorMessage?: string } {
+  if (typeof expectedVersion === 'number' && expectedVersion < currentVersion) {
+    if (lastUpdatedByRole === 'kitchen' && modifierRole === 'staff') {
+      return { hasConflict: true, errorMessage: '該餐點狀態已被廚房主畫面更新，已自動為您同步最新狀態！' };
+    }
+  }
+  return { hasConflict: false };
+}
+
+export function checkRefundLogsGate(
+  orderStatus: string | undefined | null,
+  isPaid: boolean | undefined | null,
+  refundLogs: any[] | undefined | null
+): { isLocked: boolean; errorMessage?: string } {
+  const isPaidOrCancelled = orderStatus === 'paid' || orderStatus === 'cancelled' || isPaid === true;
+  if (isPaidOrCancelled) {
+    if (!Array.isArray(refundLogs) || refundLogs.length === 0) {
+      return { isLocked: true, errorMessage: '訂單已結帳或已取消，未附帶退換核銷紀錄不可修改餐點內容！' };
+    }
+  }
+  return { isLocked: false };
+}
+
+export const PRINTER_CONSTANTS = {
+  DEFAULT_IP: '192.168.123.100',
+  DEFAULT_PORT: 9100,
+  CONNECTION_TIMEOUT_MS: 3000
+};
+

@@ -1,3 +1,4 @@
+import { PRINTER_CONSTANTS } from '@sabay/shared';
 import net from 'net';
 import * as fs from 'fs';
 import iconv from 'iconv-lite';
@@ -65,7 +66,7 @@ export function sanitizeTextForThermalPrinter(text: string): string {
  */
 export async function sendToNetworkPrinter(
   host: string,
-  port: number = 9100,
+  port: number = PRINTER_CONSTANTS.DEFAULT_PORT,
   data: Buffer | string,
   options: { timeoutMs?: number; retries?: number; simulate?: boolean } = {}
 ): Promise<PrinterDriverResult> {
@@ -382,8 +383,8 @@ export async function triggerRealCashDrawer(settings: CashDrawerSettings): Promi
   const rawCommandHex = settings.cashDrawerEscPosCommand || '1B700019FA';
   const isLpt = settings.connectionType === 'LPT' || (settings.usbPort && settings.usbPort.toUpperCase().startsWith('LPT'));
   const portName = isLpt ? resolvePortName(settings.usbPort || 'LPT1:') : (settings.usbPort || 'USB002');
-  const targetIp = settings.ip || '192.168.123.100';
-  const targetPort = settings.port || 9100;
+  const targetIp = settings.ip || PRINTER_CONSTANTS.DEFAULT_IP;
+  const targetPort = settings.port || PRINTER_CONSTANTS.DEFAULT_PORT;
   const isNetwork = settings.connectionType === 'IP' && !isLpt;
 
   // If not network (e.g. LPT or USB), attempt direct call to LOCAL-PRINTER-POS-BRIDGE /open-drawer first
@@ -466,8 +467,8 @@ export async function printKitchenTicket(
   settings: PrinterDeviceSettings = {}
 ): Promise<PrinterDriverResult> {
   const isLpt = settings.connectionType === 'LPT' || (settings.usbPort && settings.usbPort.toUpperCase().startsWith('LPT'));
-  const host = settings.ip || '192.168.123.100';
-  const port = settings.port || 9100;
+  const host = settings.ip || PRINTER_CONSTANTS.DEFAULT_IP;
+  const port = settings.port || PRINTER_CONSTANTS.DEFAULT_PORT;
   const isNetwork = (settings.connectionType === 'IP' || !settings.connectionType) && !isLpt;
 
   const cleanTicketText = sanitizeTextForThermalPrinter(ticketText);
@@ -495,7 +496,7 @@ export async function printCustomerReceipt(
 ): Promise<PrinterDriverResult> {
   const isLpt = settings.connectionType === 'LPT' || (settings.usbPort && settings.usbPort.toUpperCase().startsWith('LPT'));
   const portName = isLpt ? resolvePortName(settings.usbPort || 'LPT1:') : (settings.usbPort || 'USB002');
-  const host = settings.ip || '192.168.123.100';
+  const host = settings.ip || PRINTER_CONSTANTS.DEFAULT_IP;
   const isNetwork = settings.connectionType === 'IP' && !isLpt;
 
   const cleanReceiptText = sanitizeTextForThermalPrinter(receiptText);
@@ -508,7 +509,7 @@ export async function printCustomerReceipt(
 
   let printRes: PrinterDriverResult;
   if (isNetwork) {
-    printRes = await sendToNetworkPrinter(host, settings.port || 9100, receiptBuffer);
+    printRes = await sendToNetworkPrinter(host, settings.port || PRINTER_CONSTANTS.DEFAULT_PORT, receiptBuffer);
     // Trigger cash drawer if enabled for counter printer
     if (printRes.success && settings.cashDrawerEnabled) {
       const drawerRes = await triggerRealCashDrawer({
@@ -517,7 +518,7 @@ export async function printCustomerReceipt(
         usbPort: portName,
         connectionType: settings.connectionType,
         ip: host,
-        port: settings.port || 9100
+        port: settings.port || PRINTER_CONSTANTS.DEFAULT_PORT
       });
       printRes.log += `\n${drawerRes.log}`;
     }

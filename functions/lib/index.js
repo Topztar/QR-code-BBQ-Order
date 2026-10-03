@@ -157,6 +157,7 @@ const orders_1 = require("./routes/orders");
 const settings_1 = require("./routes/settings");
 const printer_1 = require("./routes/printer");
 const staff_1 = require("./routes/staff");
+const members_1 = require("./routes/members");
 const helpers_2 = require("./helpers");
 const routeCtx = {
     db,
@@ -174,6 +175,7 @@ const routeCtx = {
 (0, settings_1.registerSettingsRoutes)(app, routeCtx);
 (0, printer_1.registerPrinterRoutes)(app, routeCtx);
 (0, staff_1.registerStaffRoutes)(app, routeCtx);
+(0, members_1.registerMembersRoutes)(app, routeCtx);
 app.use((req, res) => {
     res.status(404).json({ error: `無效的 API 請求: ${req.method} ${req.path}` });
 });

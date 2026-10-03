@@ -1,8 +1,9 @@
+import { PRINTER_CONSTANTS } from '@sabay/shared';
 import express from 'express';
 import { Firestore } from 'firebase-admin/firestore';
 import { Bucket } from '@google-cloud/storage';
 import * as crypto from 'crypto';
-import { processMenuItemSoldOut, isStoreOpenFromData } from '../helpers';
+import { processMenuItemSoldOut, isStoreOpenFromData, setCachedMenu, setCachedCategories } from '../helpers';
 import { getStoredActiveToken } from '../auth';
 
 // ============================================================
@@ -28,6 +29,8 @@ const BOOTSTRAP_CACHE_TTL_MS = 180 * 1000; // 3 minutes in-memory TTL to elimina
  */
 export function invalidatePublicBootstrapCache() {
   cachedPublicBootstrap = null;
+  setCachedMenu(null);
+  setCachedCategories(null);
 }
 
 export function registerBootstrapRoutes(app: express.Application, ctx: RouteContext) {
@@ -171,7 +174,7 @@ export function registerBootstrapRoutes(app: express.Application, ctx: RouteCont
           rewards: sysData.liveMemberRewards || []
         },
         servicePaused: { servicePaused: sysData.liveServicePaused || false },
-        printerConfig: { ip: sysData.livePrinterIp || '192.168.123.100' },
+        printerConfig: { ip: sysData.livePrinterIp || PRINTER_CONSTANTS.DEFAULT_IP },
         ingredients: ingredientsSnap.docs.map(doc => doc.data()),
         reservations: reservationsSnap.docs.map(doc => doc.data()),
         version: sysData.liveSystemVersion || sysData.version || '1.0.1',

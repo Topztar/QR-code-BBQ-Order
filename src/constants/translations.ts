@@ -1452,7 +1452,7 @@ export const INITIAL_TRANSLATIONS: { [key: string]: { [lang in Language]?: strin
     "ru": "Выбор лапши",
     "es": "Opción de Fideos"
   },
-  "totalAmountLabel": {
+  "totalLabel": {
     "zh": "總計算額金額",
     "en": "Total Amount",
     "ko": "총 금액",

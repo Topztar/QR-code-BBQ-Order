@@ -3,7 +3,7 @@ import { OrderItem, Language, MenuItem } from '../../types';
 import { getLocalizedText } from '../../utils/i18n';
 import { TRANSLATIONS } from '../../data';
 import { ShoppingCart, X } from 'lucide-react';
-import { orderCalculationService } from '../../services/orderCalculationService';
+import { orderCalculationService } from '@sabay/shared';
 
 export interface CustomerCartDrawerProps {
   isCartOpen: boolean;

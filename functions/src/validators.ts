@@ -54,7 +54,7 @@ export function validateOrderPayload(body: any): ValidationResult<any> {
       ? item.name
       : sanitizeString(item.name || '', 100);
     
-    const qty = Number(item.quantity || item.qty);
+    const qty = Number(item.qty);
     if (!Number.isFinite(qty) || qty <= 0 || !Number.isInteger(qty) || qty > 1000) {
       return { isValid: false, error: `餐點數量異常 (Invalid quantity: ${qty})` };
     }
@@ -67,10 +67,8 @@ export function validateOrderPayload(body: any): ValidationResult<any> {
     sanitizedItems.push({
       ...item,
       name,
-      quantity: qty,
       qty,
-      price,
-      notes: sanitizeString(item.notes || '', 200)
+      price
     });
   }
   let sanitizedTakeoutInfo: any = undefined;
@@ -199,6 +197,18 @@ export function validateImageUploadPayload(body: any): ValidationResult<{
     base64Clean = parts[1];
   }
 
+  let sniffedMime = '';
+  if (base64Clean.startsWith('/9j/')) sniffedMime = 'image/jpeg';
+  else if (base64Clean.startsWith('iVBORw0KGgo')) sniffedMime = 'image/png';
+  else if (base64Clean.startsWith('R0lGODlh')) sniffedMime = 'image/gif';
+  else if (base64Clean.startsWith('UklGR')) sniffedMime = 'image/webp';
+  
+  if (sniffedMime) {
+    mime = sniffedMime;
+  } else {
+    return { isValid: false, error: '檔案格式錯誤：無法辨識的圖片魔術字節' };
+  }
+
   const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
   if (!allowedMimeTypes.includes(mime)) {
     return { isValid: false, error: `不支援的圖片格式 (${mime})，僅允許 JPEG, PNG, WEBP, GIF` };
@@ -262,6 +272,42 @@ export function validateRatingPayload(body: any): ValidationResult<{
     sanitizedData: {
       rating: ratingNum,
       feedback
+    }
+  };
+}
+
+/**
+ * Validates and sanitizes Checkout payload
+ */
+export function validateCheckoutPayload(body: any): ValidationResult<{
+  paymentMethod: string;
+  cashTendered: number;
+  changeAmount: number;
+  checkoutRecord: any | null;
+}> {
+  if (!body || typeof body !== 'object') {
+    return { isValid: false, error: '無效的結帳資料格式' };
+  }
+
+  const paymentMethod = typeof body.paymentMethod === 'string' ? body.paymentMethod : 'cash';
+  const cashTendered = Number(body.cashTendered) || 0;
+  const changeAmount = Number(body.changeAmount) || 0;
+  
+  if (cashTendered < 0 || changeAmount < 0) {
+    return { isValid: false, error: '金額不能為負數' };
+  }
+
+  const checkoutRecord = body.checkoutRecord && typeof body.checkoutRecord === 'object' 
+    ? body.checkoutRecord 
+    : null;
+
+  return {
+    isValid: true,
+    sanitizedData: {
+      paymentMethod,
+      cashTendered,
+      changeAmount,
+      checkoutRecord
     }
   };
 }

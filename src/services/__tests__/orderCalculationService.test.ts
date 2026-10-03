@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { orderCalculationService } from '../orderCalculationService';
+import { orderCalculationService } from '@sabay/shared';
 
 describe('orderCalculationService SSOT Engine', () => {
   const mockMenu = [

@@ -161,6 +161,7 @@ import { registerOrdersRoutes } from './routes/orders';
 import { registerSettingsRoutes } from './routes/settings';
 import { registerPrinterRoutes } from './routes/printer';
 import { registerStaffRoutes } from './routes/staff';
+import { registerMembersRoutes } from './routes/members';
 import { cleanupStorageImage } from './helpers';
 
 // ============================================================
@@ -186,6 +187,7 @@ registerTablesRoutes(app, routeCtx);
 registerSettingsRoutes(app, routeCtx);
 registerPrinterRoutes(app, routeCtx);
 registerStaffRoutes(app, routeCtx);
+registerMembersRoutes(app, routeCtx);
 
 // Catch-all 404 JSON Handler to prevent returning HTML on missing API endpoints
 app.use((req: any, res: any) => {

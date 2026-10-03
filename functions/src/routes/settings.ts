@@ -30,8 +30,8 @@ export function registerSettingsRoutes(app: express.Application, ctx: RouteConte
   // 雙路徑路由包裝器
   const get: RouteRegister = (routePath, ...handlers) => app.get([`/api${routePath}`, routePath], ...handlers);
   const post: RouteRegister = (routePath, ...handlers) => app.post([`/api${routePath}`, routePath], ...handlers);
-  const put: RouteRegister = (routePath, ...handlers) => app.put([`/api${routePath}`, routePath], ...handlers);
   const del: RouteRegister = (routePath, ...handlers) => app.delete([`/api${routePath}`, routePath], ...handlers);
+  const put: RouteRegister = (routePath, ...handlers) => app.put([`/api${routePath}`, routePath], ...handlers);
 
 // ⚡ /settings/public — 公開設定聚合端點 (10分鐘 CDN 邊緣快取，0 Function 喚醒成本)
 // 整合所有低頻更新的公開設定，單次請求取代 6 個獨立 API 呼叫
@@ -342,7 +342,7 @@ post('/option-rules', requireStaffAuth, async (req, res) => {
 });
 
 // 42. Option Rules (DELETE)
-del('/option-rules/:id', requireStaffAuth, async (req, res) => {
+del('/option-rules/:id', requireStaffAuth, async (req: any, res: any) => {
   const { id } = req.params;
   try {
     const systemDoc = await db.collection('settings').doc('system').get();

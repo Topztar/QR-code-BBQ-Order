@@ -1,5 +1,6 @@
 import express from 'express';
 import net from 'net';
+import { PRINTER_CONSTANTS } from '@sabay/shared';
 import {
   triggerRealCashDrawer,
   printKitchenTicket,
@@ -76,16 +77,16 @@ export function registerPrinterRoutes(app: express.Express, ctx: PrinterRouteCon
       return res.json({
         reachable: true,
         ip,
-        port: 9100,
+        port: PRINTER_CONSTANTS.DEFAULT_PORT,
         simulated: true,
         timestamp: new Date().toISOString()
       });
     }
 
-    // Real TCP connect check to probe printer availability on raw print port 9100
+    // Real TCP connect check to probe printer availability on raw print port
     const socket = new net.Socket();
     let completed = false;
-    socket.setTimeout(1500);
+    socket.setTimeout(PRINTER_CONSTANTS.CONNECTION_TIMEOUT_MS);
 
     const cleanUp = () => {
       socket.removeAllListeners();
@@ -101,7 +102,7 @@ export function registerPrinterRoutes(app: express.Express, ctx: PrinterRouteCon
         res.json({
           reachable: true,
           ip,
-          port: 9100,
+          port: PRINTER_CONSTANTS.DEFAULT_PORT,
           simulated: false,
           timestamp: new Date().toISOString()
         });
@@ -113,10 +114,10 @@ export function registerPrinterRoutes(app: express.Express, ctx: PrinterRouteCon
         completed = true;
         cleanUp();
         res.json({
-          reachable: true,
+          reachable: false,
           ip,
-          port: 9100,
-          simulated: true,
+          port: PRINTER_CONSTANTS.DEFAULT_PORT,
+          simulated: false,
           error: err.message,
           timestamp: new Date().toISOString()
         });
@@ -128,10 +129,10 @@ export function registerPrinterRoutes(app: express.Express, ctx: PrinterRouteCon
         completed = true;
         cleanUp();
         res.json({
-          reachable: true,
+          reachable: false,
           ip,
-          port: 9100,
-          simulated: true,
+          port: PRINTER_CONSTANTS.DEFAULT_PORT,
+          simulated: false,
           error: 'Network connection timeout (ETIMEDOUT) - Socket destroyed',
           timestamp: new Date().toISOString()
         });
@@ -143,16 +144,16 @@ export function registerPrinterRoutes(app: express.Express, ctx: PrinterRouteCon
     });
 
     try {
-      socket.connect(9100, ip);
+      socket.connect(PRINTER_CONSTANTS.DEFAULT_PORT, ip);
     } catch (err: any) {
       if (!completed) {
         completed = true;
         cleanUp();
         res.json({
-          reachable: true,
+          reachable: false,
           ip,
-          port: 9100,
-          simulated: true,
+          port: PRINTER_CONSTANTS.DEFAULT_PORT,
+          simulated: false,
           error: err?.message || 'Failed to initiate connect',
           timestamp: new Date().toISOString()
         });

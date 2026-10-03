@@ -34,6 +34,7 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerPrinterRoutes = registerPrinterRoutes;
+const shared_1 = require("@sabay/shared");
 const firestore_1 = require("firebase-admin/firestore");
 const net = __importStar(require("net"));
 const auth_1 = require("../auth");
@@ -52,7 +53,7 @@ function registerPrinterRoutes(app, ctx) {
         try {
             res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=600, stale-while-revalidate=1800');
             const sysData = await getCachedSettings();
-            res.json({ ip: sysData?.livePrinterIp || '192.168.123.100' });
+            res.json({ ip: sysData?.livePrinterIp || shared_1.PRINTER_CONSTANTS.DEFAULT_IP });
         }
         catch (error) {
             sendErrorResponse(res, error);
@@ -103,7 +104,7 @@ function registerPrinterRoutes(app, ctx) {
             const target = req.body?.target || 'all';
             const systemDoc = await db.collection('settings').doc('system').get();
             const sysData = systemDoc.data() || {};
-            const livePrinterIp = sysData.livePrinterIp || '192.168.123.100';
+            const livePrinterIp = sysData.livePrinterIp || shared_1.PRINTER_CONSTANTS.DEFAULT_IP;
             const livePrinterSettings = sysData.livePrinterSettings || { bill: { cashDrawerEnabled: false } };
             let drawerNote = '';
             if ((target === 'bill' || target === 'all') && livePrinterSettings.bill?.cashDrawerEnabled) {
@@ -165,7 +166,7 @@ function registerPrinterRoutes(app, ctx) {
             const systemDoc = await db.collection('settings').doc('system').get();
             const sysData = systemDoc.data() || {};
             const settings = sysData.livePrinterSettings?.bill || {};
-            const printerIp = settings.ip || sysData.livePrinterIp || '192.168.123.100';
+            const printerIp = settings.ip || sysData.livePrinterIp || shared_1.PRINTER_CONSTANTS.DEFAULT_IP;
             const port = settings.port || 9100;
             const rawCmdHex = settings.cashDrawerEscPosCommand || '1B700019FA';
             let drawerBuffer;
@@ -202,20 +203,20 @@ function registerPrinterRoutes(app, ctx) {
     get('/printer/ping', async (req, res) => {
         const systemDoc = await db.collection('settings').doc('system').get();
         const sysData = systemDoc.data() || {};
-        const ip = req.query.ip || sysData.livePrinterIp || '192.168.123.100';
+        const ip = req.query.ip || sysData.livePrinterIp || shared_1.PRINTER_CONSTANTS.DEFAULT_IP;
         const isMock = req.query.simulate === 'true' || ip.toLowerCase().includes('mock') || ip.toLowerCase().includes('simulate');
         if (isMock) {
             return res.json({
                 reachable: true,
                 ip,
-                port: 9100,
+                port: shared_1.PRINTER_CONSTANTS.DEFAULT_PORT,
                 simulated: true,
                 timestamp: new Date().toISOString()
             });
         }
         const socket = new net.Socket();
         let completed = false;
-        socket.setTimeout(1500);
+        socket.setTimeout(shared_1.PRINTER_CONSTANTS.CONNECTION_TIMEOUT_MS);
         const cleanUp = () => {
             socket.removeAllListeners();
             if (!socket.destroyed) {
@@ -229,7 +230,7 @@ function registerPrinterRoutes(app, ctx) {
                 res.json({
                     reachable: true,
                     ip,
-                    port: 9100,
+                    port: shared_1.PRINTER_CONSTANTS.DEFAULT_PORT,
                     simulated: false,
                     timestamp: new Date().toISOString()
                 });
@@ -242,7 +243,7 @@ function registerPrinterRoutes(app, ctx) {
                 res.json({
                     reachable: false,
                     ip,
-                    port: 9100,
+                    port: shared_1.PRINTER_CONSTANTS.DEFAULT_PORT,
                     simulated: false,
                     error: err.message,
                     timestamp: new Date().toISOString()
@@ -256,7 +257,7 @@ function registerPrinterRoutes(app, ctx) {
                 res.json({
                     reachable: false,
                     ip,
-                    port: 9100,
+                    port: shared_1.PRINTER_CONSTANTS.DEFAULT_PORT,
                     simulated: false,
                     error: 'Network connection timeout (ETIMEDOUT) - Socket destroyed',
                     timestamp: new Date().toISOString()
@@ -267,7 +268,7 @@ function registerPrinterRoutes(app, ctx) {
             cleanUp();
         });
         try {
-            socket.connect(9100, ip);
+            socket.connect(shared_1.PRINTER_CONSTANTS.DEFAULT_PORT, ip);
         }
         catch (err) {
             if (!completed) {
@@ -276,7 +277,7 @@ function registerPrinterRoutes(app, ctx) {
                 res.json({
                     reachable: false,
                     ip,
-                    port: 9100,
+                    port: shared_1.PRINTER_CONSTANTS.DEFAULT_PORT,
                     simulated: false,
                     error: err?.message || 'Failed to initiate TCP connection',
                     timestamp: new Date().toISOString()
@@ -292,8 +293,8 @@ function registerPrinterRoutes(app, ctx) {
                 kitchen: {
                     enabled: true,
                     connectionType: 'IP',
-                    ip: sysData.livePrinterIp || '192.168.123.100',
-                    port: 9100,
+                    ip: sysData.livePrinterIp || shared_1.PRINTER_CONSTANTS.DEFAULT_IP,
+                    port: shared_1.PRINTER_CONSTANTS.DEFAULT_PORT,
                     usbPort: 'USB001',
                     width: '80mm',
                     paperWidth: 80,
@@ -309,8 +310,8 @@ function registerPrinterRoutes(app, ctx) {
                 bill: {
                     enabled: true,
                     connectionType: 'USB',
-                    ip: sysData.livePrinterIp || '192.168.123.100',
-                    port: 9100,
+                    ip: sysData.livePrinterIp || shared_1.PRINTER_CONSTANTS.DEFAULT_IP,
+                    port: shared_1.PRINTER_CONSTANTS.DEFAULT_PORT,
                     usbPort: 'USB002',
                     width: '58mm',
                     paperWidth: 58,

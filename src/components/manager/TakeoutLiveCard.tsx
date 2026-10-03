@@ -1,7 +1,7 @@
 import React from 'react';
 import { User, Phone, Clock, FileText } from 'lucide-react';
 import { Order } from '../../types';
-import { orderCalculationService } from '../../services/orderCalculationService';
+import { orderCalculationService } from '@sabay/shared';
 
 export interface TakeoutLiveCardProps {
   order: Order;
@@ -77,7 +77,7 @@ export const TakeoutLiveCard: React.FC<TakeoutLiveCardProps> = React.memo(({
               <span>預訂取餐:</span>
             </span>
             <span className="font-mono font-black text-[#E5B453] bg-[#E5B453]/10 px-1.5 py-0.2 rounded border border-[#E5B453]/20">
-              {tOrder.takeoutInfo?.pickupTime || '即刻取餐'}
+              {tOrder.pickupTime || '即刻取餐'}
             </span>
           </div>
           <div className="flex items-center justify-between pt-1 border-t border-white/5 text-[11px]">

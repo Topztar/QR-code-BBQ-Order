@@ -233,6 +233,6 @@ const server = http.createServer(async (req, res) => {
   res.end();
 });
 
-server.listen(PORT, '0.0.0.0', () => {
+server.listen(PORT, '127.0.0.1', () => {
   console.log(`[POS-Bridge Node] Listening on http://127.0.0.1:${PORT}`);
 });

@@ -4,7 +4,7 @@ import { CashierCheckoutPanel } from './cashier/CashierCheckoutPanel';
 import { CashierOrderSidebar } from './cashier/CashierOrderSidebar';
 import { CashierFloorPlan } from './cashier/CashierFloorPlan';
 import { useDashboardStore } from '../../stores/dashboard/useDashboardStore';
-import { orderCalculationService } from '../../services/orderCalculationService';
+import { orderCalculationService } from '@sabay/shared';
 import { isReservationUpcoming } from '../../context/RestaurantDataContext';
 
 import {
@@ -2074,7 +2074,7 @@ export const ManagerCashierTab: React.FC<ManagerCashierTabProps> = (props) => {
                       <div>
                         <div className="text-[11px] text-zinc-400 font-medium">預約取餐時間 (Pickup Time)</div>
                         <div className="font-black text-[#E5B453] font-mono text-base">
-                          {takeoutDetailModalOrder.takeoutInfo?.pickupTime || '即刻取餐 (隨到隨取)'}
+                          {takeoutDetailModalOrder.pickupTime || '即刻取餐 (隨到隨取)'}
                         </div>
                       </div>
                     </div>

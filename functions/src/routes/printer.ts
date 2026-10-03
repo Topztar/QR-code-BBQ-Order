@@ -1,3 +1,4 @@
+import { PRINTER_CONSTANTS } from '@sabay/shared';
 import express from 'express';
 import { Firestore, FieldValue } from 'firebase-admin/firestore';
 import { Bucket } from '@google-cloud/storage';
@@ -38,7 +39,7 @@ get('/printer/config', async (_req, res) => {
   try {
     res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=600, stale-while-revalidate=1800');
     const sysData = await getCachedSettings();
-    res.json({ ip: sysData?.livePrinterIp || '192.168.123.100' });
+    res.json({ ip: sysData?.livePrinterIp || PRINTER_CONSTANTS.DEFAULT_IP });
   } catch (error) {
     sendErrorResponse(res, error);
   }
@@ -103,7 +104,7 @@ post('/printer/test', requireStaffAuth, async (req, res) => {
     const target = (req.body?.target as 'kitchen' | 'bill' | 'all') || 'all';
     const systemDoc = await db.collection('settings').doc('system').get();
     const sysData = systemDoc.data() || {};
-    const livePrinterIp = sysData.livePrinterIp || '192.168.123.100';
+    const livePrinterIp = sysData.livePrinterIp || PRINTER_CONSTANTS.DEFAULT_IP;
     const livePrinterSettings = sysData.livePrinterSettings || { bill: { cashDrawerEnabled: false } };
 
     let drawerNote = '';
@@ -169,7 +170,7 @@ post('/printer/open-drawer', requireStaffAuth, async (_req, res) => {
     const systemDoc = await db.collection('settings').doc('system').get();
     const sysData = systemDoc.data() || {};
     const settings = sysData.livePrinterSettings?.bill || {};
-    const printerIp = settings.ip || sysData.livePrinterIp || '192.168.123.100';
+    const printerIp = settings.ip || sysData.livePrinterIp || PRINTER_CONSTANTS.DEFAULT_IP;
     const port = settings.port || 9100;
     const rawCmdHex = settings.cashDrawerEscPosCommand || '1B700019FA';
 
@@ -211,14 +212,14 @@ post('/printer/open-drawer', requireStaffAuth, async (_req, res) => {
 get('/printer/ping', async (req, res) => {
   const systemDoc = await db.collection('settings').doc('system').get();
   const sysData = systemDoc.data() || {};
-  const ip = (req.query.ip as string) || sysData.livePrinterIp || '192.168.123.100';
+  const ip = (req.query.ip as string) || sysData.livePrinterIp || PRINTER_CONSTANTS.DEFAULT_IP;
   const isMock = req.query.simulate === 'true' || ip.toLowerCase().includes('mock') || ip.toLowerCase().includes('simulate');
 
   if (isMock) {
     return res.json({
       reachable: true,
       ip,
-      port: 9100,
+      port: PRINTER_CONSTANTS.DEFAULT_PORT,
       simulated: true,
       timestamp: new Date().toISOString()
     });
@@ -228,7 +229,7 @@ get('/printer/ping', async (req, res) => {
   const socket = new net.Socket();
   let completed = false;
 
-  socket.setTimeout(1500);
+  socket.setTimeout(PRINTER_CONSTANTS.CONNECTION_TIMEOUT_MS);
 
   const cleanUp = () => {
     socket.removeAllListeners();
@@ -244,7 +245,7 @@ get('/printer/ping', async (req, res) => {
       res.json({
         reachable: true,
         ip,
-        port: 9100,
+        port: PRINTER_CONSTANTS.DEFAULT_PORT,
         simulated: false,
         timestamp: new Date().toISOString()
       });
@@ -258,7 +259,7 @@ get('/printer/ping', async (req, res) => {
       res.json({
         reachable: false,
         ip,
-        port: 9100,
+        port: PRINTER_CONSTANTS.DEFAULT_PORT,
         simulated: false,
         error: err.message,
         timestamp: new Date().toISOString()
@@ -273,7 +274,7 @@ get('/printer/ping', async (req, res) => {
       res.json({
         reachable: false,
         ip,
-        port: 9100,
+        port: PRINTER_CONSTANTS.DEFAULT_PORT,
         simulated: false,
         error: 'Network connection timeout (ETIMEDOUT) - Socket destroyed',
         timestamp: new Date().toISOString()
@@ -286,7 +287,7 @@ get('/printer/ping', async (req, res) => {
   });
 
   try {
-    socket.connect(9100, ip);
+    socket.connect(PRINTER_CONSTANTS.DEFAULT_PORT, ip);
   } catch (err: any) {
     if (!completed) {
       completed = true;
@@ -294,7 +295,7 @@ get('/printer/ping', async (req, res) => {
       res.json({
         reachable: false,
         ip,
-        port: 9100,
+        port: PRINTER_CONSTANTS.DEFAULT_PORT,
         simulated: false,
         error: err?.message || 'Failed to initiate TCP connection',
         timestamp: new Date().toISOString()
@@ -312,8 +313,8 @@ get('/printer/settings', async (_req, res) => {
       kitchen: {
         enabled: true,
         connectionType: 'IP',
-        ip: sysData.livePrinterIp || '192.168.123.100',
-        port: 9100,
+        ip: sysData.livePrinterIp || PRINTER_CONSTANTS.DEFAULT_IP,
+        port: PRINTER_CONSTANTS.DEFAULT_PORT,
         usbPort: 'USB001',
         width: '80mm',
         paperWidth: 80,
@@ -329,8 +330,8 @@ get('/printer/settings', async (_req, res) => {
       bill: {
         enabled: true,
         connectionType: 'USB',
-        ip: sysData.livePrinterIp || '192.168.123.100',
-        port: 9100,
+        ip: sysData.livePrinterIp || PRINTER_CONSTANTS.DEFAULT_IP,
+        port: PRINTER_CONSTANTS.DEFAULT_PORT,
         usbPort: 'USB002',
         width: '58mm',
         paperWidth: 58,

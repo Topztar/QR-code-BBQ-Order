@@ -1,8 +1,8 @@
 import express from 'express';
 import { doc, deleteDoc } from 'firebase/firestore';
 import { Order, OrderItem, MenuItem, TableConfig, Reservation } from '../../types';
-import { orderCalculationService } from '../../services/orderCalculationService';
-import { validateOrderPayload } from '../../../functions/src/validators';
+import { orderCalculationService, checkItemCompleteConcurrency, checkRefundLogsGate } from '@sabay/shared';
+import { validateOrderPayload, validateCheckoutPayload } from '../../../functions/src/validators';
 
 export interface OrderRouteContext {
   getLiveOrders: () => Order[];
@@ -443,16 +443,16 @@ ${customerDetails}
 
   // 7.5 Bulk Delete Orders
   app.post('/api/orders/bulk-delete', (req, res) => {
-    const { orderIds } = req.body;
-    if (!Array.isArray(orderIds) || orderIds.length === 0) {
-      return res.status(400).json({ error: 'orderIds must be a non-empty array' });
+    const { thresholdDate } = req.body;
+    if (!thresholdDate || typeof thresholdDate !== 'string') {
+      return res.status(400).json({ error: '無效的截止日期格式 (thresholdDate is required)' });
     }
 
     const liveOrders = getLiveOrders();
     const initialLength = liveOrders.length;
     
-    // Filter out the deleted orders
-    const newOrders = liveOrders.filter(o => !orderIds.includes(o.id));
+    // Filter out the orders created before the thresholdDate
+    const newOrders = liveOrders.filter(o => o.createdAt >= thresholdDate);
     setLiveOrders(newOrders);
     
     saveStateToDisk();
@@ -525,7 +525,13 @@ ${customerDetails}
   app.put('/api/orders/:id/checkout', async (req, res) => {
     const { id } = req.params;
     const { paymentMethod, total, serviceCharge, subtotal, discount, isPaid } = req.body;
-
+    
+    const validation = validateCheckoutPayload(req.body);
+    if (!validation.isValid) {
+      return res.status(400).json({ error: validation.error });
+    }
+    // NOTE: checkoutRecord is intentionally not persisted locally in the mock server.
+    // This is a dev-only environment. (Ledger parity: dev-only fallback)
     const liveOrders = getLiveOrders();
     const liveTables = getLiveTables();
     const liveReservations = getLiveReservations();
@@ -637,6 +643,12 @@ ${customerDetails}
       return res.status(400).json({ error: 'orderIds 必須為非空陣列' });
     }
 
+    const validation = validateCheckoutPayload(req.body);
+    if (!validation.isValid) {
+      return res.status(400).json({ error: validation.error });
+    }
+    // NOTE: checkoutRecord is intentionally not persisted locally in the mock server.
+    // This is a dev-only environment. (Ledger parity: dev-only fallback)
     const liveOrders = getLiveOrders();
     const liveTables = getLiveTables();
     const liveReservations = getLiveReservations();
@@ -678,6 +690,13 @@ ${customerDetails}
         (order as any).changeAmount = changeAmount || 0;
         order.isPaid = true;
         order.status = resolvedStatus;
+        
+        const pricing = orderCalculationService.calculateOrderPricing(order as any, getLiveMenu());
+        order.subtotal = pricing.subtotal;
+        order.serviceCharge = pricing.serviceCharge;
+        (order as any).discount = pricing.discount;
+        order.total = pricing.total;
+        
         (order as any).updatedAt = new Date().toISOString();
 
         if (order.tableNumber && !isTakeoutTable(String(order.tableNumber))) {
@@ -789,13 +808,12 @@ ${customerDetails}
     const currentVersion = order.version || 0;
 
     // 🛡️ Concurrency Check: If client specified expectedVersion and role is staff, reject if outdated
-    if (typeof expectedVersion === 'number' && expectedVersion < currentVersion) {
-      if (order.lastUpdatedBy?.role === 'kitchen' && modifier?.role === 'staff') {
-        return res.status(409).json({
-          error: '該餐點狀態已被廚房主畫面更新，已自動為您同步最新狀態！',
-          currentOrder: order
-        });
-      }
+    const conflictCheck = checkItemCompleteConcurrency(expectedVersion, currentVersion, order.lastUpdatedBy?.role, modifier?.role);
+    if (conflictCheck.hasConflict) {
+      return res.status(409).json({
+        error: conflictCheck.errorMessage,
+        currentOrder: order
+      });
     }
 
     const item = order.items.find(it => it.id === itemId);
@@ -931,11 +949,12 @@ ${customerDetails}
     }
 
     // 🛡️ Security Guard: Reject modifications if order is already paid or cancelled unless valid refundLogs audit is provided
+    const gateCheck = checkRefundLogsGate(order.status, order.isPaid, refundLogs);
+    if (gateCheck.isLocked) {
+      return res.status(409).json({ error: gateCheck.errorMessage });
+    }
     const isPaidOrCancelled = order.status === 'paid' || order.status === 'cancelled' || order.isPaid;
     if (isPaidOrCancelled) {
-      if (!Array.isArray(refundLogs) || refundLogs.length === 0) {
-        return res.status(409).json({ error: '訂單已結帳或已取消，未附帶退換核銷紀錄不可修改餐點內容！' });
-      }
       for (const log of refundLogs) {
         if (!log.id || !log.timestamp || typeof log.totalDiff !== 'number' || !log.type) {
           return res.status(400).json({ error: '退換核銷紀錄格式錯誤 (Refund Log Schema Invalid)。' });

@@ -333,7 +333,7 @@ function formatLineOrderMessage(order) {
     const itemsList = (order.items || [])
         .map((i) => {
         const name = typeof i.name === 'object' ? (i.name.zh || i.name.en || JSON.stringify(i.name)) : i.name;
-        const q = i.quantity || i.qty || 1;
+        const q = i.qty || 1;
         return `• ${name} x${q} ($${i.price * q})`;
     })
         .slice(0, 15)

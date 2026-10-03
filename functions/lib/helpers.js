@@ -48,6 +48,7 @@ exports.createHandleSavePrinterSettings = createHandleSavePrinterSettings;
 exports.processMenuItemSoldOut = processMenuItemSoldOut;
 exports.extractStoragePathFromUrl = extractStoragePathFromUrl;
 exports.cleanupStorageImage = cleanupStorageImage;
+const shared_1 = require("@sabay/shared");
 const net = __importStar(require("net"));
 exports.cachedMenu = null;
 exports.cachedCategories = null;
@@ -187,7 +188,7 @@ async function sendToNetworkPrinter(host, port = 9100, data, timeoutMs = 4000) {
 function createHandleSavePrinterIp(db) {
     return async (req, res) => {
         const { ip } = req.body;
-        const targetIp = String(ip || '192.168.123.100');
+        const targetIp = String(ip || shared_1.PRINTER_CONSTANTS.DEFAULT_IP);
         try {
             const systemRef = db.collection('settings').doc('system');
             const docSnap = await systemRef.get();

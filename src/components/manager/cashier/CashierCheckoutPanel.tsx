@@ -100,7 +100,7 @@ export const CashierCheckoutPanel: React.FC<CashierCheckoutPanelProps> = ({
       const mergedOrderIds = cashierMergedOrders.map(o => o.id);
 
       const checkoutRecord = {
-        id: `TX-${Date.now()}`,
+        id: `TX-bulk-${mergedOrderIds[0]}`,
         orderId: cashierSelectedOrder.id,
         tableNumber: cashierSelectedOrder.tableNumber,
         mergedTableNumbers: mergedTableIds,

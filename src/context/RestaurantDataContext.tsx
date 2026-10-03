@@ -73,6 +73,7 @@ export interface RestaurantDataContextType {
   handleUpdateCustomerNotice: (notice: string) => Promise<{ success: boolean; error?: string }>;
   handleUpdatePopularItemIds: (ids: string[]) => Promise<{ success: boolean; error?: string }>;
   handleUpdateSystemVersion: (version: string) => Promise<{ success: boolean; version?: string; error?: string }>;
+  syncActive: boolean;
 }
 
 /**
@@ -457,8 +458,22 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
         });
         // Tables listener
         unsubscribeTables = onSnapshot(query(collection(db, "tables"), limit(50)), (snapshot) => {
-          const tbls = snapshot.docs.map(doc => doc.data() as TableConfig);
-          setTables(tbls);
+          const incoming = snapshot.docs.map(doc => doc.data() as TableConfig);
+          setTables(prev => {
+            const prevMap = new Map(prev.map(t => [t.id, t]));
+            return incoming.map(inc => {
+              const local = prevMap.get(inc.id);
+              if (!local) return inc;
+              // Merge tables onSnapshot with optimistic state instead of wholesale overwrite (S-05)
+              return {
+                ...inc,
+                status: local.isOfflinePending ? local.status : (local.status || inc.status),
+                cleaningStartedAt: local.cleaningStartedAt || inc.cleaningStartedAt,
+                preservedFor: local.preservedFor || inc.preservedFor,
+                isOfflinePending: local.isOfflinePending
+              };
+            });
+          });
         }, (error) => {
           console.warn('[Firebase Sync] Tables listener paused/disabled:', error);
         });
@@ -1183,6 +1198,7 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
     analytics,
     loading,
     systemVersion,
+    syncActive,
     fetchData,
     handleAddMenuItem,
     handleEditMenuItem,

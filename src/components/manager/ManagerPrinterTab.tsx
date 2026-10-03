@@ -1,3 +1,4 @@
+import { PRINTER_CONSTANTS } from '@sabay/shared';
 import React from 'react';
 import { Cpu, RefreshCw, Unlock, Printer, Download, Trash2 } from 'lucide-react';
 import { safeStorage } from '../../lib/safeStorage';
@@ -308,7 +309,7 @@ export const ManagerPrinterTab: React.FC<ManagerPrinterTabProps> = ({
                   onClick={() => {
                     setPrintConfirmData({
                       title: `🍳 KDS 廚房印表機測試列印 (${kitchenPrinter.restaurantName})`,
-                      ip: kitchenPrinter.ip || '192.168.123.100',
+                      ip: kitchenPrinter.ip || PRINTER_CONSTANTS.DEFAULT_IP,
                       onConfirm: async () => {
                         if (onPrintTestPage) {
                           try {

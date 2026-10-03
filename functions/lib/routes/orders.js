@@ -3,7 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerOrdersRoutes = registerOrdersRoutes;
 const validators_1 = require("../validators");
 const helpers_1 = require("../helpers");
-const orderCalculationService_1 = require("../services/orderCalculationService");
+const shared_1 = require("@sabay/shared");
 function registerOrdersRoutes(app, ctx) {
     const { db, storageBucket, requireStaffAuth, requireAppCheck, createRateLimiter, sendErrorResponse } = ctx;
     const getCachedSettings = (0, helpers_1.createGetCachedSettings)(db);
@@ -61,13 +61,13 @@ function registerOrdersRoutes(app, ctx) {
             let needsManualSort = false;
             try {
                 snapshot = await db.collection('orders')
-                    .select('id', 'tableNumber', 'items', 'subtotal', 'serviceCharge', 'total', 'status', 'createdAt', 'customerName', 'customerPhone', 'customerAvatar', 'paymentMethod', 'isMember', 'isPaid', 'guestCount', 'discount', 'quickNotes', 'isFlagged', 'flagReason', 'takeoutInfo', 'pickupTime', 'clientOrderId', 'version', 'updatedAt', 'lastUpdatedBy', 'refundLogs')
+                    .select('id', 'tableNumber', 'items', 'subtotal', 'serviceCharge', 'total', 'status', 'createdAt', 'customerName', 'customerPhone', 'customerAvatar', 'paymentMethod', 'isMember', 'isPaid', 'guestCount', 'discount', 'quickNotes', 'isFlagged', 'flagReason', 'takeoutInfo', 'clientOrderId', 'version', 'updatedAt', 'lastUpdatedBy', 'refundLogs')
                     .orderBy('createdAt', 'desc').limit(200).get();
             }
             catch (_idxErr) {
                 needsManualSort = true;
                 snapshot = await db.collection('orders')
-                    .select('id', 'tableNumber', 'items', 'subtotal', 'serviceCharge', 'total', 'status', 'createdAt', 'customerName', 'customerPhone', 'customerAvatar', 'paymentMethod', 'isMember', 'isPaid', 'guestCount', 'discount', 'quickNotes', 'isFlagged', 'flagReason', 'takeoutInfo', 'pickupTime', 'clientOrderId', 'version', 'updatedAt', 'lastUpdatedBy', 'refundLogs')
+                    .select('id', 'tableNumber', 'items', 'subtotal', 'serviceCharge', 'total', 'status', 'createdAt', 'customerName', 'customerPhone', 'customerAvatar', 'paymentMethod', 'isMember', 'isPaid', 'guestCount', 'discount', 'quickNotes', 'isFlagged', 'flagReason', 'takeoutInfo', 'clientOrderId', 'version', 'updatedAt', 'lastUpdatedBy', 'refundLogs')
                     .limit(200).get();
             }
             const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -271,15 +271,15 @@ function registerOrdersRoutes(app, ctx) {
                     }
                 }
                 const verifiedItems = (orderData.items || []).map((item) => {
-                    const unitPrice = orderCalculationService_1.orderCalculationService.computeOrderItemUnitPrice(item, menuItemsList);
+                    const unitPrice = shared_1.orderCalculationService.computeOrderItemUnitPrice(item, menuItemsList);
                     return {
                         ...item,
                         price: unitPrice
                     };
                 });
                 const combos = sysData?.livePromoCombos || sysData?.livePromoCombo?.combos || [];
-                const verifiedPromoDiscount = orderCalculationService_1.orderCalculationService.calculatePromoComboDiscount(verifiedItems, combos, menuItemsList);
-                const verifiedPricing = orderCalculationService_1.orderCalculationService.calculateOrderPricing({
+                const verifiedPromoDiscount = shared_1.orderCalculationService.calculatePromoComboDiscount(verifiedItems, combos, menuItemsList);
+                const verifiedPricing = shared_1.orderCalculationService.calculateOrderPricing({
                     items: verifiedItems,
                     paymentMethod: orderData.paymentMethod,
                     discount: verifiedPromoDiscount,
@@ -294,7 +294,6 @@ function registerOrdersRoutes(app, ctx) {
                     discount: verifiedPricing.discount,
                     serviceCharge: verifiedPricing.serviceCharge,
                     total: verifiedPricing.total,
-                    totalAmount: verifiedPricing.total,
                     status: orderData.status || 'pending',
                     createdAt: orderData.createdAt || new Date().toISOString(),
                 };
@@ -405,12 +404,11 @@ function registerOrdersRoutes(app, ctx) {
                 if (typeof expectedVersion === 'number' && expectedVersion < currentVersion) {
                     throw new Error('CONCURRENCY_CONFLICT:訂單已被他人更新，請重新載入後再試！');
                 }
-                const isPaidOrCancelled = orderData.status === 'paid' || orderData.status === 'cancelled' || orderData.isPaid;
-                const hasValidRefundLogs = Array.isArray(refundLogs) && refundLogs.length > 0;
-                if (isPaidOrCancelled && !hasValidRefundLogs) {
-                    throw new Error('ORDER_LOCKED:訂單已結帳或已取消，未附帶退換核銷紀錄不可修改餐點內容！');
+                const gateCheck = (0, shared_1.checkRefundLogsGate)(orderData.status, orderData.isPaid, refundLogs);
+                if (gateCheck.isLocked) {
+                    throw new Error('ORDER_LOCKED:' + gateCheck.errorMessage);
                 }
-                const pricing = orderCalculationService_1.orderCalculationService.calculateOrderPricing({
+                const pricing = shared_1.orderCalculationService.calculateOrderPricing({
                     ...orderData,
                     items
                 });
@@ -420,7 +418,6 @@ function registerOrdersRoutes(app, ctx) {
                     serviceCharge: pricing.serviceCharge,
                     discount: pricing.discount,
                     total: pricing.total,
-                    totalAmount: pricing.total,
                     updatedAt: new Date().toISOString(),
                     version: currentVersion + 1
                 };
@@ -446,7 +443,11 @@ function registerOrdersRoutes(app, ctx) {
     });
     put('/orders/:id/checkout', requireStaffAuth, async (req, res) => {
         const id = req.params.id;
-        const { paymentMethod, cashTendered, changeAmount, checkoutRecord } = req.body;
+        const validation = (0, validators_1.validateCheckoutPayload)(req.body);
+        if (!validation.isValid) {
+            return res.status(400).json({ error: validation.error });
+        }
+        const { paymentMethod, cashTendered, changeAmount, checkoutRecord } = validation.sanitizedData;
         try {
             let resolvedStatus = 'paid';
             await db.runTransaction(async (t) => {
@@ -455,11 +456,11 @@ function registerOrdersRoutes(app, ctx) {
                 if (!orderDoc.exists)
                     throw new Error('Order not found');
                 const orderData = orderDoc.data();
-                if (orderData?.isPaid || orderData?.status === 'paid') {
-                    throw new Error('DOUBLE_PAY_PREVENTED:訂單已結帳，不可重複付款');
-                }
                 const currentStatus = orderData?.status;
                 resolvedStatus = (currentStatus === 'completed' || currentStatus === 'cancelled') ? currentStatus : 'paid';
+                if (orderData?.isPaid || currentStatus === 'paid') {
+                    return;
+                }
                 let tableRef = null;
                 let tableSnap = null;
                 if (orderData && orderData.tableNumber && !String(orderData.tableNumber).includes('外帶') && String(orderData.tableNumber).toLowerCase() !== 'takeout') {
@@ -515,10 +516,15 @@ function registerOrdersRoutes(app, ctx) {
         }
     });
     post('/orders/bulk-checkout', requireStaffAuth, async (req, res) => {
-        const { orderIds, tableNumbers, paymentMethod, cashTendered, changeAmount, checkoutRecord } = req.body;
+        const { orderIds, tableNumbers } = req.body;
         if (!Array.isArray(orderIds) || orderIds.length === 0) {
             return res.status(400).json({ error: 'orderIds 必須為非空陣列' });
         }
+        const validation = (0, validators_1.validateCheckoutPayload)(req.body);
+        if (!validation.isValid) {
+            return res.status(400).json({ error: validation.error });
+        }
+        const { paymentMethod, cashTendered, changeAmount, checkoutRecord } = validation.sanitizedData;
         try {
             const batch = db.batch();
             const resolvedOrderStatuses = {};
@@ -578,6 +584,9 @@ function registerOrdersRoutes(app, ctx) {
                     const currentStatus = orderData?.status;
                     const resolvedStatus = (currentStatus === 'completed' || currentStatus === 'cancelled') ? currentStatus : 'paid';
                     resolvedOrderStatuses[id] = resolvedStatus;
+                    if (orderData?.isPaid || currentStatus === 'paid') {
+                        continue;
+                    }
                     transaction.update(orderRef, {
                         paymentMethod: paymentMethod || 'cash',
                         cashTendered: cashTendered || 0,
@@ -599,7 +608,8 @@ function registerOrdersRoutes(app, ctx) {
                     });
                 }
                 if (checkoutRecord && typeof checkoutRecord === 'object') {
-                    const stableId = orderIds.length > 0 ? orderIds[0] : Date.now();
+                    const sortedIds = [...orderIds].sort();
+                    const stableId = sortedIds.length > 0 ? sortedIds[0] : Date.now();
                     const txId = `TX-bulk-${stableId}`;
                     const checkoutRef = db.collection('checkouts').doc(txId);
                     transaction.set(checkoutRef, {
@@ -661,13 +671,12 @@ function registerOrdersRoutes(app, ctx) {
                 }
                 const order = docSnap.data();
                 const currentVersion = order.version || 0;
-                if (typeof expectedVersion === 'number' && expectedVersion < currentVersion) {
-                    if (order.lastUpdatedBy?.role === 'kitchen' && modifier?.role === 'staff') {
-                        const err = new Error('CONCURRENCY_CONFLICT');
-                        err.statusCode = 409;
-                        err.currentOrder = { id: docSnap.id, ...order };
-                        throw err;
-                    }
+                const conflictCheck = (0, shared_1.checkItemCompleteConcurrency)(expectedVersion, currentVersion, order.lastUpdatedBy?.role, modifier?.role);
+                if (conflictCheck.hasConflict) {
+                    const err = new Error('CONCURRENCY_CONFLICT');
+                    err.statusCode = 409;
+                    err.currentOrder = { id: docSnap.id, ...order };
+                    throw err;
                 }
                 const item = order.items.find((it) => it.id === itemId);
                 if (!item) {

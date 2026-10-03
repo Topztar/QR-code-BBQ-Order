@@ -1,3 +1,4 @@
+import { PRINTER_CONSTANTS } from '@sabay/shared';
 /**
  * functions/src/helpers.ts
  *
@@ -183,7 +184,7 @@ export async function sendToNetworkPrinter(
 export function createHandleSavePrinterIp(db: Firestore): express.RequestHandler {
   return async (req, res) => {
     const { ip } = req.body;
-    const targetIp = String(ip || '192.168.123.100');
+    const targetIp = String(ip || PRINTER_CONSTANTS.DEFAULT_IP);
     try {
       const systemRef = db.collection('settings').doc('system');
       const docSnap = await systemRef.get();

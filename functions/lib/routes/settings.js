@@ -12,8 +12,8 @@ function registerSettingsRoutes(app, ctx) {
     const getCachedSettings = (0, helpers_1.createGetCachedSettings)(db);
     const get = (routePath, ...handlers) => app.get([`/api${routePath}`, routePath], ...handlers);
     const post = (routePath, ...handlers) => app.post([`/api${routePath}`, routePath], ...handlers);
-    const put = (routePath, ...handlers) => app.put([`/api${routePath}`, routePath], ...handlers);
     const del = (routePath, ...handlers) => app.delete([`/api${routePath}`, routePath], ...handlers);
+    const put = (routePath, ...handlers) => app.put([`/api${routePath}`, routePath], ...handlers);
     get('/settings/public', async (_req, res) => {
         try {
             res.setHeader('Cache-Control', 'public, max-age=120, s-maxage=600, stale-while-revalidate=1800');

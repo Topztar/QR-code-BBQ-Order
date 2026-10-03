@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
 import { apiFetch } from '../lib/api';
+import { PRINTER_CONSTANTS } from '@sabay/shared';
 import { printViaBridge, normalizePort, DEFAULT_POS_BRIDGE_URL } from '../lib/posBridgeClient';
 
 export interface PrinterDataContextType {
@@ -23,7 +24,7 @@ interface ProviderProps {
 }
 
 export function PrinterDataProvider({ children, activeTab }: ProviderProps) {
-  const [printerIp, setPrinterIp] = useState<string>('192.168.123.100');
+  const [printerIp, setPrinterIp] = useState<string>(PRINTER_CONSTANTS.DEFAULT_IP);
   const [printLogs, setPrintLogs] = useState<any[]>([]);
 
   // Fetch printer config & logs on mount / when activeTab changes
@@ -98,7 +99,7 @@ export function PrinterDataProvider({ children, activeTab }: ProviderProps) {
       const kitchenConfig = customSettings?.kitchen || {};
       const billConfig = customSettings?.bill || {};
 
-      const kitchenIp = kitchenConfig.ip || printerIp || '192.168.123.100';
+      const kitchenIp = kitchenConfig.ip || printerIp || PRINTER_CONSTANTS.DEFAULT_IP;
       const kitchenPort = kitchenConfig.usbPort || 'USB001';
       const kitchenConn = kitchenConfig.connectionType || 'IP';
 

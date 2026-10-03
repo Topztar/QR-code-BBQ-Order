@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { orderCalculationService as frontendCalc } from '../src/services/orderCalculationService';
-import { orderCalculationService as backendCalc } from '../functions/src/services/orderCalculationService';
+import { orderCalculationService as frontendCalc, orderCalculationService as backendCalc } from '@sabay/shared';
 
 describe('Order Calculation Parity Tests (Frontend vs. Functions Backend)', () => {
   const mockMenuList = [
@@ -58,7 +57,7 @@ describe('Order Calculation Parity Tests (Frontend vs. Functions Backend)', () =
   it('should calculate subtotal with both qty and quantity fallback identically', () => {
     const items = [
       { menuItemId: 'dish-beef', price: 90, qty: 3 },
-      { menuItemId: 'dish-squid', price: 180, quantity: 2 },
+      { menuItemId: 'dish-squid', price: 180, qty: 2 },
       { menuItemId: 'item-topup-coke', price: 40 } // default 1
     ];
 

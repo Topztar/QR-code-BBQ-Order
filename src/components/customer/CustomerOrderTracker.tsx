@@ -3,7 +3,7 @@ import { Order, MenuItem, Category, Language } from '../../types';
 import { getLocalizedText } from '../../utils/i18n';
 import { apiFetch } from '../../lib/api';
 import { Clock, Check, Star, Sparkles, Flame, ShoppingCart } from 'lucide-react';
-import { orderCalculationService } from '../../services/orderCalculationService';
+import { orderCalculationService } from '@sabay/shared';
 
 const statusColors: Record<string, string> = {
   pending: 'text-amber-400 border-amber-400/20 bg-amber-400/5',

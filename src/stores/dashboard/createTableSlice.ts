@@ -22,10 +22,7 @@ export const createTableSlice: StateCreator<
   selectedFineTuneTableId: null,
   setSelectedFineTuneTableId: (id) => set({ selectedFineTuneTableId: id }),
   
-  localTablePositions: {},
-  setLocalTablePositions: (positions) => set((state) => ({
-    localTablePositions: typeof positions === 'function' ? positions(state.localTablePositions) : positions
-  })),
+
   
   tableToDeleteId: null,
   setTableToDeleteId: (id) => set({ tableToDeleteId: id }),

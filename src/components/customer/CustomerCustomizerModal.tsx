@@ -3,7 +3,7 @@ import { MenuItem, CustomAddOn, Language, Ingredient, SoldOutType } from '../../
 import { getLocalizedText } from '../../utils/i18n';
 import { TRANSLATIONS } from '../../data';
 import { X, ShoppingCart, Clock, AlertTriangle, Check } from 'lucide-react';
-import { orderCalculationService } from '../../services/orderCalculationService';
+import { orderCalculationService } from '@sabay/shared';
 import { useModalEscape } from '../../hooks/useModalEscape';
 
 class ModalErrorBoundary extends Component<{children: React.ReactNode, onClose: () => void, isInline?: boolean}, {hasError: boolean}> {
@@ -633,7 +633,7 @@ export const CustomerCustomizerModal: React.FC<CustomerCustomizerModalProps> = (
                 isSimplifiedMode ? 'text-black font-black' : 'text-white/40'
               }`}
             >
-              {TRANSLATIONS.totalAmountLabel?.[currentLang] || '總計算額金額'}
+              {TRANSLATIONS.totalLabel?.[currentLang] || '總計算額金額'}
             </span>
             <p
               className={`text-lg font-bold mt-1 font-serif ${

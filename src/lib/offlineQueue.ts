@@ -174,19 +174,6 @@ export function removeOrderRequestsFromQueue(orderIdOrIds: string | string[]) {
   }
 }
 
-// Check if there are any queued requests for a specific order
-export function hasPendingOrderRequests(orderId: string): boolean {
-  if (!orderId) return false;
-  const plainId = String(orderId).trim();
-  const encodedId = encodeURIComponent(plainId);
-  const queue = getOfflineQueue();
-  return queue.some(item => 
-    item.url.includes(`/api/orders/${plainId}`) ||
-    item.url.includes(`/api/orders/${encodedId}`) ||
-    (item.body && (item.body.includes(`"${plainId}"`) || item.body.includes(plainId)))
-  );
-}
-
 // Execute a queued request
 async function executeRequest(item: QueuedRequest): Promise<Response> {
   const token = typeof localStorage !== 'undefined' ? localStorage.getItem('sabay_jwt_token') : null;
@@ -214,14 +201,6 @@ if (typeof window !== 'undefined') {
       isExecutingQueue = false; // Lock released by another tab
     }
   };
-}
-
-export function isOfflineQueuePaused(): boolean {
-  return isQueuePaused;
-}
-
-export function isOfflineQueueExecuting(): boolean {
-  return isExecutingQueue;
 }
 
 export function resumeOfflineQueue(onProgress?: (msg: string) => void) {

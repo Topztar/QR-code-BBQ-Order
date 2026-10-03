@@ -4,7 +4,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { memberService, MEMBERS_STORAGE_KEY } from '../src/services/memberService';
 import { getMaskedEmail } from '../src/components/manager/ManagerDashboardUtils';
-import { orderCalculationService } from '../src/services/orderCalculationService';
+import { orderCalculationService } from '@sabay/shared';
 
 describe('Manager Dashboard Refactoring & Security Tests', () => {
   beforeEach(() => {

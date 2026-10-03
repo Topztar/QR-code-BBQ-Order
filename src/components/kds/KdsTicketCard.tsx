@@ -503,7 +503,7 @@ ${specLines}
                     receiptType: 'kitchen',
                     receiptBody: ticketStr,
                     onConfirm: () => {
-                      alert(`🖨️ 虛擬網卡列印指令傳送正常！(單號: ${order.id})`);
+                      if (import.meta.env.DEV) alert(`🖨️ 虛擬網卡列印指令傳送正常！(單號: ${order.id})`);
                     },
                   });
                 }}

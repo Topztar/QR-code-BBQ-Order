@@ -35,6 +35,7 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.invalidatePublicBootstrapCache = invalidatePublicBootstrapCache;
 exports.registerBootstrapRoutes = registerBootstrapRoutes;
+const shared_1 = require("@sabay/shared");
 const crypto = __importStar(require("crypto"));
 const helpers_1 = require("../helpers");
 const auth_1 = require("../auth");
@@ -42,6 +43,8 @@ let cachedPublicBootstrap = null;
 const BOOTSTRAP_CACHE_TTL_MS = 180 * 1000;
 function invalidatePublicBootstrapCache() {
     cachedPublicBootstrap = null;
+    (0, helpers_1.setCachedMenu)(null);
+    (0, helpers_1.setCachedCategories)(null);
 }
 function registerBootstrapRoutes(app, ctx) {
     const { db, storageBucket, requireStaffAuth, createRateLimiter, sendErrorResponse } = ctx;
@@ -165,7 +168,7 @@ function registerBootstrapRoutes(app, ctx) {
                     rewards: sysData.liveMemberRewards || []
                 },
                 servicePaused: { servicePaused: sysData.liveServicePaused || false },
-                printerConfig: { ip: sysData.livePrinterIp || '192.168.123.100' },
+                printerConfig: { ip: sysData.livePrinterIp || shared_1.PRINTER_CONSTANTS.DEFAULT_IP },
                 ingredients: ingredientsSnap.docs.map(doc => doc.data()),
                 reservations: reservationsSnap.docs.map(doc => doc.data()),
                 version: sysData.liveSystemVersion || sysData.version || '1.0.1',

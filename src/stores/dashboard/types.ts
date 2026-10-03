@@ -46,8 +46,7 @@ export interface CashierSlice {
   cashierSelectedMergeOrderIds: string[];
   setCashierSelectedMergeOrderIds: (ids: Updater<string[]>) => void;
   
-  cashierPanelWidth: number;
-  setCashierPanelWidth: (val: Updater<number>) => void;
+
   
   isCashierWidthAuto: boolean;
   setIsCashierWidthAuto: (val: boolean) => void;
@@ -127,8 +126,7 @@ export interface TableSlice {
   selectedFineTuneTableId: string | null;
   setSelectedFineTuneTableId: (id: string | null) => void;
   
-  localTablePositions: Record<string, { x: number; y: number }>;
-  setLocalTablePositions: (positions: Record<string, { x: number; y: number }> | ((prev: Record<string, { x: number; y: number }>) => Record<string, { x: number; y: number }>)) => void;
+
   
   tableToDeleteId: string | null;
   setTableToDeleteId: (id: string | null) => void;

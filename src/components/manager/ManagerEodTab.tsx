@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { Calendar } from 'lucide-react';
 import { Ingredient, Order } from '../../types';
 import { getLocalizedText } from '../../utils/i18n';
@@ -9,7 +9,7 @@ import {
   getLocalDateString,
   isOrderOnLocalDate
 } from './ManagerDashboardUtils';
-import { orderCalculationService } from '../../services/orderCalculationService';
+import { orderCalculationService } from '@sabay/shared';
 import { PrinterConfig } from '../../types';
 
 const localStorage = safeStorage;
@@ -63,11 +63,18 @@ export const ManagerEodTab: React.FC<ManagerEodTabProps> = ({
   const paidOrders = dailyOrders.filter(o => o.isPaid);
   const unpaidOrders = dailyOrders.filter(o => !o.isPaid && o.status !== 'cancelled');
 
-  const totalRev = paidOrders.reduce((sum, ord) => sum + orderCalculationService.calculateOrderPricing(ord, menuItems).total, 0);
-  const cashSum = paidOrders.filter(o => o.paymentMethod === 'cash').reduce((sum, ord) => sum + orderCalculationService.calculateOrderPricing(ord, menuItems).total, 0);
-  const creditSum = paidOrders.filter(o => o.paymentMethod === 'credit').reduce((sum, ord) => sum + orderCalculationService.calculateOrderPricing(ord, menuItems).total, 0);
-  const twqrSum = paidOrders.filter(o => o.paymentMethod === 'twqr').reduce((sum, ord) => sum + orderCalculationService.calculateOrderPricing(ord, menuItems).total, 0);
-  const memberSum = paidOrders.filter(o => o.paymentMethod === 'member').reduce((sum, ord) => sum + orderCalculationService.calculateOrderPricing(ord, menuItems).total, 0);
+  const { totalRev, cashSum, creditSum, twqrSum, memberSum } = useMemo(() => {
+    let tr = 0, cs = 0, cr = 0, tw = 0, ms = 0;
+    paidOrders.forEach(ord => {
+      const { total } = orderCalculationService.calculateOrderPricing(ord, menuItems);
+      tr += total;
+      if (ord.paymentMethod === 'cash') cs += total;
+      else if (ord.paymentMethod === 'credit') cr += total;
+      else if (ord.paymentMethod === 'twqr') tw += total;
+      else if (ord.paymentMethod === 'member') ms += total;
+    });
+    return { totalRev: tr, cashSum: cs, creditSum: cr, twqrSum: tw, memberSum: ms };
+  }, [paidOrders, menuItems]);
 
   // Calculate quantities of each item sold ON THIS SETTLEMENT DAY
   const itemQuants: { [name: string]: { zh: string; qty: number } } = {};

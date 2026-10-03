@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import express from 'express';
-import { orderCalculationService } from '../src/services/orderCalculationService';
+import { orderCalculationService } from '@sabay/shared';
 import { validateOrderPayload } from '../functions/src/validators';
 import { registerOrdersRoutes } from '../src/server/routes/orders';
 
@@ -9,7 +9,7 @@ describe('Order Audit Fixes Tests', () => {
     // Tests that frontend `orderCalculationService` correctly parses `quantity` just like backend
     const mockItems = [
       { id: '1', name: 'Item 1', price: 100, qty: 2 },
-      { id: '2', name: 'Item 2', price: 150, quantity: 3 }, // Should fallback to quantity
+      { id: '2', name: 'Item 2', price: 150, qty: 3 }, // Should fallback to quantity
       { id: '3', name: 'Item 3', price: 50 } // Should default to 1
     ];
     

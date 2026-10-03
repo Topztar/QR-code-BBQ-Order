@@ -11,8 +11,7 @@ import { isFirebaseSyncEnabled } from '../lib/firebase';
 
 export interface OrderDataContextType {
   orders: Order[];
-  setOrders: React.Dispatch<React.SetStateAction<Order[]>>;
-  pushNotifications: any[];
+
   offlineQueue: QueuedRequest[];
   isSyncing: boolean;
   syncProgressMsg: string;
@@ -30,11 +29,9 @@ export interface OrderDataContextType {
     customerAvatar?: string;
     isMember?: boolean;
     customerPhone?: string;
-    pickupTime?: string;
     takeoutInfo?: {
       customerName: string;
       phone: string;
-      pickupTime: string;
     };
   }) => Promise<Order | null>;
   handleUpdateOrderStatus: (orderId: string, status: OrderStatus) => Promise<void>;
@@ -73,8 +70,7 @@ export interface OrderDataContextType {
   ) => Promise<{ success: boolean }>;
   handleDeleteOrder: (orderId: string) => Promise<{ success: boolean }>;
   handleForceSync: () => Promise<void>;
-  handleSendPromoPush: (notif: { title: string; message: string; badge: string }) => Promise<void>;
-  handleMarkNotificationRead: (notifId: string) => void;
+
   kdsSession: KdsSession | null;
   currentDeviceId: string;
   isKitchenPreempted: boolean;
@@ -88,43 +84,22 @@ const OrderDataContext = createContext<OrderDataContextType | undefined>(undefin
 interface ProviderProps {
   children: ReactNode;
   activeTab: 'customer' | 'kitchen' | 'admin' | 'cashier';
-  currentPath: string;
-  tables: TableConfig[];
-  setTables: React.Dispatch<React.SetStateAction<TableConfig[]>>;
-  reservations: Reservation[];
+
   menuItems?: MenuItem[];
-  handleDeleteReservation: (id: string) => Promise<{ success: boolean; error?: string }>;
   handleUpdateTableStatus: (id: string, updates: Partial<Omit<TableConfig, 'id' | 'qrCodeUrl'>>) => Promise<{ success: boolean }>;
   onRefreshData?: () => Promise<void>;
+  syncActive: boolean;
 }
 
 export function OrderDataProvider({
   children,
   activeTab,
-  currentPath,
-  tables,
-  setTables,
-  reservations,
+
   menuItems = [],
-  handleDeleteReservation,
   handleUpdateTableStatus,
   onRefreshData,
+  syncActive,
 }: ProviderProps) {
-  const [pushNotifications, setPushNotifications] = useState<any[]>([]);
-  const [syncActive, setSyncActive] = useState<boolean>(() => isFirebaseSyncEnabled());
-
-  useEffect(() => {
-    const handleSyncChanged = (e: Event) => {
-      const customEvent = e as CustomEvent<{ syncEnabled: boolean }>;
-      if (customEvent.detail && typeof customEvent.detail.syncEnabled === 'boolean') {
-        setSyncActive(customEvent.detail.syncEnabled);
-      } else {
-        setSyncActive(isFirebaseSyncEnabled());
-      }
-    };
-    window.addEventListener('firebase_sync_changed', handleSyncChanged);
-    return () => window.removeEventListener('firebase_sync_changed', handleSyncChanged);
-  }, []);
 
   const {
     offlineQueue,
@@ -160,137 +135,13 @@ export function OrderDataProvider({
     currentDeviceId,
     isNetworkOnline,
     syncActive,
-    tables,
-    reservations,
     handleUpdateTableStatus
   );
   const { handlePlaceOrder } = useOrderSubmit(setOrders, menuItems);
 
-  const tableStatusOrdersSignature = useMemo(() => {
-    return orders
-      .filter(o => o.tableNumber && o.status !== 'cancelled')
-      .map(o => `${o.id}:${o.tableNumber}:${o.status}:${o.isPaid}`)
-      .sort()
-      .join('|');
-  }, [orders]);
-
-  // Real-time Table Status Auto-Sync based on Orders & Reservations
-  useEffect(() => {
-    if (!tables || tables.length === 0) return;
-
-    const checkAndSyncTables = () => {
-      const nowMs = Date.now();
-      const now = new Date();
-      const formatter = new Intl.DateTimeFormat('en-CA', {
-        timeZone: 'Asia/Taipei',
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit'
-      });
-      const todayStr = formatter.format(now);
-
-      setTables(prevTables => {
-        let hasChanges = false;
-        const newTables = prevTables.map(tb => {
-          const tblId = String(tb.id).trim();
-
-          const activeOrders = orders.filter(o => 
-            String(o.tableNumber).trim() === tblId && 
-            o.status !== 'cancelled'
-          );
-
-          const unpaidActiveOrders = activeOrders.filter(o => !o.isPaid && o.status !== 'completed' && o.status !== 'paid');
-
-          if (unpaidActiveOrders.length > 0) {
-            const targetStatus: 'pending_checkout' | 'in_use' = tb.status === 'pending_checkout' ? 'pending_checkout' : 'in_use';
-            if (tb.status !== targetStatus || tb.preservedFor || tb.cleaningStartedAt) {
-              hasChanges = true;
-              return { ...tb, status: targetStatus, preservedFor: '', cleaningStartedAt: null };
-            }
-            return tb;
-          }
-
-          if (tb.status === 'in_use' || tb.status === 'pending_checkout') {
-            hasChanges = true;
-            return {
-              ...tb,
-              status: 'cleaning' as const,
-              cleaningStartedAt: tb.cleaningStartedAt || new Date().toISOString()
-            };
-          }
-
-          if (tb.status === 'cleaning') {
-            let cleaningStartMs = tb.cleaningStartedAt ? new Date(tb.cleaningStartedAt).getTime() : 0;
-            if (!cleaningStartMs || isNaN(cleaningStartMs)) {
-              const latestOrder = activeOrders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
-              if (latestOrder && latestOrder.createdAt) {
-                cleaningStartMs = new Date(latestOrder.createdAt).getTime();
-              } else {
-                cleaningStartMs = nowMs;
-              }
-            }
-
-            if (nowMs - cleaningStartMs >= 15 * 60 * 1000) {
-              const todayPendingRes = reservations.find(r => 
-                String(r.tableNumber).trim() === tblId &&
-                (r.status === 'pending' || r.status === 'upcoming' || r.status === 'confirmed') &&
-                r.date.trim() === todayStr
-              );
-
-              if (todayPendingRes) {
-                hasChanges = true;
-                return {
-                  ...tb,
-                  status: 'preserved' as const,
-                  preservedFor: todayPendingRes.customerName,
-                  cleaningStartedAt: null
-                };
-              }
-
-              hasChanges = true;
-              return {
-                ...tb,
-                status: 'available' as const,
-                preservedFor: '',
-                cleaningStartedAt: null
-              };
-            }
-
-            return tb;
-          }
-
-          return tb;
-        });
-
-        return hasChanges ? newTables : prevTables;
-      });
-    };
-
-    checkAndSyncTables();
-    const interval = setInterval(checkAndSyncTables, 15000);
-    return () => clearInterval(interval);
-  }, [tableStatusOrdersSignature, reservations, tables?.length, setTables]);
-
-  const handleSendPromoPush = async (notif: { title: string; message: string; badge: string }) => {
-    try {
-      await apiFetch('/api/send-promo-push', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(notif),
-      });
-    } catch (err) {
-      console.error('[Sabay Push delivery failed]', err);
-    }
-  };
-
-  const handleMarkNotificationRead = (notifId: string) => {
-    setPushNotifications(prev => prev.filter((n) => n.id !== notifId));
-  };
-
   const value = useMemo<OrderDataContextType>(() => ({
     orders,
-    setOrders,
-    pushNotifications,
+
     offlineQueue,
     isSyncing,
     syncProgressMsg,
@@ -306,8 +157,7 @@ export function OrderDataProvider({
     handleBulkPayOrders,
     handleDeleteOrder,
     handleForceSync,
-    handleSendPromoPush,
-    handleMarkNotificationRead,
+
     kdsSession,
     currentDeviceId,
     isKitchenPreempted,
@@ -315,7 +165,7 @@ export function OrderDataProvider({
     handleReleaseKitchenRole,
     dismissPreemptedAlert,
   }), [
-    orders, pushNotifications, offlineQueue, isSyncing, syncProgressMsg, isNetworkOnline,
+    orders, offlineQueue, isSyncing, syncProgressMsg, isNetworkOnline,
     kdsSession, currentDeviceId, isKitchenPreempted, handleClaimKitchenRole, handleReleaseKitchenRole, dismissPreemptedAlert,
     handlePlaceOrder, handleUpdateOrderStatus, handleToggleOrderItemComplete, handleUpdateTableNumber, handleUpdateQuickNotes,
     handleToggleOrderFlag, handleUpdateOrderItems, handlePayOrder, handleBulkPayOrders, handleDeleteOrder, handleForceSync

@@ -4,7 +4,7 @@ import { apiFetch } from '../lib/api';
 import { addRequestToQueue } from '../lib/offlineQueue';
 import { safeStorage } from '../lib/safeStorage';
 import { broadcastOrderEvent } from './useLiveOrders';
-import { orderCalculationService } from '../services/orderCalculationService';
+import { orderCalculationService } from '@sabay/shared';
 
 export interface OrderDataPayload {
   tableNumber: string;
@@ -19,7 +19,6 @@ export interface OrderDataPayload {
   customerAvatar?: string;
   isMember?: boolean;
   customerPhone?: string;
-  pickupTime?: string;
   takeoutInfo?: {
     customerName: string;
     phone: string;
@@ -90,7 +89,6 @@ export function useOrderSubmit(
       reservationDate: orderPayload.reservationDate,
       reservationTime: orderPayload.reservationTime,
       customerPhone: orderPayload.customerPhone,
-      pickupTime: orderPayload.pickupTime,
       takeoutInfo: orderPayload.takeoutInfo,
       isOfflinePending: false,
       source: orderPayload.source || 'direct',

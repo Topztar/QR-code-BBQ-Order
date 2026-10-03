@@ -4,7 +4,7 @@ import {
   isOrderOnLocalDate,
   generateReservationNo,
 } from '../src/components/manager/ManagerDashboardUtils';
-import { orderCalculationService } from '../src/services/orderCalculationService';
+import { orderCalculationService } from '@sabay/shared';
 
 describe('ManagerDashboard & Extended Files Functional Simulation Suite', () => {
   const mockMenu = [

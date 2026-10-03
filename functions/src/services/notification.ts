@@ -425,12 +425,11 @@ export async function sendTestNotification(
 export interface OrderNotificationData {
   id: string;
   tableNumber: string;
-  items: Array<{ name: any; quantity?: number; qty?: number; price: number }>;
+  items: Array<{ name: any; qty: number; price: number }>;
   total: number;
   status?: string;
   customerName?: string;
   customerPhone?: string;
-  pickupTime?: string;
   takeoutInfo?: any;
   source?: string;
   utm_medium?: string;
@@ -455,7 +454,7 @@ export function formatLineOrderMessage(order: OrderNotificationData): string {
   const itemsList = (order.items || [])
     .map((i: any) => {
       const name = typeof i.name === 'object' ? (i.name.zh || i.name.en || JSON.stringify(i.name)) : i.name;
-      const q = i.quantity || i.qty || 1;
+      const q = i.qty || 1;
       return `• ${name} x${q} ($${i.price * q})`;
     })
     .slice(0, 15)

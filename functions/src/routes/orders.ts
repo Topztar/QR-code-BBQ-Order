@@ -1,9 +1,9 @@
 import express from 'express';
 import { Firestore, Query } from 'firebase-admin/firestore';
 import { Bucket } from '@google-cloud/storage';
-import { validateOrderPayload, validateRatingPayload } from '../validators';
+import { validateOrderPayload, validateRatingPayload, validateCheckoutPayload } from '../validators';
 import { isStoreOpenFromData, createGetCachedSettings } from '../helpers';
-import { orderCalculationService } from '../services/orderCalculationService';
+import { orderCalculationService, checkItemCompleteConcurrency, checkRefundLogsGate } from '@sabay/shared';
 
 // ============================================================
 // ORDERS 路由模組（含 print-logs）
@@ -84,12 +84,12 @@ get('/orders', requireStaffAuth, async (_req, res) => {
     let needsManualSort = false;
     try {
       snapshot = await db.collection('orders')
-        .select('id', 'tableNumber', 'items', 'subtotal', 'serviceCharge', 'total', 'status', 'createdAt', 'customerName', 'customerPhone', 'customerAvatar', 'paymentMethod', 'isMember', 'isPaid', 'guestCount', 'discount', 'quickNotes', 'isFlagged', 'flagReason', 'takeoutInfo', 'pickupTime', 'clientOrderId', 'version', 'updatedAt', 'lastUpdatedBy', 'refundLogs')
+        .select('id', 'tableNumber', 'items', 'subtotal', 'serviceCharge', 'total', 'status', 'createdAt', 'customerName', 'customerPhone', 'customerAvatar', 'paymentMethod', 'isMember', 'isPaid', 'guestCount', 'discount', 'quickNotes', 'isFlagged', 'flagReason', 'takeoutInfo', 'clientOrderId', 'version', 'updatedAt', 'lastUpdatedBy', 'refundLogs')
         .orderBy('createdAt', 'desc').limit(200).get();
     } catch (_idxErr) {
       needsManualSort = true;
       snapshot = await db.collection('orders')
-        .select('id', 'tableNumber', 'items', 'subtotal', 'serviceCharge', 'total', 'status', 'createdAt', 'customerName', 'customerPhone', 'customerAvatar', 'paymentMethod', 'isMember', 'isPaid', 'guestCount', 'discount', 'quickNotes', 'isFlagged', 'flagReason', 'takeoutInfo', 'pickupTime', 'clientOrderId', 'version', 'updatedAt', 'lastUpdatedBy', 'refundLogs')
+        .select('id', 'tableNumber', 'items', 'subtotal', 'serviceCharge', 'total', 'status', 'createdAt', 'customerName', 'customerPhone', 'customerAvatar', 'paymentMethod', 'isMember', 'isPaid', 'guestCount', 'discount', 'quickNotes', 'isFlagged', 'flagReason', 'takeoutInfo', 'clientOrderId', 'version', 'updatedAt', 'lastUpdatedBy', 'refundLogs')
         .limit(200).get();
     }
     const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -371,7 +371,6 @@ post('/orders', requireAppCheck, orderRateLimiter, async (req, res) => {
         discount: verifiedPricing.discount,
         serviceCharge: verifiedPricing.serviceCharge,
         total: verifiedPricing.total,
-        totalAmount: verifiedPricing.total,
         status: orderData.status || 'pending',
         createdAt: orderData.createdAt || new Date().toISOString(),
       };
@@ -503,10 +502,10 @@ put('/orders/:id/items', requireStaffAuth, async (req, res) => {
       if (typeof expectedVersion === 'number' && expectedVersion < currentVersion) {
         throw new Error('CONCURRENCY_CONFLICT:訂單已被他人更新，請重新載入後再試！');
       }
-      const isPaidOrCancelled = orderData.status === 'paid' || orderData.status === 'cancelled' || orderData.isPaid;
-      const hasValidRefundLogs = Array.isArray(refundLogs) && refundLogs.length > 0;
-      if (isPaidOrCancelled && !hasValidRefundLogs) {
-        throw new Error('ORDER_LOCKED:訂單已結帳或已取消，未附帶退換核銷紀錄不可修改餐點內容！');
+      
+      const gateCheck = checkRefundLogsGate(orderData.status, orderData.isPaid, refundLogs);
+      if (gateCheck.isLocked) {
+        throw new Error('ORDER_LOCKED:' + gateCheck.errorMessage);
       }
       const pricing = orderCalculationService.calculateOrderPricing({
         ...orderData,
@@ -518,7 +517,6 @@ put('/orders/:id/items', requireStaffAuth, async (req, res) => {
         serviceCharge: pricing.serviceCharge,
         discount: pricing.discount,
         total: pricing.total,
-        totalAmount: pricing.total,
         updatedAt: new Date().toISOString(),
         version: currentVersion + 1
       };
@@ -545,7 +543,12 @@ put('/orders/:id/items', requireStaffAuth, async (req, res) => {
 
 put('/orders/:id/checkout', requireStaffAuth, async (req, res) => {
   const id = req.params.id as string;
-  const { paymentMethod, cashTendered, changeAmount, checkoutRecord } = req.body;
+  const validation = validateCheckoutPayload(req.body);
+  if (!validation.isValid) {
+    return res.status(400).json({ error: validation.error });
+  }
+  const { paymentMethod, cashTendered, changeAmount, checkoutRecord } = validation.sanitizedData;
+
   try {
     let resolvedStatus = 'paid';
 
@@ -555,11 +558,12 @@ put('/orders/:id/checkout', requireStaffAuth, async (req, res) => {
       if (!orderDoc.exists) throw new Error('Order not found');
       
       const orderData = orderDoc.data();
-      if (orderData?.isPaid || orderData?.status === 'paid') {
-        throw new Error('DOUBLE_PAY_PREVENTED:訂單已結帳，不可重複付款');
-      }
       const currentStatus = orderData?.status;
       resolvedStatus = (currentStatus === 'completed' || currentStatus === 'cancelled') ? currentStatus : 'paid';
+
+      if (orderData?.isPaid || currentStatus === 'paid') {
+        return; // Idempotent: already paid, exit transaction early without throwing
+      }
 
       let tableRef = null;
       let tableSnap = null;
@@ -623,10 +627,16 @@ put('/orders/:id/checkout', requireStaffAuth, async (req, res) => {
 
 // 23.4. Bulk Checkout (多單合併原子結帳) - Atomic WriteBatch for multiple orders & table release
 post('/orders/bulk-checkout', requireStaffAuth, async (req, res) => {
-  const { orderIds, tableNumbers, paymentMethod, cashTendered, changeAmount, checkoutRecord } = req.body;
+  const { orderIds, tableNumbers } = req.body;
   if (!Array.isArray(orderIds) || orderIds.length === 0) {
     return res.status(400).json({ error: 'orderIds 必須為非空陣列' });
   }
+
+  const validation = validateCheckoutPayload(req.body);
+  if (!validation.isValid) {
+    return res.status(400).json({ error: validation.error });
+  }
+  const { paymentMethod, cashTendered, changeAmount, checkoutRecord } = validation.sanitizedData;
 
   try {
     const batch = db.batch();
@@ -690,6 +700,10 @@ post('/orders/bulk-checkout', requireStaffAuth, async (req, res) => {
         const resolvedStatus = (currentStatus === 'completed' || currentStatus === 'cancelled') ? currentStatus : 'paid';
         resolvedOrderStatuses[id] = resolvedStatus;
 
+        if (orderData?.isPaid || currentStatus === 'paid') {
+          continue; // Idempotent: already paid, skip updating this order
+        }
+
         transaction.update(orderRef, {
           paymentMethod: paymentMethod || 'cash',
           cashTendered: cashTendered || 0,
@@ -714,7 +728,8 @@ post('/orders/bulk-checkout', requireStaffAuth, async (req, res) => {
       }
 
       if (checkoutRecord && typeof checkoutRecord === 'object') {
-        const stableId = orderIds.length > 0 ? orderIds[0] : Date.now();
+        const sortedIds = [...orderIds].sort();
+        const stableId = sortedIds.length > 0 ? sortedIds[0] : Date.now();
         const txId = `TX-bulk-${stableId}`;
         const checkoutRef = db.collection('checkouts').doc(txId);
         transaction.set(checkoutRef, {
@@ -784,14 +799,12 @@ put('/orders/:id/items/:itemId/complete', requireStaffAuth, async (req, res) => 
       const currentVersion = order.version || 0;
 
       // 🛡️ Concurrency Check: If client specified expectedVersion and role is staff, reject if outdated
-      if (typeof expectedVersion === 'number' && expectedVersion < currentVersion) {
-        // If modified by kitchen recently, kitchen is the master truth -> reject stale staff
-        if (order.lastUpdatedBy?.role === 'kitchen' && modifier?.role === 'staff') {
-          const err: any = new Error('CONCURRENCY_CONFLICT');
-          err.statusCode = 409;
-          err.currentOrder = { id: docSnap.id, ...order };
-          throw err;
-        }
+      const conflictCheck = checkItemCompleteConcurrency(expectedVersion, currentVersion, order.lastUpdatedBy?.role, modifier?.role);
+      if (conflictCheck.hasConflict) {
+        const err: any = new Error('CONCURRENCY_CONFLICT');
+        err.statusCode = 409;
+        err.currentOrder = { id: docSnap.id, ...order };
+        throw err;
       }
 
       const item = order.items.find((it: any) => it.id === itemId);

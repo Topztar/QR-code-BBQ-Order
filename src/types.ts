@@ -139,12 +139,11 @@ export interface Order {
   quickNotes?: string;
   isFlagged?: boolean;
   flagReason?: string;
+  pickupTime?: string;
   takeoutInfo?: {
     customerName?: string;
-    phone?: string;
-    pickupTime?: string;
-  };
-  pickupTime?: string;
+    phone?: string;
+  };
   rating?: number;
   feedback?: string;
   isOfflinePending?: boolean;
@@ -194,7 +193,7 @@ export interface Category {
   orderIndex?: number;
 }
 
-export type TableStatus = 'available' | 'preserved' | 'reserved' | 'in_use' | 'pending_checkout' | 'cleaning';
+export type TableStatus = 'available' | 'preserved' | 'in_use' | 'pending_checkout' | 'cleaning';
 
 export interface TableConfig {
   id: string;

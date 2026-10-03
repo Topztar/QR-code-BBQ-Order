@@ -100,12 +100,16 @@ post('/inventory/adjust', requireStaffAuth, async (req, res) => {
 
 // 26. Restock Ingredients
 post('/ingredients/restock', requireStaffAuth, async (req, res) => {
-  const { ingredientId, quantityAdded } = req.body;
-  const amount = Number(quantityAdded);
-  if (isNaN(amount)) {
-    return res.status(400).json({ error: 'Invalid quantityAdded' });
+  const id = req.body.id || req.body.ingredientId;
+  const amount = Number(req.body.amount !== undefined ? req.body.amount : req.body.quantityAdded);
+  
+  if (!id) {
+    return res.status(400).json({ error: 'Missing ingredient id' });
   }
-  const ingRef = db.collection('ingredients').doc(ingredientId);
+  if (isNaN(amount)) {
+    return res.status(400).json({ error: 'Invalid amount' });
+  }
+  const ingRef = db.collection('ingredients').doc(id);
   try {
     await db.runTransaction(async (t) => {
       const docSnap = await t.get(ingRef);

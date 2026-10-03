@@ -27,6 +27,10 @@ interface StaffPortalContainerProps {
 }
 
 function StaffPortalInner({ activeTab, lang, adminSubTab, setAdminSubTab, staffPin }: StaffPortalContainerProps) {
+  const handleSendPromoPush = async (notif: { title: string; message: string; badge?: string }) => {
+    // NOTE: Implemented in future marketing module
+    alert('Promo push not implemented yet.');
+  };
   const {
     menuItems,
     categories,
@@ -88,7 +92,7 @@ function StaffPortalInner({ activeTab, lang, adminSubTab, setAdminSubTab, staffP
     handlePayOrder,
     handleBulkPayOrders,
     handleDeleteOrder,
-    handleSendPromoPush,
+    
   } = useOrderData();
 
   const {

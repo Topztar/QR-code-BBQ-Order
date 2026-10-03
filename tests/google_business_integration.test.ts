@@ -17,7 +17,7 @@ describe('Google Business Profile Integration Tests', () => {
       const payload = {
         tableNumber: '外帶 101',
         items: [
-          { name: { zh: '泰式沙嗲肉串' }, quantity: 2, price: 150 }
+          { name: { zh: '泰式沙嗲肉串' }, qty: 2, price: 150 }
         ],
         customerName: '王小明',
         source: 'google_business',
@@ -35,7 +35,7 @@ describe('Google Business Profile Integration Tests', () => {
       const payload = {
         tableNumber: '1',
         items: [
-          { name: '冬蔭功酸辣湯', quantity: 1, price: 280 }
+          { name: '冬蔭功酸辣湯', qty: 1, price: 280 }
         ]
       };
 
@@ -107,7 +107,7 @@ describe('Google Business Profile Integration Tests', () => {
         id: 'ORD-TEST-999',
         tableNumber: '外帶 501',
         items: [
-          { name: { zh: '炙烤松阪豬' }, quantity: 1, price: 320 }
+          { name: { zh: '炙烤松阪豬' }, qty: 1, price: 320 }
         ],
         total: 320,
         customerName: '張志豪',
@@ -187,7 +187,7 @@ describe('Google Business Profile Integration Tests', () => {
       const orderDataCode = fs.readFileSync(path.join(__dirname, '../src/context/OrderDataContext.tsx'), 'utf-8');
       const offlineSyncCode = fs.readFileSync(path.join(__dirname, '../src/hooks/useOfflineSync.ts'), 'utf-8');
       expect(offlineSyncCode).toContain('const probeTimer = setInterval(');
-      expect(orderDataCode).toContain('checkAndSyncTables, 15000');
+      // expect(orderDataCode).toContain('checkAndSyncTables, 15000'); // removed in Phase 3.3
     });
   });
 });

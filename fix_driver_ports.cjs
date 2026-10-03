@@ -1,0 +1,1 @@
+const fs = require('fs'); const file = 'hardware/printerDriver.ts'; let content = fs.readFileSync(file, 'utf8'); content = content.replace(/port: number = 9100/g, 'port: number = PRINTER_CONSTANTS.DEFAULT_PORT'); content = content.replace(/\|\| 9100/g, '|| PRINTER_CONSTANTS.DEFAULT_PORT'); fs.writeFileSync(file, content, 'utf8');

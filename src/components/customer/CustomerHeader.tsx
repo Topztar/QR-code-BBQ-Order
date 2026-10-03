@@ -3,7 +3,7 @@ import { TableConfig, Order, Language, Reservation } from '../../types';
 import { TRANSLATIONS } from '../../data';
 import { getMappedTableId } from '../../utils/tableUtils';
 import { getLocalizedText } from '../../utils/i18n';
-import { orderCalculationService } from '../../services/orderCalculationService';
+import { orderCalculationService } from '@sabay/shared';
 import {
   BellRing,
   AlertTriangle,
@@ -46,8 +46,7 @@ export interface CustomerHeaderProps {
   handleSimulateScan: (tableId: string) => void;
   qrScannedInfo: string | null;
   setQrScannedInfo: (info: string | null) => void;
-  pushNotifications: any[];
-  onMarkNotificationRead: (id: string) => void;
+
   orderSentSuccess: string | null;
   setOrderSentSuccess: (val: string | null) => void;
   activeOrders: Order[];
@@ -96,8 +95,6 @@ const CustomerHeaderBase: React.FC<CustomerHeaderProps> = ({
   handleSimulateScan,
   qrScannedInfo,
   setQrScannedInfo,
-  pushNotifications,
-  onMarkNotificationRead,
   orderSentSuccess,
   setOrderSentSuccess,
   activeOrders,
@@ -598,32 +595,6 @@ const CustomerHeaderBase: React.FC<CustomerHeaderProps> = ({
         </div>
       )}
 
-      {/* Push Notifications Queue */}
-      {pushNotifications.length > 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-3xl p-4 text-left shadow-md flex items-start space-x-3 gap-1 relative overflow-hidden">
-          <div className="absolute top-0 right-0 bg-yellow-400 text-slate-900 text-[9px] font-sans px-2.5 py-0.5 rounded-bl-xl font-bold flex items-center space-x-1 animate-bounce">
-            <BellRing size={10} />
-            <span>PUSH</span>
-          </div>
-          <div className="bg-amber-100 text-amber-700 p-2.5 rounded-2xl shrink-0 mt-0.5">
-            <Sparkles size={18} />
-          </div>
-          <div className="flex-1">
-            <h6 className="text-[13px] font-bold text-slate-800">{pushNotifications[0].title}</h6>
-            <p className="text-xs text-slate-600 mt-1">{pushNotifications[0].message}</p>
-            <span className="text-[10px] text-amber-600/70 block mt-2 font-mono">
-              優惠快訊・僅於 {pushNotifications[0].timestamp} 更新
-            </span>
-          </div>
-          <button
-            id="clear-promo-notif-btn"
-            onClick={() => onMarkNotificationRead(pushNotifications[0].id)}
-            className="text-slate-400 hover:text-slate-600 p-1 hover:bg-amber-100 rounded-full"
-          >
-            <X size={15} />
-          </button>
-        </div>
-      )}
 
       {/* Order Success Popup */}
       {orderSentSuccess &&

@@ -4,9 +4,10 @@ import { Order, OrderStatus, Language, TableConfig } from '../../../types';
 import { getLocalizedText } from '../../../utils/i18n';
 import { ConfirmActionModalConfig } from './ConfirmActionModal';
 import { PaidModDetails } from '../../../types';
+import { buildKitchenReceipt, buildCustomerReceipt } from '../../../utils/receiptBuilder';
 import { memberService } from '../../../services/memberService';
 import { getMaskedEmail } from '../ManagerDashboardUtils';
-import { orderCalculationService } from '../../../services/orderCalculationService';
+import { orderCalculationService } from '@sabay/shared';
 import { useModalEscape } from '../../../hooks/useModalEscape';
 
 class ModalErrorBoundary extends Component<{children: React.ReactNode, onClose: () => void}, {hasError: boolean}> {
@@ -285,39 +286,13 @@ export const OrderDetailDrilldownModal: React.FC<OrderDetailDrilldownModalProps>
                     <button
                       type="button"
                       onClick={() => {
-                        const specLines = selectedOrder.items.map(it => {
-                          const spec = [
-                            it.customization?.spiciness === 1 ? '辣味 (Spicy)' : '不辣 (Non-Spicy)',
-                            it.customization?.noodleType === 'rice-noodle' ? '河粉' : (it.customization?.noodleType === 'vermicelli' ? '米線' : ''),
-                            it.customization?.soupBase === 'coconut-milk' ? '加椰奶(+50)' : '',
-                            it.customization?.notes ? `備註: ${it.customization.notes}` : ''
-                          ].filter(Boolean).join('/');
-                          const pName = it.name ? (typeof it.name === 'object' ? ((getLocalizedText(it.name, currentLang) || '未命名')) : it.name) : '未命名';
-                          return `[ ] ${pName} x ${it.qty}份\n    【 ${spec} 】`;
-                        }).join('\n');
-                        const kitchenStr = `
-========================================
-       沙貝燒烤 (廚房工作即時交代單-重印)
-       ${selectedOrder.takeoutInfo || String(selectedOrder.tableNumber || '').includes('外帶') || selectedOrder.tableNumber === 'takeout' ? `單號/標記: #${selectedOrder.id}` : `桌號/標記: ${selectedOrder.tableNumber}`}
-========================================
-單號 ID: ${selectedOrder.id || 'N/A'}
-出單 IP : ${printerIp} (VIRTUAL LAN_9100)
-時間 TIME: ${selectedOrder.createdAt ? new Date(selectedOrder.createdAt).toLocaleTimeString() : 'N/A'}
-狀態 STATE: ${(selectedOrder.status || '').toUpperCase()}
-----------------------------------------
-餐點項目與客製需求 Kitchen Item(s):
-${specLines}
-----------------------------------------
-* REPRINT KITCHEN TICKET PRINT PREVIEW *
-* 感謝廚房人員辛勞，請依序完成出餐確認 *
-========================================`.trim();
-
+                        const kitchenStr = buildKitchenReceipt(selectedOrder as Order, currentLang, printerIp, true);
                         setPrintConfirmData({
                           title: '重印工作廚房票 Kitchen Ticket',
                           ip: printerIp,
                           receiptType: 'kitchen',
                           receiptBody: kitchenStr,
-                          onConfirm: () => alert(`🖨️ 模擬重行印列【防爆/防油熱感廚房交代票】成功！`)
+                          onConfirm: import.meta.env.DEV ? () => alert(`🖨️ 模擬重行印列【防爆/防油熱感廚房交代票】成功！`) : undefined
                         });
                       }}
                       className="flex-1 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-[10.5px] border border-white/10 font-bold active:scale-95 transition cursor-pointer"
@@ -327,38 +302,13 @@ ${specLines}
                     <button
                       type="button"
                       onClick={() => {
-                        const customerDetails = selectedOrder.items.map(it => {
-                          const pName = it.name ? (typeof it.name === 'object' ? ((getLocalizedText(it.name, currentLang) || '未命名')) : it.name) : '未命名';
-                          return `  ${pName.padEnd(16)} x${it.qty || 0}  $${(it.price || 0) * (it.qty || 0)}`;
-                        }).join('\n');
-                        const customerStr = `
-========================================
-       沙貝燒烤 (顧客結賬與消點收據-重印)
-       ${selectedOrder.takeoutInfo || String(selectedOrder.tableNumber || '').includes('外帶') || selectedOrder.tableNumber === 'takeout' ? `單號/標記: #${selectedOrder.id}` : `桌號/標記: ${selectedOrder.tableNumber || 'N/A'}`} 桌
-========================================
-單號 ID: ${selectedOrder.id || 'N/A'}
-出單 IP : ${printerIp} (VIRTUAL LAN_9100)
-時間 TIME: ${selectedOrder.createdAt ? new Date(selectedOrder.createdAt).toLocaleTimeString() : 'N/A'}
-付款方式: ${selectedOrder.paymentMethod ? selectedOrder.paymentMethod.toUpperCase() : 'CASH'}
-累積儲值會員: ${selectedOrder.isMember ? '是 (小計累積點數中)' : '否'}
-----------------------------------------
-消費明細 Billing details:
-${customerDetails}
-----------------------------------------
-小計 Total Sub: $${selectedOrder.subtotal || 0}
-服務費 Svc(10%): $${selectedOrder.serviceCharge || 0}
-實付支付 Net:   $${selectedOrder.total || 0}
-========================================
-* 感謝您的光臨，美味慢享，期待再次相遇 *
-* 憑本熱感收據於當月前台消費享回客點心一份 *
-========================================`.trim();
-
+                        const customerStr = buildCustomerReceipt(selectedOrder as Order, currentLang, printerIp, true);
                         setPrintConfirmData({
                           title: '重印顧客結算收據 Customer Receipt',
                           ip: printerIp,
                           receiptType: 'customer',
                           receiptBody: customerStr,
-                          onConfirm: () => alert(`🖨️ 模擬重行印列【顧客結賬發票與消點收據】成功！`)
+                          onConfirm: import.meta.env.DEV ? () => alert(`🖨️ 模擬重行印列【顧客結賬發票與消點收據】成功！`) : undefined
                         });
                       }}
                       className="flex-1 py-1.5 bg-[#E5B453]/15 hover:bg-[#E5B453]/25 text-[#E5B453] rounded-lg text-[10.5px] border border-[#E5B453]/25 font-bold active:scale-95 transition cursor-pointer"
@@ -502,7 +452,7 @@ ${customerDetails}
                         </div>
                         <div className="col-span-2">
                           <span className="text-zinc-500 block text-[10px] mb-0.5">預訂取餐時間 Pickup Time</span>
-                          <span className="text-amber-400 font-black font-mono text-sm">{selectedOrder.takeoutInfo.pickupTime}</span>
+                          <span className="text-amber-400 font-black font-mono text-sm">{selectedOrder.pickupTime}</span>
                         </div>
                       </div>
                     </div>
@@ -673,39 +623,13 @@ ${customerDetails}
                       <button
                         type="button"
                         onClick={() => {
-                          const specLines = selectedOrder.items.map(it => {
-                            const spec = [
-                              it.customization?.spiciness === 1 ? '辣味 (Spicy)' : '不辣 (Non-Spicy)',
-                              it.customization?.noodleType === 'rice-noodle' ? '河粉' : (it.customization?.noodleType === 'vermicelli' ? '米線' : ''),
-                              it.customization?.soupBase === 'coconut-milk' ? '加椰奶(+50)' : '',
-                              it.customization?.notes ? `備註: ${it.customization.notes}` : ''
-                            ].filter(Boolean).join('/');
-                            const pName = it.name ? (typeof it.name === 'object' ? ((getLocalizedText(it.name, currentLang) || '未命名')) : it.name) : '未命名';
-                            return `[ ] ${pName} x ${it.qty || 0}份\n    【 ${spec} 】`;
-                          }).join('\n');
-                          const kitchenStr = `
-========================================
-       沙貝燒烤 (廚房工作即時交代單-重印)
-       ${selectedOrder.takeoutInfo || String(selectedOrder.tableNumber || '').includes('外帶') || selectedOrder.tableNumber === 'takeout' ? `單號/標記: #${selectedOrder.id}` : `桌號/標記: ${selectedOrder.tableNumber || 'N/A'}`}
-========================================
-單號 ID: ${selectedOrder.id || 'N/A'}
-出單 IP : ${printerIp} (VIRTUAL LAN_9100)
-時間 TIME: ${selectedOrder.createdAt ? new Date(selectedOrder.createdAt).toLocaleTimeString() : 'N/A'}
-狀態 STATE: ${(selectedOrder.status || '').toUpperCase()}
-----------------------------------------
-餐點項目與客製需求 Kitchen Item(s):
-${specLines}
-----------------------------------------
-* REPRINT KITCHEN TICKET PRINT PREVIEW *
-* 感謝廚房人員辛勞，請依序完成出餐確認 *
-========================================`.trim();
-
+                          const kitchenStr = buildKitchenReceipt(selectedOrder as Order, currentLang, printerIp, true);
                           setPrintConfirmData({
                             title: '重印工作廚房票 Kitchen Ticket',
                             ip: printerIp,
                             receiptType: 'kitchen',
                             receiptBody: kitchenStr,
-                            onConfirm: () => alert(`🖨️ 模擬重行印列【防爆/防油熱感廚房交代票】成功！`)
+                            onConfirm: import.meta.env.DEV ? () => alert(`🖨️ 模擬重行印列【防爆/防油熱感廚房交代票】成功！`) : undefined
                           });
                         }}
                         className="flex-1 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-[10.5px] border border-white/10 font-bold active:scale-95 transition cursor-pointer"
@@ -715,38 +639,13 @@ ${specLines}
                       <button
                         type="button"
                         onClick={() => {
-                          const customerDetails = selectedOrder.items.map(it => {
-                            const pName = it.name ? (typeof it.name === 'object' ? ((getLocalizedText(it.name, currentLang) || '未命名')) : it.name) : '未命名';
-                            return `  ${pName.padEnd(16)} x${it.qty || 0}  $${(it.price || 0) * (it.qty || 0)}`;
-                          }).join('\n');
-                          const customerStr = `
-========================================
-       沙貝燒烤 (顧客結賬與消點收據-重印)
-       ${selectedOrder.takeoutInfo || String(selectedOrder.tableNumber || '').includes('外帶') || selectedOrder.tableNumber === 'takeout' ? `單號/標記: #${selectedOrder.id}` : `桌號/標記: ${selectedOrder.tableNumber || 'N/A'}`} 桌
-========================================
-單號 ID: ${selectedOrder.id || 'N/A'}
-出單 IP : ${printerIp} (VIRTUAL LAN_9100)
-時間 TIME: ${selectedOrder.createdAt ? new Date(selectedOrder.createdAt).toLocaleTimeString() : 'N/A'}
-付款方式: ${selectedOrder.paymentMethod ? selectedOrder.paymentMethod.toUpperCase() : 'CASH'}
-累積儲值會員: ${selectedOrder.isMember ? '是 (小計累積點數中)' : '否'}
-----------------------------------------
-消費明細 Billing details:
-${customerDetails}
-----------------------------------------
-小計 Total Sub: $${selectedOrder.subtotal || 0}
-服務費 Svc(10%): $${selectedOrder.serviceCharge || 0}
-實付支付 Net:   $${selectedOrder.total || 0}
-========================================
-* 感謝您的光臨，美味慢享，期待再次相遇 *
-* 憑本熱感收據於當月前台消費享回客點心一份 *
-========================================`.trim();
-
+                          const customerStr = buildCustomerReceipt(selectedOrder as Order, currentLang, printerIp, true);
                           setPrintConfirmData({
                             title: '重印顧客結算收據 Customer Receipt',
                             ip: printerIp,
                             receiptType: 'customer',
                             receiptBody: customerStr,
-                            onConfirm: () => alert(`🖨️ 模擬重行印列【顧客結賬發票與消點收據】成功！`)
+                            onConfirm: import.meta.env.DEV ? () => alert(`🖨️ 模擬重行印列【顧客結賬發票與消點收據】成功！`) : undefined
                           });
                         }}
                         className="flex-1 py-1.5 bg-[#E5B453]/15 hover:bg-[#E5B453]/25 text-[#E5B453] rounded-lg text-[10.5px] border border-[#E5B453]/25 font-bold active:scale-95 transition cursor-pointer"
@@ -906,39 +805,13 @@ ${customerDetails}
                       <button
                         type="button"
                         onClick={() => {
-                          const specLines = selectedOrder.items.map(it => {
-                            const spec = [
-                              it.customization?.spiciness === 1 ? '辣味 (Spicy)' : '不辣 (Non-Spicy)',
-                              it.customization?.noodleType === 'rice-noodle' ? '河粉' : (it.customization?.noodleType === 'vermicelli' ? '米線' : ''),
-                              it.customization?.soupBase === 'coconut-milk' ? '加椰奶(+50)' : '',
-                              it.customization?.notes ? `備註: ${it.customization.notes}` : ''
-                            ].filter(Boolean).join('/');
-                            const pName = it.name ? (typeof it.name === 'object' ? ((getLocalizedText(it.name, currentLang) || '未命名')) : it.name) : '未命名';
-                            return `[ ] ${pName} x ${it.qty}份\n    【 ${spec} 】`;
-                          }).join('\n');
-                          const kitchenStr = `
-========================================
-       沙貝燒烤 (廚房工作即時交代單-重印)
-       ${selectedOrder.takeoutInfo || String(selectedOrder.tableNumber || '').includes('外帶') || selectedOrder.tableNumber === 'takeout' ? `單號/標記: #${selectedOrder.id}` : `桌號/標記: ${selectedOrder.tableNumber}`}
-========================================
-單號 ID: ${selectedOrder.id || 'N/A'}
-出單 IP : ${printerIp} (VIRTUAL LAN_9100)
-時間 TIME: ${selectedOrder.createdAt ? new Date(selectedOrder.createdAt).toLocaleTimeString() : 'N/A'}
-狀態 STATE: ${(selectedOrder.status || '').toUpperCase()}
-----------------------------------------
-餐點項目與客製需求 Kitchen Item(s):
-${specLines}
-----------------------------------------
-* REPRINT KITCHEN TICKET PRINT PREVIEW *
-* 感謝廚房人員辛勞，請依序完成出餐確認 *
-========================================`.trim();
-
+                          const kitchenStr = buildKitchenReceipt(selectedOrder as Order, currentLang, printerIp, true);
                           setPrintConfirmData({
                             title: '重印工作廚房票 Kitchen Ticket',
                             ip: printerIp,
                             receiptType: 'kitchen',
                             receiptBody: kitchenStr,
-                            onConfirm: () => alert(`🖨️ 模擬重行印列【防爆/防油熱感廚房交代票】成功！`)
+                            onConfirm: import.meta.env.DEV ? () => alert(`🖨️ 模擬重行印列【防爆/防油熱感廚房交代票】成功！`) : undefined
                           });
                         }}
                         className="flex-1 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-[10.5px] border border-white/10 font-bold active:scale-95 transition cursor-pointer"
@@ -948,38 +821,13 @@ ${specLines}
                       <button
                         type="button"
                         onClick={() => {
-                          const customerDetails = selectedOrder.items.map(it => {
-                            const pName = it.name ? (typeof it.name === 'object' ? ((getLocalizedText(it.name, currentLang) || '未命名')) : it.name) : '未命名';
-                            return `  ${pName.padEnd(16)} x${it.qty}  $${it.price * it.qty}`;
-                          }).join('\n');
-                          const customerStr = `
-========================================
-       沙貝燒烤 (顧客結賬與消點收據-重印)
-       ${selectedOrder.takeoutInfo || String(selectedOrder.tableNumber || '').includes('外帶') || selectedOrder.tableNumber === 'takeout' ? `單號/標記: #${selectedOrder.id}` : `桌號/標記: ${selectedOrder.tableNumber}`} 桌
-========================================
-單號 ID: ${selectedOrder.id}
-出單 IP : ${printerIp} (VIRTUAL LAN_9100)
-時間 TIME: ${new Date(selectedOrder.createdAt).toLocaleTimeString()}
-付款方式: ${selectedOrder.paymentMethod ? selectedOrder.paymentMethod.toUpperCase() : 'CASH'}
-累積儲值會員: ${selectedOrder.isMember ? '是 (小計累積點數中)' : '否'}
-----------------------------------------
-消費明細 Billing details:
-${customerDetails}
-----------------------------------------
-小計 Total Sub: $${selectedOrder.subtotal}
-服務費 Svc(10%): $${selectedOrder.serviceCharge}
-實付支付 Net:   $${selectedOrder.total}
-========================================
-* 感謝您的光臨，美味慢享，期待再次相遇 *
-* 憑本熱感收據於當月前台消費享回客點心一份 *
-========================================`.trim();
-
+                          const customerStr = buildCustomerReceipt(selectedOrder as Order, currentLang, printerIp, true);
                           setPrintConfirmData({
                             title: '重印顧客結算收據 Customer Receipt',
                             ip: printerIp,
                             receiptType: 'customer',
                             receiptBody: customerStr,
-                            onConfirm: () => alert(`🖨️ 模擬重行印列【顧客結賬發票與消點收據】成功！`)
+                            onConfirm: import.meta.env.DEV ? () => alert(`🖨️ 模擬重行印列【顧客結賬發票與消點收據】成功！`) : undefined
                           });
                         }}
                         className="flex-1 py-1.5 bg-[#E5B453]/15 hover:bg-[#E5B453]/25 text-[#E5B453] rounded-lg text-[10.5px] border border-[#E5B453]/25 font-bold active:scale-95 transition cursor-pointer"

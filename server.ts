@@ -1,3 +1,4 @@
+import { PRINTER_CONSTANTS } from '@sabay/shared';
 // ============================================================================
 // ⚠️ ARCHITECTURE DIRECTIVE: LOCAL DEVELOPMENT / MOCK SERVER ONLY
 // ============================================================================
@@ -28,7 +29,7 @@ import {
   printCustomerReceipt
 } from './hardware/printerDriver';
 import { sendReservationNotifications, sendTestNotification } from './functions/src/services/notification';
-import { orderCalculationService } from './src/services/orderCalculationService';
+import { orderCalculationService } from '@sabay/shared';
 import { processAndSaveImage } from './src/lib/server/imageProcessing';
 import { getTaiwanDateString, getTaiwanTimeParts } from './src/utils/dateUtils';
 import { validateImageUploadPayload } from './functions/src/validators';
@@ -402,7 +403,7 @@ export const printerStateManager = new PrinterStateManager(
       "headerPrefix": "★★★ 廚房工作備餐單 ★★★",
       "fontSizeFactor": 1,
       "usbPort": "USB001",
-      "ip": "192.168.123.100",
+      "ip": "" + PRINTER_CONSTANTS.DEFAULT_IP + "",
       "restaurantName": "沙貝燒烤",
       "footerSuffix": "請主廚盡速配餐出餐！",
       "printTimeEnabled": true
@@ -2353,10 +2354,6 @@ app.post('/api/members', (req, res) => {
     liveMembers[existingIdx].name = String(name).trim();
     if (avatar) liveMembers[existingIdx].avatar = String(avatar);
     liveMembers[existingIdx].updatedAt = Date.now();
-    // Allow explicit balance/points seed ONLY when creating from migration (balance == undefined means skip)
-    if (balance !== undefined && existingIdx === -1) {
-      liveMembers[existingIdx].balance = Math.max(0, Number(balance) || 0);
-    }
     saveStateToDisk();
     return res.json({ success: true, member: liveMembers[existingIdx] });
   }
@@ -2960,17 +2957,26 @@ app.get('/api/ingredients', (_req, res) => {
 
 // Restock Raw Materials
 app.post('/api/ingredients/restock', (req, res) => {
-  const { id, amount } = req.body;
+  const id = req.body.id || req.body.ingredientId;
+  const numAmount = Number(req.body.amount !== undefined ? req.body.amount : req.body.quantityAdded);
+  
+  if (!id) {
+    return res.status(400).json({ error: 'Missing ingredient id' });
+  }
+  if (isNaN(numAmount)) {
+    return res.status(400).json({ error: 'Invalid amount' });
+  }
+
   const ingredient = liveIngredients.find(i => i.id === id);
   if (ingredient) {
-    ingredient.stock = Math.round((ingredient.stock + Number(amount)) * 100) / 100;
+    ingredient.stock = Math.round((ingredient.stock + numAmount) * 100) / 100;
     inventoryLogs.push({
       id: `ir-restock-${Date.now()}`,
       timestamp: new Date().toISOString(),
       ingredientId: id,
       ingredientName: ingredient.name.zh,
       type: 'incoming',
-      quantityChanged: Number(amount),
+      quantityChanged: numAmount,
       remainingStock: ingredient.stock,
       note: '後台手動原料大批進貨'
     });

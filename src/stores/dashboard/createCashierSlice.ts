@@ -58,10 +58,7 @@ export const createCashierSlice: StateCreator<
     cashierSelectedMergeOrderIds: typeof updater === 'function' ? updater(state.cashierSelectedMergeOrderIds) : updater
   })),
 
-  cashierPanelWidth: 450,
-  setCashierPanelWidth: (updater) => set((state) => ({
-    cashierPanelWidth: typeof updater === 'function' ? updater(state.cashierPanelWidth) : updater
-  })),
+
 
   isCashierWidthAuto: false,
   setIsCashierWidthAuto: (val) => set({ isCashierWidthAuto: val }),

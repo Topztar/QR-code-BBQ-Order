@@ -1,3 +1,4 @@
+import { PRINTER_CONSTANTS } from '@sabay/shared';
 import { apiFetch } from "../lib/api";
 import { ErrorBoundary } from './ErrorBoundary';
 import { ChunkErrorBoundary } from './ChunkErrorBoundary';
@@ -6,6 +7,7 @@ import { resilientLazy } from '../App';
 import { Ingredient, Language, Category, TableConfig, Order, OrderStatus, Reservation, SoldOutType, PrinterConfig, PaidModDetails } from '../types';
 import { getLocalizedText } from '../utils/i18n';
 import { safeStorage } from '../lib/safeStorage';
+import { getStatusMeta } from '../utils/orderUtils';
 import { useDashboardStore } from '../stores/dashboard/useDashboardStore';
 import { useShallow } from 'zustand/react/shallow';
 import {
@@ -44,7 +46,7 @@ import {
   getMaskedEmail,
   exportToCSV,
 } from './manager/ManagerDashboardUtils';
-import { orderCalculationService } from '../services/orderCalculationService';
+import { orderCalculationService } from '@sabay/shared';
 import { memberService } from '../services/memberService';
 import { unlockAudio, playOrderChimeSound } from '../utils/kdsAudio';
 
@@ -203,7 +205,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   onSavePromoCombo,
   popularItemIds = [],
   onUpdatePopularItemIds,
-  printerIp = '192.168.123.100',
+  printerIp = PRINTER_CONSTANTS.DEFAULT_IP,
   onPrintTestPage,
   onAddIngredient,
   memberPointsRatio = 20,
@@ -938,7 +940,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
       const change = selectedOrder.paymentMethod === 'cash' ? (cashReceivedInput - selectedOrder.total) : 0;
       
       const checkoutRecord = {
-        id: `TX-${Date.now()}`,
+        id: `TX-${selectedOrder.id}`,
         orderId: selectedOrder.id,
         tableNumber: selectedOrder.tableNumber,
         subtotal: selectedOrder.subtotal,
@@ -1546,7 +1548,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
       subtotal: o.subtotal || 0,
       serviceCharge: o.serviceCharge || 0,
       total: o.total || 0,
-      status: o.status === 'completed' ? '已出餐完成' : (o.status === 'confirmed' ? '已確認接單' : (o.status === 'delivering' ? '出餐上桌中' : (o.status === 'pending' ? '未處置待理' : (o.status === 'preparing' ? '配餐準備中' : (o.status === 'paid' ? '已結帳' : '已取消復歸'))))),
+      status: getStatusMeta(o.status).label,
       isMember: o.isMember ? 'Google會員' : '非會員一般餐客'
     }));
     const map = {

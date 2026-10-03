@@ -92,8 +92,7 @@ interface CustomerOrderViewProps {
     utm_medium?: string;
   }) => Promise<Order | null>;
   activeOrders: Order[];
-  pushNotifications: any[];
-  onMarkNotificationRead: (id: string) => void;
+
   inventoryWarnings: any[];
   minSpend?: number;
   isOpen?: boolean;
@@ -129,8 +128,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
   onAddReservation,
   onPlaceOrder,
   activeOrders,
-  pushNotifications,
-  onMarkNotificationRead,
+
   inventoryWarnings,
   minSpend = 200,
   isOpen = true,
@@ -566,14 +564,14 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
         clientOrderId,
         customerName: takeoutCustomerName || undefined,
         customerPhone: takeoutPhone || undefined,
-        pickupTime: takeoutPickupTime || undefined,
+        
         source: entrySourceInfo.source,
         utm_medium: entrySourceInfo.utm_medium,
         takeoutInfo: isTakeoutMode
           ? {
               customerName: takeoutCustomerName,
               phone: takeoutPhone,
-              pickupTime: takeoutPickupTime,
+              
             }
           : undefined,
       });
@@ -861,8 +859,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
         handleSimulateScan={handleSimulateScan}
         qrScannedInfo={qrScannedInfo}
         setQrScannedInfo={setQrScannedInfo}
-        pushNotifications={pushNotifications}
-        onMarkNotificationRead={onMarkNotificationRead}
+
         orderSentSuccess={orderSentSuccess}
         setOrderSentSuccess={setOrderSentSuccess}
         activeOrders={activeOrders}

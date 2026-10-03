@@ -1,7 +1,7 @@
 import React from 'react';
 import { User, Phone, Clock } from 'lucide-react';
 import { Order, Language } from '../../types';
-import { orderCalculationService } from '../../services/orderCalculationService';
+import { orderCalculationService } from '@sabay/shared';
 import { getLocalizedText } from '../../utils/i18n';
 
 export interface CashierOrderCardProps {
@@ -166,7 +166,7 @@ export const CashierOrderCard: React.FC<CashierOrderCardProps> = React.memo(({
                 <span>預訂取餐:</span>
               </span>
               <span className="font-mono font-black text-[#E5B453] bg-[#E5B453]/10 px-1 py-0.2 rounded border border-[#E5B453]/20">
-                {order.takeoutInfo?.pickupTime || '即刻自取'}
+                {order.pickupTime || '即刻自取'}
               </span>
             </div>
           </div>

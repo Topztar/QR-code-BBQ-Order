@@ -1,6 +1,6 @@
 import { useState, useEffect, lazy, Suspense, useMemo, useCallback, startTransition } from 'react';
 import { Language } from './types';
-import { clearOfflineQueue } from './lib/offlineQueue';
+import { clearOfflineQueue, resumeOfflineQueue } from './lib/offlineQueue';
 import { safeStorage } from './lib/safeStorage';
 import { TRANSLATIONS } from './data';
 import { LanguageSelector } from './components/LanguageSelector';
@@ -11,6 +11,7 @@ import { RestaurantDataProvider, useRestaurantData } from './context/RestaurantD
 import { OrderDataProvider, useOrderData } from './context/OrderDataContext';
 import { useAdminHotkey } from './hooks/useAdminHotkey';
 import { attemptChunkRecovery } from './lib/chunkRecovery';
+import { TableStatusSync } from './components/TableStatusSync';
 
 // Wrapper for lazy loading with retry to prevent chunk load errors causing black screens
 export const resilientLazy = <T extends React.ComponentType<any>>(
@@ -54,12 +55,10 @@ const ViewLoadingFallback = () => (
 function AppContent({
   activeTab,
   setActiveTab,
-  currentPath,
   navigateTo,
 }: {
   activeTab: 'customer' | 'kitchen' | 'admin' | 'cashier';
   setActiveTab: React.Dispatch<React.SetStateAction<'customer' | 'kitchen' | 'admin' | 'cashier'>>;
-  currentPath: string;
   navigateTo: (path: string) => void;
 }) {
   const [lang, setLang] = useState<Language>(() => {
@@ -90,6 +89,15 @@ function AppContent({
   const [isStaff, setIsStaff] = useState<boolean>(() => {
     return sessionAuth.isAuthenticated();
   });
+
+  useEffect(() => {
+    const handleAuthExpired = () => {
+      console.warn('[App] Received sabay_auth_expired event. Forcing PIN re-auth.');
+      setIsStaff(false);
+    };
+    window.addEventListener('sabay_auth_expired', handleAuthExpired);
+    return () => window.removeEventListener('sabay_auth_expired', handleAuthExpired);
+  }, []);
 
   const handleStaffTabSwitch = useCallback((
     targetPath: string,
@@ -147,7 +155,7 @@ function AppContent({
       search.get('action') === 'reserve' ||
       search.get('reserve') === 'true'
     );
-  }, [currentPath]);
+  }, []);
 
   const isOrderRoute = useMemo(() => {
     if (typeof window === 'undefined') return false;
@@ -158,7 +166,7 @@ function AppContent({
       search.get('mode') === 'order' ||
       search.get('action') === 'order'
     );
-  }, [currentPath]);
+  }, []);
 
   // Hidden backdoor hotkey for non-staff to access the staff login gate securely
   useAdminHotkey({ ctrl: true, shift: true, key: 'l' }, useCallback(() => {
@@ -256,7 +264,7 @@ function AppContent({
 
   const {
     orders,
-    pushNotifications,
+
     offlineQueue,
     isSyncing,
     syncProgressMsg,
@@ -272,8 +280,7 @@ function AppContent({
     handleBulkPayOrders,
     handleDeleteOrder,
     handleForceSync,
-    handleSendPromoPush,
-    handleMarkNotificationRead,
+
   } = useOrderData();
 
   return (
@@ -643,6 +650,7 @@ function AppContent({
                   <StaffLoginGate
                     onLoginSuccess={() => {
                       setIsStaff(true);
+                      resumeOfflineQueue();
                       handleStaffTabSwitch('/admin?tab=stats', 'admin', 'stats');
                     }}
                     onCancel={() => {
@@ -681,8 +689,7 @@ function AppContent({
                   onAddReservation={handleAddReservation}
                   onPlaceOrder={handlePlaceOrder}
                   activeOrders={orders}
-                  pushNotifications={pushNotifications}
-                  onMarkNotificationRead={handleMarkNotificationRead}
+
                   inventoryWarnings={analytics.stockWarnings}
                   minSpend={minSpend}
                   isOpen={isOpen}
@@ -765,12 +772,10 @@ function AppContent({
 function AppWithProviders({
   activeTab,
   setActiveTab,
-  currentPath,
   navigateTo,
 }: {
   activeTab: 'customer' | 'kitchen' | 'admin' | 'cashier';
   setActiveTab: React.Dispatch<React.SetStateAction<'customer' | 'kitchen' | 'admin' | 'cashier'>>;
-  currentPath: string;
   navigateTo: (path: string) => void;
 }) {
   return (
@@ -778,7 +783,7 @@ function AppWithProviders({
       <OrderDataConsumerWrapper
         activeTab={activeTab}
         setActiveTab={setActiveTab}
-        currentPath={currentPath}
+
         navigateTo={navigateTo}
       />
     </RestaurantDataProvider>
@@ -788,32 +793,27 @@ function AppWithProviders({
 function OrderDataConsumerWrapper({
   activeTab,
   setActiveTab,
-  currentPath,
   navigateTo,
 }: {
   activeTab: 'customer' | 'kitchen' | 'admin' | 'cashier';
   setActiveTab: React.Dispatch<React.SetStateAction<'customer' | 'kitchen' | 'admin' | 'cashier'>>;
-  currentPath: string;
   navigateTo: (path: string) => void;
 }) {
-  const { tables, setTables, reservations, handleDeleteReservation, handleUpdateTableStatus, fetchData, menuItems } = useRestaurantData();
+  const { handleUpdateTableStatus, fetchData, menuItems, syncActive } = useRestaurantData();
 
   return (
     <OrderDataProvider
       activeTab={activeTab}
-      currentPath={currentPath}
-      tables={tables}
-      setTables={setTables}
       menuItems={menuItems}
-      reservations={reservations}
-      handleDeleteReservation={handleDeleteReservation}
       handleUpdateTableStatus={handleUpdateTableStatus}
       onRefreshData={fetchData}
+      syncActive={syncActive}
     >
+      <TableStatusSync />
       <AppContent
         activeTab={activeTab}
         setActiveTab={setActiveTab}
-        currentPath={currentPath}
+
         navigateTo={navigateTo}
       />
     </OrderDataProvider>
@@ -852,12 +852,11 @@ export default function App() {
     } catch { /* ignore */ }
     return 'customer';
   });
-  const [currentPath, setCurrentPath] = useState<string>(typeof window !== 'undefined' ? window.location.pathname : '/');
+
 
   useEffect(() => {
     const handlePopState = () => {
       const path = window.location.pathname;
-      setCurrentPath(path);
       setActiveTab(getTabFromPath(path));
     };
     window.addEventListener('popstate', handlePopState);
@@ -866,7 +865,6 @@ export default function App() {
 
   const navigateTo = useCallback((path: string) => {
     window.history.pushState({}, '', path);
-    setCurrentPath(path);
     setActiveTab(getTabFromPath(path));
   }, []);
 
@@ -874,7 +872,7 @@ export default function App() {
     <AppWithProviders
       activeTab={activeTab}
       setActiveTab={setActiveTab}
-      currentPath={currentPath}
+
       navigateTo={navigateTo}
     />
   );

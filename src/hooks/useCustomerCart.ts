@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { MenuItem, OrderItem, CustomAddOn } from '../types';
-import { orderCalculationService } from '../services/orderCalculationService';
+import { orderCalculationService } from '@sabay/shared';
 
 export interface UseCustomerCartProps {
   promoCombo?: any;
