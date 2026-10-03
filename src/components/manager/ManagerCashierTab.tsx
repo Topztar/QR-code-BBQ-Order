@@ -1236,7 +1236,7 @@ export const ManagerCashierTab: React.FC<ManagerCashierTabProps> = (props) => {
                             className="flex-1 bg-black/60 border border-white/10 rounded-lg px-2.5 py-1 text-xs text-white focus:outline-none focus:border-[#E5B453]"
                           >
                             <option value="">-- 🔎 選擇加點品項 (Add Dish) --</option>
-                            {menuItems && menuItems.filter(item => item.isAvailable !== false).map((item) => (
+                            {menuItems && menuItems.filter(item => item.available !== false).map((item) => (
                               <option key={item.id} value={item.id}>
                                 {getLocalizedText(item.name, 'zh')} (+NT$ {item.price})
                               </option>

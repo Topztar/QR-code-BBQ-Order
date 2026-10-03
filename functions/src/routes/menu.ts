@@ -230,7 +230,7 @@ export function registerMenuRoutes(app: express.Application, ctx: RouteContext) 
       }
 
       const now = new Date();
-      const snapshot = await db.collection('menu').select('id', 'category', 'name', 'price', 'image', 'thumbnailUrl', 'avifUrl', 'avifThumbnailUrl', 'description', 'available', 'isAvailable', 'isSetMeal', 'requiredSaucesOption', 'hasNoodlesOption', 'hasCoconutsMilkOption', 'containsBeef', 'containsPork', 'containsSeafood', 'isNotSpicy', 'customAddOns', 'recipe', 'orderIndex', 'isTakeoutAvailable', 'soldOutAt', 'soldOutType', 'soldOutDate').orderBy('orderIndex').get();
+      const snapshot = await db.collection('menu').select('id', 'category', 'name', 'price', 'image', 'thumbnailUrl', 'avifUrl', 'avifThumbnailUrl', 'description', 'available', 'isSetMeal', 'requiredSaucesOption', 'hasNoodlesOption', 'hasCoconutsMilkOption', 'containsBeef', 'containsPork', 'containsSeafood', 'isNotSpicy', 'customAddOns', 'recipe', 'orderIndex', 'isTakeoutAvailable', 'soldOutAt', 'soldOutType', 'soldOutDate').orderBy('orderIndex').get();
       const items = snapshot.docs.map(doc => {
         const d = doc.data() as any;
         return {
@@ -243,9 +243,8 @@ export function registerMenuRoutes(app: express.Application, ctx: RouteContext) 
           avifUrl: d.avifUrl ?? '',
           avifThumbnailUrl: d.avifThumbnailUrl ?? '',
           description: d.description ?? { zh: '' },
-          available: !!d.available,
-          isAvailable: d.isAvailable,
-          soldOutType: d.soldOutType || (d.available ? 'none' : 'permanent'),
+          available: !!d.available || !!d.isAvailable, // fallback for legacy, but map to available
+          soldOutType: d.soldOutType || (d.available || d.isAvailable ? 'none' : 'permanent'),
           soldOutDate: d.soldOutDate ?? null,
           isSetMeal: !!d.isSetMeal,
           requiredSaucesOption: !!d.requiredSaucesOption,

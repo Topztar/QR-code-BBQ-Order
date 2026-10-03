@@ -231,9 +231,17 @@ export function registerOrdersRoutes(app: express.Express, ctx: OrderRouteContex
     });
 
     const promoDiscount = calculatePromoDiscount(processedItems);
-    const netSubtotal = Math.max(0, subtotal - promoDiscount);
-    const serviceCharge = (paymentMethod === 'credit' || paymentMethod === 'twqr') ? Math.round(subtotal * 0.1) : 0;
-    const total = Math.max(0, netSubtotal + serviceCharge);
+    const verifiedPricing = orderCalculationService.calculateOrderPricing(
+      {
+        items: processedItems,
+        paymentMethod,
+        discount: promoDiscount,
+        isPaid: false
+      },
+      liveMenu
+    );
+    const serviceCharge = verifiedPricing.serviceCharge;
+    const total = verifiedPricing.total;
 
     // Sequentially secure order ID auto-increment to prevent ID conflicts under concurrent multi-user workloads
     let nextSeq = liveOrders.length + 1;
@@ -278,6 +286,15 @@ export function registerOrdersRoutes(app: express.Express, ctx: OrderRouteContex
     }
 
     // Interlock table status: when order is successfully placed, transition table status to in_use
+    let priceReconciliation = undefined;
+    if (safePayload.total !== undefined && Math.abs(safePayload.total - verifiedPricing.total) > 0.01) {
+      priceReconciliation = {
+        clientTotal: safePayload.total,
+        serverTotal: verifiedPricing.total,
+        reason: 'Menu prices or discounts have been updated. The client will adopt server totals.'
+      };
+    }
+
     if (!isTakeoutOrder && mappedTableNumber) {
       const tb = liveTables.find(t => t.id.toString().trim() === mappedTableNumber);
       if (tb) {
@@ -287,7 +304,7 @@ export function registerOrdersRoutes(app: express.Express, ctx: OrderRouteContex
     }
 
     saveStateToDisk();
-    res.status(201).json(newOrder);
+    res.status(201).json({ ...newOrder, priceReconciliation });
   });
 
   // 4. Rate Completed Order

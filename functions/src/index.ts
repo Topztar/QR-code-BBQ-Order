@@ -46,12 +46,7 @@ app.use(cors({
   origin: (origin, callback) => {
     // 允許無 origin 的請求 (如同源請求、後端直接呼叫、行動裝置 Webview)
     if (!origin) return callback(null, true);
-    if (
-      allowedOrigins.includes(origin) ||
-      /\.web\.app$/.test(origin) ||
-      /\.firebaseapp\.com$/.test(origin) ||
-      /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)
-    ) {
+    if (allowedOrigins.includes(origin)) {
       return callback(null, true);
     }
     return callback(null, false);

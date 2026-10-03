@@ -10,6 +10,12 @@ import { PRINTER_CONSTANTS } from '@sabay/shared';
 // ============================================================================
 
 import 'dotenv/config';
+
+if (process.env.NODE_ENV === 'production') {
+  console.error("FATAL: server.ts is the local mock dev server and MUST NOT be run in production. Use Firebase Cloud Functions.");
+  process.exit(1);
+}
+
 import express from 'express';
 import crypto from 'crypto';
 import sharp from 'sharp';

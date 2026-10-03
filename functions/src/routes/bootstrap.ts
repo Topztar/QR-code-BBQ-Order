@@ -79,7 +79,7 @@ export function registerBootstrapRoutes(app: express.Application, ctx: RouteCont
         reservationsSnap
       ] = await Promise.all([
         db.collection('categories').select('id', 'name', 'showOnCustomerPage', 'orderIndex').orderBy('orderIndex').get(),
-        db.collection('menu').select('id', 'category', 'name', 'price', 'image', 'thumbnailUrl', 'avifUrl', 'avifThumbnailUrl', 'description', 'available', 'isAvailable', 'isSetMeal', 'requiredSaucesOption', 'hasNoodlesOption', 'hasCoconutsMilkOption', 'containsBeef', 'containsPork', 'containsSeafood', 'isNotSpicy', 'customAddOns', 'recipe', 'orderIndex', 'isTakeoutAvailable', 'soldOutAt', 'soldOutType', 'soldOutDate').orderBy('orderIndex').get(),
+        db.collection('menu').select('id', 'category', 'name', 'price', 'image', 'thumbnailUrl', 'avifUrl', 'avifThumbnailUrl', 'description', 'available', 'isSetMeal', 'requiredSaucesOption', 'hasNoodlesOption', 'hasCoconutsMilkOption', 'containsBeef', 'containsPork', 'containsSeafood', 'isNotSpicy', 'customAddOns', 'recipe', 'orderIndex', 'isTakeoutAvailable', 'soldOutAt', 'soldOutType', 'soldOutDate').orderBy('orderIndex').get(),
         db.collection('tables').select('id', 'qrCodeUrl', 'status', 'cleaningStartedAt', 'maxCapacity', 'positionX', 'positionY', 'preservedFor', 'mergedWith').get(),
         db.collection('settings').doc('system').get(),
         isStaffRequest 
@@ -103,9 +103,8 @@ export function registerBootstrapRoutes(app: express.Application, ctx: RouteCont
           avifUrl: d.avifUrl ?? '',
           avifThumbnailUrl: d.avifThumbnailUrl ?? '',
           description: d.description ?? { zh: '' },
-          available: !!d.available,
-          isAvailable: d.isAvailable,
-          soldOutType: d.soldOutType || (d.available ? 'none' : 'permanent'),
+          available: !!d.available || !!d.isAvailable, // fallback for legacy, but map to available
+          soldOutType: d.soldOutType || (d.available || d.isAvailable ? 'none' : 'permanent'),
           soldOutDate: d.soldOutDate ?? null,
           isSetMeal: !!d.isSetMeal,
           requiredSaucesOption: !!d.requiredSaucesOption,
@@ -235,7 +234,7 @@ export function registerBootstrapRoutes(app: express.Application, ctx: RouteCont
       const [systemDoc, soldOutMenuSnap] = await Promise.all([
         db.collection('settings').doc('system').get(),
         db.collection('menu')
-          .select('available', 'isAvailable', 'soldOutType', 'soldOutDate')
+          .select('available', 'soldOutType', 'soldOutDate')
           .get()
       ]);
 
@@ -247,17 +246,17 @@ export function registerBootstrapRoutes(app: express.Application, ctx: RouteCont
       const soldOutItemIds: string[] = [];
       for (const doc of soldOutMenuSnap.docs) {
         const d = doc.data() as any;
-        let isAvailable = d.available ?? true;
+        let available = d.available ?? d.isAvailable ?? true;
         if (d.soldOutType === 'permanent') {
-          isAvailable = false;
+          available = false;
         } else if (d.soldOutType === 'daily') {
           if (d.soldOutDate === todayStr) {
-            isAvailable = false;
+            available = false;
           } else {
-            isAvailable = true;
+            available = true;
           }
         }
-        if (!isAvailable) {
+        if (!available) {
           soldOutItemIds.push(doc.id);
         }
       }

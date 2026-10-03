@@ -30,7 +30,6 @@ export interface MenuItem {
   avifThumbnailUrl?: string;
   description: { [key in Language]?: string };
   available: boolean;
-  isAvailable?: boolean;
   isSetMeal?: boolean;
   requiredSaucesOption?: boolean; // needs dipping options
   hasNoodlesOption?: boolean;
@@ -50,7 +49,6 @@ export interface MenuItem {
   showOnCustomerPage?: boolean;
 }
 
-export type Dish = MenuItem;
 
 export interface OrderItem {
   id: string; // instance id
@@ -84,39 +82,9 @@ export interface RefundLog {
   processedBy?: string;
 }
 
-export interface KitchenReceiptLog {
-  id: string;
-  orderId: string;
-  printedAt: string;
-  status: 'success' | 'failed';
-  error?: string;
-}
 
-export interface TakeoutQueueInfo {
-  queueNumber: string;
-  estimatedReadyTime?: string;
-  notifiedAt?: string;
-  pickedUpAt?: string;
-}
 
-export interface StoreSettings {
-  isOpen: boolean;
-  minSpend?: number;
-  operatingHours?: OperatingHourSlot[];
-  servicePaused?: boolean;
-  customerNotice?: string;
-}
 
-export interface OfflineQueueRequest {
-  id: string;
-  url: string;
-  method: string;
-  body: any;
-  timestamp: number;
-  status: 'pending' | 'syncing' | 'failed';
-  description?: string;
-  retryCount?: number;
-}
 
 export interface Order {
   id: string;
@@ -237,16 +205,6 @@ export interface OperatingHourSlot {
   isReservableOnly?: boolean; // 可預約時段 (營業時間外只開放給已預約顧客)
 }
 
-export interface OrderHistoryUserStatus {
-  isMember: boolean;
-  memberId?: string;
-  hasPastOrders: boolean;
-}
-
-export interface OrderHistoryBillStatus {
-  hasUnpaidBillOnTable: boolean;
-  tableNumber?: string;
-}
 
 export interface PrinterConfig {
   connectionType: 'USB' | 'IP' | 'LPT';

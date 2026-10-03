@@ -64,13 +64,13 @@ const orderCalculationService = {
       : (itemsSub > 0 ? itemsSub : (order.subtotal || 0));
 
     const pm = order.paymentMethod;
-    const isCreditOrTwqr = pm === 'credit' || pm === 'twqr';
-    const defaultSvc = isCreditOrTwqr ? Math.round(subtotal * 0.1) : 0;
+    const defaultSvc = orderCalculationService.getServiceCharge(subtotal, pm);
     const serviceCharge = (typeof order.serviceCharge === 'number' && order.serviceCharge > 0) ? order.serviceCharge : defaultSvc;
     const discount = order.discount || 0;
     
     let total = Math.max(0, subtotal + serviceCharge - discount);
     if (isPaid && typeof order.total === 'number' && !isNaN(order.total) && order.total > 0) {
+      const isCreditOrTwqr = pm === 'credit' || pm === 'twqr';
       if (isCreditOrTwqr && (order.serviceCharge === 0 || order.serviceCharge === undefined) && order.total === subtotal) {
         total = order.total + defaultSvc;
       } else {
@@ -80,20 +80,23 @@ const orderCalculationService = {
     return { subtotal, serviceCharge, discount, total };
   },
 
-  calculatePromoComboDiscount: (
+  getServiceCharge: (subtotal: number, paymentMethod?: string): number => {
+    const isCreditOrTwqr = paymentMethod === 'credit' || paymentMethod === 'twqr';
+    return isCreditOrTwqr ? Math.round(subtotal * 0.1) : 0;
+  },
+
+  calculatePromoComboBreakdown: (
     items: any[],
     combos: any[] = [],
     menuItemsList: any[] = []
-  ): number => {
+  ): { combo: any, eligibleCount: number, groups: number, discount: number }[] => {
     if (!Array.isArray(combos) || combos.length === 0 || !Array.isArray(items) || items.length === 0) {
-      return 0;
+      return [];
     }
-
-    return combos.reduce((totalDiscount: number, combo: any) => {
+    return combos.map((combo: any) => {
       if (!combo || !combo.enabled || !combo.requiredQty || combo.requiredQty <= 0) {
-        return totalDiscount;
+        return { combo, eligibleCount: 0, groups: 0, discount: 0 };
       }
-
       const eligibleCount = items.reduce((count: number, item: any) => {
         const mItem = menuItemsList.find((m: any) => m.id === item.menuItemId);
         const cat = (item as any).category || mItem?.category;
@@ -113,13 +116,23 @@ const orderCalculationService = {
         }
         return count;
       }, 0);
-
+      let discount = 0;
+      let groups = 0;
       if (eligibleCount >= combo.requiredQty) {
-        const sets = Math.floor(eligibleCount / combo.requiredQty);
-        return totalDiscount + sets * (Number(combo.discountAmount) || 0);
+        groups = Math.floor(eligibleCount / combo.requiredQty);
+        discount = groups * (Number(combo.discountAmount) || 0);
       }
-      return totalDiscount;
-    }, 0);
+      return { combo, eligibleCount, groups, discount };
+    });
+  },
+
+  calculatePromoComboDiscount: (
+    items: any[],
+    combos: any[] = [],
+    menuItemsList: any[] = []
+  ): number => {
+    const breakdowns = orderCalculationService.calculatePromoComboBreakdown(items, combos, menuItemsList);
+    return breakdowns.reduce((sum, b) => sum + b.discount, 0);
   },
   
   calculateVipStatus(userPoints: number, vipThreshold: number = 300) {

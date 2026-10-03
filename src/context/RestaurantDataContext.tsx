@@ -320,8 +320,7 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
               const soldOutSet = new Set(storeStatusData.soldOutItemIds);
               enrichedMenu = enrichedMenu.map((m: any) => ({
                 ...m,
-                available: !soldOutSet.has(m.id),
-                isAvailable: !soldOutSet.has(m.id)
+                available: !soldOutSet.has(m.id)
               }));
             }
             setMenuItems(enrichedMenu);

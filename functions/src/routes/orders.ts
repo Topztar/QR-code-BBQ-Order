@@ -231,7 +231,7 @@ get('/orders/export', requireStaffAuth, async (req, res) => {
 
 // --- Logs APIs ---
 
-get('/print-logs', async (_req, res) => {
+get('/print-logs', requireStaffAuth, async (_req, res) => {
   try {
     res.setHeader('Cache-Control', 'private, no-cache, no-store, must-revalidate');
     const logsDoc = await db.collection('settings').doc('logs').get();
@@ -392,13 +392,25 @@ post('/orders', requireAppCheck, orderRateLimiter, async (req, res) => {
         t.update(tableRef, { status: 'in_use', cleaningStartedAt: null });
       }
 
-      return { isExisting: false, data: orderToSave };
+      let priceReconciliation = undefined;
+      if (orderData.total !== undefined && Math.abs(orderData.total - verifiedPricing.total) > 0.01) {
+        priceReconciliation = {
+          clientTotal: orderData.total,
+          serverTotal: verifiedPricing.total,
+          reason: 'Menu prices or discounts have been updated. The client will adopt server totals.'
+        };
+      }
+
+      return { isExisting: false, data: orderToSave, priceReconciliation };
     });
 
     if (savedOrder.isExisting) {
       return res.status(200).json(savedOrder.data);
     }
-    res.status(201).json(savedOrder.data);
+    res.status(201).json({
+      ...savedOrder.data,
+      priceReconciliation: savedOrder.priceReconciliation
+    });
   } catch (error) {
     console.error('Error submitting order:', error);
     if (error instanceof Error && error.message.startsWith('SOLDOUT:')) {

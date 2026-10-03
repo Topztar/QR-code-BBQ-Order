@@ -142,34 +142,7 @@ export function useCustomerCart({
   const activeCombosAndDiscounts = useMemo(() => {
     if (!promoCombo) return [];
     const combosList = Array.isArray(promoCombo.combos) ? promoCombo.combos : [];
-
-    return combosList.map((combo: any) => {
-      if (!combo.enabled) return { combo, eligibleCount: 0, discount: 0 };
-
-      const eligibleCount = cart.reduce((count, item) => {
-        const isBeverageOrTopup =
-          (item.menuItemId && item.menuItemId.startsWith('item-topup-')) ||
-          item.id.startsWith('topup-') ||
-          (item as any).category === 'beverages' ||
-          (item as any).category === 'drinks';
-        const isEligible =
-          combo.eligibleItemIds && combo.eligibleItemIds.length > 0
-            ? combo.eligibleItemIds.includes(item.menuItemId || '')
-            : !isBeverageOrTopup;
-        if (isEligible) {
-          return count + item.qty;
-        }
-        return count;
-      }, 0);
-
-      let discount = 0;
-      if (eligibleCount >= combo.requiredQty && combo.requiredQty > 0) {
-        const groups = Math.floor(eligibleCount / combo.requiredQty);
-        discount = groups * combo.discountAmount;
-      }
-
-      return { combo, eligibleCount, discount };
-    });
+    return orderCalculationService.calculatePromoComboBreakdown(cart, combosList, []);
   }, [cart, promoCombo]);
 
   const promoComboDiscount = useMemo(() => {
@@ -185,10 +158,8 @@ export function useCustomerCart({
   }, [cartSubtotal, promoComboDiscount]);
 
   const expressFee = useMemo(() => {
-    return paymentMethod === 'credit' || paymentMethod === 'twqr'
-      ? Math.round(discountedSubtotal * 0.1)
-      : 0;
-  }, [paymentMethod, discountedSubtotal]);
+    return orderCalculationService.getServiceCharge(cartSubtotal, paymentMethod);
+  }, [paymentMethod, cartSubtotal]);
 
   const cartTotal = useMemo(() => {
     return discountedSubtotal + expressFee;
