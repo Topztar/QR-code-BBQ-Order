@@ -114,8 +114,6 @@ export const CustomerOrderTracker: React.FC<CustomerOrderTrackerProps> = ({
   handleQuickAddToCart,
   t,
 }) => {
-  const getSimulatedPastOrders = () => [];
-
   return (
     <div className="pt-6 border-t border-white/10 text-left space-y-4 font-sans" id="switchable-orders-segment">
       {isOrderHistoryVisible ? (
@@ -546,7 +544,6 @@ export const CustomerOrderTracker: React.FC<CustomerOrderTrackerProps> = ({
                     ...clientActiveOrders.filter(
                       (o) => o.status === 'completed' || o.status === 'cancelled'
                     ),
-                    ...getSimulatedPastOrders(),
                   ];
 
                   if (pastOrdersList.length === 0) {

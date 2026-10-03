@@ -8,7 +8,7 @@ export interface KdsMergedViewProps {
   currentLang: Language;
   t: (key: string) => string;
   getElapsedTime: (dateStr: string) => { mins: number; text: string; style: string };
-  isCloseToClosing: (dateStr: string, operatingHours: any[]) => boolean;
+
   operatingHours?: any[];
   setQuickViewOrder: (order: Order) => void;
 }
@@ -18,7 +18,6 @@ export const KdsMergedView: React.FC<KdsMergedViewProps> = React.memo(({
   currentLang,
   t,
   getElapsedTime,
-  isCloseToClosing,
   operatingHours = [],
   setQuickViewOrder,
 }) => {
@@ -80,11 +79,7 @@ export const KdsMergedView: React.FC<KdsMergedViewProps> = React.memo(({
                             <Clock size={8} className={elapsed.mins > 15 ? 'animate-pulse' : ''} />
                             <span>已等 {elapsed.text}</span>
                           </span>
-                          {isCloseToClosing(oi.createdAt, operatingHours) && (
-                            <span className="bg-red-500/20 text-red-400 border border-red-500/30 text-[9px] font-extrabold px-1.5 py-0.5 rounded shadow-[0_0_6px_rgba(239,68,68,0.2)] animate-pulse">
-                              ⚠️ 即將關店
-                            </span>
-                          )}
+
                         </div>
 
                         {/* Customization specifications */}

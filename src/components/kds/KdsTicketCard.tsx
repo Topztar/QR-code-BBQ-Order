@@ -39,8 +39,7 @@ export interface KdsTicketCardProps {
   getElapsedTime: (dateStr: string) => { mins: number; text: string; style: string };
   getTableOccupancyElapsedTime: (tableNumber: string) => any;
   isOrderLateForPrepTime: (order: Order) => any;
-  checkReservationOrderHoldStatus: (order: Order) => any;
-  isCloseToClosing: (dateStr: string, operatingHours: any[]) => boolean;
+
   collapsedOrders: Set<string>;
   toggleOrderCollapse: (orderId: string) => void;
   editingOrderId: string | null;
@@ -99,8 +98,7 @@ export const KdsTicketCard: React.FC<KdsTicketCardProps> = React.memo(({
   getElapsedTime,
   getTableOccupancyElapsedTime,
   isOrderLateForPrepTime,
-  checkReservationOrderHoldStatus,
-  isCloseToClosing,
+
   collapsedOrders,
   toggleOrderCollapse,
   editingOrderId,
@@ -167,7 +165,7 @@ export const KdsTicketCard: React.FC<KdsTicketCardProps> = React.memo(({
   const drag = dragStates ? (dragStates[order.id] || localDrag) : localDrag;
   const offset = drag.isDragging ? Math.max(0, drag.currentX - drag.startX) : 0;
   const lateCheck = isOrderLateForPrepTime(order);
-  const holdCheck = checkReservationOrderHoldStatus(order);
+
   const totalQty = order.items.reduce((sum, item) => sum + (item.qty || 0), 0);
 
   return (
@@ -220,9 +218,7 @@ export const KdsTicketCard: React.FC<KdsTicketCardProps> = React.memo(({
           }
         }}
         className={`bg-[#161616] border rounded-xl overflow-hidden shadow-md flex flex-col justify-between text-left transition-colors duration-300 ${
-          holdCheck.isHold
-            ? 'border-purple-500 ring-2 ring-purple-500/50 bg-gradient-to-b from-purple-950/40 via-[#161616] to-[#161616] shadow-[0_0_20px_rgba(168,85,247,0.35)] font-bold'
-            : order.isFlagged
+            order.isFlagged
               ? 'border-red-500 ring-2 ring-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.5)]'
               : lateCheck.isLate
                 ? 'animate-red-breathing-glow border-red-500 ring-2 ring-red-500/35 shadow-[0_0_15px_rgba(239,68,68,0.35)] font-bold'
@@ -237,22 +233,6 @@ export const KdsTicketCard: React.FC<KdsTicketCardProps> = React.memo(({
                         : 'border-white/10'
         }`}
       >
-        {/* Reservation Hold Status Header Banner */}
-        {holdCheck.isHold && (
-          <div className="bg-purple-950/90 border-b border-purple-500/40 px-4 py-2 text-left space-y-1">
-            <div className="flex items-center justify-between gap-2">
-              <span className="bg-purple-500 text-white font-mono font-black text-[10.5px] px-2 py-0.5 rounded tracking-wide animate-pulse">
-                🔒 預約單廚房保留中 (HOLD)
-              </span>
-              <span className="text-purple-300 font-mono text-[10.5px] font-bold">
-                {order.reservationNo || '預約單'} | 預約時間: {order.reservationDate}{' '}
-                {order.reservationTime || ''}
-              </span>
-            </div>
-            <p className="text-[10px] text-purple-200 font-sans">💡 {holdCheck.reason}</p>
-          </div>
-        )}
-
         {/* Upcoming Reservation Alert Banner */}
         {(() => {
           const now = new Date();
@@ -436,15 +416,7 @@ export const KdsTicketCard: React.FC<KdsTicketCardProps> = React.memo(({
                   </span>
                 </span>
               )}
-              {isCloseToClosing(order.createdAt, operatingHours) && (
-                <span
-                  className="inline-flex items-center gap-1 bg-red-500/20 text-red-400 border border-red-500/30 text-[10px] font-black px-1.5 py-0.5 rounded shadow-[0_0_8px_rgba(239,68,68,0.2)] animate-pulse"
-                  title="訂單於結業前 30 分鐘內進入，請優先且速配餐"
-                >
-                  <span className="w-1.5 h-1.5 rounded-full bg-red-450 animate-ping mr-0.5" />
-                  <span>{t('closingSoonRushAlert')}</span>
-                </span>
-              )}
+
               <button
                 type="button"
                 onClick={() => setQuickViewOrder(order)}

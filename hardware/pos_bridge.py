@@ -28,7 +28,7 @@ ESC_POS_CUT = bytes([0x1D, 0x56, 0x00])                           # GS V 0 (Full
 ESC_POS_DRAWER_PULSE = bytes([0x1B, 0x70, 0x00, 0x19, 0xFA])       # ESC p m t1 t2 (25ms pulse to Pin 2)
 
 DEFAULT_PORT = 8060
-DEFAULT_HOST = '0.0.0.0'
+DEFAULT_HOST = '127.0.0.1'
 
 
 def sanitize_text(text: str) -> str:

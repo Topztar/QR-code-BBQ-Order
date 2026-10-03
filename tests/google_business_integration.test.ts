@@ -183,11 +183,18 @@ describe('Google Business Profile Integration Tests', () => {
       expect(mgrCode).toContain('setInterval(checkBridgeStatus, 15000)');
     });
 
-    it('must retain Offline Queue probe in OrderDataContext.tsx (or extracted hooks)', () => {
+    it('must retain real-time Firestore Table snapshot and TableStatusSync derivation logic (Phase 3.3 S-06)', () => {
       const orderDataCode = fs.readFileSync(path.join(__dirname, '../src/context/OrderDataContext.tsx'), 'utf-8');
-      const offlineSyncCode = fs.readFileSync(path.join(__dirname, '../src/hooks/useOfflineSync.ts'), 'utf-8');
-      expect(offlineSyncCode).toContain('const probeTimer = setInterval(');
-      // expect(orderDataCode).toContain('checkAndSyncTables, 15000'); // removed in Phase 3.3
+      const tableSyncCode = fs.readFileSync(path.join(__dirname, '../src/components/TableStatusSync.tsx'), 'utf-8');
+      const restaurantDataCode = fs.readFileSync(path.join(__dirname, '../src/context/RestaurantDataContext.tsx'), 'utf-8');
+
+      // Verify that RestaurantDataContext retains the onSnapshot tables listener and optimistic merge
+      expect(restaurantDataCode).toContain('onSnapshot(query(collection(db, "tables")');
+      expect(restaurantDataCode).toContain('Merge tables onSnapshot with optimistic state');
+
+      // Verify TableStatusSync reacts to tableStatusOrdersSignature instead of a 15-second fixed poll loop
+      expect(tableSyncCode).toContain('S-06: Derive table status natively from snapshot');
+      expect(tableSyncCode).toContain('tableStatusOrdersSignature');
     });
   });
 });

@@ -29,7 +29,7 @@ interface StaffPortalContainerProps {
 function StaffPortalInner({ activeTab, lang, adminSubTab, setAdminSubTab, staffPin }: StaffPortalContainerProps) {
   const handleSendPromoPush = async (notif: { title: string; message: string; badge?: string }) => {
     // NOTE: Implemented in future marketing module
-    alert('Promo push not implemented yet.');
+    console.info('[Marketing Module Backlog] Promo push broadcast deferred to Phase 6+', notif);
   };
   const {
     menuItems,

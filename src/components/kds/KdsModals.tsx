@@ -17,7 +17,7 @@ export interface KdsQuickViewModalProps {
   currentLang: Language;
   t: (key: string) => string;
   getElapsedTime: (dateStr: string) => { mins: number; text: string; style: string };
-  isCloseToClosing: (dateStr: string, operatingHours: any[]) => boolean;
+
   operatingHours?: any[];
   getTableOccupancyElapsedTime: (tableNumber: string) => any;
   orders: Order[];
@@ -37,7 +37,6 @@ export const KdsQuickViewModal: React.FC<KdsQuickViewModalProps> = ({
   currentLang,
   t,
   getElapsedTime,
-  isCloseToClosing,
   operatingHours = [],
   getTableOccupancyElapsedTime,
   orders,
@@ -118,18 +117,7 @@ export const KdsQuickViewModal: React.FC<KdsQuickViewModalProps> = ({
                 {getElapsedTime(quickViewOrder.createdAt).text}
               </p>
             </div>
-            {isCloseToClosing(quickViewOrder.createdAt, operatingHours) && (
-              <div className="col-span-2 bg-red-500/10 border border-red-500/20 p-3 rounded-lg text-left text-xs font-sans animate-pulse">
-                <p className="text-red-400 font-extrabold flex items-center gap-1.5 uppercase tracking-wider text-[11px]">
-                  <span className="w-2 h-2 rounded-full bg-red-400 animate-ping mr-0.5" />
-                  ⚠️ 即將關店，加速出餐 (Store closing soon)
-                </p>
-                <p className="text-red-400/80 font-medium text-[10px] mt-1">
-                  此訂單於每日結業關閉前 30
-                  分鐘內進入，請廚房人員縮短備餐流程，儘速完成出餐！
-                </p>
-              </div>
-            )}
+
             {qvOcc && (
               <div className="col-span-2 bg-sky-500/5 border border-sky-500/15 p-3 rounded-lg text-left text-xs font-mono">
                 <p className="text-sky-400 font-bold text-[10px] uppercase tracking-wider flex items-center gap-1.5">

@@ -690,17 +690,6 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
     };
   };
 
-  const checkReservationOrderHoldStatus = (order: Order) => {
-    if (!order.reservationNo || !order.reservationDate) {
-      return { isHold: false, reason: '' };
-    }
-    return { isHold: false, reason: '' };
-  };
-
-  const isCloseToClosing = (_dateStr: string, _opHours: any[]) => {
-    return false;
-  };
-
   // Filtered orders
   const filteredOrders = useMemo(() => {
     return deferredOrders
@@ -809,7 +798,6 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
         currentLang={currentLang}
         t={t}
         getElapsedTime={getElapsedTime}
-        isCloseToClosing={isCloseToClosing}
         operatingHours={operatingHours}
         getTableOccupancyElapsedTime={getTableOccupancyElapsedTime}
         orders={deferredOrders}
@@ -885,7 +873,6 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
               currentLang={currentLang}
               t={t}
               getElapsedTime={getElapsedTime}
-              isCloseToClosing={isCloseToClosing}
               operatingHours={operatingHours}
               setQuickViewOrder={setQuickViewOrder}
             />
@@ -911,8 +898,7 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
                   getElapsedTime={getElapsedTime}
                   getTableOccupancyElapsedTime={getTableOccupancyElapsedTime}
                   isOrderLateForPrepTime={isOrderLateForPrepTime}
-                  checkReservationOrderHoldStatus={checkReservationOrderHoldStatus}
-                  isCloseToClosing={isCloseToClosing}
+
                   collapsedOrders={collapsedOrders}
                   toggleOrderCollapse={toggleOrderCollapse}
                   editingOrderId={editingOrderId}
