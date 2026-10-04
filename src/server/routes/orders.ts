@@ -30,6 +30,8 @@ export { getMappedTableId };
 const localIdempotencyKeys = new Map<string, { orderId: string, expiresAt: number }>();
 let lastCashDrawerOpenTime = 0; // G-12: Cash drawer debounce flag
 
+const VALID_ORDER_STATUSES = ['pending', 'confirmed', 'pending_kitchen_verification', 'preparing', 'delivering', 'paid', 'completed', 'cancelled'];
+
 export function registerOrdersRoutes(app: express.Express, ctx: OrderRouteContext) {
   const {
     getLiveOrders,
@@ -340,7 +342,6 @@ export function registerOrdersRoutes(app: express.Express, ctx: OrderRouteContex
     const livePrinterIp = getLivePrinterIp();
 
     // 🛡️ 狀態值白名單驗證，防止任意字串注入
-    const VALID_ORDER_STATUSES = ['pending', 'confirmed', 'pending_kitchen_verification', 'preparing', 'delivering', 'paid', 'completed', 'cancelled'];
     if (!status || !VALID_ORDER_STATUSES.includes(status)) {
       return res.status(400).json({ error: `無效的訂單狀態值: ${status}` });
     }
