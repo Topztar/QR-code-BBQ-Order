@@ -3114,7 +3114,7 @@ async function main() {
     console.log('[Sabay Server] State initialization completed successfully.');
 
     // Background Task: Automatically reset takeout sequence to 0 at 12:00 AM Midnight every day
-    setInterval(() => {
+    const takeoutResetTimer = setInterval(() => {
       const today = new Date().toDateString();
       if (lastTakeoutDate && today !== lastTakeoutDate) {
         console.log(`[Sabay Server] Midnight date change detected! Resetting takeout sequence from #${liveTakeoutSeq} to #0. (Old: ${lastTakeoutDate}, New: ${today})`);
@@ -3123,9 +3123,10 @@ async function main() {
         saveStateToDisk();
       }
     }, 10000); // Check every 10 seconds for real-time daily midnight reset
+    takeoutResetTimer.unref();
 
     // Background Task: Automatically check for upcoming reservations (<= 1 hour before reservation time)
-    setInterval(() => {
+    const upcomingResTimer = setInterval(() => {
       try {
         const now = new Date();
         let changed = false;
@@ -3173,15 +3174,16 @@ async function main() {
         console.error('[Reservation Auto-Check Error]', checkErr);
       }
     }, 15000); // Check every 15 seconds for real-time transitions
-
+    upcomingResTimer.unref();
     // Background Task: Automatically restore 'daily' SOLD OUT menu items after Taiwan midnight (00:00:00)
-    setInterval(() => {
+    const menuRestoreTimer = setInterval(() => {
       try {
         checkAndRestoreSoldOutMenuItems();
       } catch (menuErr) {
         console.error('[Menu Auto-Restore Check Error]', menuErr);
       }
     }, 15000); // Check every 15 seconds
+    menuRestoreTimer.unref();
   } catch (err) {
     console.error('[Sabay Server] Failed to initialize state on boot, falling back to disk:', err);
     loadStateFromDisk();
@@ -3248,10 +3250,13 @@ async function main() {
     console.log('[Sabay Server] Mounted Production Static Assets at:', distPath);
   }
 
-  // Always listen on port 3000
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`[Sabay Server] Sabay Grilled BBQ System Running on URL http://localhost:${PORT}`);
-  });
+  // Prevent port binding conflict during test executions
+  const isTest = process.env.NODE_ENV === 'test' || Boolean(process.env.VITEST);
+  if (!isTest || process.env.START_SERVER === 'true') {
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`[Sabay Server] Sabay Grilled BBQ System Running on URL http://localhost:${PORT}`);
+    });
+  }
 }
 
 main().catch(err => {

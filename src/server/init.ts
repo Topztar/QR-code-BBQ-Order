@@ -2,7 +2,7 @@ import express from 'express';
 import { Storage } from '@google-cloud/storage';
 
 export const app = express();
-export const PORT = 3000;
+export const PORT = Number(process.env.PORT) || (process.env.NODE_ENV === 'test' || Boolean(process.env.VITEST) ? 0 : 3000);
 
 export const STORAGE_BUCKET_NAME = 'sabay-bbq-order.firebasestorage.app';
 export let gcsStorage: Storage | null = null;
