@@ -37,10 +37,14 @@ const CustomerCategoryTabsBase: React.FC<CustomerCategoryTabsProps> = ({
     if (activeTab) {
       const container = carouselRef.current;
       const scrollLeft = activeTab.offsetLeft - container.offsetWidth / 2 + activeTab.offsetWidth / 2;
-      container.scrollTo({
-        left: Math.max(0, scrollLeft),
-        behavior: 'smooth',
-      });
+      if (typeof container.scrollTo === 'function') {
+        container.scrollTo({
+          left: Math.max(0, scrollLeft),
+          behavior: 'smooth',
+        });
+      } else {
+        container.scrollLeft = Math.max(0, scrollLeft);
+      }
     }
   }, [selectedCategory]);
 

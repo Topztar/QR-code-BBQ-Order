@@ -3218,7 +3218,8 @@ async function main() {
     res.status(404).json({ error: 'API endpoint not found', timestamp: Date.now() });
   });
 
-  const isStaticMode = process.env.SERVE_STATIC === 'true' || process.env.CI === 'true' || __filename.includes('dist');
+  const isDistBuild = typeof __filename !== 'undefined' && __filename.includes('dist');
+  const isStaticMode = process.env.SERVE_STATIC === 'true' || process.env.CI === 'true' || isDistBuild;
   if (!isStaticMode) {
     const vite = await createViteServer({
       server: { middlewareMode: true },
