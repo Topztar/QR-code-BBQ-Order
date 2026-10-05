@@ -39,12 +39,48 @@ export function useManagerMenuEditor({
   useEffect(() => {
     if (!hasUnsavedCategoryOrder) {
       setLocalCategoryOrder(categories);
+    } else {
+      const prev = useDashboardStore.getState().localCategoryOrder;
+      const currentIds = new Set(categories.map(c => c.id));
+      const prevIds = new Set(prev.map(c => c.id));
+      
+      const updatedPrev = prev
+        .filter(c => currentIds.has(c.id))
+        .map(c => categories.find(cat => cat.id === c.id) || c);
+      const newItems = categories.filter(c => !prevIds.has(c.id));
+      
+      if (updatedPrev.length !== prev.length || newItems.length > 0) {
+        setLocalCategoryOrder([...updatedPrev, ...newItems]);
+      } else {
+        const isDeepEqual = JSON.stringify(prev) === JSON.stringify(updatedPrev);
+        if (!isDeepEqual) {
+          setLocalCategoryOrder(updatedPrev);
+        }
+      }
     }
   }, [categories, hasUnsavedCategoryOrder, setLocalCategoryOrder]);
 
   useEffect(() => {
     if (!hasUnsavedMenuItemOrder) {
       setLocalMenuItemOrder(menuItems);
+    } else {
+      const prev = useDashboardStore.getState().localMenuItemOrder;
+      const currentIds = new Set(menuItems.map(m => m.id));
+      const prevIds = new Set(prev.map(m => m.id));
+      
+      const updatedPrev = prev
+        .filter(m => currentIds.has(m.id))
+        .map(m => menuItems.find(mi => mi.id === m.id) || m);
+      const newItems = menuItems.filter(m => !prevIds.has(m.id));
+      
+      if (updatedPrev.length !== prev.length || newItems.length > 0) {
+        setLocalMenuItemOrder([...updatedPrev, ...newItems]);
+      } else {
+        const isDeepEqual = JSON.stringify(prev) === JSON.stringify(updatedPrev);
+        if (!isDeepEqual) {
+          setLocalMenuItemOrder(updatedPrev);
+        }
+      }
     }
   }, [menuItems, hasUnsavedMenuItemOrder, setLocalMenuItemOrder]);
 

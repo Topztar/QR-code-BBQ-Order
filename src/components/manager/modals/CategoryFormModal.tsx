@@ -34,14 +34,17 @@ export const CategoryFormModal: React.FC<CategoryFormModalProps> = ({
     if (isOpen) {
       if (editingCategory) {
         setCatId(editingCategory.id);
-        setCatNameZh(editingCategory.name.zh || '');
-        setCatNameEn(editingCategory.name.en || '');
-        setCatNameTh(editingCategory.name.th || '');
-        setCatNameJa(editingCategory.name.ja || '');
-        setCatNameKo(editingCategory.name.ko || '');
-        setCatNameVi(editingCategory.name.vi || '');
-        setCatNameRu(editingCategory.name.ru || '');
-        setCatNameEs(editingCategory.name.es || '');
+        const nameObj = typeof editingCategory.name === 'string'
+          ? { zh: editingCategory.name, en: '' }
+          : (editingCategory.name || {});
+        setCatNameZh(typeof nameObj.zh === 'string' ? nameObj.zh : (typeof editingCategory.name === 'string' ? editingCategory.name : ''));
+        setCatNameEn(typeof nameObj.en === 'string' ? nameObj.en : '');
+        setCatNameTh(typeof nameObj.th === 'string' ? nameObj.th : '');
+        setCatNameJa(typeof nameObj.ja === 'string' ? nameObj.ja : '');
+        setCatNameKo(typeof nameObj.ko === 'string' ? nameObj.ko : '');
+        setCatNameVi(typeof nameObj.vi === 'string' ? nameObj.vi : '');
+        setCatNameRu(typeof nameObj.ru === 'string' ? nameObj.ru : '');
+        setCatNameEs(typeof nameObj.es === 'string' ? nameObj.es : '');
         setCatShowOnCustomer(editingCategory.showOnCustomerPage !== false);
       } else {
         setCatId('');

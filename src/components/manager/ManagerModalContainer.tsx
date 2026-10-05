@@ -75,14 +75,21 @@ export const ManagerModalContainer: React.FC<ManagerModalContainerProps> = ({
 
   const handleSaveCatSubmit = async (formData: any) => {
     setCatError(null);
-    if (editingCategory && onEditCategory) {
-      const r = await onEditCategory(editingCategory.id, formData.names, formData.showOnCustomerPage);
-      if (r.success) setIsCatFormOpen(false);
-      else setCatError(r.error || 'Failed to update category');
-    } else if (onAddCategory) {
-      const r = await onAddCategory(formData.id, formData.names, formData.showOnCustomerPage);
-      if (r.success) setIsCatFormOpen(false);
-      else setCatError(r.error || 'Failed to add category');
+    try {
+      const catName = formData.name || formData.names;
+      const showOnCustomer = formData.showOnCustomer !== undefined ? formData.showOnCustomer : formData.showOnCustomerPage;
+      if (editingCategory && onEditCategory) {
+        const r = await onEditCategory(editingCategory.id, catName, showOnCustomer);
+        if (r.success) setIsCatFormOpen(false);
+        else setCatError(r.error || 'Failed to update category');
+      } else if (onAddCategory) {
+        const r = await onAddCategory(formData.id, catName, showOnCustomer);
+        if (r.success) setIsCatFormOpen(false);
+        else setCatError(r.error || 'Failed to add category');
+      }
+    } catch (err) {
+      console.error('Failed to save category', err);
+      setCatError('儲存分類失敗，請重試 (Failed to save category)');
     }
   };
 

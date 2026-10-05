@@ -1570,28 +1570,30 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
       />
 
       {/* MODALS CONTAINER */}
-      <ManagerModalContainer
-        globalRules={globalRules}
-        categories={categories}
-        ingredients={ingredients}
-        tables={tables}
-        reservations={reservations}
-        onAddMenuItem={onAddMenuItem}
-        onEditMenuItem={onEditMenuItem}
-        onAddCategory={onAddCategory}
-        onEditCategory={onEditCategory}
-        onAddTable={onAddTable}
-        onEditTable={onEditTable}
-        onAddReservation={onAddReservation}
-        onEditReservation={onEditReservation}
-        onRestock={onRestock!}
-        checkoutSuccessData={checkoutSuccessData}
-        handleSavePointsAdjustment={handleSavePointsAdjustment}
-        loadMembers={loadMembers}
-        handleBulkDeleteOrders={handleBulkDeleteOrders}
-        handleExportOrdersReport={handleExportOrdersReport}
-        isBulkDeleting={isBulkDeleting}
-      />
+      <ErrorBoundary fallbackTitle="管理彈出視窗異常" fallbackMessage="彈出視窗載入遇到問題，請重新整理或重新開啟。">
+        <ManagerModalContainer
+          globalRules={globalRules}
+          categories={categories}
+          ingredients={ingredients}
+          tables={tables}
+          reservations={reservations}
+          onAddMenuItem={onAddMenuItem}
+          onEditMenuItem={onEditMenuItem}
+          onAddCategory={onAddCategory}
+          onEditCategory={onEditCategory}
+          onAddTable={onAddTable}
+          onEditTable={onEditTable}
+          onAddReservation={onAddReservation}
+          onEditReservation={onEditReservation}
+          onRestock={onRestock!}
+          checkoutSuccessData={checkoutSuccessData}
+          handleSavePointsAdjustment={handleSavePointsAdjustment}
+          loadMembers={loadMembers}
+          handleBulkDeleteOrders={handleBulkDeleteOrders}
+          handleExportOrdersReport={handleExportOrdersReport}
+          isBulkDeleting={isBulkDeleting}
+        />
+      </ErrorBoundary>
 </div>
   );
 };

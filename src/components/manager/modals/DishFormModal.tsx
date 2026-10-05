@@ -65,6 +65,68 @@ const LANG_CONFIG: Record<Language, { label: string; namePlaceholder: string; de
   }
 };
 
+const normalizeLanguageMap = (primaryInput: any, secondaryInput?: any): Record<Language, string> => {
+  const result: Record<Language, string> = {
+    zh: '',
+    en: '',
+    th: '',
+    ja: '',
+    ko: '',
+    vi: '',
+    ru: '',
+    es: ''
+  };
+
+  const extractObject = (val: any): Record<string, any> => {
+    if (!val) return {};
+    if (typeof val === 'string') {
+      const trimmed = val.trim();
+      if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            return parsed;
+          }
+        } catch {
+          // not valid json
+        }
+      }
+      return { zh: val };
+    }
+    if (typeof val === 'object' && !Array.isArray(val)) {
+      return val;
+    }
+    return { zh: String(val) };
+  };
+
+  const pObj = extractObject(primaryInput);
+  const sObj = extractObject(secondaryInput);
+
+  ALL_LANGUAGES.forEach((lang) => {
+    let candidate = pObj[lang];
+    if (candidate === undefined || candidate === null || (typeof candidate === 'object' && !Array.isArray(candidate))) {
+      candidate = sObj[lang];
+    }
+    if (typeof candidate === 'string') {
+      result[lang] = candidate;
+    } else if (typeof candidate === 'number' || typeof candidate === 'boolean') {
+      result[lang] = String(candidate);
+    } else {
+      result[lang] = '';
+    }
+  });
+
+  if (!result.zh) {
+    if (typeof primaryInput === 'string' && !primaryInput.startsWith('{')) {
+      result.zh = primaryInput;
+    } else if (typeof secondaryInput === 'string' && !secondaryInput.startsWith('{')) {
+      result.zh = secondaryInput;
+    }
+  }
+
+  return result;
+};
+
 interface ModalErrorBoundaryProps {
   children: React.ReactNode;
   onClose: () => void;
@@ -159,8 +221,8 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
       setIsUploadingImage(false);
       setIsLocalPreviewOnly(false);
       if (editingItem) {
-        setItemNames(editingItem.names || { zh: editingItem.name?.zh || editingItem.name || '', en: editingItem.name?.en || '', th: '', ja: '', ko: '', vi: '', ru: '', es: '' });
-        setItemDescs(editingItem.descriptions || { zh: editingItem.description?.zh || editingItem.description || '', en: editingItem.description?.en || '', th: '', ja: '', ko: '', vi: '', ru: '', es: '' });
+        setItemNames(normalizeLanguageMap(editingItem.names, editingItem.name));
+        setItemDescs(normalizeLanguageMap(editingItem.descriptions, editingItem.description));
         setItemCategory(editingItem.category || 'skewers');
         setItemPrice(editingItem.price || 100);
         setItemImage(editingItem.image || '');
@@ -194,8 +256,8 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
   // Compute isDirty dynamically
   useEffect(() => {
     if (!isOpen) return;
-    const initialNames = editingItem ? (editingItem.names || { zh: editingItem.name?.zh || editingItem.name || '', en: editingItem.name?.en || '', th: '', ja: '', ko: '', vi: '', ru: '', es: '' }) : { zh: '', en: '', th: '', ja: '', ko: '', vi: '', ru: '', es: '' };
-    const initialDescs = editingItem ? (editingItem.descriptions || { zh: editingItem.description?.zh || editingItem.description || '', en: editingItem.description?.en || '', th: '', ja: '', ko: '', vi: '', ru: '', es: '' }) : { zh: '', en: '', th: '', ja: '', ko: '', vi: '', ru: '', es: '' };
+    const initialNames = editingItem ? normalizeLanguageMap(editingItem.names, editingItem.name) : { zh: '', en: '', th: '', ja: '', ko: '', vi: '', ru: '', es: '' };
+    const initialDescs = editingItem ? normalizeLanguageMap(editingItem.descriptions, editingItem.description) : { zh: '', en: '', th: '', ja: '', ko: '', vi: '', ru: '', es: '' };
     const initialCategory = editingItem?.category || 'skewers';
     const initialPrice = editingItem?.price || 100;
     const initialImage = editingItem?.image || '';
@@ -278,9 +340,14 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
   };
 
   const handleAutoTranslateAll = async () => {
-    const sourceName = (names.zh || names.en || '').trim();
-    const sourceDesc = (descs.zh || descs.en || '').trim();
-    const sourceLang: Language = names.zh ? 'zh' : 'en';
+    const rawZhName = typeof names.zh === 'string' ? names.zh : '';
+    const rawEnName = typeof names.en === 'string' ? names.en : '';
+    const rawZhDesc = typeof descs.zh === 'string' ? descs.zh : '';
+    const rawEnDesc = typeof descs.en === 'string' ? descs.en : '';
+
+    const sourceName = (rawZhName || rawEnName).trim();
+    const sourceDesc = (rawZhDesc || rawEnDesc).trim();
+    const sourceLang: Language = rawZhName.trim() ? 'zh' : 'en';
 
     if (!sourceName && !sourceDesc) {
       alert('請先填寫正體中文或英文的餐點名稱或說明，即可自動翻譯補齊其他 7 國語言！');
@@ -296,12 +363,12 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
         ALL_LANGUAGES.map(async (lang) => {
           if (lang === sourceLang) return;
           // 若欄位為空，或等於原文（先前被 fallback 或複製貼成中文），皆應重新進行該語言的翻譯
-          const curName = updatedNames[lang]?.trim();
+          const curName = typeof updatedNames[lang] === 'string' ? updatedNames[lang].trim() : '';
           if (sourceName && (!curName || curName === sourceName)) {
             const transName = await translateTextToLanguage(sourceName, lang, sourceLang);
             if (transName) updatedNames[lang] = transName;
           }
-          const curDesc = updatedDescs[lang]?.trim();
+          const curDesc = typeof updatedDescs[lang] === 'string' ? updatedDescs[lang].trim() : '';
           if (sourceDesc && (!curDesc || curDesc === sourceDesc)) {
             const transDesc = await translateTextToLanguage(sourceDesc, lang, sourceLang);
             if (transDesc) updatedDescs[lang] = transDesc;
@@ -311,8 +378,6 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
 
       setItemNames(updatedNames);
       setItemDescs(updatedDescs);
-
-
     } catch (err) {
       console.error('Auto translate error:', err);
     } finally {
@@ -321,9 +386,14 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
   };
 
   const handleTranslateSingleLang = async (targetLang: Language) => {
-    const sourceName = (names.zh || names.en || '').trim();
-    const sourceDesc = (descs.zh || descs.en || '').trim();
-    const sourceLang: Language = names.zh ? 'zh' : 'en';
+    const rawZhName = typeof names.zh === 'string' ? names.zh : '';
+    const rawEnName = typeof names.en === 'string' ? names.en : '';
+    const rawZhDesc = typeof descs.zh === 'string' ? descs.zh : '';
+    const rawEnDesc = typeof descs.en === 'string' ? descs.en : '';
+
+    const sourceName = (rawZhName || rawEnName).trim();
+    const sourceDesc = (rawZhDesc || rawEnDesc).trim();
+    const sourceLang: Language = rawZhName.trim() ? 'zh' : 'en';
 
     if (!sourceName && !sourceDesc) {
       alert('請先填寫正體中文或英文餐點名稱或說明！');
@@ -646,8 +716,8 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
                       {ALL_LANGUAGES.map((lang) => {
                         const cfg = LANG_CONFIG[lang];
                         const isCurrent = activeLangTab === lang;
-                        const hasName = !!names[lang]?.trim();
-                        const hasDesc = !!descs[lang]?.trim();
+                        const hasName = typeof names[lang] === 'string' ? !!names[lang].trim() : !!String(names[lang] || '').trim();
+                        const hasDesc = typeof descs[lang] === 'string' ? !!descs[lang].trim() : !!String(descs[lang] || '').trim();
                         const isComplete = hasName && hasDesc;
                         const isPartial = hasName || hasDesc;
 
@@ -708,7 +778,7 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
                         </label>
                         <input
                           type="text"
-                          value={names[activeLangTab] || ''}
+                          value={typeof names[activeLangTab] === 'string' ? names[activeLangTab] : ''}
                           onChange={(e) => handleNameChange(activeLangTab, e.target.value)}
                           placeholder={LANG_CONFIG[activeLangTab].namePlaceholder}
                           className="w-full bg-[#1e1e1e] border border-white/10 rounded px-2.5 py-1.5 text-white text-xs focus:border-amber-400/50 outline-none"
@@ -721,7 +791,7 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
                         </label>
                         <textarea
                           rows={2}
-                          value={descs[activeLangTab] || ''}
+                          value={typeof descs[activeLangTab] === 'string' ? descs[activeLangTab] : ''}
                           onChange={(e) => handleDescChange(activeLangTab, e.target.value)}
                           placeholder={LANG_CONFIG[activeLangTab].descPlaceholder}
                           className="w-full bg-[#1e1e1e] border border-white/10 rounded px-2.5 py-1.5 text-white text-xs focus:border-amber-400/50 outline-none"
@@ -755,7 +825,7 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
                             </div>
                             <input
                               type="text"
-                              value={names[lang] || ''}
+                              value={typeof names[lang] === 'string' ? names[lang] : ''}
                               onChange={(e) => handleNameChange(lang, e.target.value)}
                               placeholder={LANG_CONFIG[lang].namePlaceholder}
                               className="w-full bg-[#1e1e1e] border border-white/10 rounded px-2 py-1 text-white text-xs focus:border-amber-400/50 outline-none"
@@ -788,7 +858,7 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
                             </div>
                             <textarea
                               rows={2}
-                              value={descs[lang] || ''}
+                              value={typeof descs[lang] === 'string' ? descs[lang] : ''}
                               onChange={(e) => handleDescChange(lang, e.target.value)}
                               placeholder={LANG_CONFIG[lang].descPlaceholder}
                               className="w-full bg-[#1e1e1e] border border-white/10 rounded px-2 py-1 text-white text-xs focus:border-amber-400/50 outline-none"

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Plus, Layers, Edit, Trash2 } from 'lucide-react';
 import { Category, Language, MenuItem, SoldOutType } from '../../types';
 import { getLocalizedText } from '../../utils/i18n';
@@ -51,6 +51,97 @@ export const ManagerMenuTab: React.FC<ManagerMenuTabProps> = ({
     setHasUnsavedCategoryOrder,
     setConfirmActionModal,
   } = useDashboardStore();
+
+  const [draggedMenuItemId, setDraggedMenuItemId] = useState<string | null>(null);
+  const [draggedCategoryId, setDraggedCategoryId] = useState<string | null>(null);
+
+  const handleMenuItemDragStart = (e: React.DragEvent, id: string) => {
+    if (!isMenuItemSortingMode) {
+      e.preventDefault();
+      return;
+    }
+    setDraggedMenuItemId(id);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', id);
+    setTimeout(() => {
+      if (e.target instanceof HTMLElement) {
+        e.target.classList.add('opacity-50', 'scale-[0.99]');
+      }
+    }, 0);
+  };
+
+  const handleMenuItemDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleMenuItemDrop = (e: React.DragEvent, targetId: string) => {
+    e.preventDefault();
+    if (!draggedMenuItemId || draggedMenuItemId === targetId) return;
+
+    const draggedIndex = localMenuItemOrder.findIndex(m => m.id === draggedMenuItemId);
+    const targetIndex = localMenuItemOrder.findIndex(m => m.id === targetId);
+
+    if (draggedIndex === -1 || targetIndex === -1) return;
+
+    const newItems = [...localMenuItemOrder];
+    const [draggedItem] = newItems.splice(draggedIndex, 1);
+    newItems.splice(targetIndex, 0, draggedItem);
+
+    setLocalMenuItemOrder(newItems);
+    setHasUnsavedMenuItemOrder(true);
+  };
+
+  const handleMenuItemDragEnd = (e: React.DragEvent) => {
+    setDraggedMenuItemId(null);
+    if (e.target instanceof HTMLElement) {
+      e.target.classList.remove('opacity-50', 'scale-[0.99]');
+    }
+  };
+
+  const handleCategoryDragStart = (e: React.DragEvent, id: string) => {
+    if (!isCategorySortingMode) {
+      e.preventDefault();
+      return;
+    }
+    setDraggedCategoryId(id);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', id);
+    setTimeout(() => {
+      if (e.target instanceof HTMLElement) {
+        e.target.classList.add('opacity-50', 'scale-[0.98]');
+      }
+    }, 0);
+  };
+
+  const handleCategoryDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleCategoryDrop = (e: React.DragEvent, targetId: string) => {
+    e.preventDefault();
+    if (!draggedCategoryId || draggedCategoryId === targetId) return;
+
+    const draggedIndex = localCategoryOrder.findIndex(c => c.id === draggedCategoryId);
+    const targetIndex = localCategoryOrder.findIndex(c => c.id === targetId);
+
+    if (draggedIndex === -1 || targetIndex === -1) return;
+
+    const newCats = [...localCategoryOrder];
+    const [draggedCat] = newCats.splice(draggedIndex, 1);
+    newCats.splice(targetIndex, 0, draggedCat);
+
+    setLocalCategoryOrder(newCats);
+    setHasUnsavedCategoryOrder(true);
+  };
+
+  const handleCategoryDragEnd = (e: React.DragEvent) => {
+    setDraggedCategoryId(null);
+    if (e.target instanceof HTMLElement) {
+      e.target.classList.remove('opacity-50', 'scale-[0.98]');
+    }
+  };
 
   const handleMoveMenuItem = (id: string, direction: 'up' | 'down') => {
     const index = localMenuItemOrder.findIndex(m => m.id === id);
@@ -137,28 +228,67 @@ export const ManagerMenuTab: React.FC<ManagerMenuTabProps> = ({
                   <button
                     type="button"
                     onClick={() => setIsMenuItemSortingMode(true)}
-                    className="bg-amber-500/10 hover:bg-[#E5B453] hover:text-black border border-amber-500/35 text-[#E5B453] px-2.5 py-1.5 rounded-lg text-xs font-bold active:scale-95 transition cursor-pointer flex items-center gap-1"
+                    className="bg-amber-500/20 hover:bg-[#E5B453] hover:text-black border-2 border-amber-500 text-[#E5B453] px-3 py-1.5 rounded-lg text-xs font-bold active:scale-95 transition-all duration-300 cursor-pointer flex items-center gap-2 shadow-[0_0_10px_rgba(245,158,11,0.2)] hover:shadow-[0_0_15px_rgba(245,158,11,0.4)]"
                     id="btn-menuitem-sort-start"
+                    title="開啟手動調整品項排序模式 (Drag & Drop or Arrows)"
                   >
-                    調整品項排序 ↕️
+                    <span>↕️</span>
+                    <span>調整品項排序</span>
                   </button>
                 ) : (
-                  <div className="flex items-center gap-2 bg-zinc-900/80 p-1 rounded-lg border border-white/5">
-                    <button
-                      type="button"
-                      onClick={handleSaveMenuItemOrder}
-                      className="bg-emerald-600 hover:bg-emerald-500 text-white px-2.5 py-1 rounded text-xs font-bold active:scale-95 transition cursor-pointer flex items-center gap-1 shadow-md shadow-emerald-900/40 animate-pulse"
-                      id="btn-menuitem-sort-confirm"
-                    >
-                      💾 確認儲存品項排序
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleCancelMenuItemOrder}
-                      className="bg-white/5 hover:bg-white/10 text-zinc-300 hover:text-white px-2 py-1 rounded text-xs transition cursor-pointer"
-                    >
-                      取消
-                    </button>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="flex items-center gap-1.5 bg-zinc-900/60 px-2 py-1 rounded-lg border border-white/5 shadow-inner">
+                      <span className="text-[10px] text-zinc-500 hidden sm:inline font-bold px-1">自動排序:</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                           const sorted = [...localMenuItemOrder].sort((a, b) => {
+                             const catOrderA = localCategoryOrder.findIndex(c => c.id === a.category);
+                             const catOrderB = localCategoryOrder.findIndex(c => c.id === b.category);
+                             if (catOrderA !== catOrderB) {
+                               return (catOrderA !== -1 ? catOrderA : 999) - (catOrderB !== -1 ? catOrderB : 999);
+                             }
+                             return a.price - b.price; // fallback to price if same category
+                           });
+                           setLocalMenuItemOrder(sorted);
+                           setHasUnsavedMenuItemOrder(true);
+                        }}
+                        className="bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 px-2 py-1 rounded text-[10px] transition cursor-pointer flex items-center gap-1 border border-sky-500/20 active:scale-95"
+                        title="自動依目前分類順序排列 (同分類依價格遞增)"
+                      >
+                        🗂️ 依分類
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                           const sorted = [...localMenuItemOrder].sort((a, b) => a.price - b.price);
+                           setLocalMenuItemOrder(sorted);
+                           setHasUnsavedMenuItemOrder(true);
+                        }}
+                        className="bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 px-2 py-1 rounded text-[10px] transition cursor-pointer flex items-center gap-1 border border-indigo-500/20 active:scale-95"
+                        title="自動依價格(由低至高)排列"
+                      >
+                        💲 依價格
+                      </button>
+                    </div>
+                    
+                    <div className="flex items-center gap-2 bg-zinc-900/80 p-1 rounded-lg border border-white/5">
+                      <button
+                        type="button"
+                        onClick={handleSaveMenuItemOrder}
+                        className="bg-emerald-600 hover:bg-emerald-500 text-white px-2.5 py-1 rounded text-xs font-bold active:scale-95 transition cursor-pointer flex items-center gap-1 shadow-md shadow-emerald-900/40 animate-pulse"
+                        id="btn-menuitem-sort-confirm"
+                      >
+                        💾 確認儲存品項排序
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleCancelMenuItemOrder}
+                        className="bg-white/5 hover:bg-white/10 text-zinc-300 hover:text-white px-2 py-1 rounded text-xs transition cursor-pointer"
+                      >
+                        取消
+                      </button>
+                    </div>
                   </div>
                 )}
               </>
@@ -195,10 +325,15 @@ export const ManagerMenuTab: React.FC<ManagerMenuTabProps> = ({
                 const foundCategoryObj = categories.find(c => c.id === item.category);
                 return (
                   <tr 
-                    key={item.id} 
-                    className={`hover:bg-[#E5B453]/5 transition-colors ${
+                    key={item.id}
+                    draggable={isMenuItemSortingMode}
+                    onDragStart={(e) => handleMenuItemDragStart(e, item.id)}
+                    onDragOver={handleMenuItemDragOver}
+                    onDrop={(e) => handleMenuItemDrop(e, item.id)}
+                    onDragEnd={handleMenuItemDragEnd}
+                    className={`transition-all duration-300 ease-in-out ${
                       index % 2 === 0 ? 'bg-zinc-900/20' : 'bg-black/30'
-                    }`}
+                    } ${isMenuItemSortingMode ? 'hover:bg-amber-500/10 border-l-4 border-l-amber-500/60 cursor-grab active:cursor-grabbing' : 'hover:bg-[#E5B453]/5'} ${draggedMenuItemId === item.id ? 'opacity-50 bg-amber-500/20' : ''}`}
                   >
                     {/* # Row Index */}
                     <td className="p-2.5 border-r border-white/10 text-center text-zinc-500 font-mono text-[10px]">{index + 1}</td>
@@ -206,7 +341,8 @@ export const ManagerMenuTab: React.FC<ManagerMenuTabProps> = ({
                     {/* 排序操作 */}
                     <td className="p-2.5 border-r border-white/10 text-center">
                       {isMenuItemSortingMode ? (
-                        <div className="flex items-center justify-center space-x-1.5 animate-pulse bg-amber-500/10 p-1 rounded border border-amber-500/25">
+                        <div className="flex items-center justify-center space-x-1.5 animate-pulse bg-amber-500/10 p-1 rounded border border-amber-500/25 cursor-grab">
+                          <span className="text-amber-500 opacity-60 text-[10px] hidden sm:inline" title="可拖曳排序">☰</span>
                           <button
                             type="button"
                             disabled={index === 0}
@@ -392,10 +528,12 @@ export const ManagerMenuTab: React.FC<ManagerMenuTabProps> = ({
                   <button
                     type="button"
                     onClick={() => setIsCategorySortingMode(true)}
-                    className="bg-amber-500/10 hover:bg-[#E5B453] hover:text-black border border-amber-500/35 text-[#E5B453] px-2.5 py-1.5 rounded-lg text-xs font-bold active:scale-95 transition cursor-pointer flex items-center gap-1"
+                    className="bg-amber-500/20 hover:bg-[#E5B453] hover:text-black border-2 border-amber-500 text-[#E5B453] px-3 py-1.5 rounded-lg text-xs font-bold active:scale-95 transition-all duration-300 cursor-pointer flex items-center gap-2 shadow-[0_0_10px_rgba(245,158,11,0.2)] hover:shadow-[0_0_15px_rgba(245,158,11,0.4)]"
                     id="btn-category-sort-start"
+                    title="開啟手動調整分類排序模式 (Drag & Drop or Arrows)"
                   >
-                    調整分類排序 ↕️
+                    <span>↕️</span>
+                    <span>調整分類排序</span>
                   </button>
                 ) : (
                   <div className="flex items-center gap-2 bg-zinc-900/80 p-1 rounded-lg border border-white/5">
@@ -435,12 +573,19 @@ export const ManagerMenuTab: React.FC<ManagerMenuTabProps> = ({
             const isFirst = catIndex === 0;
             return (
               <div 
-                key={cat.id} 
-                className={`bg-black/35 border p-4 flex flex-col justify-between space-y-3 rounded-xl shadow-md hover:border-[#E5B453]/45 transition duration-200 ${
-                  isFirst 
-                    ? 'border-[#E5B453]/60 bg-gradient-to-br from-[#E5B453]/[0.08] to-transparent ring-[1.5px] ring-[#E5B453]/20 shadow-[0_0_15px_rgba(229,180,83,0.06)]' 
-                    : 'border-white/10'
-                }`}
+                key={cat.id}
+                draggable={isCategorySortingMode}
+                onDragStart={(e) => handleCategoryDragStart(e, cat.id)}
+                onDragOver={handleCategoryDragOver}
+                onDrop={(e) => handleCategoryDrop(e, cat.id)}
+                onDragEnd={handleCategoryDragEnd}
+                className={`bg-black/35 border p-4 flex flex-col justify-between space-y-3 rounded-xl shadow-md transition-all duration-300 ease-in-out ${
+                  isCategorySortingMode 
+                    ? 'border-amber-500/60 shadow-[0_0_10px_rgba(245,158,11,0.15)] hover:border-amber-400 hover:ring-1 hover:ring-amber-400/50 cursor-grab active:cursor-grabbing' 
+                    : (isFirst 
+                      ? 'border-[#E5B453]/60 bg-gradient-to-br from-[#E5B453]/[0.08] to-transparent ring-[1.5px] ring-[#E5B453]/20 shadow-[0_0_15px_rgba(229,180,83,0.06)] hover:border-[#E5B453]/45' 
+                      : 'border-white/10 hover:border-[#E5B453]/45')
+                } ${draggedCategoryId === cat.id ? 'opacity-50 bg-amber-500/10' : ''}`}
               >
                 <div className="text-left font-sans text-xs space-y-1.5">
                   <div className="flex items-start justify-between gap-2.5 flex-wrap">
@@ -460,7 +605,8 @@ export const ManagerMenuTab: React.FC<ManagerMenuTabProps> = ({
                     
                     {/* 菜色分類排序 (Category Sorting Controls) */}
                     {isCategorySortingMode ? (
-                      <div className="flex items-center space-x-1 shrink-0 bg-amber-500/10 p-0.5 rounded-lg border border-amber-500/20 animate-pulse">
+                      <div className="flex items-center space-x-1 shrink-0 bg-amber-500/10 p-0.5 rounded-lg border border-amber-500/20 animate-pulse cursor-grab">
+                        <span className="text-amber-500 opacity-60 text-[10px] pl-1 pr-0.5 hidden sm:inline" title="可拖曳排序">☰</span>
                         <button
                           type="button"
                           disabled={catIndex === 0}
