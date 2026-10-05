@@ -60,12 +60,17 @@ export const ManagerModalContainer: React.FC<ManagerModalContainerProps> = ({
   const [tableSuccess, setTableSuccess] = useState<string | null>(null);
 
   const handleSaveItemSubmit = async (formData: any) => {
-    if (editingItem && onEditMenuItem) {
-      await onEditMenuItem(editingItem.id, formData);
-    } else if (onAddMenuItem) {
-      await onAddMenuItem(formData);
+    try {
+      if (editingItem && onEditMenuItem) {
+        await onEditMenuItem(editingItem.id, formData);
+      } else if (onAddMenuItem) {
+        await onAddMenuItem(formData);
+      }
+      setIsDishFormOpen(false);
+    } catch (err) {
+      console.error('Failed to save item', err);
+      alert('儲存失敗，請重試 (Failed to save item)');
     }
-    setIsDishFormOpen(false);
   };
 
   const handleSaveCatSubmit = async (formData: any) => {

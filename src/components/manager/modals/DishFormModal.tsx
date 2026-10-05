@@ -135,6 +135,7 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
   ingredients,
 }) => {
   const [isDirty, setIsDirty] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   const [itemNames, setItemNames] = useState<Record<Language, string>>({ zh: '', en: '', th: '', ja: '', ko: '', vi: '', ru: '', es: '' });
   const [itemDescs, setItemDescs] = useState<Record<Language, string>>({ zh: '', en: '', th: '', ja: '', ko: '', vi: '', ru: '', es: '' });
@@ -187,7 +188,6 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
       }
       setNewRecipeIngId('');
       setNewRecipeAmount('1');
-      if (!editingItem) setIsDirty(false);
     }
   }, [isOpen, editingItem]);
 
@@ -241,21 +241,25 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
       alert('⚠️ 圖片尚未成功上傳至雲端儲存 (Firebase Storage)！\n為避免資料庫寫入過大字串，請確認網路正常並重新選擇圖片上傳，或填寫外部圖片網址。');
       return;
     }
-
-    await onSave({
-      names: itemNames,
-      descriptions: itemDescs,
-      category: itemCategory,
-      price: itemPrice,
-      image: itemImage,
-      thumbnailUrl: itemThumbnailUrl,
-      avifUrl: itemAvifUrl,
-      avifThumbnailUrl: itemAvifThumbnailUrl,
-      isNotSpicy,
-      isTakeoutAvailable,
-      customAddOns,
-      recipe: itemRecipe
-    });
+    setIsSaving(true);
+    try {
+      await onSave({
+        name: itemNames,
+        description: itemDescs,
+        category: itemCategory,
+        price: itemPrice,
+        image: itemImage,
+        thumbnailUrl: itemThumbnailUrl,
+        avifUrl: itemAvifUrl,
+        avifThumbnailUrl: itemAvifThumbnailUrl,
+        isNotSpicy,
+        isTakeoutAvailable,
+        customAddOns,
+        recipe: itemRecipe
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
   const [activeLangTab, setActiveLangTab] = useState<Language>('zh');
   const [viewMode, setViewMode] = useState<'tabs' | 'all'>('tabs');
@@ -1016,20 +1020,20 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
             <button type="button" onClick={handleSafeClose} className="px-4 py-2 hover:bg-white/5 border border-white/10 rounded-lg font-bold transition active:scale-95 cursor-pointer text-white">取消</button>
             <button
               type="submit"
-              disabled={isUploadingImage}
+              disabled={isUploadingImage || isSaving}
               className={`flex items-center space-x-2 px-5 py-2 font-extrabold rounded-lg active:scale-95 transition shadow-md ${
-                isUploadingImage
+                (isUploadingImage || isSaving)
                   ? 'bg-zinc-700 text-zinc-400 cursor-not-allowed opacity-60'
                   : 'bg-[#E5B453] hover:bg-amber-400 text-slate-900 cursor-pointer'
               }`}
             >
-              {isUploadingImage && (
+              {(isUploadingImage || isSaving) && (
                 <svg className="animate-spin -ml-1 mr-1.5 h-4 w-4 text-zinc-300" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
                 </svg>
               )}
-              <span>{isUploadingImage ? '☁️ 圖片處理中...' : '儲存餐點'}</span>
+              <span>{isUploadingImage ? '☁️ 圖片處理中...' : isSaving ? '儲存中...' : '儲存餐點'}</span>
             </button>
           </div>
         </form>
