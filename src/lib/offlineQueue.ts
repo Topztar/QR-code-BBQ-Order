@@ -203,6 +203,10 @@ if (typeof window !== 'undefined') {
   };
 }
 
+export function isOfflineQueuePaused(): boolean {
+  return isQueuePaused;
+}
+
 export function resumeOfflineQueue(onProgress?: (msg: string) => void) {
   isQueuePaused = false;
   return processOfflineQueue(onProgress);

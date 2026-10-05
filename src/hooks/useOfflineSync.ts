@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { getOfflineQueue, processOfflineQueue, QueuedRequest } from '../lib/offlineQueue';
+import { getOfflineQueue, processOfflineQueue, isOfflineQueuePaused, QueuedRequest } from '../lib/offlineQueue';
 
 export function useOfflineSync(onRefreshData?: () => Promise<void>) {
   const [offlineQueue, setOfflineQueue] = useState<QueuedRequest[]>(getOfflineQueue());
@@ -40,7 +40,7 @@ export function useOfflineSync(onRefreshData?: () => Promise<void>) {
   }, []);
 
   const handleForceSync = useCallback(async () => {
-    if (isSyncingRef.current) return;
+    if (isSyncingRef.current || isOfflineQueuePaused()) return;
     isSyncingRef.current = true;
     setIsSyncing(true);
     setSyncProgressMsg('正在準備批次重發...');
@@ -62,7 +62,7 @@ export function useOfflineSync(onRefreshData?: () => Promise<void>) {
   }, []);
 
   useEffect(() => {
-    if (isNetworkOnline && offlineQueue.length > 0) {
+    if (isNetworkOnline && offlineQueue.length > 0 && !isOfflineQueuePaused()) {
       handleForceSync();
     }
   }, [isNetworkOnline, offlineQueue.length, handleForceSync]);
@@ -73,14 +73,14 @@ export function useOfflineSync(onRefreshData?: () => Promise<void>) {
 
     const probeTimer = setInterval(() => {
       const currentQueue = getOfflineQueue();
-      if (currentQueue.length > 0 && !isSyncing) {
+      if (currentQueue.length > 0 && !isSyncingRef.current && !isOfflineQueuePaused()) {
         console.log(`[OfflineQueue] Background probe: ${currentQueue.length} items pending — triggering auto-sync.`);
         handleForceSync();
       }
     }, PROBE_INTERVAL_MS);
 
     return () => clearInterval(probeTimer);
-  }, [offlineQueue.length, isSyncing, handleForceSync]);
+  }, [offlineQueue.length, handleForceSync]);
 
   return {
     offlineQueue,

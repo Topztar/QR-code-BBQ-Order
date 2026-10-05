@@ -2187,7 +2187,7 @@ export const getLocalizedText = (
 ): string => {
   if (!textObj) return '';
 
-  let parsedObj: { [key in Language]?: string } | null = null;
+  let parsedObj: { [key in Language]?: string } | any | null = null;
   let rawStr = '';
 
   if (typeof textObj === 'string') {
@@ -2207,8 +2207,10 @@ export const getLocalizedText = (
 
   // 1. Direct match if parsedObj exists
   if (parsedObj) {
-    const directVal = parsedObj[currentLang]?.trim();
-    const zhVal = parsedObj['zh']?.trim() || '';
+    const dRaw = parsedObj[currentLang];
+    const zRaw = parsedObj['zh'];
+    const directVal = typeof dRaw === 'string' ? dRaw.trim() : (dRaw ? String(dRaw).trim() : undefined);
+    const zhVal = typeof zRaw === 'string' ? zRaw.trim() : (zRaw ? String(zRaw).trim() : '');
 
     // If directVal exists and is NOT identical to zhVal (or if currentLang is zh), return it!
     if (directVal && (currentLang === 'zh' || directVal !== zhVal)) {
@@ -2216,7 +2218,7 @@ export const getLocalizedText = (
     }
 
     // Check dictionary using zhVal or any available value
-    const lookupKey = zhVal || parsedObj['en'] || '';
+    const lookupKey = zhVal || (parsedObj['en'] ? String(parsedObj['en']).trim() : '');
     if (lookupKey && TRANSLATION_DICTIONARY[lookupKey]?.[currentLang]) {
       return TRANSLATION_DICTIONARY[lookupKey]![currentLang]!;
     }

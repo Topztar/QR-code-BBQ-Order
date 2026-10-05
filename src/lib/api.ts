@@ -21,7 +21,8 @@ export const getAuthHeader = async (opts: { skipAuth?: boolean } = {}) => {
       }
       headers['X-Firebase-AppCheck'] = _cachedAppCheckToken;
     } catch (err) {
-      console.warn('App Check Token 獲取失敗', err);
+      console.warn('App Check Token 獲取失敗 (暫緩重試 60 秒):', err);
+      _appCheckTokenExpiry = Date.now() + 60 * 1000;
     }
   }
   return headers;

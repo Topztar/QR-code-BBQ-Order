@@ -105,10 +105,7 @@ export default defineConfig(({ mode }) => {
           if (id.includes('node_modules/react/') || id.includes('node_modules/react-dom/') || id.includes('node_modules/scheduler/')) {
             return 'vendor-react';
           }
-          // Firebase SDK 核心細分化，減少初始 precache 體積
-          if (id.includes('node_modules/firebase/app') || id.includes('node_modules/@firebase/app')) {
-            return 'vendor-firebase-app';
-          }
+          // Firebase SDK 模組劃分，避免 app 與 core 拆分導致循環相依 TDZ (Cannot access 'L' before initialization)
           if (id.includes('node_modules/firebase/firestore') || id.includes('node_modules/@firebase/firestore')) {
             return 'vendor-firebase-firestore';
           }
