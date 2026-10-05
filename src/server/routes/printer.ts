@@ -223,7 +223,7 @@ export function registerPrinterRoutes(app: express.Express, ctx: PrinterRouteCon
 
   // Unified endpoint to print arbitrary formatted receipt / ticket / EOD
   app.post('/api/printer/print-receipt', async (req, res) => {
-    const { target = 'bill', text, settings: clientSettings, autoOpenDrawer = false, title = '單據出單' } = req.body || {};
+    const { target = 'bill', text, settings: clientSettings, title = '單據出單' } = req.body || {};
     
     if (!text) {
       return res.status(400).json({ success: false, error: '缺少列印內容' });

@@ -249,10 +249,6 @@ export function stopSpeech(): void {
   }
 }
 
-export function getActiveUtterance(): SpeechSynthesisUtterance | null {
-  return activeUtterance;
-}
-
 export const TTS_LOCALE_MAP: Record<Language, string> = {
   zh: 'zh-TW',
   en: 'en-US',

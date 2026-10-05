@@ -148,12 +148,6 @@ export interface Ingredient {
   unit: string;
 }
 
-// Map menu food item ID to its ingredient cost mapping
-export interface IngredientCost {
-  ingredientId: string;
-  amount: number;
-}
-
 export interface Category {
   id: string;
   name: { [key in Language]?: string };

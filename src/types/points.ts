@@ -17,16 +17,3 @@ export function calculateEarnedPoints(amount: number, ratio: number = POINTS_CON
 export function isVipMember(totalPoints: number | undefined, threshold: number = POINTS_CONFIG.VIP_THRESHOLD): boolean {
   return (totalPoints || 0) >= threshold;
 }
-
-export const pointsHelper = {
-  calculateEarnedPoints,
-  calculateVipStatus: (points: number | undefined, threshold: number = POINTS_CONFIG.VIP_THRESHOLD): VipStatus => {
-    const p = points || 0;
-    const isVip = isVipMember(p, threshold);
-    const pointsToNext = Math.max(0, threshold - p);
-    return { isVip, pointsToNext };
-  },
-  canRedeemReward: (points: number | undefined, cost: number): boolean => {
-    return (points || 0) >= cost;
-  }
-};

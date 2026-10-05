@@ -113,7 +113,6 @@ export function registerOrdersRoutes(app: express.Express, ctx: OrderRouteContex
 
     const {
       tableNumber,
-      items,
       customerName,
       customerAvatar,
       paymentMethod,
@@ -586,7 +585,7 @@ ${customerDetails}
   // 11. Checkout Single Order
   app.put('/api/orders/:id/checkout', async (req, res) => {
     const { id } = req.params;
-    const { paymentMethod, total, serviceCharge, subtotal, discount, isPaid } = req.body;
+    const { paymentMethod, isPaid } = req.body;
     
     const validation = validateCheckoutPayload(req.body);
     if (!validation.isValid) {
