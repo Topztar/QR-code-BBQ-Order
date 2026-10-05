@@ -346,6 +346,8 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
 
   // Promo combo staging and menu synchronization
   const {
+    stagingPromoCombos,
+    setStagingPromoCombos,
     promoComboSaveError,
     setPromoComboSaveError,
     promoComboSaveSuccess,

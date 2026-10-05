@@ -124,6 +124,8 @@ export function useManagerMenuEditor({
   };
 
   return {
+    stagingPromoCombos,
+    setStagingPromoCombos,
     promoComboSaveError,
     setPromoComboSaveError,
     promoComboSaveSuccess,
