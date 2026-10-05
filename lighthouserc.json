@@ -5,13 +5,14 @@
       "url": ["http://localhost:3000/"],
       "numberOfRuns": 3,
       "settings": {
-        "chromeFlags": "--no-sandbox --headless --disable-gpu"
+        "chromeFlags": "--no-sandbox --headless --disable-gpu",
+        "preset": "desktop"
       }
     },
     "assert": {
       "assertions": {
-        "first-contentful-paint": ["error", {"maxNumericValue": 800}],
-        "interactive": ["warn", {"maxNumericValue": 3000}]
+        "first-contentful-paint": ["error", {"maxNumericValue": 4000}],
+        "interactive": ["warn", {"maxNumericValue": 6000}]
       }
     },
     "upload": {

@@ -123,7 +123,14 @@
     </script>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div id="sabay-init-loader" style="min-height: 100vh; background-color: #0b0f17; color: #E5B453; display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; text-align: center; padding: 24px;">
+        <div style="width: 44px; height: 44px; border: 3px solid rgba(229, 180, 83, 0.2); border-top-color: #E5B453; border-radius: 50%; animation: sabaySpin 1s linear infinite; margin-bottom: 16px;"></div>
+        <div style="font-size: 1.15rem; font-weight: 600; letter-spacing: 0.05em; color: #E5B453; margin-bottom: 6px;">沙貝泰式燒烤 SABAY BBQ</div>
+        <div style="font-size: 0.75rem; color: #94a3b8; letter-spacing: 0.1em; text-transform: uppercase;">系統載入中 Loading System...</div>
+        <style>@keyframes sabaySpin { to { transform: rotate(360deg); } }</style>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

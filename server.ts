@@ -11,7 +11,7 @@ import { PRINTER_CONSTANTS, orderCalculationService, deriveTableStatuses } from 
 
 import 'dotenv/config';
 
-if (process.env.NODE_ENV === 'production') {
+if (process.env.NODE_ENV === 'production' && !process.env.SERVE_STATIC && !process.env.CI) {
   console.error("FATAL: server.ts is the local mock dev server and MUST NOT be run in production. Use Firebase Cloud Functions.");
   process.exit(1);
 }
@@ -724,7 +724,7 @@ let liveMembers: MemberRecord[] = [];
 // ─────────────────────────────────────────────────────────────────────────────
 
 // --- Firestore Cloud Persistence Integration ---
-let DISABLE_FIREBASE_SYNC = process.env.DISABLE_FIREBASE_SYNC === 'true'; // Default to enabled unless explicitly set to 'true'
+let DISABLE_FIREBASE_SYNC = process.env.DISABLE_FIREBASE_SYNC === 'true' || process.env.CI === 'true'; // Default to enabled unless explicitly set to 'true' or in CI
 let firestoreDb: any = null;
 
 if (DISABLE_FIREBASE_SYNC) {
@@ -3216,7 +3216,8 @@ async function main() {
     res.status(404).json({ error: 'API endpoint not found', timestamp: Date.now() });
   });
 
-  if (process.env.NODE_ENV !== 'production') {
+  const isStaticMode = process.env.SERVE_STATIC === 'true' || process.env.CI === 'true' || __filename.includes('dist');
+  if (!isStaticMode) {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',

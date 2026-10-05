@@ -12,6 +12,9 @@ jobs:
   quality-gate-and-audit:
     name: Architecture, Security, Performance & Unit Tests
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      statuses: write
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
