@@ -970,6 +970,7 @@ ${customerDetails}
     const nowIso = new Date(now).toISOString();
     const expiresAtIso = new Date(now + LEASE_DURATION_MS).toISOString();
 
+    // If the device sending heartbeat is not the currently active kitchen device, it has been preempted
     if (localKdsSession.activeKitchenDeviceId !== deviceId) {
       return res.status(403).json({ error: '您的廚房角色已被其他裝置取代', code: 'PREEMPTED' });
     }
