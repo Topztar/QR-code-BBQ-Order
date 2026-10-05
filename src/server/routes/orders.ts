@@ -971,7 +971,7 @@ ${customerDetails}
     const expiresAtIso = new Date(now + LEASE_DURATION_MS).toISOString();
 
     if (localKdsSession.activeKitchenDeviceId !== deviceId) {
-      return res.status(409).json({ error: '您的廚房角色已被其他裝置取代', code: 'PREEMPTED' });
+      return res.status(403).json({ error: '您的廚房角色已被其他裝置取代', code: 'PREEMPTED' });
     }
 
     localKdsSession.lastHeartbeat = nowIso;
