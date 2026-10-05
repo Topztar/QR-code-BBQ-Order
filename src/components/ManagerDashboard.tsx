@@ -16,7 +16,7 @@ import {
   printViaBridge,
   DEFAULT_POS_BRIDGE_URL
 } from '../lib/posBridgeClient';
-// removed recipeMap import
+
 const ManagerStatsTab = resilientLazy(() => import('./manager/ManagerStatsTab').then(m => ({ default: m.ManagerStatsTab })));
 const ManagerOrdersTab = resilientLazy(() => import('./manager/ManagerOrdersTab').then(m => ({ default: m.ManagerOrdersTab })));
 const ManagerInventoryTab = resilientLazy(() => import('./manager/ManagerInventoryTab').then(m => ({ default: m.ManagerInventoryTab })));

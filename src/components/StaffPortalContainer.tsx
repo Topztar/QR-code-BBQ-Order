@@ -139,6 +139,7 @@ function StaffPortalInner({ activeTab, lang, adminSubTab, setAdminSubTab, staffP
           onUpdateOrderStatus={handleUpdateOrderStatus}
           onRestock={handleRestock}
           onToggleMenuItemAvailability={handleToggleMenuItemAvailability}
+          // @deprecated Reserved for Phase 6 marketing extension to prevent false positive dead code alerts
           onSendPromoPush={handleSendPromoPush}
           menuItems={menuItems}
           onAddMenuItem={handleAddMenuItem}

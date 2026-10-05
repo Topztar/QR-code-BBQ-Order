@@ -679,7 +679,7 @@ export const OrderDetailDrilldownModal: React.FC<OrderDetailDrilldownModalProps>
                             <div className="space-y-1 pr-4">
                               <p className="font-bold text-white text-[13px]">{it.name?.zh || it.name}</p>
                               {spec && <p className="text-[10px] text-amber-400 font-sans">{spec}</p>}
-                              <p className="text-[10px] text-zinc-500 font-mono">定額單價: NT$ {it.price}</p>
+                              <p className="text-[10px] text-zinc-500 font-mono">計費單價: NT$ {orderCalculationService.computeOrderItemUnitPrice(it, menuItems)}</p>
                             </div>
                             
                             <div className="flex items-center space-x-3">
@@ -705,7 +705,7 @@ export const OrderDetailDrilldownModal: React.FC<OrderDetailDrilldownModalProps>
                               </div>
 
                               <div className="text-right whitespace-nowrap min-w-[70px]">
-                                <p className="font-mono text-white font-bold text-[13px]">NT$ {((it.price || 0) * (it.qty || 0)).toLocaleString()}</p>
+                                <p className="font-mono text-white font-bold text-[13px]">NT$ {(orderCalculationService.computeOrderItemUnitPrice(it, menuItems) * (it.qty || 0)).toLocaleString()}</p>
                               </div>
                             </div>
                           </div>

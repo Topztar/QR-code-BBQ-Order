@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Order } from '../types';
+import { Order, Language } from '../types';
 import {
   unlockAudio,
   playOrderChimeSound,
@@ -14,7 +14,7 @@ import { safeStorage, safeSessionStorage } from '../lib/safeStorage';
 
 const localStorage = safeStorage;
 
-export function useKdsAudio() {
+export function useKdsAudio(currentLang: Language = 'zh') {
   const [ttsEnabled, setTtsEnabled] = useState<boolean>(() => {
     try {
       const saved = localStorage.getItem('kds-tts-enabled');
@@ -81,9 +81,19 @@ export function useKdsAudio() {
     if (nextState) {
       await unlockAudio();
       setAudioNeedsUnlock(false);
-      announceOrderNotification('語音廣播已開啟', true);
+      const enabledMsg: Record<Language, string> = {
+        zh: '語音廣播已開啟',
+        en: 'Voice readout enabled',
+        ja: '音声案内を有効にしました',
+        ko: '음성 안내가 켜졌습니다',
+        th: 'เปิดการแจ้งเตือนด้วยเสียงแล้ว',
+        vi: 'Đã bật thông báo bằng giọng nói',
+        ru: 'Голосовые оповещения включены',
+        es: 'Locución de voz activada'
+      };
+      announceOrderNotification(enabledMsg[currentLang] || enabledMsg.zh, true, currentLang);
     }
-  }, [ttsEnabled]);
+  }, [ttsEnabled, currentLang]);
 
   /**
    * Play high-frequency chime tone + announce table or takeout number via TTS
@@ -93,9 +103,9 @@ export function useKdsAudio() {
       if (!newOrders || newOrders.length === 0) return;
 
       if (ttsEnabled) {
-        // High-frequency chime followed sequentially by Mandarin TTS (桌號 / 外帶單號)
-        const text = formatOrderAnnouncementText(newOrders);
-        announceOrderNotification(text, true);
+        // High-frequency chime followed sequentially by multilingual TTS (桌號 / 外帶單號)
+        const text = formatOrderAnnouncementText(newOrders, currentLang);
+        announceOrderNotification(text, true, currentLang);
       } else {
         // High-frequency chime only
         playOrderChimeSound();
@@ -108,7 +118,7 @@ export function useKdsAudio() {
         }
       }, 3000);
     },
-    [ttsEnabled]
+    [ttsEnabled, currentLang]
   );
 
   const notifyNewOrder = useCallback(

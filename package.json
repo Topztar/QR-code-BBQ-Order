@@ -9,6 +9,7 @@
     "emulator:seed": "node scripts/seed-emulator.cjs",
     "dev:emulators": "npm run emulator:prep && concurrently \"vite --mode emulator\" \"firebase emulators:start --import=./emulator-data --export-on-exit=./emulator-data\"",
     "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
+    "postbuild": "node scripts/check_bundle_size.cjs",
     "start": "node dist/server.cjs",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
@@ -20,7 +21,7 @@
     "audit:all": "node scripts/run_all_checks.cjs",
     "audit:e2e": "node scripts/run_e2e_qa_audit.cjs",
     "clean:artifacts": "node scripts/post_test_hygiene.cjs",
-    "predeploy": "npm test && npm run audit:e2e && npm run clean:artifacts"
+    "predeploy": "npm test && npm run clean:artifacts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

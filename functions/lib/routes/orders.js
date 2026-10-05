@@ -5,7 +5,7 @@ const validators_1 = require("../validators");
 const helpers_1 = require("../helpers");
 const shared_1 = require("@sabay/shared");
 function registerOrdersRoutes(app, ctx) {
-    const { db, storageBucket, requireStaffAuth, requireAppCheck, createRateLimiter, sendErrorResponse } = ctx;
+    const { db, requireStaffAuth, requireAppCheck, createRateLimiter, sendErrorResponse } = ctx;
     const getCachedSettings = (0, helpers_1.createGetCachedSettings)(db);
     const orderRateLimiter = createRateLimiter(20, 60 * 1000, '訂單提交');
     const ratingRateLimiter = createRateLimiter(15, 60 * 1000, '訂單評價');
@@ -185,7 +185,7 @@ function registerOrdersRoutes(app, ctx) {
             sendErrorResponse(res, error, '匯出歷史訂單數據異常');
         }
     });
-    get('/print-logs', async (_req, res) => {
+    get('/print-logs', requireStaffAuth, async (_req, res) => {
         try {
             res.setHeader('Cache-Control', 'private, no-cache, no-store, must-revalidate');
             const logsDoc = await db.collection('settings').doc('logs').get();
@@ -286,6 +286,24 @@ function registerOrdersRoutes(app, ctx) {
                     discount: verifiedPromoDiscount,
                     isPaid: false
                 }, menuItemsList);
+                const ingredientDeductions = {};
+                verifiedItems.forEach((item) => {
+                    const menuItem = menuItemsList.find(m => m.id === item.menuItemId);
+                    if (menuItem?.recipe && Array.isArray(menuItem.recipe)) {
+                        menuItem.recipe.forEach((r) => {
+                            const qty = (item.qty || 1) * (Number(r.amount) || 0);
+                            if (qty > 0 && r.ingredientId) {
+                                ingredientDeductions[r.ingredientId] = (ingredientDeductions[r.ingredientId] || 0) + qty;
+                            }
+                        });
+                    }
+                });
+                const deductionKeys = Object.keys(ingredientDeductions);
+                let ingSnaps = [];
+                if (deductionKeys.length > 0) {
+                    const ingRefs = deductionKeys.map(id => db.collection('ingredients').doc(id));
+                    ingSnaps = await t.getAll(...ingRefs);
+                }
                 const orderToSave = {
                     ...orderData,
                     id: orderId,
@@ -309,12 +327,47 @@ function registerOrdersRoutes(app, ctx) {
                 if (tableRef && tableSnap && tableSnap.exists) {
                     t.update(tableRef, { status: 'in_use', cleaningStartedAt: null });
                 }
-                return { isExisting: false, data: orderToSave };
+                if (deductionKeys.length > 0) {
+                    ingSnaps.forEach((ingSnap) => {
+                        if (!ingSnap.exists)
+                            return;
+                        const id = ingSnap.id;
+                        const data = ingSnap.data();
+                        const deduction = ingredientDeductions[id] || 0;
+                        if (deduction > 0) {
+                            const newStock = Math.round(((data?.stock || 0) - deduction) * 100) / 100;
+                            t.update(ingSnap.ref, { stock: newStock });
+                            const logRef = db.collection('inventoryLogs').doc();
+                            t.set(logRef, {
+                                id: logRef.id,
+                                timestamp: new Date().toISOString(),
+                                ingredientId: id,
+                                ingredientName: data?.name || id,
+                                type: 'outgoing',
+                                quantityChanged: -deduction,
+                                remainingStock: newStock,
+                                note: `Sold via Order #${orderId}`
+                            });
+                        }
+                    });
+                }
+                let priceReconciliation = undefined;
+                if (orderData.total !== undefined && Math.abs(orderData.total - verifiedPricing.total) > 0.01) {
+                    priceReconciliation = {
+                        clientTotal: orderData.total,
+                        serverTotal: verifiedPricing.total,
+                        reason: 'Menu prices or discounts have been updated. The client will adopt server totals.'
+                    };
+                }
+                return { isExisting: false, data: orderToSave, priceReconciliation };
             });
             if (savedOrder.isExisting) {
                 return res.status(200).json(savedOrder.data);
             }
-            res.status(201).json(savedOrder.data);
+            res.status(201).json({
+                ...savedOrder.data,
+                priceReconciliation: savedOrder.priceReconciliation
+            });
         }
         catch (error) {
             console.error('Error submitting order:', error);
@@ -327,7 +380,7 @@ function registerOrdersRoutes(app, ctx) {
     put('/orders/:id/status', requireStaffAuth, async (req, res) => {
         const id = req.params.id;
         const { status } = req.body;
-        const allowedStatuses = ['pending', 'confirmed', 'preparing', 'delivering', 'completed', 'cancelled', 'paid'];
+        const allowedStatuses = ['pending', 'confirmed', 'pending_kitchen_verification', 'preparing', 'delivering', 'completed', 'cancelled', 'paid'];
         if (!allowedStatuses.includes(status)) {
             return res.status(400).json({ error: '無效的訂單狀態' });
         }
@@ -413,12 +466,17 @@ function registerOrdersRoutes(app, ctx) {
                     ...orderData,
                     items
                 });
+                let newStatus = orderData.status;
+                if (['pending', 'confirmed', 'preparing'].includes(orderData.status)) {
+                    newStatus = 'pending_kitchen_verification';
+                }
                 updatePayload = {
                     items,
                     subtotal: pricing.subtotal,
                     serviceCharge: pricing.serviceCharge,
                     discount: pricing.discount,
                     total: pricing.total,
+                    status: newStatus,
                     updatedAt: new Date().toISOString(),
                     version: currentVersion + 1
                 };
@@ -740,7 +798,7 @@ function registerOrdersRoutes(app, ctx) {
         if (!deviceId || typeof deviceId !== 'string') {
             return res.status(400).json({ error: '缺少有效的設備識別碼 (deviceId is required)' });
         }
-        const kdsSessionRef = db.collection('settings').doc('kds_session');
+        const kdsSessionRef = db.collection('kds_presence').doc('kitchen');
         const LEASE_DURATION_MS = 45 * 1000;
         try {
             const result = await db.runTransaction(async (t) => {
@@ -788,7 +846,7 @@ function registerOrdersRoutes(app, ctx) {
         if (!deviceId || typeof deviceId !== 'string') {
             return res.status(400).json({ error: '缺少有效的設備識別碼 (deviceId is required)' });
         }
-        const kdsSessionRef = db.collection('settings').doc('kds_session');
+        const kdsSessionRef = db.collection('kds_presence').doc('kitchen');
         const LEASE_DURATION_MS = 45 * 1000;
         try {
             const result = await db.runTransaction(async (t) => {
@@ -799,7 +857,7 @@ function registerOrdersRoutes(app, ctx) {
                 const expiresAtIso = new Date(now + LEASE_DURATION_MS).toISOString();
                 if (!data || data.activeKitchenDeviceId !== deviceId) {
                     const preemptedErr = new Error('KITCHEN_ROLE_PREEMPTED');
-                    preemptedErr.statusCode = 403;
+                    preemptedErr.statusCode = 409;
                     throw preemptedErr;
                 }
                 const sessionData = {
@@ -816,8 +874,8 @@ function registerOrdersRoutes(app, ctx) {
             return res.json({ success: true, session: result });
         }
         catch (error) {
-            if (error?.statusCode === 403 || error?.message === 'KITCHEN_ROLE_PREEMPTED') {
-                return res.status(403).json({ error: '您的廚房角色已被其他裝置取代' });
+            if (error?.statusCode === 409 || error?.message === 'KITCHEN_ROLE_PREEMPTED') {
+                return res.status(409).json({ error: '您的廚房角色已被其他裝置取代', code: 'PREEMPTED' });
             }
             console.error('[KDS Heartbeat Error]', error);
             res.status(500).json({ error: '心跳更新失敗' });
@@ -828,7 +886,7 @@ function registerOrdersRoutes(app, ctx) {
         if (!deviceId || typeof deviceId !== 'string') {
             return res.status(400).json({ error: '缺少有效的設備識別碼 (deviceId is required)' });
         }
-        const kdsSessionRef = db.collection('settings').doc('kds_session');
+        const kdsSessionRef = db.collection('kds_presence').doc('kitchen');
         try {
             await db.runTransaction(async (t) => {
                 const snap = await t.get(kdsSessionRef);
@@ -850,39 +908,10 @@ function registerOrdersRoutes(app, ctx) {
         }
     });
     del('/orders/:id', requireStaffAuth, async (req, res) => {
-        const id = req.params.id;
-        try {
-            await db.collection('orders').doc(id).delete();
-            res.json({ success: true });
-        }
-        catch (error) {
-            res.status(500).send(error);
-        }
+        return res.status(403).json({ error: '安全限制：禁止實體刪除訂單，請使用作廢/軟刪除或透過 Admin SDK 處理' });
     });
     post('/orders/bulk-delete', requireStaffAuth, async (req, res) => {
-        const { thresholdDate } = req.body;
-        if (!thresholdDate || typeof thresholdDate !== 'string') {
-            return res.status(400).json({ error: '無效的截止日期格式 (thresholdDate is required)' });
-        }
-        try {
-            const snapshot = await db.collection('orders')
-                .where('createdAt', '<', thresholdDate)
-                .limit(450)
-                .get();
-            if (snapshot.empty) {
-                return res.json({ success: true, deletedCount: 0, message: '沒有符合條件的歷史訂單' });
-            }
-            const batch = db.batch();
-            snapshot.docs.forEach((d) => {
-                batch.delete(d.ref);
-            });
-            await batch.commit();
-            res.json({ success: true, deletedCount: snapshot.size });
-        }
-        catch (error) {
-            console.error('[bulk-delete orders error]', error);
-            res.status(500).json({ error: '批量刪除訂單失敗' });
-        }
+        return res.status(403).json({ error: '安全限制：禁止實體刪除訂單，請使用作廢/軟刪除或透過 Admin SDK 處理' });
     });
     post('/print-logs/clear', requireStaffAuth, async (_req, res) => {
         try {

@@ -110,4 +110,36 @@ describe('Verified Architecture Fixes Regression Suite', () => {
       expect(reconstructedOrder.notificationSent).toBe(false);
     });
   });
+
+  describe('Offline Queue retryCount Persistence Across Reloads', () => {
+    it('persists and increments retryCount during failed processing attempts across reloads', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        text: async () => 'Internal Server Error'
+      });
+      global.fetch = mockFetch;
+
+      const req = addRequestToQueue('/api/orders/test-fail/checkout', 'PUT', { isPaid: true }, '失敗測試單');
+      expect(req).not.toBeNull();
+      expect(getOfflineQueue()[0].retryCount).toBeUndefined();
+
+      // Process queue once -> attempt 1 fails -> retryCount becomes 1 and is saved
+      const { processOfflineQueue } = await import('../src/lib/offlineQueue');
+      const { safeStorage } = await import('../src/lib/safeStorage');
+      await processOfflineQueue();
+
+      const queueAfterAttempt = getOfflineQueue();
+      expect(queueAfterAttempt.length).toBe(1);
+      expect(queueAfterAttempt[0].retryCount).toBe(1);
+
+      // Verify safeStorage has the persisted retryCount (survives page reloads)
+      const rawStored = safeStorage.getItem('sabay_offline_sync_queue_v1');
+      expect(rawStored).toBeTruthy();
+      const parsedStored = JSON.parse(rawStored!);
+      expect(parsedStored[0].retryCount).toBe(1);
+      expect(parsedStored[0].id).toBe(req!.id);
+    });
+  });
 });
+

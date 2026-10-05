@@ -1,6 +1,7 @@
 import React from 'react';
 import { Order, MenuItem, Category, TableConfig, Reservation, Language } from '../../types';
 import { getLocalizedText } from '../../utils/i18n';
+import { buildKitchenReceipt } from '../../utils/receiptBuilder';
 import { isReservationUpcoming } from '../../context/RestaurantDataContext';
 import {
   Check,
@@ -429,54 +430,13 @@ export const KdsTicketCard: React.FC<KdsTicketCardProps> = React.memo(({
               <button
                 type="button"
                 onClick={() => {
-                  const specLines = order.items
-                    .map((it) => {
-                      const spec = [
-                        it.customization?.spiciness === 1 ? t('spicy') : it.customization?.spiciness === 0 ? t('notSpicy') : '',
-                        it.customization?.noodleType === 'rice-noodle'
-                          ? t('riceNoodle')
-                          : it.customization?.noodleType === 'vermicelli'
-                            ? t('vermicelli')
-                            : '',
-                        it.customization?.soupBase === 'coconut-milk' ? t('coconutMilkAdd') : '',
-                        it.customization?.notes ? `${t('notesLabel')}: ${it.customization.notes}` : '',
-                      ]
-                        .filter(Boolean)
-                        .join('/');
-                      const itName = getLocalizedText(it.name, currentLang);
-                      return `[ ] ${itName} x ${it.qty} ${t('qtyPortion')}\n    【 ${spec} 】`;
-                    })
-                    .join('\n');
-                  const ticketStr = `
-========================================
-       沙貝燒烤 (廚房工作即時交代單)
-       ${
-         order.takeoutInfo ||
-         String(order.tableNumber || '').includes('外帶') ||
-         order.tableNumber === 'takeout'
-           ? `單號/標記: #${order.id}`
-           : `桌號/標記: ${order.tableNumber}`
-       }
-========================================
-單號 ID: ${order.id}
-出單 IP : ${printerIp} (VIRTUAL LAN_9100)
-時間 TIME: ${new Date(order.createdAt).toLocaleTimeString()}
-狀態 STATE: ${order.status.toUpperCase()}
-----------------------------------------
-餐點項目與客製需求 Kitchen Item(s):
-${specLines}
-----------------------------------------
-* KDS TICKET PRINT PREVIEW GENERATED OK *
-* 感謝廚房人員辛勞，請於出餐完畢時完成確認 *
-========================================`.trim();
+                  const ticketStr = buildKitchenReceipt(order, currentLang, printerIp, false);
                   setPrintConfirmData({
                     title: `驗證列印廚房交代票 #${order.id}`,
                     ip: printerIp,
                     receiptType: 'kitchen',
                     receiptBody: ticketStr,
-                    onConfirm: () => {
-                      if (import.meta.env.DEV) alert(`🖨️ 虛擬網卡列印指令傳送正常！(單號: ${order.id})`);
-                    },
+                    onConfirm: import.meta.env.DEV ? () => alert(`🖨️ 虛擬網卡列印指令傳送正常！(單號: ${order.id})`) : undefined,
                   });
                 }}
                 className="bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-[#E5B453]/20 hover:border-[#E5B453]/40 text-[9px] font-bold px-1.5 py-0.5 rounded cursor-pointer transition flex items-center gap-1"

@@ -2,7 +2,7 @@
   "name": "functions",
   "version": "1.0.1",
   "scripts": {
-    "build": "node -e \"fs.rmSync('lib', { recursive: true, force: true })\" && tsc",
+    "build": "node -e \"fs.rmSync('lib', { recursive: true, force: true })\" && tsc && npx esbuild lib/index.js --bundle --platform=node --target=node22 --outfile=lib/index.js --allow-overwrite --external:firebase-functions --external:firebase-admin --external:axios --external:busboy --external:nodemailer --external:sharp",
     "serve": "npm run build && firebase emulators:start --only functions",
     "shell": "npm run build && firebase functions:shell",
     "start": "npm run shell",

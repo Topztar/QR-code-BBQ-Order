@@ -65,6 +65,7 @@ export function registerPrinterRoutes(app: express.Express, ctx: PrinterRouteCon
 
   // Get printer IP configuration
   app.get('/api/printer/config', (_req, res) => {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.json({ ip: ctx.getLivePrinterIp() });
   });
 

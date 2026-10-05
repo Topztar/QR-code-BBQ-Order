@@ -182,3 +182,14 @@ if (typeof window !== 'undefined') {
   }
 }
 export const appCheck = appCheckInstance;
+
+// 🚀 Firebase Performance Monitoring (生產環境非同步動態載入，零首屏體積負擔)
+if (typeof window !== 'undefined' && (import.meta as any).env?.PROD && !isEmulatorMode) {
+  import('firebase/performance').then(({ getPerformance }) => {
+    try {
+      getPerformance(app);
+      console.log('[Firebase Performance] Initialized Core Web Vitals monitoring.');
+    } catch (_err) {}
+  }).catch(() => {});
+}
+

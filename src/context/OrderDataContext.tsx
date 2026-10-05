@@ -1,13 +1,12 @@
-import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
+import React, { createContext, useContext, useMemo, ReactNode } from 'react';
 import { Order, OrderItem, MenuItem, TableConfig, Reservation, OrderStatus, KdsSession } from '../types';
-import { apiFetch } from '../lib/api';
-import { safeStorage } from '../lib/safeStorage';
+
 import { QueuedRequest } from '../lib/offlineQueue';
 import { useOrderSubmit } from '../hooks/useOrderSubmit';
 import { useLiveOrders } from '../hooks/useLiveOrders';
 import { useOfflineSync } from '../hooks/useOfflineSync';
 import { useKdsMutexSession } from '../hooks/useKdsMutexSession';
-import { isFirebaseSyncEnabled } from '../lib/firebase';
+
 
 export interface OrderDataContextType {
   orders: Order[];

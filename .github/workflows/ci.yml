@@ -48,5 +48,12 @@ jobs:
             echo "✅ Server bundle size is within acceptable threshold (< 350KB)"
           fi
 
+      - name: Run Lighthouse CI (Performance & FCP Assertion)
+        run: |
+          npm install -g @lhci/cli
+          lhci autorun
+        env:
+          LHCI_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Post-Test Hygiene (Clean Artifacts)
         run: npm run clean:artifacts

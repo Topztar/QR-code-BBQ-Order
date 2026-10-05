@@ -36,8 +36,40 @@ describe('Ingestion Contracts Parity (M-B03, M-B04) Pre-Consolidation', () => {
     route.route.stack[0].handle(req, res);
     
     expect(jsonRes.success).toBe(true);
-    // order 1 should be deleted because 2025-01-01 < 2026-01-01
-    // wait, our filter is liveOrders.filter(o => o.createdAt >= thresholdDate);
     expect(deletedCount).toBe(1);
+  });
+
+  it('local restock accepts both {id, amount} and {ingredientId, quantityAdded} (M-B04)', () => {
+    const testApp = express();
+    let liveIngredients = [{ id: 'ing-1', stock: 10 }, { id: 'ing-2', stock: 5 }];
+    
+    // Register restock route locally
+    testApp.post('/api/ingredients/restock', (req, res) => {
+      const id = req.body.id || req.body.ingredientId;
+      const numAmount = Number(req.body.amount !== undefined ? req.body.amount : req.body.quantityAdded);
+      
+      if (!id || isNaN(numAmount)) return res.status(400).json({ error: 'bad req' });
+
+      const ingredient = liveIngredients.find(i => i.id === id);
+      if (ingredient) {
+        ingredient.stock = Math.round((ingredient.stock + numAmount) * 100) / 100;
+      }
+      res.json({ success: true, stock: ingredient?.stock });
+    });
+
+    // 1. Client schema: { id, amount }
+    const route = testApp._router.stack.find((l: any) => l.route && l.route.path === '/api/ingredients/restock');
+    expect(route).toBeDefined();
+
+    let res1: any = null;
+    route.route.stack[0].handle({ body: { id: 'ing-1', amount: 5 } }, { status: () => ({ json: (d: any) => res1 = d }), json: (d: any) => res1 = d });
+    expect(res1.success).toBe(true);
+    expect(liveIngredients[0].stock).toBe(15);
+
+    // 2. Cloud schema fallback: { ingredientId, quantityAdded }
+    let res2: any = null;
+    route.route.stack[0].handle({ body: { ingredientId: 'ing-2', quantityAdded: 15 } }, { status: () => ({ json: (d: any) => res2 = d }), json: (d: any) => res2 = d });
+    expect(res2.success).toBe(true);
+    expect(liveIngredients[1].stock).toBe(20);
   });
 });

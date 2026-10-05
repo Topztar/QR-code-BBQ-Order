@@ -45,6 +45,18 @@ def sanitize_text(text: str) -> str:
     cleaned = re.sub(r'[\uD800-\uDBFF][\uDC00-\uDFFF]|[\uFE00-\uFE0F]', '', cleaned)
     return cleaned
 
+def resolve_drawer_pulse(payload: dict) -> bytes:
+    raw_hex = payload.get('pulseHex') or payload.get('drawerCommand') or payload.get('cashDrawerEscPosCommand')
+    if raw_hex and isinstance(raw_hex, str):
+        try:
+            clean = re.sub(r'[^0-9A-Fa-f]', '', raw_hex)
+            if len(clean) >= 2:
+                return bytes.fromhex(clean)
+        except Exception:
+            pass
+    return ESC_POS_DRAWER_PULSE
+
+
 def get_system_default_encoding() -> str:
     try:
         enc = locale.getpreferredencoding().lower()
@@ -143,7 +155,18 @@ class POSBridgeRequestHandler(BaseHTTPRequestHandler):
 
     def send_cors_headers(self):
         """注入標準 CORS 與 Firefox / Chrome Private Network Access (PNA) 標頭"""
-        self.send_header('Access-Control-Allow-Origin', '*')
+        origin = self.headers.get('Origin', '')
+        allow_origin = '*'
+        if origin:
+            try:
+                import urllib.parse
+                parsed = urllib.parse.urlparse(origin)
+                hostname = parsed.hostname or ''
+                if hostname in ('localhost', '127.0.0.1') or hostname.endswith('.web.app') or hostname.endswith('.firebaseapp.com'):
+                    allow_origin = origin
+            except Exception:
+                pass
+        self.send_header('Access-Control-Allow-Origin', allow_origin)
         self.send_header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, HEAD')
         self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Access-Control-Request-Private-Network')
         self.send_header('Access-Control-Allow-Private-Network', 'true')
@@ -202,12 +225,13 @@ class POSBridgeRequestHandler(BaseHTTPRequestHandler):
         port = payload.get('port', 'LPT1:')
         ip = payload.get('ip')
         conn_type = payload.get('connectionType', 'IP' if ip else 'LPT')
+        drawer_pulse = resolve_drawer_pulse(payload)
 
         if conn_type == 'IP' and ip:
             net_port = int(payload.get('netPort', 9100))
-            success, log_msg = send_to_network_printer(ip, net_port, ESC_POS_DRAWER_PULSE)
+            success, log_msg = send_to_network_printer(ip, net_port, drawer_pulse)
         else:
-            success, log_msg = write_to_hardware_port(port, ESC_POS_DRAWER_PULSE)
+            success, log_msg = write_to_hardware_port(port, drawer_pulse)
 
         res_payload = {
             "success": success,
@@ -257,7 +281,7 @@ class POSBridgeRequestHandler(BaseHTTPRequestHandler):
 
         # 若需要連動開錢箱
         if auto_open_drawer:
-            buffer_to_send.extend(ESC_POS_DRAWER_PULSE)
+            buffer_to_send.extend(resolve_drawer_pulse(payload))
 
         # 根據連線型態分流發送
         if conn_type == 'IP' and ip:

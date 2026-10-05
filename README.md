@@ -18,7 +18,7 @@
 
 ### 2. ⚡ 高效能與前端優化 (Phase 2)
 - **模組化路由分割**：全站核心視圖（CustomerOrderView, ManagerDashboard, KDS）均採用 `React.lazy` 與 `Suspense` 進行程式碼分割。
-- **極致輕量化 Chunk**：顧客點餐端主檔案僅 **141 KB**（Brotli 壓縮後 **30.25 KB**），首屏載入時間 (FCP) < 0.8 秒。
+- **極致輕量化 Chunk**：顧客點餐端主檔案約 **183 KB**（Brotli 壓縮後約 **52 KB**），首屏載入時間 (FCP) < 0.8 秒。
 - **細粒度 Memoization**：`CustomerMenuGrid` 預先完成分類分組，單道菜品卡片封裝為 `React.memo(DishCard)`，購物車增減時 50+ 項菜品卡片 **0 重複渲染**。
 - **無阻塞字型載入 (Zero Render-Blocking)**：Google Fonts 配置 `<link rel="preconnect">` 與 `display=swap`，消除樣式解析阻塞鏈。
 - **版面穩定性 (Zero CLS)**：圖片固定長寬比，配置 `loading="lazy"`、`decoding="async"` 與 `onError` 優雅降級圖示。

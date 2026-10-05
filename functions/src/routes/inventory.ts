@@ -88,8 +88,21 @@ post('/inventory/adjust', requireStaffAuth, async (req, res) => {
   try {
     await db.runTransaction(async (t) => {
       const docSnap = await t.get(ingRef);
-      const newStock = Math.round(((docSnap.data()?.stock || 0) + change) * 100) / 100;
+      const data = docSnap.data();
+      const newStock = Math.round(((data?.stock || 0) + change) * 100) / 100;
       t.update(ingRef, { stock: newStock });
+      
+      const logRef = db.collection('inventoryLogs').doc();
+      t.set(logRef, {
+        id: logRef.id,
+        timestamp: new Date().toISOString(),
+        ingredientId,
+        ingredientName: data?.name || ingredientId,
+        type: 'adjustment',
+        quantityChanged: change,
+        remainingStock: newStock,
+        note: req.body.note || ''
+      });
     });
     res.json({ success: true });
   } catch (error) {
@@ -113,8 +126,21 @@ post('/ingredients/restock', requireStaffAuth, async (req, res) => {
   try {
     await db.runTransaction(async (t) => {
       const docSnap = await t.get(ingRef);
-      const newStock = Math.round(((docSnap.data()?.stock || 0) + amount) * 100) / 100;
+      const data = docSnap.data();
+      const newStock = Math.round(((data?.stock || 0) + amount) * 100) / 100;
       t.update(ingRef, { stock: newStock });
+      
+      const logRef = db.collection('inventoryLogs').doc();
+      t.set(logRef, {
+        id: logRef.id,
+        timestamp: new Date().toISOString(),
+        ingredientId: id,
+        ingredientName: data?.name || id,
+        type: 'incoming',
+        quantityChanged: amount,
+        remainingStock: newStock,
+        note: req.body.note || 'Restocked via Manager UI'
+      });
     });
     res.json({ success: true });
   } catch (error) {

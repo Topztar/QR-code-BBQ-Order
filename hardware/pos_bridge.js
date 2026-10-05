@@ -54,12 +54,40 @@ function encodeText(text, encodingHint = 'big5') {
   return Buffer.from(clean, 'utf-8');
 }
 
-function setCorsHeaders(res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
+function setCorsHeaders(req, res) {
+  const origin = req?.headers?.['origin'] || req?.headers?.['Origin'];
+  let allowOrigin = '*';
+  if (origin) {
+    try {
+      const url = new URL(origin);
+      if (
+        url.hostname === 'localhost' ||
+        url.hostname === '127.0.0.1' ||
+        url.hostname.endsWith('.web.app') ||
+        url.hostname.endsWith('.firebaseapp.com')
+      ) {
+        allowOrigin = origin;
+      }
+    } catch {}
+  }
+  res.setHeader('Access-Control-Allow-Origin', allowOrigin);
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, HEAD');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Access-Control-Request-Private-Network');
   res.setHeader('Access-Control-Allow-Private-Network', 'true');
   res.setHeader('Access-Control-Max-Age', '86400');
+}
+
+function resolveDrawerPulse(payload) {
+  const rawHex = payload?.pulseHex || payload?.drawerCommand || payload?.cashDrawerEscPosCommand;
+  if (rawHex && typeof rawHex === 'string') {
+    try {
+      const cleanHex = rawHex.replace(/[^0-9A-Fa-f]/g, '');
+      if (cleanHex.length >= 2) {
+        return Buffer.from(cleanHex, 'hex');
+      }
+    } catch {}
+  }
+  return ESC_POS_DRAWER_PULSE;
 }
 
 function sendToNetwork(ip, port, data, timeoutMs = 3000) {
@@ -131,7 +159,7 @@ function writeToLocalPort(port, data) {
 }
 
 const server = http.createServer(async (req, res) => {
-  setCorsHeaders(res);
+  setCorsHeaders(req, res);
 
   if (req.method === 'OPTIONS') {
     res.writeHead(204);
@@ -160,11 +188,12 @@ const server = http.createServer(async (req, res) => {
       if (url === '/open-drawer' || url === '/api/printer/open-drawer') {
         const port = payload.port || 'LPT1:';
         const ip = payload.ip;
+        const drawerPulse = resolveDrawerPulse(payload);
         let result;
         if (payload.connectionType === 'IP' && ip) {
-          result = await sendToNetwork(ip, payload.netPort || 9100, ESC_POS_DRAWER_PULSE);
+          result = await sendToNetwork(ip, payload.netPort || 9100, drawerPulse);
         } else {
-          result = await writeToLocalPort(port, ESC_POS_DRAWER_PULSE);
+          result = await writeToLocalPort(port, drawerPulse);
         }
         res.writeHead(result.success ? 200 : 500, { 'Content-Type': 'application/json; charset=utf-8' });
         return res.end(JSON.stringify({
@@ -203,7 +232,8 @@ const server = http.createServer(async (req, res) => {
         }
 
         if (autoOpen) {
-          buffer = Buffer.concat([buffer, ESC_POS_DRAWER_PULSE]);
+          const drawerPulse = resolveDrawerPulse(payload);
+          buffer = Buffer.concat([buffer, drawerPulse]);
         }
 
         let result;

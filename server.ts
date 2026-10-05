@@ -21,7 +21,7 @@ import crypto from 'crypto';
 import sharp from 'sharp';
 import busboy from 'busboy';
 import path from 'path';
-import net from 'net';
+
 import { initializeApp as initializeClientApp, getApps as getClientApps } from 'firebase/app';
 import { getFirestore as getClientFirestore, collection, doc, deleteDoc, getDoc, getDocs, setDoc, writeBatch } from 'firebase/firestore';
 import { createServer as createViteServer } from 'vite';
@@ -3028,7 +3028,9 @@ registerOrdersRoutes(app, {
   triggerCashDrawerOpen: (settings: any) => triggerRealCashDrawer(settings),
   saveStateToDisk: () => saveStateToDisk(),
   orderRateLimiter,
-  ratingRateLimiter
+  ratingRateLimiter,
+  getLiveIngredients: () => liveIngredients,
+  getInventoryLogs: () => inventoryLogs
 });
 
 // 8. Management Analytical Insights Data

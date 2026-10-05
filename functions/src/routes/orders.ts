@@ -21,7 +21,7 @@ export interface RouteContext {
 }
 
 export function registerOrdersRoutes(app: express.Application, ctx: RouteContext) {
-  const { db, storageBucket, requireStaffAuth, requireAppCheck, createRateLimiter, sendErrorResponse } = ctx;
+  const { db, requireStaffAuth, requireAppCheck, createRateLimiter, sendErrorResponse } = ctx;
   const getCachedSettings = createGetCachedSettings(db);
   const orderRateLimiter = createRateLimiter(20, 60 * 1000, '訂單提交');
   const ratingRateLimiter = createRateLimiter(15, 60 * 1000, '訂單評價');
@@ -362,6 +362,26 @@ post('/orders', requireAppCheck, orderRateLimiter, async (req, res) => {
         menuItemsList
       );
 
+      // 1.8 Ingredient Deductions (Reads)
+      const ingredientDeductions: Record<string, number> = {};
+      verifiedItems.forEach((item: any) => {
+         const menuItem = menuItemsList.find(m => m.id === item.menuItemId);
+         if (menuItem?.recipe && Array.isArray(menuItem.recipe)) {
+           menuItem.recipe.forEach((r: any) => {
+             const qty = (item.qty || 1) * (Number(r.amount) || 0);
+             if (qty > 0 && r.ingredientId) {
+               ingredientDeductions[r.ingredientId] = (ingredientDeductions[r.ingredientId] || 0) + qty;
+             }
+           });
+         }
+      });
+      const deductionKeys = Object.keys(ingredientDeductions);
+      let ingSnaps: any[] = [];
+      if (deductionKeys.length > 0) {
+        const ingRefs = deductionKeys.map(id => db.collection('ingredients').doc(id));
+        ingSnaps = await t.getAll(...ingRefs);
+      }
+
       // 2. Writes
       const orderToSave = {
         ...orderData,
@@ -390,6 +410,32 @@ post('/orders', requireAppCheck, orderRateLimiter, async (req, res) => {
       // Mark table as in_use and clear cleaningStartedAt
       if (tableRef && tableSnap && tableSnap.exists) {
         t.update(tableRef, { status: 'in_use', cleaningStartedAt: null });
+      }
+
+      // Deduct stock and log
+      if (deductionKeys.length > 0) {
+        ingSnaps.forEach((ingSnap) => {
+          if (!ingSnap.exists) return;
+          const id = ingSnap.id;
+          const data = ingSnap.data();
+          const deduction = ingredientDeductions[id] || 0;
+          if (deduction > 0) {
+            const newStock = Math.round(((data?.stock || 0) - deduction) * 100) / 100;
+            t.update(ingSnap.ref, { stock: newStock });
+            
+            const logRef = db.collection('inventoryLogs').doc();
+            t.set(logRef, {
+              id: logRef.id,
+              timestamp: new Date().toISOString(),
+              ingredientId: id,
+              ingredientName: data?.name || id,
+              type: 'outgoing',
+              quantityChanged: -deduction,
+              remainingStock: newStock,
+              note: `Sold via Order #${orderId}`
+            });
+          }
+        });
       }
 
       let priceReconciliation = undefined;
@@ -972,7 +1018,7 @@ post('/kds/heartbeat', requireStaffAuth, async (req, res) => {
       if (!data || data.activeKitchenDeviceId !== deviceId) {
         // 如果當前不是此設備持有鎖，表示已被搶佔或已被強制登出
         const preemptedErr: any = new Error('KITCHEN_ROLE_PREEMPTED');
-        preemptedErr.statusCode = 403;
+        preemptedErr.statusCode = 409;
         throw preemptedErr;
       }
 
@@ -992,8 +1038,8 @@ post('/kds/heartbeat', requireStaffAuth, async (req, res) => {
 
     return res.json({ success: true, session: result });
   } catch (error: any) {
-    if (error?.statusCode === 403 || error?.message === 'KITCHEN_ROLE_PREEMPTED') {
-      return res.status(403).json({ error: '您的廚房角色已被其他裝置取代' });
+    if (error?.statusCode === 409 || error?.message === 'KITCHEN_ROLE_PREEMPTED') {
+      return res.status(409).json({ error: '您的廚房角色已被其他裝置取代', code: 'PREEMPTED' });
     }
     console.error('[KDS Heartbeat Error]', error);
     res.status(500).json({ error: '心跳更新失敗' });

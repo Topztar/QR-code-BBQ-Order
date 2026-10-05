@@ -5,7 +5,6 @@ import { apiFetch } from '../lib/api';
 import { db, isFirebaseSyncEnabled } from '../lib/firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
 
-import { isRtdbPresenceSupported, claimKdsPresence, releaseKdsPresence } from '../lib/kdsPresence';
 
 export function useKdsMutexSession(
   activeTab: string,
@@ -74,8 +73,13 @@ export function useKdsMutexSession(
       if (currentRoleRef.current === 'kitchen' && currentDeviceId) {
         try {
           const payload = JSON.stringify({ deviceId: currentDeviceId });
-          if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
-            navigator.sendBeacon('/api/kds/release-kitchen', new Blob([payload], { type: 'application/json' }));
+          if (typeof fetch !== 'undefined') {
+            fetch('/api/kds/release-kitchen', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: payload,
+              keepalive: true
+            }).catch(() => {});
           }
         } catch (_) {}
       }
@@ -93,8 +97,11 @@ export function useKdsMutexSession(
           method: 'POST',
           body: JSON.stringify({ deviceId: currentDeviceId })
         });
-        if (res.status === 403) {
-          setIsKitchenPreempted(true);
+        if (res.status === 409) {
+          const data = await res.json().catch(() => ({}));
+          if (data.code === 'PREEMPTED' || data.error?.includes('取代')) {
+            setIsKitchenPreempted(true);
+          }
         }
       } catch (err) {
         console.warn('[KDS Heartbeat Network Error]', err);
@@ -110,11 +117,6 @@ export function useKdsMutexSession(
 
   const handleClaimKitchenRole = useCallback(async (force: boolean = false): Promise<{ success: boolean; conflict?: boolean; activeKitchenDeviceId?: string }> => {
     try {
-      const supported = await isRtdbPresenceSupported();
-      if (supported) {
-        await claimKdsPresence(currentDeviceId);
-      }
-
       const res = await apiFetch('/api/kds/claim-kitchen', {
         method: 'POST',
         body: JSON.stringify({ deviceId: currentDeviceId, force })
@@ -139,10 +141,6 @@ export function useKdsMutexSession(
 
   const handleReleaseKitchenRole = useCallback(async () => {
     try {
-      const supported = await isRtdbPresenceSupported();
-      if (supported) {
-        await releaseKdsPresence(currentDeviceId);
-      }
       await apiFetch('/api/kds/release-kitchen', {
         method: 'POST',
         body: JSON.stringify({ deviceId: currentDeviceId })

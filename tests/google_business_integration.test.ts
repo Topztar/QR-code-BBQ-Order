@@ -163,6 +163,57 @@ describe('Google Business Profile Integration Tests', () => {
       const announcement = formatOrderAnnouncementText([googleDineInOrder]);
       expect(announcement).toContain('Google 商家桌號 6 號');
     });
+
+    it('should format announcements according to the requested language', () => {
+      const dineInOrder: Order = {
+        id: 'ord_table_5',
+        tableNumber: '5',
+        items: [],
+        subtotal: 300,
+        serviceCharge: 30,
+        total: 330,
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+        customerAvatar: '',
+        paymentMethod: 'cash',
+        isMember: false,
+        source: 'direct'
+      };
+
+      const takeoutOrder: Order = {
+        id: 'ord_takeout_77',
+        tableNumber: '外帶 77',
+        items: [],
+        subtotal: 150,
+        serviceCharge: 0,
+        total: 150,
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+        customerAvatar: '',
+        paymentMethod: 'cash',
+        isMember: false,
+        source: 'direct'
+      };
+
+      // English
+      expect(formatOrderAnnouncementText([dineInOrder], 'en')).toBe('New order for Table 5, please confirm!');
+      expect(formatOrderAnnouncementText([takeoutOrder], 'en')).toBe('New order for Takeout order #77, please confirm!');
+
+      // Japanese
+      expect(formatOrderAnnouncementText([dineInOrder], 'ja')).toBe('テーブル5番、新規注文です。ご確認ください！');
+      expect(formatOrderAnnouncementText([takeoutOrder], 'ja')).toBe('テイクアウト注文、番号77、新規注文です。ご確認ください！');
+
+      // Korean
+      expect(formatOrderAnnouncementText([dineInOrder], 'ko')).toBe('5번 테이블에 새로운 주문이 들어왔습니다. 확인해 주세요!');
+
+      // Thai
+      expect(formatOrderAnnouncementText([dineInOrder], 'th')).toBe('มีออเดอร์ใหม่จาก โต๊ะ 5 กรุณายืนยันออเดอร์!');
+
+      // Multiple orders
+      const multiEn = formatOrderAnnouncementText([dineInOrder, takeoutOrder], 'en');
+      expect(multiEn).toContain('You have 2 new orders to confirm');
+      expect(multiEn).toContain('Table 5, Takeout order #77');
+    });
   });
 
   describe('Critical Timers Preservation (Anti-Regression & Anti-Over-Pruning)', () => {

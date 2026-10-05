@@ -22,6 +22,8 @@ export interface OrderRouteContext {
   orderRateLimiter?: express.RequestHandler;
   ratingRateLimiter?: express.RequestHandler;
   historyRateLimiter?: express.RequestHandler;
+  getLiveIngredients?: () => any[];
+  getInventoryLogs?: () => any[];
 }
 
 import { getMappedTableId, isTakeoutTable } from '../../utils/tableUtils';
@@ -50,7 +52,9 @@ export function registerOrdersRoutes(app: express.Express, ctx: OrderRouteContex
     saveStateToDisk,
     orderRateLimiter,
     ratingRateLimiter,
-    historyRateLimiter
+    historyRateLimiter,
+    getLiveIngredients,
+    getInventoryLogs
   } = ctx;
 
   const noopMiddleware: express.RequestHandler = (_req, _res, next) => next();
@@ -279,6 +283,43 @@ export function registerOrdersRoutes(app: express.Express, ctx: OrderRouteContex
     };
 
     liveOrders.push(newOrder);
+
+    // Ingredient deductions for local server
+    if (getLiveIngredients && getInventoryLogs) {
+      const liveIngredients = getLiveIngredients();
+      const inventoryLogs = getInventoryLogs();
+      const ingredientDeductions: Record<string, number> = {};
+      
+      processedItems.forEach(item => {
+         const menuItem = liveMenu.find(m => m.id === item.menuItemId);
+         if (menuItem?.recipe && Array.isArray(menuItem.recipe)) {
+           menuItem.recipe.forEach((r: any) => {
+             const qty = (item.qty || 1) * (Number(r.amount) || 0);
+             if (qty > 0 && r.ingredientId) {
+               ingredientDeductions[r.ingredientId] = (ingredientDeductions[r.ingredientId] || 0) + qty;
+             }
+           });
+         }
+      });
+      
+      Object.keys(ingredientDeductions).forEach(ingredientId => {
+        const deduction = ingredientDeductions[ingredientId];
+        const ingredient = liveIngredients.find(ig => ig.id === ingredientId);
+        if (ingredient && deduction > 0) {
+          ingredient.stock = Math.round((ingredient.stock - deduction) * 100) / 100;
+          inventoryLogs.push({
+            id: `ir-out-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+            timestamp: new Date().toISOString(),
+            ingredientId,
+            ingredientName: ingredient.name.zh || ingredient.name,
+            type: 'outgoing',
+            quantityChanged: -deduction,
+            remainingStock: ingredient.stock,
+            note: `Sold via Order #${newOrder.id}`
+          });
+        }
+      });
+    }
 
     if (clientOrderId) {
       localIdempotencyKeys.set(clientOrderId, {
@@ -930,7 +971,7 @@ ${customerDetails}
     const expiresAtIso = new Date(now + LEASE_DURATION_MS).toISOString();
 
     if (localKdsSession.activeKitchenDeviceId !== deviceId) {
-      return res.status(403).json({ error: '您的廚房角色已被其他裝置取代' });
+      return res.status(409).json({ error: '您的廚房角色已被其他裝置取代', code: 'PREEMPTED' });
     }
 
     localKdsSession.lastHeartbeat = nowIso;
@@ -988,27 +1029,31 @@ ${customerDetails}
       order.refundLogs = refundLogs;
     }
 
-    // Recompute subtotal, service charge, and total
-    let subtotal = 0;
-    order.items.forEach(it => {
+    // Recompute authoritative pricing via SSOT
+    const verifiedItems = order.items.map((it: any) => {
       const origP = (it as any).originalPrice !== undefined ? Number((it as any).originalPrice) : null;
       let basePrice = origP !== null ? origP : (Number(it.price) || 0);
 
-      // Always calculate unit price from base price + customizations
-      const unitP = orderCalculationService.computeOrderItemUnitPrice(it, liveMenu);
-      it.price = unitP; // update price so it reflects total unit cost
-      (it as any).originalPrice = basePrice; // Ensure originalPrice is stored for future updates
-
-      subtotal += unitP * (Number(it.qty) || 1);
+      const unitPrice = orderCalculationService.computeOrderItemUnitPrice(it, liveMenu);
+      return {
+        ...it,
+        price: unitPrice,
+        originalPrice: basePrice
+      };
     });
+    order.items = verifiedItems;
 
-    const promoDiscount = calculatePromoDiscount(order.items);
+    const promoDiscount = calculatePromoDiscount(verifiedItems);
+    const verifiedPricing = orderCalculationService.calculateOrderPricing({
+      ...order,
+      items: verifiedItems,
+      discount: promoDiscount
+    } as any, liveMenu);
 
-    order.subtotal = subtotal;
-    (order as any).discount = promoDiscount;
-    const netSubtotal = Math.max(0, subtotal - promoDiscount);
-    order.serviceCharge = (order.paymentMethod === 'credit' || order.paymentMethod === 'twqr') ? Math.round(subtotal * 0.1) : 0;
-    order.total = netSubtotal + order.serviceCharge;
+    order.subtotal = verifiedPricing.subtotal;
+    (order as any).discount = verifiedPricing.discount;
+    order.serviceCharge = verifiedPricing.serviceCharge;
+    order.total = verifiedPricing.total;
 
     // Phase 3: Force kitchen verification when staff modifies items
     if (['pending', 'confirmed', 'preparing'].includes(order.status)) {

@@ -8,7 +8,7 @@
  * 4. Autoplay unlock management and Chrome SpeechSynthesis garbage collection workarounds.
  */
 
-import { Order } from '../types';
+import { Order, Language } from '../types';
 
 let globalAudioCtx: AudioContext | null = null;
 let cachedVoices: SpeechSynthesisVoice[] = [];
@@ -253,6 +253,17 @@ export function getActiveUtterance(): SpeechSynthesisUtterance | null {
   return activeUtterance;
 }
 
+export const TTS_LOCALE_MAP: Record<Language, string> = {
+  zh: 'zh-TW',
+  en: 'en-US',
+  ja: 'ja-JP',
+  ko: 'ko-KR',
+  th: 'th-TH',
+  vi: 'vi-VN',
+  ru: 'ru-RU',
+  es: 'es-ES',
+};
+
 /**
  * Find the most natural Taiwan Mandarin (zh-TW) voice available on the device
  */
@@ -284,9 +295,34 @@ function findBestMandarinVoice(): SpeechSynthesisVoice | null {
 }
 
 /**
- * Read out text using Browser SpeechSynthesis in natural Mandarin Chinese
+ * Find the most suitable voice for the specified language on the device
  */
-export function speakUtterance(text: string): Promise<void> {
+export function findBestVoiceForLanguage(lang: Language = 'zh'): SpeechSynthesisVoice | null {
+  const voices = cachedVoices.length > 0 ? cachedVoices : loadVoices();
+  if (!voices || voices.length === 0) return null;
+
+  if (lang === 'zh') {
+    return findBestMandarinVoice();
+  }
+
+  const targetLocale = (TTS_LOCALE_MAP[lang] || 'zh-TW').toLowerCase();
+  const langPrefix = lang.toLowerCase();
+
+  // 1. Exact match locale (e.g. ja-jp, ko-kr, en-us)
+  const exactVoice = voices.find(v => (v.lang || '').toLowerCase().replace('_', '-') === targetLocale);
+  if (exactVoice) return exactVoice;
+
+  // 2. Prefix match (e.g. ja, ko, en)
+  const prefixVoice = voices.find(v => (v.lang || '').toLowerCase().startsWith(langPrefix));
+  if (prefixVoice) return prefixVoice;
+
+  return null;
+}
+
+/**
+ * Read out text using Browser SpeechSynthesis in natural voice for the target language
+ */
+export function speakUtterance(text: string, lang: Language = 'zh'): Promise<void> {
   return new Promise((resolve) => {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
       resolve();
@@ -297,13 +333,14 @@ export function speakUtterance(text: string): Promise<void> {
       stopSpeech();
       window.speechSynthesis.resume();
 
+      const targetLocale = TTS_LOCALE_MAP[lang] || 'zh-TW';
       const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'zh-TW';
+      utterance.lang = targetLocale;
       utterance.volume = 1.0; // Max volume for busy kitchen
       utterance.rate = 1.02;  // Clear, crisp pace
       utterance.pitch = 1.02; // Elevated pitch for acoustic clarity
 
-      const voice = findBestMandarinVoice();
+      const voice = findBestVoiceForLanguage(lang);
       if (voice) {
         utterance.voice = voice;
       }
@@ -354,24 +391,24 @@ export function speakUtterance(text: string): Promise<void> {
 }
 
 /**
- * Dual Notification Sequencing: Plays Web Audio chime first, followed by Mandarin voice announcement.
+ * Dual Notification Sequencing: Plays Web Audio chime first, followed by voice announcement.
  */
-export async function announceOrderNotification(text: string, withChime: boolean = true): Promise<void> {
+export async function announceOrderNotification(text: string, withChime: boolean = true, lang: Language = 'zh'): Promise<void> {
   if (withChime) {
     await playOrderChimeSound();
   }
-  await speakUtterance(text);
+  await speakUtterance(text, lang);
 }
 
 /**
- * Format dynamic, natural Traditional Chinese announcement phrasing for incoming orders.
+ * Format dynamic, natural announcement phrasing for incoming orders according to language.
  * 
  * Rules:
- * - Dine-In Orders: "桌號 [X] 號，有新訂單"
- * - Take-Out Orders: "外帶訂單，單號 [X]，有新訂單"
+ * - Dine-In Orders: "桌號 [X] 號，有新訂單" / "Table [X], new order"
+ * - Take-Out Orders: "外帶訂單，單號 [X]，有新訂單" / "Takeout order #[X]"
  * - Multiple Orders: Aggregated natural phrasing.
  */
-export function formatOrderAnnouncementText(orders: Order[]): string {
+export function formatOrderAnnouncementText(orders: Order[], lang: Language = 'zh'): string {
   if (!orders || orders.length === 0) return '';
 
   const orderDescriptions = orders.map(order => {
@@ -392,20 +429,111 @@ export function formatOrderAnnouncementText(orders: Order[]): string {
         const digits = order.id.replace(/\D/g, '');
         shortNum = digits.length >= 3 ? digits.slice(-3) : order.id.slice(-4);
       }
-      const label = isGoogle ? 'Google 商家外帶訂單' : '外帶訂單';
-      return shortNum ? `${label}，單號 ${shortNum}` : label;
+
+      switch (lang) {
+        case 'en': {
+          const label = isGoogle ? 'Google Business Takeout' : 'Takeout order';
+          return shortNum ? `${label} #${shortNum}` : label;
+        }
+        case 'ja': {
+          const label = isGoogle ? 'Googleビジネス テイクアウト注文' : 'テイクアウト注文';
+          return shortNum ? `${label}、番号${shortNum}` : label;
+        }
+        case 'ko': {
+          const label = isGoogle ? 'Google 비즈니스 포장 주문' : '포장 주문';
+          return shortNum ? `${label} ${shortNum}번` : label;
+        }
+        case 'th': {
+          const label = isGoogle ? 'ออเดอร์สั่งกลับบ้าน Google' : 'ออเดอร์สั่งกลับบ้าน';
+          return shortNum ? `${label} หมายเลข ${shortNum}` : label;
+        }
+        case 'vi': {
+          const label = isGoogle ? 'Đơn mang về Google' : 'Đơn mang về';
+          return shortNum ? `${label} số ${shortNum}` : label;
+        }
+        case 'ru': {
+          const label = isGoogle ? 'Заказ с собой из Google' : 'Заказ с собой';
+          return shortNum ? `${label} №${shortNum}` : label;
+        }
+        case 'es': {
+          const label = isGoogle ? 'Pedido para llevar de Google' : 'Pedido para llevar';
+          return shortNum ? `${label} #${shortNum}` : label;
+        }
+        case 'zh':
+        default: {
+          const label = isGoogle ? 'Google 商家外帶訂單' : '外帶訂單';
+          return shortNum ? `${label}，單號 ${shortNum}` : label;
+        }
+      }
     } else {
       const rawTable = order.tableNumber || '1';
-      const cleanTableNum = String(rawTable).replace(/^第/, '').replace(/桌$/, '').replace(/號$/, '').trim();
-      return isGoogle ? `Google 商家桌號 ${cleanTableNum || '1'} 號` : `桌號 ${cleanTableNum || '1'} 號`;
+      const cleanTableNum = String(rawTable).replace(/^第/, '').replace(/桌$/, '').replace(/號$/, '').trim() || '1';
+
+      switch (lang) {
+        case 'en':
+          return isGoogle ? `Google Business Table ${cleanTableNum}` : `Table ${cleanTableNum}`;
+        case 'ja':
+          return isGoogle ? `Googleビジネス テーブル${cleanTableNum}番` : `テーブル${cleanTableNum}番`;
+        case 'ko':
+          return isGoogle ? `Google 비즈니스 ${cleanTableNum}번 테이블` : `${cleanTableNum}번 테이블`;
+        case 'th':
+          return isGoogle ? `Google Business โต๊ะ ${cleanTableNum}` : `โต๊ะ ${cleanTableNum}`;
+        case 'vi':
+          return isGoogle ? `Bàn Google ${cleanTableNum}` : `Bàn ${cleanTableNum}`;
+        case 'ru':
+          return isGoogle ? `Google Бизнес Стол ${cleanTableNum}` : `Стол ${cleanTableNum}`;
+        case 'es':
+          return isGoogle ? `Google Business Mesa ${cleanTableNum}` : `Mesa ${cleanTableNum}`;
+        case 'zh':
+        default:
+          return isGoogle ? `Google 商家桌號 ${cleanTableNum} 號` : `桌號 ${cleanTableNum} 號`;
+      }
     }
   });
 
   if (orders.length === 1) {
-    return `${orderDescriptions[0]}，有新訂單，請確認接單！`;
+    switch (lang) {
+      case 'en':
+        return `New order for ${orderDescriptions[0]}, please confirm!`;
+      case 'ja':
+        return `${orderDescriptions[0]}、新規注文です。ご確認ください！`;
+      case 'ko':
+        return `${orderDescriptions[0]}에 새로운 주문이 들어왔습니다. 확인해 주세요!`;
+      case 'th':
+        return `มีออเดอร์ใหม่จาก ${orderDescriptions[0]} กรุณายืนยันออเดอร์!`;
+      case 'vi':
+        return `Có đơn hàng mới cho ${orderDescriptions[0]}, vui lòng xác nhận!`;
+      case 'ru':
+        return `Новый заказ: ${orderDescriptions[0]}, пожалуйста, подтвердите!`;
+      case 'es':
+        return `¡Nuevo pedido para ${orderDescriptions[0]}, por favor confirmar!`;
+      case 'zh':
+      default:
+        return `${orderDescriptions[0]}，有新訂單，請確認接單！`;
+    }
   }
 
   // Multiple orders
-  const listStr = orderDescriptions.join('、');
-  return `您有 ${orders.length} 筆新訂單待確認：包含 ${listStr}，請廚房確認接單！`;
+  const separator = (lang === 'zh' || lang === 'ja') ? '、' : ', ';
+  const listStr = orderDescriptions.join(separator);
+
+  switch (lang) {
+    case 'en':
+      return `You have ${orders.length} new orders to confirm: ${listStr}, please check kitchen display!`;
+    case 'ja':
+      return `新規注文が${orders.length}件あります：${listStr}、厨房でご確認ください！`;
+    case 'ko':
+      return `확인 대기 중인 새 주문이 ${orders.length}건 있습니다: ${listStr}. 주방에서 확인해 주세요!`;
+    case 'th':
+      return `มีออเดอร์ใหม่ ${orders.length} รายการ: ${listStr} กรุณาตรวจสอบที่ครัว!`;
+    case 'vi':
+      return `Bạn có ${orders.length} đơn hàng mới cần xác nhận: ${listStr}, vui lòng kiểm tra!`;
+    case 'ru':
+      return `У вас ${orders.length} новых заказов: ${listStr}, пожалуйста, проверьте на кухне!`;
+    case 'es':
+      return `¡Tiene ${orders.length} nuevos pedidos: ${listStr}, por favor revisar en cocina!`;
+    case 'zh':
+    default:
+      return `您有 ${orders.length} 筆新訂單待確認：包含 ${listStr}，請廚房確認接單！`;
+  }
 }

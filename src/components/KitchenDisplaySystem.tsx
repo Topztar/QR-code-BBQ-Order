@@ -120,7 +120,7 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
     setBeepSim: _setBeepSim,
     notifyNewOrders,
     notifyStatusChange,
-  } = useKdsAudio();
+  } = useKdsAudio(currentLang);
 
   // 🍳 Mutex Lock & Role Session Management from OrderDataContext
   const {
