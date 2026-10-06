@@ -496,7 +496,6 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
     }
 
     return () => {
-      unsubscribeIngredients();
       unsubscribeMenu();
       unsubscribeCategories();
       unsubscribeTables();
