@@ -1,6 +1,8 @@
 import React, { Component } from 'react';
 import { safeStorage } from '../../lib/safeStorage';
 
+import { sessionAuth } from '../../lib/sessionAuth';
+
 const localStorage = safeStorage;
 
 import { useModalEscape } from '../../hooks/useModalEscape';
@@ -110,7 +112,7 @@ export const CustomerStaffPinModal: React.FC<CustomerStaffPinModalProps> = ({
                 if (res.ok) {
                   const data = await res.json();
                   if (data?.access_token) {
-                    localStorage.setItem('sabay_jwt_token', data.access_token);
+                    sessionAuth.setToken(data.access_token);
                   }
                   setIsMerchantMode(true);
                   setShowPasscodeModal(false);

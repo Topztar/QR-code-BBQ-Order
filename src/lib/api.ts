@@ -61,6 +61,9 @@ export const apiFetch = async (url: string, options: any = {}) => {
   } else if (response.status === 403) {
     // 403 Forbidden: 憑證有效但操作被拒 (如權限不符或業務規則限制)，保留憑證不觸發無限登出迴圈
     console.warn(`[apiFetch] 403 Forbidden for ${url}. Preserving staff session (permission/rule constraint).`);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('sabay_permission_denied', { detail: { url, status: 403, message: '權限不足 (Insufficient permissions)' } }));
+    }
   }
 
   return response;
