@@ -39,6 +39,47 @@ get('/ingredients', async (_req, res) => {
   }
 });
 
+// GET /inventory/logs — 游標分頁查詢 (Cursor-based Pagination)
+get('/inventory/logs', requireStaffAuth, async (req, res) => {
+  try {
+    const limitNum = Math.min(Number(req.query.limit) || 20, 100);
+    const startAfterId = req.query.startAfter as string | undefined;
+
+    let queryRef = db.collection('inventoryLogs').orderBy('timestamp', 'desc').limit(limitNum);
+
+    if (startAfterId) {
+      const lastDoc = await db.collection('inventoryLogs').doc(startAfterId).get();
+      if (lastDoc.exists) {
+        queryRef = queryRef.startAfter(lastDoc);
+      }
+    }
+
+    const snapshot = await queryRef.get();
+    const logs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const lastDocId = snapshot.docs.length > 0 ? snapshot.docs[snapshot.docs.length - 1].id : null;
+    const hasMore = snapshot.docs.length === limitNum;
+
+    res.json({ logs, lastDocId, hasMore });
+  } catch (error) {
+    console.error('Error fetching inventory logs:', error);
+    sendErrorResponse(res, error);
+  }
+});
+
+// GET /inventory/stats — 讀取物化檢視文件 (Read Materialized View)
+get('/inventory/stats', requireStaffAuth, async (_req, res) => {
+  try {
+    const docSnap = await db.collection('inventory_stats').doc('current_month').get();
+    if (!docSnap.exists) {
+      return res.json({ item_sales: {}, total_orders: 0 });
+    }
+    res.json(docSnap.data());
+  } catch (error) {
+    sendErrorResponse(res, error);
+  }
+});
+
+
 // --- Write APIs (POST/PUT/DELETE) ---
 // 1. Create Menu
 post('/ingredients', requireStaffAuth, async (req, res) => {

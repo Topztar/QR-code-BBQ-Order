@@ -448,20 +448,14 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
   }, [isStaffView]);
 
   useEffect(() => {
-    let unsubscribeIngredients = () => {};
     let unsubscribeMenu = () => {};
     let unsubscribeCategories = () => {};
     let unsubscribeTables = () => {};
 
     if (syncActive && isFirebaseSyncEnabled() && isStaffView) {
       try {
-        // Ingredients listener
-        unsubscribeIngredients = onSnapshot(query(collection(db, "ingredients"), limit(150)), (snapshot) => {
-          const updatedIngredients = snapshot.docs.map(doc => doc.data() as Ingredient);
-          setIngredients(updatedIngredients);
-        }, (error) => {
-          console.warn('[Firebase Sync] Ingredients listener paused/disabled:', error);
-        });
+        // Ingredients listener is scoped strictly to ManagerInventoryTab to ensure cross-tab isolation (TC-PERF-INV-003)
+
         // Menu listener
         unsubscribeMenu = onSnapshot(query(collection(db, "menu"), limit(300)), (snapshot) => {
           const items = snapshot.docs.map(doc => doc.data() as MenuItem);

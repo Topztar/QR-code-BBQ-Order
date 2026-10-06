@@ -19,6 +19,40 @@ function registerInventoryRoutes(app, ctx) {
             sendErrorResponse(res, error);
         }
     });
+    get('/inventory/logs', requireStaffAuth, async (req, res) => {
+        try {
+            const limitNum = Math.min(Number(req.query.limit) || 20, 100);
+            const startAfterId = req.query.startAfter;
+            let queryRef = db.collection('inventoryLogs').orderBy('timestamp', 'desc').limit(limitNum);
+            if (startAfterId) {
+                const lastDoc = await db.collection('inventoryLogs').doc(startAfterId).get();
+                if (lastDoc.exists) {
+                    queryRef = queryRef.startAfter(lastDoc);
+                }
+            }
+            const snapshot = await queryRef.get();
+            const logs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            const lastDocId = snapshot.docs.length > 0 ? snapshot.docs[snapshot.docs.length - 1].id : null;
+            const hasMore = snapshot.docs.length === limitNum;
+            res.json({ logs, lastDocId, hasMore });
+        }
+        catch (error) {
+            console.error('Error fetching inventory logs:', error);
+            sendErrorResponse(res, error);
+        }
+    });
+    get('/inventory/stats', requireStaffAuth, async (_req, res) => {
+        try {
+            const docSnap = await db.collection('inventory_stats').doc('current_month').get();
+            if (!docSnap.exists) {
+                return res.json({ item_sales: {}, total_orders: 0 });
+            }
+            res.json(docSnap.data());
+        }
+        catch (error) {
+            sendErrorResponse(res, error);
+        }
+    });
     post('/ingredients', requireStaffAuth, async (req, res) => {
         try {
             const data = req.body;

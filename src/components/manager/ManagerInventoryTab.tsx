@@ -1,7 +1,10 @@
-import React from 'react';
-import { AlertTriangle, Package, Download } from 'lucide-react';
+import React, { useEffect, useState, useMemo } from 'react';
+import { AlertTriangle, Package, Download, Loader2 } from 'lucide-react';
 import { Ingredient } from '../../types';
 import { getLocalizedText } from '../../utils/i18n';
+import { db, isFirebaseSyncEnabled } from '../../lib/firebase';
+import { collection, onSnapshot, query, limit } from 'firebase/firestore';
+import { apiFetch } from '../../lib/api';
 
 interface ManagerInventoryTabProps {
   analytics: {
@@ -12,7 +15,6 @@ interface ManagerInventoryTabProps {
   restockAmount: { [id: string]: number };
   setRestockAmount: React.Dispatch<React.SetStateAction<{ [id: string]: number }>>;
   handleRestockClick: (id: string) => void;
-
 
   manualAdjustId: string;
   setManualAdjustId: (id: string) => void;
@@ -43,7 +45,7 @@ interface ManagerInventoryTabProps {
 
 export const ManagerInventoryTab: React.FC<ManagerInventoryTabProps> = ({
   analytics,
-  ingredients,
+  ingredients: propIngredients,
   menuItems,
   restockAmount,
   setRestockAmount,
@@ -73,19 +75,118 @@ export const ManagerInventoryTab: React.FC<ManagerInventoryTabProps> = ({
   handleExportInventoryReport,
   inventoryLogSearch,
   setInventoryLogSearch,
-  dbInventoryLogs,
+  dbInventoryLogs: propDbInventoryLogs,
 }) => {
+  // ⚡ 1. 隔離式即時監聽 (Scoped Realtime Listener): 僅在此組件 Mount 時監聽 ingredients，Unmount 時自動中斷 (TC-PERF-INV-003)
+  const [liveIngredients, setLiveIngredients] = useState<Ingredient[]>(propIngredients);
+
+  useEffect(() => {
+    if (propIngredients && propIngredients.length > 0) {
+      setLiveIngredients(propIngredients);
+    }
+  }, [propIngredients]);
+
+  useEffect(() => {
+    if (!isFirebaseSyncEnabled()) return;
+
+    let unsubscribe = () => {};
+    try {
+      unsubscribe = onSnapshot(query(collection(db, "ingredients"), limit(200)), (snapshot) => {
+        const updated = snapshot.docs.map(doc => doc.data() as Ingredient);
+        setLiveIngredients(updated);
+      }, (err) => {
+        console.warn('[ManagerInventoryTab] Scoped ingredients listener error:', err);
+      });
+    } catch (e) {
+      console.warn('[ManagerInventoryTab] Failed to start listener:', e);
+    }
+
+    return () => {
+      // 離場時立即解綁監聽器，保障 Cross-Tab Isolation
+      unsubscribe();
+    };
+  }, []);
+
+  const ingredients = liveIngredients.length > 0 ? liveIngredients : propIngredients;
+
+  // ⚡ 2. 低庫存警報動態計算 (TC-PERF-INV-004): 反應時間 < 200ms
+  const stockWarnings = useMemo(() => {
+    return ingredients.filter(ig => ig.stock <= ig.minThreshold);
+  }, [ingredients]);
+
+  // ⚡ 3. 游標分頁日誌載入 (TC-PERF-INV-001 & TC-PERF-INV-002)
+  const [logsList, setLogsList] = useState<any[]>(propDbInventoryLogs || []);
+  const [lastDocId, setLastDocId] = useState<string | null>(null);
+  const [hasMoreLogs, setHasMoreLogs] = useState<boolean>(true);
+  const [isLoadingLogs, setIsLoadingLogs] = useState<boolean>(false);
+
+  // 首頁加載：限額 20 筆
+  useEffect(() => {
+    const fetchInitialLogs = async () => {
+      setIsLoadingLogs(true);
+      try {
+        const res = await apiFetch('/api/inventory/logs?limit=20');
+        if (res.ok) {
+          const data = await res.json();
+          if (data && Array.isArray(data.logs)) {
+            setLogsList(data.logs);
+            setLastDocId(data.lastDocId || null);
+            setHasMoreLogs(!!data.hasMore);
+          } else if (Array.isArray(data)) {
+            setLogsList(data.slice(0, 20));
+            setHasMoreLogs(data.length > 20);
+          }
+        }
+      } catch (err) {
+        console.warn('[ManagerInventoryTab] Initial log fetch error:', err);
+      } finally {
+        setIsLoadingLogs(false);
+      }
+    };
+
+    fetchInitialLogs();
+  }, []);
+
+  // 載入更多日誌：每次批次載入 20 筆 (TC-PERF-INV-002)
+  const handleLoadMoreLogs = async () => {
+    if (!hasMoreLogs || isLoadingLogs) return;
+    setIsLoadingLogs(true);
+    try {
+      const url = lastDocId
+        ? `/api/inventory/logs?limit=20&startAfter=${encodeURIComponent(lastDocId)}`
+        : `/api/inventory/logs?limit=20&offset=${logsList.length}`;
+      const res = await apiFetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && Array.isArray(data.logs)) {
+          setLogsList(prev => [...prev, ...data.logs]);
+          setLastDocId(data.lastDocId || null);
+          setHasMoreLogs(!!data.hasMore);
+        } else if (Array.isArray(data)) {
+          setLogsList(prev => [...prev, ...data.slice(logsList.length, logsList.length + 20)]);
+          setHasMoreLogs(logsList.length + 20 < data.length);
+        }
+      }
+    } catch (err) {
+      console.warn('[ManagerInventoryTab] Load more logs error:', err);
+    } finally {
+      setIsLoadingLogs(false);
+    }
+  };
+
+  const dbInventoryLogs = logsList.length > 0 ? logsList : propDbInventoryLogs;
+
   return (
     <div className="space-y-6 animate-fadeIn text-left" id="subtab-section-inventory">
       {/* Warning state board */}
-      {analytics.stockWarnings.length > 0 ? (
+      {stockWarnings.length > 0 ? (
         <div className="bg-rose-550/10 border border-rose-500/25 p-4.5 rounded-xl flex items-start space-x-3 text-left">
           <AlertTriangle className="text-rose-400 shrink-0 mt-0.5" size={18} />
           <div className="space-y-1">
             <h5 className="font-bold text-xs text-rose-400 uppercase tracking-wider">下列原料項目已低於安全防線！</h5>
             <p className="text-white/70 text-[11px] leading-tight">
               建議立即辦理原料進貨或利用手動庫存調整以確保正常配餐原料消耗：
-              {analytics.stockWarnings.map(ig => `【${getLocalizedText(ig.name, 'zh')} 剩餘 ${ig.stock} ${ig.unit}】`).join('、')}
+              {stockWarnings.map(ig => `【${getLocalizedText(ig.name, 'zh')} 剩餘 ${ig.stock} ${ig.unit}】`).join('、')}
             </p>
           </div>
         </div>
@@ -475,6 +576,27 @@ export const ManagerInventoryTab: React.FC<ManagerInventoryTabProps> = ({
             </tbody>
           </table>
         </div>
+
+        {/* 游標分頁加載按鈕 (Cursor Pagination Button - TC-PERF-INV-002) */}
+        {hasMoreLogs && (
+          <div className="flex justify-center pt-3 border-t border-white/5">
+            <button
+              type="button"
+              onClick={handleLoadMoreLogs}
+              disabled={isLoadingLogs}
+              className="flex items-center space-x-2 bg-[#E5B453]/15 hover:bg-[#E5B453]/25 text-[#E5B453] border border-[#E5B453]/30 px-5 py-2 rounded-xl font-black text-xs transition active:scale-95 cursor-pointer disabled:opacity-50 shadow-md"
+            >
+              {isLoadingLogs ? (
+                <>
+                  <Loader2 className="animate-spin" size={14} />
+                  <span>載入中 Loading batch...</span>
+                </>
+              ) : (
+                <span>⬇️ 載入更多 20 筆日誌 (Load 20 More Logs)</span>
+              )}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

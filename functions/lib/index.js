@@ -54932,6 +54932,38 @@ var require_inventory = __commonJS({
           sendErrorResponse2(res, error);
         }
       });
+      get("/inventory/logs", requireStaffAuth, async (req, res) => {
+        try {
+          const limitNum = Math.min(Number(req.query.limit) || 20, 100);
+          const startAfterId = req.query.startAfter;
+          let queryRef = db2.collection("inventoryLogs").orderBy("timestamp", "desc").limit(limitNum);
+          if (startAfterId) {
+            const lastDoc = await db2.collection("inventoryLogs").doc(startAfterId).get();
+            if (lastDoc.exists) {
+              queryRef = queryRef.startAfter(lastDoc);
+            }
+          }
+          const snapshot = await queryRef.get();
+          const logs = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+          const lastDocId = snapshot.docs.length > 0 ? snapshot.docs[snapshot.docs.length - 1].id : null;
+          const hasMore = snapshot.docs.length === limitNum;
+          res.json({ logs, lastDocId, hasMore });
+        } catch (error) {
+          console.error("Error fetching inventory logs:", error);
+          sendErrorResponse2(res, error);
+        }
+      });
+      get("/inventory/stats", requireStaffAuth, async (_req, res) => {
+        try {
+          const docSnap = await db2.collection("inventory_stats").doc("current_month").get();
+          if (!docSnap.exists) {
+            return res.json({ item_sales: {}, total_orders: 0 });
+          }
+          res.json(docSnap.data());
+        } catch (error) {
+          sendErrorResponse2(res, error);
+        }
+      });
       post("/ingredients", requireStaffAuth, async (req, res) => {
         try {
           const data = req.body;
@@ -57482,7 +57514,7 @@ var __importDefault = exports && exports.__importDefault || function(mod) {
   return mod && mod.__esModule ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.onOrderCreated = exports.onReservationCreated = exports.reconcileDailySoldOut = exports.onMenuItemWritten = exports.api = exports.requireAppCheck = exports.sendErrorResponse = exports.requireStaffAuth = void 0;
+exports.onOrderCompleted = exports.onOrderCreated = exports.onReservationCreated = exports.reconcileDailySoldOut = exports.onMenuItemWritten = exports.api = exports.requireAppCheck = exports.sendErrorResponse = exports.requireStaffAuth = void 0;
 exports.createRateLimiter = createRateLimiter;
 var https_1 = require("firebase-functions/v2/https");
 var firestore_1 = require("firebase-functions/v2/firestore");
@@ -57774,6 +57806,43 @@ exports.onOrderCreated = (0, firestore_1.onDocumentCreated)({
     console.log(`[onOrderCreated] Dispatched notifications for order: ${event.params.orderId}`);
   } catch (error) {
     console.error(`[onOrderCreated Error] Failed to process order notifications for ${event.params.orderId}:`, error);
+  }
+});
+exports.onOrderCompleted = (0, firestore_1.onDocumentWritten)({
+  document: "orders/{orderId}",
+  database: "ai-studio-sabaythaibbqtabl-84418196-9d0c-459c-bced-ddc424dfba07",
+  region: "asia-east1"
+}, async (event) => {
+  const beforeData = event.data?.before.exists ? event.data.before.data() : null;
+  const afterData = event.data?.after.exists ? event.data.after.data() : null;
+  if (!afterData)
+    return;
+  const wasPaidOrServed = beforeData ? beforeData.status === "paid" || beforeData.status === "served" : false;
+  const isPaidOrServed = afterData.status === "paid" || afterData.status === "served";
+  if (isPaidOrServed && !wasPaidOrServed) {
+    const batch = db.batch();
+    const statsRef = db.doc("inventory_stats/current_month");
+    const updates = {
+      total_orders: firestore_2.FieldValue.increment(1),
+      updatedAt: firestore_2.FieldValue.serverTimestamp()
+    };
+    if (Array.isArray(afterData.items)) {
+      for (const item of afterData.items) {
+        const qty = Number(item.quantity) || 1;
+        if (item.ingredientId) {
+          const ingRef = db.doc(`ingredients/${item.ingredientId}`);
+          batch.update(ingRef, {
+            stock: firestore_2.FieldValue.increment(-qty)
+          });
+        }
+        if (item.id) {
+          updates[`item_sales.${item.id}`] = firestore_2.FieldValue.increment(qty);
+        }
+      }
+    }
+    batch.set(statsRef, updates, { merge: true });
+    await batch.commit();
+    console.log(`[onOrderCompleted] Materialized view inventory_stats updated for order ${event.params.orderId}`);
   }
 });
 /*! Bundled license information:

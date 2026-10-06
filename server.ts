@@ -2976,10 +2976,23 @@ app.post('/api/ingredients', (req, res) => {
   res.json({ success: true, ingredient: newIngredient });
 });
 
-// Get Inventory Logs
-app.get('/api/inventory/logs', (_req, res) => {
-  res.json(inventoryLogs);
+// Get Inventory Logs (Cursor / Paginated)
+app.get('/api/inventory/logs', (req, res) => {
+  const limitNum = Math.min(Number(req.query.limit) || 20, 100);
+  const offset = Number(req.query.offset) || 0;
+  const sorted = [...inventoryLogs].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  const sliced = sorted.slice(offset, offset + limitNum);
+  const hasMore = offset + limitNum < sorted.length;
+  const lastDocId = sliced.length > 0 ? sliced[sliced.length - 1].id : null;
+
+  res.json({ logs: sliced, lastDocId, hasMore, total: sorted.length });
 });
+
+// Get Materialized View Inventory Stats
+app.get('/api/inventory/stats', (_req, res) => {
+  res.json({ item_sales: {}, total_orders: 0 });
+});
+
 
 // Adjust Inventory manually
 app.post('/api/inventory/adjust', (req, res) => {

@@ -398,3 +398,53 @@ export const onOrderCreated = onDocumentCreated(
     }
   }
 );
+
+// ============================================================
+// ⚡ Firestore Event Trigger — 訂單結帳/完成時物化檢視與庫存扣減 (Compute-on-Write)
+// ============================================================
+export const onOrderCompleted = onDocumentWritten(
+  {
+    document: 'orders/{orderId}',
+    database: 'ai-studio-sabaythaibbqtabl-84418196-9d0c-459c-bced-ddc424dfba07',
+    region: 'asia-east1',
+  },
+  async (event) => {
+    const beforeData = event.data?.before.exists ? event.data.before.data() : null;
+    const afterData = event.data?.after.exists ? event.data.after.data() : null;
+    if (!afterData) return;
+
+    const wasPaidOrServed = beforeData ? (beforeData.status === 'paid' || beforeData.status === 'served') : false;
+    const isPaidOrServed = afterData.status === 'paid' || afterData.status === 'served';
+
+    // 僅在狀態首次轉為 paid 或 served 時執行寫入計算
+    if (isPaidOrServed && !wasPaidOrServed) {
+      const batch = db.batch();
+      const statsRef = db.doc('inventory_stats/current_month');
+
+      const updates: Record<string, any> = {
+        total_orders: FieldValue.increment(1),
+        updatedAt: FieldValue.serverTimestamp()
+      };
+
+      if (Array.isArray(afterData.items)) {
+        for (const item of afterData.items) {
+          const qty = Number(item.quantity) || 1;
+          if (item.ingredientId) {
+            const ingRef = db.doc(`ingredients/${item.ingredientId}`);
+            batch.update(ingRef, {
+              stock: FieldValue.increment(-qty)
+            });
+          }
+          if (item.id) {
+            updates[`item_sales.${item.id}`] = FieldValue.increment(qty);
+          }
+        }
+      }
+
+      batch.set(statsRef, updates, { merge: true });
+      await batch.commit();
+      console.log(`[onOrderCompleted] Materialized view inventory_stats updated for order ${event.params.orderId}`);
+    }
+  }
+);
+
