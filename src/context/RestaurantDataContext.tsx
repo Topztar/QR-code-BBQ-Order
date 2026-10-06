@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useRef, useMemo,
 import { MenuItem, Ingredient, Category, TableConfig, OperatingHourSlot, Reservation, Language, SoldOutType } from '../types';
 import { evaluateDishAvailability } from '../utils/menuAvailability';
 import { apiFetch } from '../lib/api';
+import { sessionAuth } from '../lib/sessionAuth';
 import { db, isFirebaseSyncEnabled, startFirebaseSync, stopFirebaseSync } from '../lib/firebase';
 import { collection, onSnapshot, query, limit } from 'firebase/firestore';
 import { INITIAL_MENU, INITIAL_CATEGORIES, loadData } from '../data';
@@ -200,6 +201,8 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
   const lastCategoryReorderTimeRef = useRef<number>(0);
   const lastMenuReorderTimeRef = useRef<number>(0);
   const pollingCycleRef = useRef<number>(0);
+  const lastFetchTimeRef = useRef<number>(0);
+  const isFetchingRef = useRef<boolean>(false);
 
   const [analytics, setAnalytics] = useState<AnalyticsData>({
     totalRevenue: 0,
@@ -233,7 +236,21 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
   }, []);
 
   const fetchData = async (forceFull: boolean = true, bypassReorderLock: boolean = false) => {
-    const fetchStartTime = Date.now();
+    // 🛡️ 認證前置依賴檢查：後台視圖下若未通過員工登入，立即終止拉取，防止登入門戶渲染時觸發未授權呼叫與無限迴圈
+    if (activeTab !== 'customer' && !sessionAuth.isAuthenticated()) {
+      setLoading(false);
+      return;
+    }
+
+    // 🛡️ 防抖與併發防護：避免短時間連續 mutation 觸發重複 API 風暴
+    const now = Date.now();
+    if (isFetchingRef.current && (now - lastFetchTimeRef.current < 250)) {
+      return;
+    }
+    isFetchingRef.current = true;
+    lastFetchTimeRef.current = now;
+
+    const fetchStartTime = now;
 
 
     // Safety timeout to ensure loading screen never hangs indefinitely (e.g. if bootstrap takes > 8s)
@@ -407,6 +424,7 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
     } finally {
       clearTimeout(loadingTimeoutId);
       setLoading(false);
+      isFetchingRef.current = false;
     }
   };
 

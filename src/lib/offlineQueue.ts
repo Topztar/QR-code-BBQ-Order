@@ -309,16 +309,16 @@ export async function processOfflineQueue(onProgress?: (msg: string) => void): P
         console.error(`[OfflineQueue] Server rejected request for ${item.url}:`, response.status);
         failureCount++;
 
-        // 🛡️ 認證失效防護：401/403 絕不可丟棄店員已建立的單據與劃單
-        if (response.status === 401 || response.status === 403) {
-          console.warn(`[OfflineQueue] Authentication expired (status ${response.status}) on "${item.description}". Pausing queue.`);
+        // 🛡️ 認證失效防護：僅 401 Unauthorized 視為憑證過期，絕不可丟棄店員已建立的單據與劃單
+        if (response.status === 401) {
+          console.warn(`[OfflineQueue] Authentication expired (status 401) on "${item.description}". Pausing queue.`);
           isQueuePaused = true;
           // Revert retryCount increment for this auth failure so it doesn't get discarded
           item.retryCount = Math.max(0, (item.retryCount || 1) - 1);
           const rIdx = remaining.findIndex(r => r.id === item.id);
           if (rIdx > -1) remaining[rIdx] = { ...remaining[rIdx], retryCount: item.retryCount };
           saveOfflineQueue([...remaining]);
-          window.dispatchEvent(new CustomEvent('sabay_auth_expired', { detail: { url: item.url, status: response.status } }));
+          window.dispatchEvent(new CustomEvent('sabay_auth_expired', { detail: { url: item.url, status: 401 } }));
           if (onProgress) onProgress(`🔒 憑證過期，請重新驗證 PIN 碼...`);
           break; // Pause and halt the batch without discarding
         }

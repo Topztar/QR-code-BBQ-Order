@@ -59,7 +59,7 @@ function AppContent({
 }: {
   activeTab: 'customer' | 'kitchen' | 'admin' | 'cashier';
   setActiveTab: React.Dispatch<React.SetStateAction<'customer' | 'kitchen' | 'admin' | 'cashier'>>;
-  navigateTo: (path: string) => void;
+  navigateTo: (path: string, options?: { replace?: boolean }) => void;
 }) {
   const [lang, setLang] = useState<Language>(() => {
     try {
@@ -93,6 +93,12 @@ function AppContent({
   useEffect(() => {
     const handleAuthExpired = () => {
       console.warn('[App] Received sabay_auth_expired event. Forcing PIN re-auth.');
+      sessionAuth.clear();
+      safeStorage.removeItem('staff_token');
+      safeStorage.removeItem('sabay_jwt_token');
+      safeStorage.removeItem('sabay-staff-auth');
+      safeStorage.removeItem('sabay-staff-active-tab');
+      safeStorage.removeItem('sabay-staff-subtab');
       setIsStaff(false);
     };
     window.addEventListener('sabay_auth_expired', handleAuthExpired);
@@ -119,21 +125,28 @@ function AppContent({
   }, [navigateTo]);
 
   const handleStaffLogout = useCallback(() => {
-    setIsStaff(false);
     sessionAuth.clear();
+    safeStorage.removeItem('staff_token');
+    safeStorage.removeItem('sabay_jwt_token');
+    safeStorage.removeItem('sabay-staff-auth');
     safeStorage.removeItem('sabay-staff-active-tab');
     safeStorage.removeItem('sabay-staff-subtab');
-    navigateTo('/');
+    setIsStaff(false);
+    navigateTo('/', { replace: true });
   }, [navigateTo]);
 
   useEffect(() => {
     if (isStaff) {
       sessionAuth.verify().then(isValid => {
         if (!isValid) {
-          setIsStaff(false);
+          sessionAuth.clear();
+          safeStorage.removeItem('staff_token');
+          safeStorage.removeItem('sabay_jwt_token');
+          safeStorage.removeItem('sabay-staff-auth');
           safeStorage.removeItem('sabay-staff-active-tab');
           safeStorage.removeItem('sabay-staff-subtab');
-          navigateTo('/');
+          setIsStaff(false);
+          navigateTo('/', { replace: true });
         }
       });
     }
@@ -655,7 +668,7 @@ function AppContent({
                     }}
                     onCancel={() => {
                       setActiveTab('customer');
-                      navigateTo('/');
+                      navigateTo('/', { replace: true });
                     }}
                   />
                 </Suspense>
@@ -739,7 +752,7 @@ function AppContent({
               id="footer-customer-portal-link"
               onClick={() => {
                 setActiveTab('customer');
-                navigateTo('/');
+                navigateTo('/', { replace: true });
               }}
               className="text-[#E5B453]/30 hover:text-[#E5B453] text-[9px] font-mono tracking-widest uppercase cursor-pointer transition py-0.5 px-1 rounded flex items-center space-x-1"
             >
@@ -776,7 +789,7 @@ function AppWithProviders({
 }: {
   activeTab: 'customer' | 'kitchen' | 'admin' | 'cashier';
   setActiveTab: React.Dispatch<React.SetStateAction<'customer' | 'kitchen' | 'admin' | 'cashier'>>;
-  navigateTo: (path: string) => void;
+  navigateTo: (path: string, options?: { replace?: boolean }) => void;
 }) {
   return (
     <RestaurantDataProvider activeTab={activeTab}>
@@ -797,7 +810,7 @@ function OrderDataConsumerWrapper({
 }: {
   activeTab: 'customer' | 'kitchen' | 'admin' | 'cashier';
   setActiveTab: React.Dispatch<React.SetStateAction<'customer' | 'kitchen' | 'admin' | 'cashier'>>;
-  navigateTo: (path: string) => void;
+  navigateTo: (path: string, options?: { replace?: boolean }) => void;
 }) {
   const { handleUpdateTableStatus, fetchData, menuItems, syncActive } = useRestaurantData();
 
@@ -863,8 +876,12 @@ export default function App() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
-  const navigateTo = useCallback((path: string) => {
-    window.history.pushState({}, '', path);
+  const navigateTo = useCallback((path: string, options?: { replace?: boolean }) => {
+    if (options?.replace) {
+      window.history.replaceState({}, '', path);
+    } else {
+      window.history.pushState({}, '', path);
+    }
     setActiveTab(getTabFromPath(path));
   }, []);
 

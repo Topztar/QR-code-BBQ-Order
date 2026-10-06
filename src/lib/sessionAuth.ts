@@ -3,24 +3,34 @@ import { apiFetch } from './api';
 export const sessionAuth = {
   getToken: () => {
     try {
-      return localStorage.getItem('sabay_jwt_token');
+      return localStorage.getItem('sabay_jwt_token') || sessionStorage.getItem('staff_token');
     } catch { return null; }
   },
   setToken: (token: string) => {
     try {
       localStorage.setItem('sabay_jwt_token', token);
       localStorage.setItem('sabay-staff-auth', 'true');
+      sessionStorage.setItem('staff_token', token);
+      sessionStorage.setItem('sabay_jwt_token', token);
+      sessionStorage.setItem('sabay-staff-auth', 'true');
     } catch {}
   },
   clear: () => {
     try {
       localStorage.removeItem('sabay_jwt_token');
       localStorage.removeItem('sabay-staff-auth');
+      sessionStorage.removeItem('staff_token');
+      sessionStorage.removeItem('sabay_jwt_token');
+      sessionStorage.removeItem('sabay-staff-auth');
+      sessionStorage.removeItem('sabay-staff-active-tab');
+      sessionStorage.removeItem('sabay-staff-subtab');
     } catch {}
   },
   isAuthenticated: () => {
     try {
-      return localStorage.getItem('sabay-staff-auth') === 'true' && !!localStorage.getItem('sabay_jwt_token');
+      const hasToken = !!localStorage.getItem('sabay_jwt_token') || !!sessionStorage.getItem('staff_token');
+      const hasAuth = localStorage.getItem('sabay-staff-auth') === 'true' || sessionStorage.getItem('sabay-staff-auth') === 'true';
+      return hasAuth && hasToken;
     } catch { return false; }
   },
   verify: async (): Promise<boolean> => {
@@ -37,9 +47,12 @@ export const sessionAuth = {
       if (res.ok) {
         return true;
       }
-      // Only clear credentials if the server explicitly tells us the token is invalid/expired
-      if (res.status === 401 || res.status === 403) {
+      // Only clear credentials if the server explicitly tells us the token is invalid/expired (401)
+      if (res.status === 401) {
         sessionAuth.clear();
+        return false;
+      }
+      if (res.status === 403) {
         return false;
       }
       // For transient 5xx server issues, retain existing session to prevent work disruption
