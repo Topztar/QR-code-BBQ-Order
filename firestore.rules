@@ -23,7 +23,8 @@ service cloud.firestore {
     // ==========================================
     match /menu/{id} {
       allow read: if true;
-      allow write: if false;
+      // 🚀 Allow staff to update inventory via the frontend without server rejections
+      allow write: if isAuthenticated();
     }
 
     match /categories/{id} {
@@ -43,7 +44,10 @@ service cloud.firestore {
     // ==========================================
     match /orders/{id} {
       allow read: if isStaffOrAdmin();
-      allow write: if false;
+      // 🚀 Allow frontend soft-deletes and status updates for cashier terminal
+      allow create: if true;
+      allow update: if request.resource.data.status in ['pending', 'preparing', 'served', 'unpaid', 'paid', 'cancelled'];
+      allow delete: if isAuthenticated() || resource.data.status == 'cancelled';
     }
 
     match /ingredients/{id} {

@@ -6,6 +6,7 @@ import { sessionAuth } from '../lib/sessionAuth';
 import { db, isFirebaseSyncEnabled, startFirebaseSync, stopFirebaseSync } from '../lib/firebase';
 import { collection, onSnapshot, query, limit } from 'firebase/firestore';
 import { INITIAL_MENU, INITIAL_CATEGORIES, loadData } from '../data';
+import { saveMenuItem } from '../lib/menuService';
 import { addRequestToQueue } from '../lib/offlineQueue';
 import { validateTableMonopoly } from '../utils/reservationValidator';
 import { getMsUntilTaiwanMidnight, getTaiwanDateString } from '../utils/dateUtils';
@@ -632,14 +633,9 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
   const handleEditMenuItem = async (id: string, itemData: any) => {
     lastMenuReorderTimeRef.current = Date.now();
     try {
-      const res = await apiFetch(`/api/menu/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(itemData),
-      });
-      if (res.ok) {
-        await fetchData(true, true);
-      }
+      await saveMenuItem(id, itemData);
+      // Let the snapshot handle real-time sync, but if there's no snapshot, we can fetch
+      await fetchData(true, true);
     } catch (err) {
       console.error('[Sabay Menu Edit error]', err);
     }

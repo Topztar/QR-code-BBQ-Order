@@ -4,6 +4,7 @@ import { orderCalculationService } from '@sabay/shared';
 import { apiFetch } from '../lib/api';
 import { db, isFirebaseSyncEnabled, ensureFirebaseAuthReady } from '../lib/firebase';
 import { collection, onSnapshot, query, limit, where, orderBy } from 'firebase/firestore';
+import { removeOrCancelOrder } from '../lib/orders';
 import { getOfflineQueue, addRequestToQueue, removeOrderRequestsFromQueue, processOfflineQueue } from '../lib/offlineQueue';
 import { safeStorage } from '../lib/safeStorage';
 
@@ -266,6 +267,7 @@ export function useLiveOrders(
         const ordersQuery = query(
           collection(db, "orders"),
           where("status", "in", activeStatuses),
+          where("isDeleted", "==", false),
           orderBy("createdAt", "desc"),
           limit(200)
         );
@@ -806,12 +808,9 @@ export function useLiveOrders(
   const handleDeleteOrder = async (orderId: string) => {
     const description = `?�除 ?�� 訂單 #${orderId.replace('offline_temp_', '?��?')}`;
     const isOnline = getIsOnline();
-    deletedOrderIdsRef.current.add(orderId);
-    setOrders(prev => prev.filter(o => o.id !== orderId));
-
-    broadcastOrderEvent({ type: 'ORDER_DELETED', orderId });
 
     if (!isOnline || orderId.startsWith('offline_temp_')) {
+      const description = `Delete offline order #${orderId.replace('offline_temp_', '')}`;
       addRequestToQueue(`/api/orders/${orderId}`, 'DELETE', {}, description);
       return { success: true };
     }
@@ -820,19 +819,11 @@ export function useLiveOrders(
     recentStatusTransitionsRef.current.delete(orderId);
 
     try {
-      const res = await apiFetch(`/api/orders/${orderId}`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-      });
-      if (res.ok) {
-        return { success: true };
-      } else {
-        addRequestToQueue(`/api/orders/${orderId}`, 'DELETE', {}, description);
-        return { success: false };
-      }
-    } catch (err) {
-      addRequestToQueue(`/api/orders/${orderId}`, 'DELETE', {}, description);
+      await removeOrCancelOrder(orderId, { hardDelete: false });
       return { success: true };
+    } catch (err) {
+      console.error('[handleDeleteOrder] Failed to remove/cancel order:', err);
+      return { success: false };
     }
   };
 
