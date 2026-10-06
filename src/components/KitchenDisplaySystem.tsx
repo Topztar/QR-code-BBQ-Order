@@ -14,6 +14,7 @@ import { getLocalizedText } from '../utils/i18n';
 import { TRANSLATIONS } from '../data';
 import { safeStorage } from '../lib/safeStorage';
 import { useKdsAudio } from '../hooks/useKdsAudio';
+import { useKDSContinuousAlarm } from '../hooks/useKDSContinuousAlarm';
 import { useOrderData } from '../context/OrderDataContext';
 import { ShieldAlert, LogOut, Moon } from 'lucide-react';
 import { stopFirebaseSync, startFirebaseSync } from '../lib/firebase';
@@ -121,6 +122,13 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
     notifyNewOrders,
     notifyStatusChange,
   } = useKdsAudio(currentLang);
+
+  // 🔔 KDS Continuous Alarm Loop
+  const { pendingCount, unlockAudioContext } = useKDSContinuousAlarm({
+    orders: deferredOrders,
+    intervalMs: 8000,
+    enabled: ttsEnabled,
+  });
 
   // 🍳 Mutex Lock & Role Session Management from OrderDataContext
   const {
@@ -312,76 +320,6 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
     }
   }, []);
 
-  const seenOrderIdsRef = useRef<Set<string>>(new Set());
-  // 初始化 watermark 為 0，稍後在 effect 中載入持久化值
-  const watermarkRef = useRef<number>(0);
-  // 讀取本地儲存的水位線，僅在首次掛載時執行
-  useEffect(() => {
-    try {
-      const saved = safeStorage.getItem('kds_order_watermark');
-      watermarkRef.current = saved ? parseInt(saved, 10) : 0;
-    } catch {
-      watermarkRef.current = 0;
-    }
-  }, []);
-
-  // Detect new pending orders and trigger high-frequency chime + TTS (桌號 / 外帶單號)
-  useEffect(() => {
-    if (!orders || orders.length === 0) return;
-
-    // 🛡️ 水位線初始化：初次掛載若尚未建立水位線，以當前歷史訂單最新時間為基準，防止開機轟鳴
-    let currentWatermark = typeof watermarkRef.current === 'function' ? (watermarkRef.current as any)() : watermarkRef.current;
-    if (!currentWatermark || currentWatermark <= 0) {
-      const latestOrderTime = orders.reduce((max, o) => {
-        const t = new Date(o.createdAt || 0).getTime();
-        return t > max ? t : max;
-      }, 0);
-      currentWatermark = latestOrderTime > 0 ? latestOrderTime : Date.now();
-      watermarkRef.current = currentWatermark;
-      try {
-        safeStorage.setItem('kds_order_watermark', String(currentWatermark));
-      } catch (_) {}
-
-      // 將現有所有訂單標記為已見
-      orders.forEach(o => seenOrderIdsRef.current.add(o.id));
-      return;
-    }
-
-    const newPendingOrders: Order[] = [];
-    let updatedWatermark = currentWatermark;
-
-    orders.forEach((order) => {
-      const orderTime = new Date(order.createdAt || 0).getTime();
-      const isUnseen = !seenOrderIdsRef.current.has(order.id);
-
-      if (isUnseen) {
-        seenOrderIdsRef.current.add(order.id);
-
-        // 僅當訂單時間超越歷史水位線，且狀態為 pending/confirmed/pending_kitchen_verification 時，才判定為真正的新單
-        if ((order.status === 'pending' || order.status === 'confirmed' || order.status === 'pending_kitchen_verification') && orderTime > currentWatermark) {
-          newPendingOrders.push(order);
-          if (orderTime > updatedWatermark) {
-            updatedWatermark = orderTime;
-          }
-        }
-      }
-    });
-
-    if (updatedWatermark > currentWatermark) {
-      watermarkRef.current = updatedWatermark;
-      try {
-        safeStorage.setItem('kds_order_watermark', String(updatedWatermark));
-      } catch (_) {}
-    }
-
-    if (newPendingOrders.length > 0) {
-      notifyNewOrders(newPendingOrders);
-      if (autoScrollEnabled) {
-        scrollToHeaderTop();
-      }
-    }
-  }, [orders, notifyNewOrders, autoScrollEnabled, scrollToHeaderTop]);
-
   // Track Severely Overtime Orders (> 30 mins)
   const [overtimeCount, setOvertimeCount] = useState(0);
   const lastOvertimeBeepRef = useRef<number>(0);
@@ -405,34 +343,6 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
       }
     }
   }, [orders, playOvertimeBeepSound]);
-
-  // Track Unacknowledged Pending Orders (Repeated Reminders)
-  const latestOrdersRef = useRef<Order[]>(orders);
-  useEffect(() => {
-    latestOrdersRef.current = orders;
-  }, [orders]);
-
-  useEffect(() => {
-    const intervalId = setInterval(() => {
-      if (!isMountedRef.current) return;
-      
-      const currentOrders = latestOrdersRef.current || [];
-      const now = Date.now();
-      
-      // Find orders that are still pending/confirmed and exceed the acceptance threshold (e.g., 30 seconds wait)
-      const unacknowledged = currentOrders.filter(o => {
-        if (!['pending', 'confirmed', 'pending_kitchen_verification'].includes(o.status)) return false;
-        const waitTime = now - new Date(o.createdAt || 0).getTime();
-        return waitTime >= 30000; // remind if they have been waiting for >= 30 seconds without kitchen ack
-      });
-      
-      if (unacknowledged.length > 0) {
-        notifyNewOrders(unacknowledged);
-      }
-    }, 30000); // Polling every 30 seconds
-
-    return () => clearInterval(intervalId);
-  }, [notifyNewOrders]);
 
   // Printer Ping Status
   const [pingState, setPingState] = useState<{
@@ -818,7 +728,7 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
   };
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 p-4 lg:p-6 select-none" id="kds-root-workspace">
+    <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 p-4 lg:p-6 select-none" id="kds-root-workspace" onClick={unlockAudioContext}>
       {/* Quick View Modal */}
       <KdsQuickViewModal
         quickViewOrder={quickViewOrder}
