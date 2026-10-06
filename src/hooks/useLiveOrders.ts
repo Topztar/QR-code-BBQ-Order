@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Order, OrderStatus, TableConfig, Reservation } from '../types';
 import { orderCalculationService } from '@sabay/shared';
 import { apiFetch } from '../lib/api';
@@ -178,6 +178,7 @@ export function useLiveOrders(
       } else if (data.type === 'ORDER_UPDATED' && data.orderId && data.updates) {
         setOrders(prev => prev.map(o => o.id === data.orderId ? { ...o, ...data.updates } : o));
       } else if (data.type === 'ORDER_DELETED' && data.orderId) {
+        deletedOrderIdsRef.current.add(data.orderId);
         setOrders(prev => prev.filter(o => o.id !== data.orderId));
       }
     };

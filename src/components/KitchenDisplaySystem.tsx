@@ -406,6 +406,34 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
     }
   }, [orders, playOvertimeBeepSound]);
 
+  // Track Unacknowledged Pending Orders (Repeated Reminders)
+  const latestOrdersRef = useRef<Order[]>(orders);
+  useEffect(() => {
+    latestOrdersRef.current = orders;
+  }, [orders]);
+
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      if (!isMountedRef.current) return;
+      
+      const currentOrders = latestOrdersRef.current || [];
+      const now = Date.now();
+      
+      // Find orders that are still pending/confirmed and exceed the acceptance threshold (e.g., 30 seconds wait)
+      const unacknowledged = currentOrders.filter(o => {
+        if (!['pending', 'confirmed', 'pending_kitchen_verification'].includes(o.status)) return false;
+        const waitTime = now - new Date(o.createdAt || 0).getTime();
+        return waitTime >= 30000; // remind if they have been waiting for >= 30 seconds without kitchen ack
+      });
+      
+      if (unacknowledged.length > 0) {
+        notifyNewOrders(unacknowledged);
+      }
+    }, 30000); // Polling every 30 seconds
+
+    return () => clearInterval(intervalId);
+  }, [notifyNewOrders]);
+
   // Printer Ping Status
   const [pingState, setPingState] = useState<{
     reachable: boolean;
