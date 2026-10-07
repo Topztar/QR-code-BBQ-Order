@@ -54956,8 +54956,9 @@ var require_inventory = __commonJS({
       get("/inventory/stats", requireStaffAuth, async (_req, res) => {
         try {
           const NUM_SHARDS = 10;
+          const legacyRef = db2.collection("inventory_stats").doc("current_month");
           const shardRefs = Array.from({ length: NUM_SHARDS }, (_, i) => db2.collection("inventory_stats").doc(`current_month_shard_${i}`));
-          const docSnaps = await db2.getAll(...shardRefs);
+          const docSnaps = await db2.getAll(legacyRef, ...shardRefs);
           let total_orders = 0;
           const item_sales = {};
           docSnaps.forEach((snap) => {

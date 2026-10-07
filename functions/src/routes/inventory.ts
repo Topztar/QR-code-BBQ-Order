@@ -70,10 +70,11 @@ get('/inventory/logs', requireStaffAuth, async (req, res) => {
 get('/inventory/stats', requireStaffAuth, async (_req, res) => {
   try {
     const NUM_SHARDS = 10;
+    const legacyRef = db.collection('inventory_stats').doc('current_month');
     const shardRefs = Array.from({ length: NUM_SHARDS }, (_, i) => 
       db.collection('inventory_stats').doc(`current_month_shard_${i}`)
     );
-    const docSnaps = await db.getAll(...shardRefs);
+    const docSnaps = await db.getAll(legacyRef, ...shardRefs);
     
     let total_orders = 0;
     const item_sales: Record<string, number> = {};

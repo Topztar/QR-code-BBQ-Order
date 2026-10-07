@@ -310,6 +310,11 @@ export const KdsTicketCard: React.FC<KdsTicketCardProps> = React.memo(({
                   💳 櫃檯已結帳 (Paid)
                 </span>
               )}
+              {order.syncFailed && (
+                <span className="bg-rose-500/20 text-rose-300 border border-rose-500/40 text-[10px] font-black px-2 py-0.5 rounded shadow-[0_0_10px_rgba(244,63,94,0.3)] shrink-0 flex items-center gap-1 animate-pulse" title="狀態同步異常，系統已自動放入離線重試佇列">
+                  ⚠️ 同步延遲 (Sync Pending)
+                </span>
+              )}
               {collapsedOrders.has(order.id) && (
                 <span className="text-[10px] text-amber-300/90 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded font-bold shrink-0">
                   已收合

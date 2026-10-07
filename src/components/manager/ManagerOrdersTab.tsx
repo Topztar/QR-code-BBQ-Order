@@ -362,6 +362,11 @@ export const ManagerOrdersTab: React.FC<ManagerOrdersTabProps> = ({
                       }`}>
                         {o.status === 'completed' ? '已完成出餐' : (o.status === 'confirmed' ? '已確認接單' : (o.status === 'delivering' ? '出餐上桌中' : (o.status === 'preparing' ? '廚房配餐中' : (o.status === 'pending_kitchen_verification' ? '待廚房確認' : (o.status === 'pending' ? '新單待理' : '已取消復歸')))))}
                       </span>
+                      {o.syncFailed && (
+                        <span className="ml-1 inline-block px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-rose-500/20 text-rose-300 border border-rose-500/40 animate-pulse" title="狀態同步異常，佇列重試中">
+                          ⚠️ 待重試
+                        </span>
+                      )}
                     </td>
                     <td className="py-3 px-4 text-center">
                       <button
