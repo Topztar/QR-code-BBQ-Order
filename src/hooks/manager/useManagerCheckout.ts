@@ -469,17 +469,6 @@ export function useManagerCheckout({
 
     setIsBulkDeleting(true);
     try {
-      const ordersRef = collection(db, 'orders');
-      const q = query(ordersRef, where('createdAt', '<', targetDate.toISOString()));
-      const snap = await getDocs(q);
-      const orderIds = snap.docs.map(d => d.id);
-
-      if (orderIds.length === 0) {
-        alert('沒有符合條件的訂單可刪除。');
-        setIsBulkDeleting(false);
-        return;
-      }
-
       const res = await apiFetch('/api/admin/orders/batch-delete', {
         method: 'POST',
         headers: { 
@@ -487,13 +476,13 @@ export function useManagerCheckout({
           'X-Staff-PIN': staffPin || ''
         },
         body: JSON.stringify({ 
-          orderIds,
+          targetDate: targetDate.toISOString(),
           idempotencyKey: crypto.randomUUID()
         })
       });
       if (res.ok) {
         const data = await res.json();
-        alert(`已成功刪除 ${data.deletedCount || orderIds.length} 筆歷史訂單！`);
+        alert(`已成功刪除 ${data.deletedCount || 0} 筆歷史訂單！`);
         setShowBulkDeleteOrdersModal(false);
       } else {
         const errData = await res.json().catch(() => ({}));

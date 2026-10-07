@@ -56204,10 +56204,10 @@ var require_orders = __commonJS({
       });
       post("/admin/orders/batch-delete", requireStaffAuth, async (req, res) => {
         try {
-          const { orderIds, idempotencyKey } = req.body;
+          const { targetDate, idempotencyKey } = req.body;
           const staffPin = req.headers["x-staff-pin"] || req.headers["X-Staff-PIN"];
-          if (!orderIds || !Array.isArray(orderIds)) {
-            return res.status(400).json({ error: "Missing or invalid orderIds array" });
+          if (!targetDate) {
+            return res.status(400).json({ error: "Missing targetDate" });
           }
           if (!staffPin || typeof staffPin !== "string") {
             return res.status(401).json({ error: "Missing staff PIN" });
@@ -56225,17 +56225,22 @@ var require_orders = __commonJS({
           if (idoc.exists) {
             return res.json({ success: true, deletedCount: idoc.data()?.deletedCount || 0, cached: true });
           }
+          const ordersSnapshot = await db2.collection("orders").where("createdAt", "<", targetDate).get();
           const batch = db2.batch();
-          for (const id of orderIds) {
-            batch.delete(db2.collection("orders").doc(id));
-          }
+          ordersSnapshot.forEach((docSnap) => {
+            batch.update(docSnap.ref, {
+              status: "ARCHIVED",
+              isDeleted: true,
+              deletedAt: firestore_12.FieldValue.serverTimestamp()
+            });
+          });
           batch.set(idempotencyRef, {
             usedAt: firestore_12.FieldValue.serverTimestamp(),
-            deletedCount: orderIds.length,
+            deletedCount: ordersSnapshot.size,
             action: "batch-delete"
           });
           await batch.commit();
-          res.json({ success: true, deletedCount: orderIds.length });
+          res.json({ success: true, deletedCount: ordersSnapshot.size });
         } catch (err) {
           sendErrorResponse2(res, err, "Batch deletion failed");
         }

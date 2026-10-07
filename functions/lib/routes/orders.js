@@ -917,10 +917,10 @@ function registerOrdersRoutes(app, ctx) {
     });
     post('/admin/orders/batch-delete', requireStaffAuth, async (req, res) => {
         try {
-            const { orderIds, idempotencyKey } = req.body;
+            const { targetDate, idempotencyKey } = req.body;
             const staffPin = req.headers['x-staff-pin'] || req.headers['X-Staff-PIN'];
-            if (!orderIds || !Array.isArray(orderIds)) {
-                return res.status(400).json({ error: 'Missing or invalid orderIds array' });
+            if (!targetDate) {
+                return res.status(400).json({ error: 'Missing targetDate' });
             }
             if (!staffPin || typeof staffPin !== 'string') {
                 return res.status(401).json({ error: 'Missing staff PIN' });
@@ -938,17 +938,24 @@ function registerOrdersRoutes(app, ctx) {
             if (idoc.exists) {
                 return res.json({ success: true, deletedCount: idoc.data()?.deletedCount || 0, cached: true });
             }
+            const ordersSnapshot = await db.collection('orders')
+                .where('createdAt', '<', targetDate)
+                .get();
             const batch = db.batch();
-            for (const id of orderIds) {
-                batch.delete(db.collection('orders').doc(id));
-            }
+            ordersSnapshot.forEach((docSnap) => {
+                batch.update(docSnap.ref, {
+                    status: 'ARCHIVED',
+                    isDeleted: true,
+                    deletedAt: firestore_1.FieldValue.serverTimestamp()
+                });
+            });
             batch.set(idempotencyRef, {
                 usedAt: firestore_1.FieldValue.serverTimestamp(),
-                deletedCount: orderIds.length,
+                deletedCount: ordersSnapshot.size,
                 action: 'batch-delete'
             });
             await batch.commit();
-            res.json({ success: true, deletedCount: orderIds.length });
+            res.json({ success: true, deletedCount: ordersSnapshot.size });
         }
         catch (err) {
             sendErrorResponse(res, err, 'Batch deletion failed');
