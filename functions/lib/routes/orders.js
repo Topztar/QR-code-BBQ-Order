@@ -938,25 +938,54 @@ function registerOrdersRoutes(app, ctx) {
             if (idoc.exists) {
                 return res.json({ success: true, deletedCount: idoc.data()?.deletedCount || 0, cached: true });
             }
-            const ordersSnapshot = await db.collection('orders')
-                .where('createdAt', '<', targetDate)
-                .get();
-            const batch = db.batch();
-            ordersSnapshot.forEach((docSnap) => {
-                batch.update(docSnap.ref, {
-                    status: 'ARCHIVED',
-                    isDeleted: true,
-                    deletedAt: firestore_1.FieldValue.serverTimestamp()
+            let processedCount = 0;
+            const BATCH_SIZE = 400;
+            let hasMore = true;
+            let lastDoc = null;
+            while (hasMore) {
+                let query = db.collection('orders')
+                    .where('createdAt', '<', targetDate)
+                    .orderBy('createdAt', 'desc')
+                    .limit(BATCH_SIZE);
+                if (lastDoc) {
+                    query = query.startAfter(lastDoc);
+                }
+                const ordersSnapshot = await query.get();
+                if (ordersSnapshot.empty) {
+                    hasMore = false;
+                    break;
+                }
+                lastDoc = ordersSnapshot.docs[ordersSnapshot.docs.length - 1];
+                const batch = db.batch();
+                let actualUpdatesInThisBatch = 0;
+                ordersSnapshot.forEach((docSnap) => {
+                    const data = docSnap.data();
+                    if (data.status !== 'ARCHIVED') {
+                        batch.update(docSnap.ref, {
+                            status: 'ARCHIVED',
+                            isDeleted: true,
+                            deletedAt: firestore_1.FieldValue.serverTimestamp()
+                        });
+                        actualUpdatesInThisBatch++;
+                    }
                 });
-            });
-            batch.set(idempotencyRef, {
+                if (actualUpdatesInThisBatch > 0) {
+                    await batch.commit();
+                    processedCount += actualUpdatesInThisBatch;
+                }
+                if (ordersSnapshot.size < BATCH_SIZE) {
+                    hasMore = false;
+                }
+            }
+            const finalBatch = db.batch();
+            finalBatch.set(idempotencyRef, {
                 usedAt: firestore_1.FieldValue.serverTimestamp(),
-                deletedCount: ordersSnapshot.size,
+                deletedCount: processedCount,
                 action: 'batch-delete',
                 expiresAt: new Date(Date.now() + 86400000)
             });
-            await batch.commit();
-            res.json({ success: true, deletedCount: ordersSnapshot.size });
+            await finalBatch.commit();
+            res.json({ success: true, deletedCount: processedCount });
         }
         catch (err) {
             sendErrorResponse(res, err, 'Batch deletion failed');

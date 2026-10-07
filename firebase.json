@@ -154,6 +154,13 @@
     ],
     "rewrites": [
       {
+        "source": "/api/menu/upload-image",
+        "function": {
+          "functionId": "imageApi",
+          "region": "asia-east1"
+        }
+      },
+      {
         "source": "/api/**",
         "function": {
           "functionId": "api",

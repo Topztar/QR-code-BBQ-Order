@@ -191,6 +191,16 @@ app.use((req: any, res: any) => {
 
 export const api = onRequest({ cors: true, invoker: 'public' }, app);
 
+// 🛡️ Dedicated High-Memory Pool for Heavy Image Processing
+// Avoids scaling up the monolith memory footprint and protects standard JSON APIs from Sharp AVIF OOM crashes
+export const imageApi = onRequest({ 
+  memory: '1GiB', 
+  concurrency: 10, 
+  timeoutSeconds: 60, 
+  cors: true, 
+  invoker: 'public' 
+}, app);
+
 // ============================================================
 // ⚡ Firestore Event Trigger — 孤兒圖片自動非同步清理 (Suggestion 1)
 // ============================================================

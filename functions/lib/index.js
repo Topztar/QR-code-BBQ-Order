@@ -56225,23 +56225,51 @@ var require_orders = __commonJS({
           if (idoc.exists) {
             return res.json({ success: true, deletedCount: idoc.data()?.deletedCount || 0, cached: true });
           }
-          const ordersSnapshot = await db2.collection("orders").where("createdAt", "<", targetDate).get();
-          const batch = db2.batch();
-          ordersSnapshot.forEach((docSnap) => {
-            batch.update(docSnap.ref, {
-              status: "ARCHIVED",
-              isDeleted: true,
-              deletedAt: firestore_12.FieldValue.serverTimestamp()
+          let processedCount = 0;
+          const BATCH_SIZE = 400;
+          let hasMore = true;
+          let lastDoc = null;
+          while (hasMore) {
+            let query = db2.collection("orders").where("createdAt", "<", targetDate).orderBy("createdAt", "desc").limit(BATCH_SIZE);
+            if (lastDoc) {
+              query = query.startAfter(lastDoc);
+            }
+            const ordersSnapshot = await query.get();
+            if (ordersSnapshot.empty) {
+              hasMore = false;
+              break;
+            }
+            lastDoc = ordersSnapshot.docs[ordersSnapshot.docs.length - 1];
+            const batch = db2.batch();
+            let actualUpdatesInThisBatch = 0;
+            ordersSnapshot.forEach((docSnap) => {
+              const data = docSnap.data();
+              if (data.status !== "ARCHIVED") {
+                batch.update(docSnap.ref, {
+                  status: "ARCHIVED",
+                  isDeleted: true,
+                  deletedAt: firestore_12.FieldValue.serverTimestamp()
+                });
+                actualUpdatesInThisBatch++;
+              }
             });
-          });
-          batch.set(idempotencyRef, {
+            if (actualUpdatesInThisBatch > 0) {
+              await batch.commit();
+              processedCount += actualUpdatesInThisBatch;
+            }
+            if (ordersSnapshot.size < BATCH_SIZE) {
+              hasMore = false;
+            }
+          }
+          const finalBatch = db2.batch();
+          finalBatch.set(idempotencyRef, {
             usedAt: firestore_12.FieldValue.serverTimestamp(),
-            deletedCount: ordersSnapshot.size,
+            deletedCount: processedCount,
             action: "batch-delete",
             expiresAt: new Date(Date.now() + 864e5)
           });
-          await batch.commit();
-          res.json({ success: true, deletedCount: ordersSnapshot.size });
+          await finalBatch.commit();
+          res.json({ success: true, deletedCount: processedCount });
         } catch (err) {
           sendErrorResponse2(res, err, "Batch deletion failed");
         }
@@ -57560,7 +57588,7 @@ var __importDefault = exports && exports.__importDefault || function(mod) {
   return mod && mod.__esModule ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.onOrderCompleted = exports.onOrderCreated = exports.onReservationCreated = exports.autoDeleteExpiredIdempotencyKeys = exports.reconcileDailySoldOut = exports.onMenuItemWritten = exports.api = exports.requireAppCheck = exports.sendErrorResponse = exports.requireStaffAuth = void 0;
+exports.onOrderCompleted = exports.onOrderCreated = exports.onReservationCreated = exports.autoDeleteExpiredIdempotencyKeys = exports.reconcileDailySoldOut = exports.onMenuItemWritten = exports.imageApi = exports.api = exports.requireAppCheck = exports.sendErrorResponse = exports.requireStaffAuth = void 0;
 exports.createRateLimiter = createRateLimiter;
 var https_1 = require("firebase-functions/v2/https");
 var firestore_1 = require("firebase-functions/v2/firestore");
@@ -57700,6 +57728,13 @@ app.use((req, res) => {
   res.status(404).json({ error: `\u7121\u6548\u7684 API \u8ACB\u6C42: ${req.method} ${req.path}` });
 });
 exports.api = (0, https_1.onRequest)({ cors: true, invoker: "public" }, app);
+exports.imageApi = (0, https_1.onRequest)({
+  memory: "1GiB",
+  concurrency: 10,
+  timeoutSeconds: 60,
+  cors: true,
+  invoker: "public"
+}, app);
 exports.onMenuItemWritten = (0, firestore_1.onDocumentWritten)({
   document: "menu/{menuId}",
   database: "ai-studio-sabaythaibbqtabl-84418196-9d0c-459c-bced-ddc424dfba07",

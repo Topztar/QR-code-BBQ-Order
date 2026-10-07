@@ -1121,31 +1121,68 @@ post('/admin/orders/batch-delete', requireStaffAuth, async (req, res) => {
       return res.json({ success: true, deletedCount: idoc.data()?.deletedCount || 0, cached: true });
     }
 
-    // Process deletion securely using Admin SDK
-    const ordersSnapshot = await db.collection('orders')
-      .where('createdAt', '<', targetDate)
-      .get();
+    // Process deletion securely using Admin SDK in chunks to avoid 500-operation limit
+    let processedCount = 0;
+    const BATCH_SIZE = 400; // Leave headroom for idempotency key and other mutations
+    let hasMore = true;
+    let lastDoc: FirebaseFirestore.QueryDocumentSnapshot | null = null;
 
-    const batch = db.batch();
-    ordersSnapshot.forEach((docSnap) => {
-      batch.update(docSnap.ref, { 
-        status: 'ARCHIVED',
-        isDeleted: true,
-        deletedAt: FieldValue.serverTimestamp()
+    while (hasMore) {
+      let query = db.collection('orders')
+        .where('createdAt', '<', targetDate)
+        .orderBy('createdAt', 'desc')
+        .limit(BATCH_SIZE);
+        
+      if (lastDoc) {
+        query = query.startAfter(lastDoc);
+      }
+
+      const ordersSnapshot = await query.get();
+
+      if (ordersSnapshot.empty) {
+        hasMore = false;
+        break;
+      }
+
+      lastDoc = ordersSnapshot.docs[ordersSnapshot.docs.length - 1];
+
+      const batch = db.batch();
+      let actualUpdatesInThisBatch = 0;
+      
+      ordersSnapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        // Skip already archived to save writes
+        if (data.status !== 'ARCHIVED') {
+          batch.update(docSnap.ref, { 
+            status: 'ARCHIVED',
+            isDeleted: true,
+            deletedAt: FieldValue.serverTimestamp()
+          });
+          actualUpdatesInThisBatch++;
+        }
       });
-    });
-    
-    // Record idempotency
-    batch.set(idempotencyRef, { 
+      
+      if (actualUpdatesInThisBatch > 0) {
+        await batch.commit();
+        processedCount += actualUpdatesInThisBatch;
+      }
+
+      if (ordersSnapshot.size < BATCH_SIZE) {
+        hasMore = false;
+      }
+    }
+
+    // Record idempotency once all chunks complete successfully
+    const finalBatch = db.batch();
+    finalBatch.set(idempotencyRef, { 
       usedAt: FieldValue.serverTimestamp(),
-      deletedCount: ordersSnapshot.size,
+      deletedCount: processedCount,
       action: 'batch-delete',
       expiresAt: new Date(Date.now() + 86400000) // TTL 24h
     });
+    await finalBatch.commit();
 
-    await batch.commit();
-
-    res.json({ success: true, deletedCount: ordersSnapshot.size });
+    res.json({ success: true, deletedCount: processedCount });
   } catch (err: any) {
     sendErrorResponse(res, err, 'Batch deletion failed');
   }
