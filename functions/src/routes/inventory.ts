@@ -69,11 +69,28 @@ get('/inventory/logs', requireStaffAuth, async (req, res) => {
 // GET /inventory/stats — 讀取物化檢視文件 (Read Materialized View)
 get('/inventory/stats', requireStaffAuth, async (_req, res) => {
   try {
-    const docSnap = await db.collection('inventory_stats').doc('current_month').get();
-    if (!docSnap.exists) {
-      return res.json({ item_sales: {}, total_orders: 0 });
-    }
-    res.json(docSnap.data());
+    const NUM_SHARDS = 10;
+    const shardRefs = Array.from({ length: NUM_SHARDS }, (_, i) => 
+      db.collection('inventory_stats').doc(`current_month_shard_${i}`)
+    );
+    const docSnaps = await db.getAll(...shardRefs);
+    
+    let total_orders = 0;
+    const item_sales: Record<string, number> = {};
+    
+    docSnaps.forEach(snap => {
+      if (snap.exists) {
+        const data = snap.data();
+        if (data?.total_orders) total_orders += data.total_orders;
+        if (data?.item_sales) {
+          for (const [itemId, qty] of Object.entries(data.item_sales)) {
+            item_sales[itemId] = (item_sales[itemId] || 0) + (qty as number);
+          }
+        }
+      }
+    });
+    
+    res.json({ item_sales, total_orders });
   } catch (error) {
     sendErrorResponse(res, error);
   }

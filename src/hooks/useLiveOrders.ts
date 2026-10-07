@@ -398,10 +398,16 @@ export function useLiveOrders(
         body: JSON.stringify({ status }),
       });
       if (!res.ok) {
-        console.warn(`[KDS Sync] Server returned status ${res.status}, keeping optimistic update`);
+        console.warn(`[KDS Sync] Server returned status ${res.status}, marking syncFailed`);
+        setOrders(prev => prev.map(o => o.id === orderId ? { ...o, syncFailed: true } : o));
+        addRequestToQueue(`/api/orders/${orderId}/status`, 'PUT', { status }, description);
+      } else {
+        setOrders(prev => prev.map(o => o.id === orderId ? { ...o, syncFailed: false } : o));
       }
     } catch (err) {
       console.warn('[KDS Sync Error]', err);
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, syncFailed: true } : o));
+      addRequestToQueue(`/api/orders/${orderId}/status`, 'PUT', { status }, description);
     }
 
     if (getOfflineQueue().length > 0) {

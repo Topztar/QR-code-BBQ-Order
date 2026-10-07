@@ -113,6 +113,7 @@ export interface Order {
     phone?: string;
   };
   rating?: number;
+  syncFailed?: boolean;
   feedback?: string;
 
   clientOrderId?: string;

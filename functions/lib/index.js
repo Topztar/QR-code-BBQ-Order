@@ -54955,11 +54955,24 @@ var require_inventory = __commonJS({
       });
       get("/inventory/stats", requireStaffAuth, async (_req, res) => {
         try {
-          const docSnap = await db2.collection("inventory_stats").doc("current_month").get();
-          if (!docSnap.exists) {
-            return res.json({ item_sales: {}, total_orders: 0 });
-          }
-          res.json(docSnap.data());
+          const NUM_SHARDS = 10;
+          const shardRefs = Array.from({ length: NUM_SHARDS }, (_, i) => db2.collection("inventory_stats").doc(`current_month_shard_${i}`));
+          const docSnaps = await db2.getAll(...shardRefs);
+          let total_orders = 0;
+          const item_sales = {};
+          docSnaps.forEach((snap) => {
+            if (snap.exists) {
+              const data = snap.data();
+              if (data?.total_orders)
+                total_orders += data.total_orders;
+              if (data?.item_sales) {
+                for (const [itemId, qty] of Object.entries(data.item_sales)) {
+                  item_sales[itemId] = (item_sales[itemId] || 0) + qty;
+                }
+              }
+            }
+          });
+          res.json({ item_sales, total_orders });
         } catch (error) {
           sendErrorResponse2(res, error);
         }
@@ -57939,7 +57952,9 @@ exports.onOrderCompleted = (0, firestore_1.onDocumentWritten)({
   const isPaidOrServed = afterData.status === "paid" || afterData.status === "served";
   if (isPaidOrServed && !wasPaidOrServed) {
     const batch = db.batch();
-    const statsRef = db.doc("inventory_stats/current_month");
+    const NUM_SHARDS = 10;
+    const shardId = Math.floor(Math.random() * NUM_SHARDS);
+    const statsRef = db.doc(`inventory_stats/current_month_shard_${shardId}`);
     const updates = {
       total_orders: firestore_2.FieldValue.increment(1),
       updatedAt: firestore_2.FieldValue.serverTimestamp()

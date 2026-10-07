@@ -482,7 +482,10 @@ export const onOrderCompleted = onDocumentWritten(
     // 僅在狀態首次轉為 paid 或 served 時執行寫入計算
     if (isPaidOrServed && !wasPaidOrServed) {
       const batch = db.batch();
-      const statsRef = db.doc('inventory_stats/current_month');
+      
+      const NUM_SHARDS = 10;
+      const shardId = Math.floor(Math.random() * NUM_SHARDS);
+      const statsRef = db.doc(`inventory_stats/current_month_shard_${shardId}`);
 
       const updates: Record<string, any> = {
         total_orders: FieldValue.increment(1),
