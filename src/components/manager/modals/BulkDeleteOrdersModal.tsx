@@ -78,18 +78,18 @@ export const BulkDeleteOrdersModal: React.FC<BulkDeleteOrdersModalProps> = ({
           <div className="flex items-center justify-center space-x-2 text-rose-500 mb-2">
             <AlertTriangle size={24} />
             <h3 className="font-extrabold text-lg font-sans tracking-wider">
-              危險操作：批量刪除歷史訂單
+              批次封存歷史訂單
             </h3>
           </div>
-          <p className="text-rose-400/80 text-xs text-center font-sans leading-relaxed">
-            此操作將會從 Firestore 資料庫中永久刪除指定日期以前的所有訂單紀錄，此操作不可逆，且會影響過往業績報表的統計結果。
+          <p className="text-amber-400/80 text-xs text-center font-sans leading-relaxed">
+            此操作將會封存指定日期以前的所有訂單紀錄。封存後的資料將不再顯示於日常報表，但仍可於後台系統匯出。
           </p>
         </div>
 
         <div className="p-5 space-y-5">
           <div className="bg-[#0A0A0A] p-4 rounded-lg border border-white/5 space-y-3">
             <label className="text-xs font-bold text-white/70 block">
-              選擇截止日期 (將刪除此日期 00:00 以前的訂單)：
+              選擇截止日期 (將封存此日期 00:00 以前的訂單)：
             </label>
             <input
               type="date"

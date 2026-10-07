@@ -1139,7 +1139,8 @@ post('/admin/orders/batch-delete', requireStaffAuth, async (req, res) => {
     batch.set(idempotencyRef, { 
       usedAt: FieldValue.serverTimestamp(),
       deletedCount: ordersSnapshot.size,
-      action: 'batch-delete'
+      action: 'batch-delete',
+      expiresAt: new Date(Date.now() + 86400000) // TTL 24h
     });
 
     await batch.commit();

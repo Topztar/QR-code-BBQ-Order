@@ -63,7 +63,12 @@ export const ManagerOrdersTab: React.FC<ManagerOrdersTabProps> = ({
   const handleLoadMoreHistory = async () => {
     setLoadingHistory(true);
     try {
-      let q = query(collection(db, 'orders'), orderBy('createdAt', 'desc'), limit(50));
+      let q = query(
+        collection(db, 'orders'),
+        where('isDeleted', '==', false),
+        orderBy('createdAt', 'desc'),
+        limit(50)
+      );
       
       // Apply filters if applicable
       if (dateRangeFilter === 'custom') {

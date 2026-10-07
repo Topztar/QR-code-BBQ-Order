@@ -952,7 +952,8 @@ function registerOrdersRoutes(app, ctx) {
             batch.set(idempotencyRef, {
                 usedAt: firestore_1.FieldValue.serverTimestamp(),
                 deletedCount: ordersSnapshot.size,
-                action: 'batch-delete'
+                action: 'batch-delete',
+                expiresAt: new Date(Date.now() + 86400000)
             });
             await batch.commit();
             res.json({ success: true, deletedCount: ordersSnapshot.size });

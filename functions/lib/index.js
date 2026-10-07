@@ -56237,7 +56237,8 @@ var require_orders = __commonJS({
           batch.set(idempotencyRef, {
             usedAt: firestore_12.FieldValue.serverTimestamp(),
             deletedCount: ordersSnapshot.size,
-            action: "batch-delete"
+            action: "batch-delete",
+            expiresAt: new Date(Date.now() + 864e5)
           });
           await batch.commit();
           res.json({ success: true, deletedCount: ordersSnapshot.size });
