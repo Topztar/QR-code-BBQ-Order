@@ -46,8 +46,6 @@ export const BulkDeleteOrdersModal: React.FC<BulkDeleteOrdersModalProps> = ({
     }
   }, [isOpen]);
 
-  if (!isOpen) return null;
-
   const handleClose = () => {
     if (isBulkDeleting) return;
     if (isDirty) {
@@ -60,6 +58,8 @@ export const BulkDeleteOrdersModal: React.FC<BulkDeleteOrdersModalProps> = ({
 
   const isDirty = thresholdDate !== '' || confirmText !== '';
   useModalEscape(isOpen, handleClose, isDirty);
+
+  if (!isOpen) return null;
 
   const handleDelete = async () => {
     if (confirmText !== 'DELETE' || !thresholdDate || isBulkDeleting) return;

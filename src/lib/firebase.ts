@@ -30,11 +30,12 @@ try {
     connectFirestoreEmulator(firestoreInstance, 'localhost', 8080);
     console.log('[Firebase] Connected to Local Firestore Emulator (Port 8080) with memoryLocalCache.');
   } else if (checkIndexedDB()) {
+    const isIOSSafari = typeof navigator !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent) && /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent);
     // Configure persistent local cache with multi-tab manager for sub-millisecond cache speed and optimal quota conservation
     firestoreInstance = initializeFirestore(app, {
       localCache: persistentLocalCache({
         tabManager: persistentMultipleTabManager(),
-        cacheSizeBytes: 100 * 1024 * 1024 // 100MB — BBQ POS 尖峰營業充裕，保留 LRU GC
+        cacheSizeBytes: isIOSSafari ? 20 * 1024 * 1024 : 100 * 1024 * 1024 // 縮減 iOS 配額
       })
     }, FIRESTORE_DATABASE_ID);
   } else {

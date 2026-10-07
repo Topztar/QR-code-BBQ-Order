@@ -4,6 +4,8 @@ import { apiFetch } from '../../lib/api';
 import { getLocalizedText } from '../../utils/i18n';
 import { orderCalculationService } from '@sabay/shared';
 import { memberService } from '../../services/memberService';
+import { db } from '../../lib/firebase';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 
 export interface CheckoutSuccessData {
   id: string;
@@ -467,22 +469,39 @@ export function useManagerCheckout({
 
     setIsBulkDeleting(true);
     try {
-      const res = await apiFetch('/api/orders/bulk-delete', {
+      const ordersRef = collection(db, 'orders');
+      const q = query(ordersRef, where('createdAt', '<', targetDate.toISOString()));
+      const snap = await getDocs(q);
+      const orderIds = snap.docs.map(d => d.id);
+
+      if (orderIds.length === 0) {
+        alert('沒有符合條件的訂單可刪除。');
+        setIsBulkDeleting(false);
+        return;
+      }
+
+      const res = await apiFetch('/api/admin/orders/batch-delete', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ thresholdDate: targetDate.toISOString() })
+        headers: { 
+          'Content-Type': 'application/json',
+          'X-Staff-PIN': staffPin || ''
+        },
+        body: JSON.stringify({ 
+          orderIds,
+          idempotencyKey: crypto.randomUUID()
+        })
       });
       if (res.ok) {
         const data = await res.json();
-        alert(`已成功刪除 ${data.deletedCount || 0} 筆歷史訂單！`);
+        alert(`已成功刪除 ${data.deletedCount || orderIds.length} 筆歷史訂單！`);
         setShowBulkDeleteOrdersModal(false);
       } else {
         const errData = await res.json().catch(() => ({}));
-        alert('刪除失敗: ' + (errData.error || '伺服器處理異常'));
+        alert('刪除失敗: ' + (errData.error || errData.message || '伺服器處理異常'));
       }
     } catch (error: any) {
       console.error('Error deleting orders:', error);
-      alert('刪除失敗: ' + error.message);
+      alert('刪除發生異常：' + (error.message || ''));
     } finally {
       setIsBulkDeleting(false);
     }

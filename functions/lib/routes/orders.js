@@ -1,9 +1,11 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerOrdersRoutes = registerOrdersRoutes;
+const firestore_1 = require("firebase-admin/firestore");
 const validators_1 = require("../validators");
 const helpers_1 = require("../helpers");
 const shared_1 = require("@sabay/shared");
+const auth_1 = require("../auth");
 function registerOrdersRoutes(app, ctx) {
     const { db, requireStaffAuth, requireAppCheck, createRateLimiter, sendErrorResponse } = ctx;
     const getCachedSettings = (0, helpers_1.createGetCachedSettings)(db);
@@ -912,6 +914,45 @@ function registerOrdersRoutes(app, ctx) {
     });
     post('/orders/bulk-delete', requireStaffAuth, async (req, res) => {
         return res.status(403).json({ error: '安全限制：禁止實體刪除訂單，請使用作廢/軟刪除或透過 Admin SDK 處理' });
+    });
+    post('/admin/orders/batch-delete', requireStaffAuth, async (req, res) => {
+        try {
+            const { orderIds, idempotencyKey } = req.body;
+            const staffPin = req.headers['x-staff-pin'] || req.headers['X-Staff-PIN'];
+            if (!orderIds || !Array.isArray(orderIds)) {
+                return res.status(400).json({ error: 'Missing or invalid orderIds array' });
+            }
+            if (!staffPin || typeof staffPin !== 'string') {
+                return res.status(401).json({ error: 'Missing staff PIN' });
+            }
+            if (!idempotencyKey) {
+                return res.status(400).json({ error: 'Missing idempotency key' });
+            }
+            const credsDoc = await db.collection('secrets').doc('credentials').get();
+            const storedHash = credsDoc.data()?.staffPinHash;
+            if (!storedHash || (0, auth_1.hashPin)(staffPin) !== storedHash) {
+                return res.status(401).json({ error: 'Invalid staff PIN' });
+            }
+            const idempotencyRef = db.collection('_idempotency_keys').doc(idempotencyKey);
+            const idoc = await idempotencyRef.get();
+            if (idoc.exists) {
+                return res.json({ success: true, deletedCount: idoc.data()?.deletedCount || 0, cached: true });
+            }
+            const batch = db.batch();
+            for (const id of orderIds) {
+                batch.delete(db.collection('orders').doc(id));
+            }
+            batch.set(idempotencyRef, {
+                usedAt: firestore_1.FieldValue.serverTimestamp(),
+                deletedCount: orderIds.length,
+                action: 'batch-delete'
+            });
+            await batch.commit();
+            res.json({ success: true, deletedCount: orderIds.length });
+        }
+        catch (err) {
+            sendErrorResponse(res, err, 'Batch deletion failed');
+        }
     });
     post('/print-logs/clear', requireStaffAuth, async (_req, res) => {
         try {

@@ -25,6 +25,7 @@ export class ChunkErrorBoundary extends Component<Props, State> {
       error.name === 'ChunkLoadError' ||
       error.message?.includes('Failed to fetch dynamically imported module') ||
       error.message?.includes('dynamically imported module') ||
+      error.message?.includes('Minified React error #310') ||
       error.message?.includes('loading chunk');
     return { hasError: true, isChunkError: Boolean(isChunk) };
   }
@@ -35,6 +36,7 @@ export class ChunkErrorBoundary extends Component<Props, State> {
       error.name === 'ChunkLoadError' ||
       error.message?.includes('Failed to fetch dynamically imported module') ||
       error.message?.includes('dynamically imported module') ||
+      error.message?.includes('Minified React error #310') ||
       error.message?.includes('loading chunk');
 
     if (isChunk) {

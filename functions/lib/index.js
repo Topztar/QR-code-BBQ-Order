@@ -55341,9 +55341,11 @@ var require_orders = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.registerOrdersRoutes = registerOrdersRoutes;
+    var firestore_12 = require("firebase-admin/firestore");
     var validators_1 = require_validators();
     var helpers_12 = require_helpers();
     var shared_1 = (init_src(), __toCommonJS(src_exports));
+    var auth_12 = require_auth();
     function registerOrdersRoutes(app2, ctx) {
       const { db: db2, requireStaffAuth, requireAppCheck: requireAppCheck2, createRateLimiter: createRateLimiter2, sendErrorResponse: sendErrorResponse2 } = ctx;
       const getCachedSettings = (0, helpers_12.createGetCachedSettings)(db2);
@@ -56199,6 +56201,44 @@ var require_orders = __commonJS({
       });
       post("/orders/bulk-delete", requireStaffAuth, async (req, res) => {
         return res.status(403).json({ error: "\u5B89\u5168\u9650\u5236\uFF1A\u7981\u6B62\u5BE6\u9AD4\u522A\u9664\u8A02\u55AE\uFF0C\u8ACB\u4F7F\u7528\u4F5C\u5EE2/\u8EDF\u522A\u9664\u6216\u900F\u904E Admin SDK \u8655\u7406" });
+      });
+      post("/admin/orders/batch-delete", requireStaffAuth, async (req, res) => {
+        try {
+          const { orderIds, idempotencyKey } = req.body;
+          const staffPin = req.headers["x-staff-pin"] || req.headers["X-Staff-PIN"];
+          if (!orderIds || !Array.isArray(orderIds)) {
+            return res.status(400).json({ error: "Missing or invalid orderIds array" });
+          }
+          if (!staffPin || typeof staffPin !== "string") {
+            return res.status(401).json({ error: "Missing staff PIN" });
+          }
+          if (!idempotencyKey) {
+            return res.status(400).json({ error: "Missing idempotency key" });
+          }
+          const credsDoc = await db2.collection("secrets").doc("credentials").get();
+          const storedHash = credsDoc.data()?.staffPinHash;
+          if (!storedHash || (0, auth_12.hashPin)(staffPin) !== storedHash) {
+            return res.status(401).json({ error: "Invalid staff PIN" });
+          }
+          const idempotencyRef = db2.collection("_idempotency_keys").doc(idempotencyKey);
+          const idoc = await idempotencyRef.get();
+          if (idoc.exists) {
+            return res.json({ success: true, deletedCount: idoc.data()?.deletedCount || 0, cached: true });
+          }
+          const batch = db2.batch();
+          for (const id of orderIds) {
+            batch.delete(db2.collection("orders").doc(id));
+          }
+          batch.set(idempotencyRef, {
+            usedAt: firestore_12.FieldValue.serverTimestamp(),
+            deletedCount: orderIds.length,
+            action: "batch-delete"
+          });
+          await batch.commit();
+          res.json({ success: true, deletedCount: orderIds.length });
+        } catch (err) {
+          sendErrorResponse2(res, err, "Batch deletion failed");
+        }
       });
       post("/print-logs/clear", requireStaffAuth, async (_req, res) => {
         try {
@@ -57514,7 +57554,7 @@ var __importDefault = exports && exports.__importDefault || function(mod) {
   return mod && mod.__esModule ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.onOrderCompleted = exports.onOrderCreated = exports.onReservationCreated = exports.reconcileDailySoldOut = exports.onMenuItemWritten = exports.api = exports.requireAppCheck = exports.sendErrorResponse = exports.requireStaffAuth = void 0;
+exports.onOrderCompleted = exports.onOrderCreated = exports.onReservationCreated = exports.autoDeleteExpiredIdempotencyKeys = exports.reconcileDailySoldOut = exports.onMenuItemWritten = exports.api = exports.requireAppCheck = exports.sendErrorResponse = exports.requireStaffAuth = void 0;
 exports.createRateLimiter = createRateLimiter;
 var https_1 = require("firebase-functions/v2/https");
 var firestore_1 = require("firebase-functions/v2/firestore");
@@ -57743,6 +57783,43 @@ exports.reconcileDailySoldOut = (0, scheduler_1.onSchedule)({
     console.log(`[Reconciler] Reset ${querySnap.size} daily sold-out items to available.`);
   } catch (err) {
     console.error("[Reconciler] Failed to reset daily sold-out items:", err);
+  }
+});
+exports.autoDeleteExpiredIdempotencyKeys = (0, scheduler_1.onSchedule)({
+  schedule: "every 6 hours",
+  timeZone: "Asia/Taipei",
+  region: "asia-east1"
+}, async (event) => {
+  try {
+    const now = /* @__PURE__ */ new Date();
+    let totalDeleted = 0;
+    let hasMore = true;
+    let iterations = 0;
+    const MAX_ITERATIONS = 5;
+    while (hasMore && iterations < MAX_ITERATIONS) {
+      iterations++;
+      const expiredQuerySnap = await db.collection("_idempotency_keys").where("expiresAt", "<=", now).limit(500).get();
+      if (expiredQuerySnap.empty) {
+        hasMore = false;
+        break;
+      }
+      const batch = db.batch();
+      expiredQuerySnap.docs.forEach((doc) => {
+        batch.delete(doc.ref);
+      });
+      await batch.commit();
+      totalDeleted += expiredQuerySnap.size;
+      if (expiredQuerySnap.size < 500) {
+        hasMore = false;
+      }
+    }
+    if (totalDeleted > 0) {
+      console.log(`[AutoDeleteIdempotency] Successfully erased ${totalDeleted} expired idempotency keys.`);
+    } else {
+      console.log("[AutoDeleteIdempotency] No expired idempotency keys found.");
+    }
+  } catch (err) {
+    console.error("[AutoDeleteIdempotency Error] Failed to delete expired idempotency keys:", err);
   }
 });
 var getCachedNotificationSettings = (0, helpers_1.createGetCachedNotificationSettings)(db);

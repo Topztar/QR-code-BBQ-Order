@@ -309,6 +309,59 @@ export const reconcileDailySoldOut = onSchedule(
 );
 
 // ============================================================
+// 🗑️ Scheduled Task — 自動清除過期的 _idempotency_keys 紀錄
+// Automatically delete documents from _idempotency_keys where expiresAt <= now
+// ============================================================
+export const autoDeleteExpiredIdempotencyKeys = onSchedule(
+  {
+    schedule: 'every 6 hours',
+    timeZone: 'Asia/Taipei',
+    region: 'asia-east1',
+  },
+  async (event) => {
+    try {
+      const now = new Date();
+      let totalDeleted = 0;
+      let hasMore = true;
+      let iterations = 0;
+      const MAX_ITERATIONS = 5; // 防範單次執行逾時，最多清理 5 * 500 = 2500 筆
+
+      while (hasMore && iterations < MAX_ITERATIONS) {
+        iterations++;
+        const expiredQuerySnap = await db.collection('_idempotency_keys')
+          .where('expiresAt', '<=', now)
+          .limit(500)
+          .get();
+
+        if (expiredQuerySnap.empty) {
+          hasMore = false;
+          break;
+        }
+
+        const batch = db.batch();
+        expiredQuerySnap.docs.forEach((doc) => {
+          batch.delete(doc.ref);
+        });
+        await batch.commit();
+        totalDeleted += expiredQuerySnap.size;
+
+        if (expiredQuerySnap.size < 500) {
+          hasMore = false;
+        }
+      }
+
+      if (totalDeleted > 0) {
+        console.log(`[AutoDeleteIdempotency] Successfully erased ${totalDeleted} expired idempotency keys.`);
+      } else {
+        console.log('[AutoDeleteIdempotency] No expired idempotency keys found.');
+      }
+    } catch (err: any) {
+      console.error('[AutoDeleteIdempotency Error] Failed to delete expired idempotency keys:', err);
+    }
+  }
+);
+
+// ============================================================
 // 🔔 Firestore Event Trigger — 預約非同步通知 (LINE & Gmail)
 // ============================================================
 const getCachedNotificationSettings = createGetCachedNotificationSettings(db);

@@ -1,9 +1,10 @@
 import express from 'express';
-import { Firestore, Query } from 'firebase-admin/firestore';
+import { Firestore, Query, FieldValue } from 'firebase-admin/firestore';
 import { Bucket } from '@google-cloud/storage';
 import { validateOrderPayload, validateRatingPayload, validateCheckoutPayload } from '../validators';
 import { isStoreOpenFromData, createGetCachedSettings } from '../helpers';
 import { orderCalculationService, checkItemCompleteConcurrency, checkRefundLogsGate } from '@sabay/shared';
+import { hashPin } from '../auth';
 
 // ============================================================
 // ORDERS 路由模組（含 print-logs）
@@ -1088,6 +1089,57 @@ del('/orders/:id', requireStaffAuth, async (req, res) => {
 post('/orders/bulk-delete', requireStaffAuth, async (req, res) => {
   // Phase 2 Hardening: Block physical deletion of orders from standard staff API
   return res.status(403).json({ error: '安全限制：禁止實體刪除訂單，請使用作廢/軟刪除或透過 Admin SDK 處理' });
+});
+
+// 24.2 Secure Batch Delete
+post('/admin/orders/batch-delete', requireStaffAuth, async (req, res) => {
+  try {
+    const { orderIds, idempotencyKey } = req.body;
+    const staffPin = req.headers['x-staff-pin'] || req.headers['X-Staff-PIN'];
+
+    if (!orderIds || !Array.isArray(orderIds)) {
+      return res.status(400).json({ error: 'Missing or invalid orderIds array' });
+    }
+    if (!staffPin || typeof staffPin !== 'string') {
+      return res.status(401).json({ error: 'Missing staff PIN' });
+    }
+    if (!idempotencyKey) {
+      return res.status(400).json({ error: 'Missing idempotency key' });
+    }
+
+    // PIN Verification
+    const credsDoc = await db.collection('secrets').doc('credentials').get();
+    const storedHash = credsDoc.data()?.staffPinHash;
+    if (!storedHash || hashPin(staffPin) !== storedHash) {
+      return res.status(401).json({ error: 'Invalid staff PIN' });
+    }
+
+    // Idempotency check
+    const idempotencyRef = db.collection('_idempotency_keys').doc(idempotencyKey);
+    const idoc = await idempotencyRef.get();
+    if (idoc.exists) {
+      return res.json({ success: true, deletedCount: idoc.data()?.deletedCount || 0, cached: true });
+    }
+
+    // Process deletion securely using Admin SDK
+    const batch = db.batch();
+    for (const id of orderIds) {
+      batch.delete(db.collection('orders').doc(id));
+    }
+    
+    // Record idempotency
+    batch.set(idempotencyRef, { 
+      usedAt: FieldValue.serverTimestamp(),
+      deletedCount: orderIds.length,
+      action: 'batch-delete'
+    });
+
+    await batch.commit();
+
+    res.json({ success: true, deletedCount: orderIds.length });
+  } catch (err: any) {
+    sendErrorResponse(res, err, 'Batch deletion failed');
+  }
 });
 
 // --- Print Logs API ---
