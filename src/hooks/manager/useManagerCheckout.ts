@@ -249,17 +249,29 @@ export function useManagerCheckout({
     }).filter((it: any) => it.qty > 0);
 
     if (updatedItems.length === 0) {
+      const confirmDelete = async () => {
+        if (onDeleteOrder) {
+          try {
+            const res = await onDeleteOrder(selectedOrder.id);
+            if (res && res.success === false) {
+              alert(`❌ 刪除訂單失敗：${res.error || '伺服器拒絕或網路異常'}`);
+              return;
+            }
+          } catch (err: any) {
+            console.error('[useManagerCheckout] Delete error:', err);
+            alert(`❌ 刪除訂單失敗：${err?.message || '未知錯誤'}`);
+            return;
+          }
+        }
+        setSelectedOrder(null);
+      };
+
       setConfirmActionModal({
         isOpen: true,
         title: '⚠️ 訂單已無菜品',
         message: `訂單 [${selectedOrder.id}] 的菜品已被清空。是否直接刪除此訂單？`,
         actionLabel: '確定刪除 Delete',
-        onConfirm: async () => {
-          if (onDeleteOrder) {
-            await onDeleteOrder(selectedOrder.id);
-          }
-          setSelectedOrder(null);
-        }
+        onConfirm: confirmDelete
       });
       return;
     }

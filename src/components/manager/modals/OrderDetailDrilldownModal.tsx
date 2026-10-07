@@ -102,17 +102,32 @@ export const OrderDetailDrilldownModal: React.FC<OrderDetailDrilldownModalProps>
                 {onDeleteOrder && (
                   <button
                     type="button"
-                    onClick={() => {
-                      setConfirmActionModal({
-                        isOpen: true,
-                        title: '🚨 永久刪除此訂單',
-                        message: `您確定要永久刪除訂單 [${selectedOrder.id}] 嗎？此操作將永久刪除此訂單，且無法復原。`,
-                        actionLabel: '確定刪除 Delete',
-                        onConfirm: async () => {
-                          await onDeleteOrder(selectedOrder.id);
+                    onClick={async () => {
+                      const confirmDelete = async () => {
+                        try {
+                          const res = await onDeleteOrder(selectedOrder.id);
+                          if (res && res.success === false) {
+                            alert(`❌ 刪除訂單失敗：${res.error || '伺服器拒絕或網路異常'}`);
+                            return;
+                          }
                           setSelectedOrder(null);
+                        } catch (err: any) {
+                          console.error('[OrderDetailDrilldownModal] Delete error:', err);
+                          alert(`❌ 刪除訂單失敗：${err?.message || '未知錯誤'}`);
                         }
-                      });
+                      };
+
+                      if (setConfirmActionModal) {
+                        setConfirmActionModal({
+                          isOpen: true,
+                          title: '🚨 永久刪除此訂單',
+                          message: `您確定要永久刪除訂單 [${selectedOrder.id}] 嗎？此操作將永久刪除此訂單，且無法復原。`,
+                          actionLabel: '確定刪除 Delete',
+                          onConfirm: confirmDelete
+                        });
+                      } else if (window.confirm(`您確定要永久刪除訂單 [${selectedOrder.id}] 嗎？此操作將永久刪除此訂單，且無法復原。`)) {
+                        await confirmDelete();
+                      }
                     }}
                     className="text-xs bg-rose-600/20 hover:bg-rose-600 text-rose-400 hover:text-white transition active:scale-95 border border-rose-500/30 px-3 py-1.5 rounded-lg cursor-pointer font-bold animate-fadeIn"
                   >

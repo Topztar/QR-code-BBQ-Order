@@ -121,21 +121,35 @@ export const CashierOrderDetailPanel: React.FC<CashierOrderDetailPanelProps> = (
     }).filter((it: any) => it.qty > 0);
 
     if (updatedItems.length === 0) {
+      const confirmDeleteZeroItems = async () => {
+        if (onDeleteOrder) {
+          try {
+            const res = await onDeleteOrder(orderId);
+            if (res && res.success === false) {
+              alert(`❌ 刪除訂單失敗：${res.error || '伺服器拒絕或網路異常'}`);
+              return;
+            }
+          } catch (err: any) {
+            console.error('[CashierOrderDetailPanel] Delete error:', err);
+            alert(`❌ 刪除訂單失敗：${err?.message || '未知錯誤'}`);
+            return;
+          }
+        }
+        if (selectedCashierOrderId === orderId) {
+          setSelectedCashierOrderId(null);
+        }
+      };
+
       if (setConfirmActionModal) {
         setConfirmActionModal({
           isOpen: true,
           title: '⚠️ 訂單已無菜品',
           message: `訂單 [${orderId}] 的菜品已被清空。是否直接刪除此訂單？`,
           actionLabel: '確定刪除 Delete',
-          onConfirm: async () => {
-            if (onDeleteOrder) {
-              await onDeleteOrder(orderId);
-            }
-            if (selectedCashierOrderId === orderId) {
-              setSelectedCashierOrderId(null);
-            }
-          }
+          onConfirm: confirmDeleteZeroItems
         });
+      } else if (window.confirm(`訂單 [${orderId}] 的菜品已被清空。是否直接刪除此訂單？`)) {
+        await confirmDeleteZeroItems();
       }
       return;
     }
@@ -150,21 +164,35 @@ export const CashierOrderDetailPanel: React.FC<CashierOrderDetailPanelProps> = (
     const updatedItems = ordObj.items.filter((it: any) => it.id !== itemId);
 
     if (updatedItems.length === 0) {
+      const confirmDeleteZeroItems = async () => {
+        if (onDeleteOrder) {
+          try {
+            const res = await onDeleteOrder(orderId);
+            if (res && res.success === false) {
+              alert(`❌ 刪除訂單失敗：${res.error || '伺服器拒絕或網路異常'}`);
+              return;
+            }
+          } catch (err: any) {
+            console.error('[CashierOrderDetailPanel] Delete error:', err);
+            alert(`❌ 刪除訂單失敗：${err?.message || '未知錯誤'}`);
+            return;
+          }
+        }
+        if (selectedCashierOrderId === orderId) {
+          setSelectedCashierOrderId(null);
+        }
+      };
+
       if (setConfirmActionModal) {
         setConfirmActionModal({
           isOpen: true,
           title: '⚠️ 訂單已無菜品',
           message: `移除此品項後，訂單 [${orderId}] 將無任何菜品。是否直接刪除此訂單？`,
           actionLabel: '確定刪除 Delete',
-          onConfirm: async () => {
-            if (onDeleteOrder) {
-              await onDeleteOrder(orderId);
-            }
-            if (selectedCashierOrderId === orderId) {
-              setSelectedCashierOrderId(null);
-            }
-          }
+          onConfirm: confirmDeleteZeroItems
         });
+      } else if (window.confirm(`移除此品項後，訂單 [${orderId}] 將無任何菜品。是否直接刪除此訂單？`)) {
+        await confirmDeleteZeroItems();
       }
       return;
     }
@@ -354,18 +382,31 @@ export const CashierOrderDetailPanel: React.FC<CashierOrderDetailPanelProps> = (
               {onDeleteOrder && (
                 <button
                   type="button"
-                  onClick={() => {
+                  onClick={async () => {
+                    const confirmDelete = async () => {
+                      try {
+                        const res = await onDeleteOrder(cashierSelectedOrder.id);
+                        if (res && res.success === false) {
+                          alert(`❌ 刪除訂單失敗：${res.error || '伺服器拒絕或網路異常'}`);
+                          return;
+                        }
+                        setSelectedCashierOrderId(null);
+                      } catch (err: any) {
+                        console.error('[CashierOrderDetailPanel] Delete error:', err);
+                        alert(`❌ 刪除訂單失敗：${err?.message || '未知錯誤'}`);
+                      }
+                    };
+
                     if (setConfirmActionModal) {
                       setConfirmActionModal({
                         isOpen: true,
                         title: '🚨 永久刪除此訂單',
                         message: `您確定要永久刪除訂單 [${cashierSelectedOrder.id}] 嗎？此操作將永久刪除此訂單，且無法復原。`,
                         actionLabel: '確定刪除 Delete',
-                        onConfirm: async () => {
-                          await onDeleteOrder(cashierSelectedOrder.id);
-                          setSelectedCashierOrderId(null);
-                        }
+                        onConfirm: confirmDelete
                       });
+                    } else if (window.confirm(`您確定要永久刪除訂單 [${cashierSelectedOrder.id}] 嗎？此操作將永久刪除此訂單，且無法復原。`)) {
+                      await confirmDelete();
                     }
                   }}
                   className="text-xs bg-rose-600/20 hover:bg-rose-600 text-rose-400 hover:text-white transition active:scale-95 border border-rose-500/30 px-3 py-1.5 rounded-lg cursor-pointer font-bold"

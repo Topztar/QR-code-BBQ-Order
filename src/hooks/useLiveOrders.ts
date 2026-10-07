@@ -819,11 +819,14 @@ export function useLiveOrders(
     recentStatusTransitionsRef.current.delete(orderId);
 
     try {
-      await removeOrCancelOrder(orderId, { hardDelete: false });
+      const res = await removeOrCancelOrder(orderId, { hardDelete: false });
+      if (res && res.success === false) {
+        return { success: false, error: res.error || '伺服器拒絕刪除 (Server rejected deletion)' };
+      }
       return { success: true };
-    } catch (err) {
+    } catch (err: any) {
       console.error('[handleDeleteOrder] Failed to remove/cancel order:', err);
-      return { success: false };
+      return { success: false, error: err?.message || '刪除訂單失敗 (Failed to delete order)' };
     }
   };
 
