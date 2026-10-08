@@ -315,6 +315,7 @@ export const ManagerMenuTab: React.FC<ManagerMenuTabProps> = ({
                 <th scope="col" className="p-3 border-r border-white/10">菜品分類 (Category)</th>
                 <th scope="col" className="p-3 border-r border-white/10">品名 (Dish Name)</th>
                 <th scope="col" className="p-3 border-r border-white/10 text-right">定價 (Price)</th>
+                <th scope="col" className="p-3 border-r border-white/10 text-center">庫存數量 (Inventory Count)</th>
                 <th scope="col" className="p-3 border-r border-white/10 text-center">可售狀態 (Stock Status)</th>
                 <th scope="col" className="p-3 border-r border-white/10">附加規格 (Options)</th>
                 <th scope="col" className="p-3 text-center">後端控制 (Operations)</th>
@@ -410,6 +411,25 @@ export const ManagerMenuTab: React.FC<ManagerMenuTabProps> = ({
                     {/* 定價 */}
                     <td className="p-2.5 border-r border-white/10 text-right font-mono font-bold text-white">
                       NT$ {item.price}
+                    </td>
+
+                    {/* 庫存數量 */}
+                    <td className="p-2.5 border-r border-white/10 text-center font-mono">
+                      {!item.trackInventory ? (
+                        <span className="text-zinc-500 text-xs font-sans">-- (無限制)</span>
+                      ) : (item.inventoryCount ?? 0) < 0 ? (
+                        <span className="text-rose-400 bg-rose-500/15 px-2 py-0.5 rounded font-bold text-xs inline-block">
+                          {item.inventoryCount} (低於庫存)
+                        </span>
+                      ) : (item.inventoryCount ?? 0) === 0 ? (
+                        <span className="text-amber-400 font-semibold text-xs inline-block">
+                          0 份 (已售罄)
+                        </span>
+                      ) : (
+                        <span className="text-emerald-400 font-semibold text-xs inline-block">
+                          {item.inventoryCount} 份
+                        </span>
+                      )}
                     </td>
                     
                     {/* 可售狀態 */}

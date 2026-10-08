@@ -27,6 +27,11 @@ service cloud.firestore {
       allow write: if isAuthenticated();
     }
 
+    match /dishes/{id} {
+      allow read: if true;
+      allow write: if isAuthenticated() && (request.auth.token.role == 'manager' || isStaffOrAdmin());
+    }
+
     match /categories/{id} {
       allow read: if true;
       allow write: if false;

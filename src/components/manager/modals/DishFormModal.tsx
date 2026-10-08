@@ -211,6 +211,8 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
   const [isLocalPreviewOnly, setIsLocalPreviewOnly] = useState(false);
   const [isNotSpicy, setIsNotSpicy] = useState(false);
   const [isTakeoutAvailable, setIsTakeoutAvailable] = useState(false);
+  const [trackInventory, setTrackInventory] = useState(false);
+  const [inventoryCount, setInventoryCount] = useState<number>(0);
   const [customAddOns, setCustomAddOns] = useState<any[]>([]);
   const [itemRecipe, setItemRecipe] = useState<{ ingredientId: string; amount: number }[]>([]);
   const [newRecipeIngId, setNewRecipeIngId] = useState('');
@@ -231,6 +233,8 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
         setItemAvifThumbnailUrl(editingItem.avifThumbnailUrl || '');
         setIsNotSpicy(editingItem.isNotSpicy || false);
         setIsTakeoutAvailable(editingItem.isTakeoutAvailable || false);
+        setTrackInventory(editingItem.trackInventory || false);
+        setInventoryCount(editingItem.inventoryCount ?? 0);
         setCustomAddOns(editingItem.customAddOns || []);
         setItemRecipe(editingItem.recipe || []);
         setIsDirty(false);
@@ -245,6 +249,8 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
         setItemAvifThumbnailUrl('');
         setIsNotSpicy(false);
         setIsTakeoutAvailable(false);
+        setTrackInventory(false);
+        setInventoryCount(0);
         setCustomAddOns([]);
         setItemRecipe([]);
       }
@@ -316,6 +322,8 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
         avifThumbnailUrl: itemAvifThumbnailUrl,
         isNotSpicy,
         isTakeoutAvailable,
+        trackInventory,
+        inventoryCount: trackInventory ? Number(inventoryCount || 0) : undefined,
         customAddOns,
         recipe: itemRecipe
       });
@@ -878,6 +886,47 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
                 <div className="flex items-center space-x-2">
                   <input type="checkbox" id="checkbox-is-takeout-available" checked={isTakeoutAvailable} onChange={(e) => setIsTakeoutAvailable(e.target.checked)} className="w-3.5 h-3.5 outline-none rounded bg-[#1e1e1e] border-white/10 text-emerald-500 focus:ring-0 active:scale-95 transition" />
                   <label htmlFor="checkbox-is-takeout-available" className="text-zinc-300 font-bold cursor-pointer select-none text-emerald-400">✅ 此餐品【可供外帶】(勾選後在外帶模式中可供點購)</label>
+                </div>
+
+                {/* Inventory Control Group */}
+                <div className="mt-2 p-3 bg-white/5 border border-white/10 rounded-lg">
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      id="checkbox-track-inventory"
+                      checked={trackInventory}
+                      onChange={(e) => {
+                        setTrackInventory(e.target.checked);
+                        if (e.target.checked && (inventoryCount === undefined || inventoryCount === null)) {
+                          setInventoryCount(0);
+                        }
+                      }}
+                      className="w-3.5 h-3.5 outline-none rounded bg-[#1e1e1e] border-white/10 text-amber-500 focus:ring-0 active:scale-95 transition cursor-pointer"
+                    />
+                    <span className="font-semibold text-sm text-zinc-200">
+                      對齊【餐點數量】(確認訂單後自動扣除，數量 ≤ 0 時自動切換為已結清)
+                    </span>
+                  </label>
+                  {trackInventory && (
+                    <div className="mt-2.5 ml-6 flex items-center gap-2.5">
+                      <span className="text-xs text-zinc-300">餐點數量 (支援負數):</span>
+                      <input
+                        type="number"
+                        step="1"
+                        id="input-inventory-count"
+                        value={inventoryCount ?? 0}
+                        onChange={(e) => setInventoryCount(parseInt(e.target.value, 10) || 0)}
+                        className={`w-24 px-2 py-1 rounded bg-[#1a1a1a] text-xs font-mono border outline-none ${
+                          (inventoryCount ?? 0) < 0
+                            ? 'border-rose-500 text-rose-400 font-bold'
+                            : 'border-zinc-700 text-white'
+                        }`}
+                      />
+                      {(inventoryCount ?? 0) < 0 && (
+                        <span className="text-rose-400 text-xs font-medium">⚠️ 目前低於庫存</span>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 

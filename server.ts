@@ -1753,7 +1753,7 @@ app.get('/api/menu', (_req, res) => {
 
 // Create live menu item
 app.post('/api/menu', (req, res) => {
-  const { category, name, price, image, thumbnailUrl, avifUrl, avifThumbnailUrl, description, available, isSetMeal, requiredSaucesOption, hasNoodlesOption, hasCoconutsMilkOption, containsBeef, containsPork, containsSeafood, isNotSpicy, isTakeoutAvailable, customAddOns, recipe } = req.body;
+  const { category, name, price, image, thumbnailUrl, avifUrl, avifThumbnailUrl, description, available, isSetMeal, requiredSaucesOption, hasNoodlesOption, hasCoconutsMilkOption, containsBeef, containsPork, containsSeafood, isNotSpicy, isTakeoutAvailable, customAddOns, recipe, trackInventory, inventoryCount } = req.body;
   
   if (!category || !name || !price) {
     return res.status(400).json({ error: 'Missing required fields (category, name, price)' });
@@ -1782,6 +1782,8 @@ app.post('/api/menu', (req, res) => {
     containsSeafood: !!containsSeafood,
     isNotSpicy: !!isNotSpicy,
     isTakeoutAvailable: isTakeoutAvailable !== undefined ? !!isTakeoutAvailable : true,
+    trackInventory: trackInventory !== undefined ? !!trackInventory : false,
+    inventoryCount: trackInventory ? Number(inventoryCount || 0) : undefined,
     customAddOns: Array.isArray(customAddOns) ? customAddOns : [],
     recipe: Array.isArray(recipe) ? recipe : undefined,
     orderIndex: liveMenu.length
@@ -1822,7 +1824,7 @@ app.put('/api/menu/reorder', (req, res) => {
 // Update live menu item
 app.put('/api/menu/:id', (req, res) => {
   const { id } = req.params;
-  const { category, name, price, image, thumbnailUrl, avifUrl, avifThumbnailUrl, description, available, soldOutType, soldOutDate, isSetMeal, requiredSaucesOption, hasNoodlesOption, hasCoconutsMilkOption, containsBeef, containsPork, containsSeafood, isNotSpicy, isTakeoutAvailable, customAddOns, recipe } = req.body;
+  const { category, name, price, image, thumbnailUrl, avifUrl, avifThumbnailUrl, description, available, soldOutType, soldOutDate, isSetMeal, requiredSaucesOption, hasNoodlesOption, hasCoconutsMilkOption, containsBeef, containsPork, containsSeafood, isNotSpicy, isTakeoutAvailable, customAddOns, recipe, trackInventory, inventoryCount } = req.body;
   
   const itemIndex = liveMenu.findIndex(m => m.id === id);
   if (itemIndex > -1) {
@@ -1863,6 +1865,8 @@ app.put('/api/menu/:id', (req, res) => {
       containsSeafood: containsSeafood !== undefined ? !!containsSeafood : liveMenu[itemIndex].containsSeafood,
       isNotSpicy: isNotSpicy !== undefined ? !!isNotSpicy : liveMenu[itemIndex].isNotSpicy,
       isTakeoutAvailable: isTakeoutAvailable !== undefined ? !!isTakeoutAvailable : (liveMenu[itemIndex].isTakeoutAvailable !== false),
+      trackInventory: trackInventory !== undefined ? !!trackInventory : liveMenu[itemIndex].trackInventory,
+      inventoryCount: inventoryCount !== undefined ? Number(inventoryCount) : liveMenu[itemIndex].inventoryCount,
       customAddOns: Array.isArray(customAddOns) ? customAddOns : (liveMenu[itemIndex].customAddOns || []),
       recipe: Array.isArray(recipe) ? recipe : liveMenu[itemIndex].recipe
     };

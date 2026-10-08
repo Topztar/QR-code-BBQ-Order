@@ -21,6 +21,75 @@ export interface RouteContext {
   sendErrorResponse: (res: express.Response, error: any, ctx?: string) => void;
 }
 
+/**
+ * 📦 confirmOrderTransaction — 原子扣除餐點庫存事務 (Atomic Dish Inventory Deduction)
+ * 嚴格遵循 Firestore 事務「所有讀取先於寫入」規範，支援負數庫存並在 ≤ 0 時自動切換為結清/售罄。
+ */
+export async function confirmOrderTransaction(
+  db: Firestore,
+  orderId: string,
+  items?: Array<{ dishId: string; quantity: number }>
+) {
+  const orderRef = db.collection('orders').doc(orderId);
+  return db.runTransaction(async (transaction) => {
+    // 1. All reads must occur before writes in Firestore transactions
+    const orderDoc = await transaction.get(orderRef);
+    if (!orderDoc.exists) throw new Error(`Order ${orderId} not found`);
+    const orderData = orderDoc.data();
+
+    const itemsList: Array<{ dishId: string; quantity: number }> = (items && items.length > 0)
+      ? items
+      : (orderData?.items || []).map((it: any) => ({
+          dishId: it.menuItemId || it.id,
+          quantity: Number(it.qty) || 1
+        }));
+
+    const qtyMap: Record<string, number> = {};
+    itemsList.forEach((it) => {
+      if (it.dishId) {
+        qtyMap[it.dishId] = (qtyMap[it.dishId] || 0) + (Number(it.quantity) || 1);
+      }
+    });
+
+    const uniqueDishIds = Object.keys(qtyMap);
+    const dishRefs = uniqueDishIds.map((id) => db.collection('menu').doc(id));
+    const dishDocs = dishRefs.length > 0 ? await Promise.all(dishRefs.map((ref) => transaction.get(ref))) : [];
+
+    // 2. Compute deductions
+    for (const doc of dishDocs) {
+      if (!doc.exists) continue;
+      const dish = doc.data() as any;
+
+      // Skip items without inventory tracking (Unchecked Dish Isolation)
+      if (!dish?.trackInventory) continue;
+
+      const currentStock = dish.inventoryCount ?? 0;
+      const updatedStock = currentStock - (qtyMap[doc.id] || 0); // Negative balances allowed
+
+      const updates: any = {
+        inventoryCount: updatedStock
+      };
+
+      // Automatically switch to SOLD_OUT when balance is <= 0
+      if (updatedStock <= 0) {
+        updates.available = false;
+        updates.soldOutType = 'permanent';
+        updates.soldOutAt = new Date().toISOString();
+        updates.stockStatus = 'SOLD_OUT';
+      }
+
+      transaction.update(doc.ref, updates);
+    }
+
+    // 3. Mark the order as confirmed
+    transaction.update(orderRef, {
+      status: 'confirmed',
+      confirmedAt: FieldValue.serverTimestamp(),
+      inventoryDeducted: true
+    });
+  });
+}
+
 export function registerOrdersRoutes(app: express.Application, ctx: RouteContext) {
   const { db, requireStaffAuth, requireAppCheck, createRateLimiter, sendErrorResponse } = ctx;
   const getCachedSettings = createGetCachedSettings(db);
@@ -489,8 +558,56 @@ put('/orders/:id/status', requireStaffAuth, async (req, res) => {
         console.warn(`[Backend] Rejected status update to ${status} for order ${id} because it's already ${data?.status}`);
         throw new Error(`TRANSITION_REJECTED:訂單已結帳或已取消 (${data?.status})，不可變更為 ${status}`);
       }
+
+      const shouldDeductInventory = status === 'confirmed' && data?.status !== 'confirmed' && !data?.inventoryDeducted;
+      let dishDocs: FirebaseFirestore.DocumentSnapshot[] = [];
+      const itemQuantities: Record<string, number> = {};
+
+      if (shouldDeductInventory && Array.isArray(data?.items) && data.items.length > 0) {
+        data.items.forEach((it: any) => {
+          const dishId = it.menuItemId || it.id;
+          if (dishId) {
+            itemQuantities[dishId] = (itemQuantities[dishId] || 0) + (Number(it.qty) || 1);
+          }
+        });
+        const uniqueDishIds = Object.keys(itemQuantities);
+        if (uniqueDishIds.length > 0) {
+          const dishRefs = uniqueDishIds.map((dId) => db.collection('menu').doc(dId));
+          dishDocs = await Promise.all(dishRefs.map((ref) => t.get(ref)));
+        }
+      }
+
+      // Writes must occur after all reads in Firestore transaction
+      if (dishDocs.length > 0) {
+        for (const dishDoc of dishDocs) {
+          if (!dishDoc.exists) continue;
+          const dish = dishDoc.data();
+          if (!dish?.trackInventory) continue; // Unchecked Dish Isolation
+
+          const currentStock = dish.inventoryCount ?? 0;
+          const updatedStock = currentStock - (itemQuantities[dishDoc.id] || 0);
+
+          const updates: any = {
+            inventoryCount: updatedStock
+          };
+
+          if (updatedStock <= 0) {
+            updates.available = false;
+            updates.soldOutType = 'permanent';
+            updates.soldOutAt = new Date().toISOString();
+            updates.stockStatus = 'SOLD_OUT';
+          }
+
+          t.update(dishDoc.ref, updates);
+        }
+      }
       
-      t.update(orderRef, { status });
+      const orderUpdates: any = { status };
+      if (shouldDeductInventory) {
+        orderUpdates.inventoryDeducted = true;
+        orderUpdates.confirmedAt = FieldValue.serverTimestamp();
+      }
+      t.update(orderRef, orderUpdates);
     });
     res.json({ id, status });
   } catch (error: any) {

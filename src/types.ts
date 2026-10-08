@@ -45,9 +45,13 @@ export interface MenuItem {
   soldOutAt?: string | null;
   soldOutType?: SoldOutType;
   soldOutDate?: string; // YYYY-MM-DD
+  trackInventory?: boolean; // Enables inventory management (if unchecked, unrestricted)
+  inventoryCount?: number; // Current inventory count (allows negative values; defaults to 0)
   updatedAt?: any;
   showOnCustomerPage?: boolean;
 }
+
+export type Dish = MenuItem;
 
 
 export interface OrderItem {
@@ -123,6 +127,7 @@ export interface Order {
   source?: 'google_business' | 'direct' | string;
   utm_medium?: string;
   notificationSent?: boolean;
+  inventoryDeducted?: boolean;
   version?: number;
   updatedAt?: string;
   lastUpdatedBy?: OrderItemModifier;

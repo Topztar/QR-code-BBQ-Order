@@ -467,6 +467,25 @@ ${customerDetails}
       });
     }
 
+    // Inventory deduction for confirmed orders
+    if (status === 'confirmed' && order.status !== 'confirmed' && !(order as any).inventoryDeducted) {
+      const liveMenu = getLiveMenu();
+      (order.items || []).forEach(it => {
+        const menuItem = liveMenu.find(m => m.id === it.menuItemId);
+        if (menuItem && menuItem.trackInventory) {
+          const currentStock = menuItem.inventoryCount ?? 0;
+          const updatedStock = currentStock - (Number(it.qty) || 1);
+          menuItem.inventoryCount = updatedStock;
+          if (updatedStock <= 0) {
+            menuItem.available = false;
+            menuItem.soldOutType = 'permanent';
+            menuItem.soldOutAt = new Date().toISOString();
+          }
+        }
+      });
+      (order as any).inventoryDeducted = true;
+    }
+
     order.status = status;
 
     // Interlock status: if order starts cooking (preparing), automatically set table status to in_use

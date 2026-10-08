@@ -1,11 +1,60 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.confirmOrderTransaction = confirmOrderTransaction;
 exports.registerOrdersRoutes = registerOrdersRoutes;
 const firestore_1 = require("firebase-admin/firestore");
 const validators_1 = require("../validators");
 const helpers_1 = require("../helpers");
 const shared_1 = require("@sabay/shared");
 const auth_1 = require("../auth");
+async function confirmOrderTransaction(db, orderId, items) {
+    const orderRef = db.collection('orders').doc(orderId);
+    return db.runTransaction(async (transaction) => {
+        const orderDoc = await transaction.get(orderRef);
+        if (!orderDoc.exists)
+            throw new Error(`Order ${orderId} not found`);
+        const orderData = orderDoc.data();
+        const itemsList = (items && items.length > 0)
+            ? items
+            : (orderData?.items || []).map((it) => ({
+                dishId: it.menuItemId || it.id,
+                quantity: Number(it.qty) || 1
+            }));
+        const qtyMap = {};
+        itemsList.forEach((it) => {
+            if (it.dishId) {
+                qtyMap[it.dishId] = (qtyMap[it.dishId] || 0) + (Number(it.quantity) || 1);
+            }
+        });
+        const uniqueDishIds = Object.keys(qtyMap);
+        const dishRefs = uniqueDishIds.map((id) => db.collection('menu').doc(id));
+        const dishDocs = dishRefs.length > 0 ? await Promise.all(dishRefs.map((ref) => transaction.get(ref))) : [];
+        for (const doc of dishDocs) {
+            if (!doc.exists)
+                continue;
+            const dish = doc.data();
+            if (!dish?.trackInventory)
+                continue;
+            const currentStock = dish.inventoryCount ?? 0;
+            const updatedStock = currentStock - (qtyMap[doc.id] || 0);
+            const updates = {
+                inventoryCount: updatedStock
+            };
+            if (updatedStock <= 0) {
+                updates.available = false;
+                updates.soldOutType = 'permanent';
+                updates.soldOutAt = new Date().toISOString();
+                updates.stockStatus = 'SOLD_OUT';
+            }
+            transaction.update(doc.ref, updates);
+        }
+        transaction.update(orderRef, {
+            status: 'confirmed',
+            confirmedAt: firestore_1.FieldValue.serverTimestamp(),
+            inventoryDeducted: true
+        });
+    });
+}
 function registerOrdersRoutes(app, ctx) {
     const { db, requireStaffAuth, requireAppCheck, createRateLimiter, sendErrorResponse } = ctx;
     const getCachedSettings = (0, helpers_1.createGetCachedSettings)(db);
@@ -397,7 +446,49 @@ function registerOrdersRoutes(app, ctx) {
                     console.warn(`[Backend] Rejected status update to ${status} for order ${id} because it's already ${data?.status}`);
                     throw new Error(`TRANSITION_REJECTED:訂單已結帳或已取消 (${data?.status})，不可變更為 ${status}`);
                 }
-                t.update(orderRef, { status });
+                const shouldDeductInventory = status === 'confirmed' && data?.status !== 'confirmed' && !data?.inventoryDeducted;
+                let dishDocs = [];
+                const itemQuantities = {};
+                if (shouldDeductInventory && Array.isArray(data?.items) && data.items.length > 0) {
+                    data.items.forEach((it) => {
+                        const dishId = it.menuItemId || it.id;
+                        if (dishId) {
+                            itemQuantities[dishId] = (itemQuantities[dishId] || 0) + (Number(it.qty) || 1);
+                        }
+                    });
+                    const uniqueDishIds = Object.keys(itemQuantities);
+                    if (uniqueDishIds.length > 0) {
+                        const dishRefs = uniqueDishIds.map((dId) => db.collection('menu').doc(dId));
+                        dishDocs = await Promise.all(dishRefs.map((ref) => t.get(ref)));
+                    }
+                }
+                if (dishDocs.length > 0) {
+                    for (const dishDoc of dishDocs) {
+                        if (!dishDoc.exists)
+                            continue;
+                        const dish = dishDoc.data();
+                        if (!dish?.trackInventory)
+                            continue;
+                        const currentStock = dish.inventoryCount ?? 0;
+                        const updatedStock = currentStock - (itemQuantities[dishDoc.id] || 0);
+                        const updates = {
+                            inventoryCount: updatedStock
+                        };
+                        if (updatedStock <= 0) {
+                            updates.available = false;
+                            updates.soldOutType = 'permanent';
+                            updates.soldOutAt = new Date().toISOString();
+                            updates.stockStatus = 'SOLD_OUT';
+                        }
+                        t.update(dishDoc.ref, updates);
+                    }
+                }
+                const orderUpdates = { status };
+                if (shouldDeductInventory) {
+                    orderUpdates.inventoryDeducted = true;
+                    orderUpdates.confirmedAt = firestore_1.FieldValue.serverTimestamp();
+                }
+                t.update(orderRef, orderUpdates);
             });
             res.json({ id, status });
         }
