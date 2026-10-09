@@ -104,6 +104,7 @@ export interface Order {
   customerAvatar: string;
   paymentMethod: PaymentMethod;
   isMember: boolean;
+  isDeleted?: boolean;
   isPaid?: boolean;
   guestCount?: number;
   refundLogs?: RefundLog[];

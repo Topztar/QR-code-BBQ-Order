@@ -1705,7 +1705,8 @@ function toPublicMenuItem(m: MenuItem) {
     customAddOns: m.customAddOns,
     recipe: m.recipe,
     orderIndex: m.orderIndex,
-    isTakeoutAvailable: m.isTakeoutAvailable
+    isTakeoutAvailable: m.isTakeoutAvailable,
+    showOnCustomerPage: m.showOnCustomerPage
   };
 }
 

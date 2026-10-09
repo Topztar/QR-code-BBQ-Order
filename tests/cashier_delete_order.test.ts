@@ -5,7 +5,7 @@ import { removeOrCancelOrder } from '../src/lib/orders';
 
 describe('Cashier Order Deletion Integration & Anti-Regression Suite', () => {
   it('Cloud Functions DELETE /orders/:id should successfully soft-delete via Admin SDK instead of returning 403', async () => {
-    const app = express();
+    const app = express() as any;
     app.use(express.json());
 
     let updatedDocData: any = null;

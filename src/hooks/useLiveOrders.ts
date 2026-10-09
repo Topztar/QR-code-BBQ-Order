@@ -828,7 +828,7 @@ export function useLiveOrders(
       );
       if (remainingUnpaid.length === 0) {
         handleUpdateTableStatus(targetOrder.tableNumber, {
-          status: 'idle',
+          status: 'available',
           preservedFor: '',
           mergedWith: ''
         }).catch(() => {});
