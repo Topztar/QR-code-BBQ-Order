@@ -1,5 +1,5 @@
 import express from 'express';
-import { Firestore, Query, FieldValue } from 'firebase-admin/firestore';
+import { Firestore, Query, FieldValue, DocumentReference } from 'firebase-admin/firestore';
 import { Bucket } from '@google-cloud/storage';
 import { validateOrderPayload, validateRatingPayload, validateCheckoutPayload } from '../validators';
 import { isStoreOpenFromData, createGetCachedSettings } from '../helpers';
@@ -334,7 +334,7 @@ post('/orders', requireAppCheck, orderRateLimiter, async (req, res) => {
 
     const savedOrder = await db.runTransaction(async (t) => {
       // 0. Atomic Idempotency Check inside Transaction (prevents TOCTOU race conditions)
-      let idempotencyRef = null;
+      let idempotencyRef: DocumentReference | null = null;
       if (clientOrderId) {
         idempotencyRef = db.collection('_idempotency_keys').doc(clientOrderId);
         const idemSnap = await t.get(idempotencyRef);

@@ -8,7 +8,6 @@ import {
   BellRing,
   AlertTriangle,
   QrCode,
-  Sparkles,
   Check,
   X,
   Coins,

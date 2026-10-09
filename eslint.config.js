@@ -54,5 +54,21 @@ export default [
         }
       ]
     }
+  },
+  {
+    files: ['src/components/customer/**', 'src/components/CustomerOrderView.tsx'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['**/manager/**', '**/kds/**', '**/hardware/**'],
+              message: '[Chunk Isolation] Customer components must not import from manager, kds, or hardware modules to preserve customer bundle isolation.'
+            }
+          ]
+        }
+      ]
+    }
   }
 ];

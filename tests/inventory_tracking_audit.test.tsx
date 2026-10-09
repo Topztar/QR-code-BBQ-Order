@@ -76,7 +76,7 @@ describe('Inventory Tracking & Hallucination Elimination Audit Tests', () => {
           isOpen={true}
           onClose={() => {}}
           editingItem={mockEditingItem}
-          onSave={() => {}}
+          onSave={async () => {}}
           globalRules={mockGlobalRules as any}
           categories={mockCategories}
           ingredients={[]}
@@ -145,16 +145,12 @@ describe('Inventory Tracking & Hallucination Elimination Audit Tests', () => {
         <ManagerMenuTab
           menuItems={mockMenuItems}
           categories={[{ id: 'cat-1', name: { zh: '燒烤' } }]}
-          ingredients={[]}
           currentLang="zh"
-          getLocalizedText={(txt) => (typeof txt === 'object' ? txt?.zh || '' : txt || '')}
-          activeCategory="all"
-          setActiveCategory={() => {}}
-          menuSearchQuery=""
-          setMenuSearchQuery={() => {}}
-          onAddMenuItem={() => {}}
-          onEditMenuItem={() => {}}
-          onDeleteMenuItem={() => {}}
+          triggerAddMenuItemMode={() => {}}
+          triggerEditMenuItemMode={() => {}}
+          triggerAddCatMode={() => {}}
+          triggerEditCatMode={() => {}}
+          onDeleteMenuItem={async () => {}}
           onToggleMenuItemAvailability={() => {}}
           onReorderMenuItems={async () => true}
         />
