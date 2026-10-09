@@ -815,15 +815,38 @@ export function useLiveOrders(
     const description = `?�除 ?�� 訂單 #${orderId.replace('offline_temp_', '?��?')}`;
     const isOnline = getIsOnline();
 
-    if (!isOnline || orderId.startsWith('offline_temp_')) {
-      const description = `Delete offline order #${orderId.replace('offline_temp_', '')}`;
-      addRequestToQueue(`/api/orders/${orderId}`, 'DELETE', {}, description);
-      return { success: true };
-    }
-
+    // 1. Mark as deleted in FIFO ref to prevent re-addition on polling/snapshot
+    deletedOrderIdsRef.current.add(orderId);
     removeOrderRequestsFromQueue(orderId);
     recentStatusTransitionsRef.current.delete(orderId);
 
+    // 2. Check table release if this was the last unpaid order on the table
+    const targetOrder = ordersRef.current.find(o => o.id === orderId);
+    if (targetOrder?.tableNumber && !targetOrder.tableNumber.includes('外帶') && targetOrder.tableNumber.toLowerCase() !== 'takeout') {
+      const remainingUnpaid = ordersRef.current.filter(
+        o => o.id !== orderId && o.tableNumber === targetOrder.tableNumber && !o.isPaid && o.status !== 'cancelled' && !o.isDeleted
+      );
+      if (remainingUnpaid.length === 0) {
+        handleUpdateTableStatus(targetOrder.tableNumber, {
+          status: 'idle',
+          preservedFor: '',
+          mergedWith: ''
+        }).catch(() => {});
+      }
+    }
+
+    // 3. Optimistically remove from state and broadcast to tabs
+    setOrders(prev => prev.filter(o => o.id !== orderId));
+    broadcastOrderEvent({ type: 'ORDER_DELETED', orderId });
+
+    // 4. Handle offline queue if network is disconnected or temp offline order
+    if (!isOnline || orderId.startsWith('offline_temp_')) {
+      const offlineDesc = `Delete offline order #${orderId.replace('offline_temp_', '')}`;
+      addRequestToQueue(`/api/orders/${orderId}`, 'DELETE', {}, offlineDesc);
+      return { success: true };
+    }
+
+    // 5. Execute removal/cancellation via API & Firestore
     try {
       const res = await removeOrCancelOrder(orderId, { hardDelete: false });
       if (res && res.success === false) {
@@ -832,6 +855,7 @@ export function useLiveOrders(
       return { success: true };
     } catch (err: any) {
       console.error('[handleDeleteOrder] Failed to remove/cancel order:', err);
+      addRequestToQueue(`/api/orders/${orderId}`, 'DELETE', {}, `刪除 訂單 #${orderId}`);
       return { success: false, error: err?.message || '刪除訂單失敗 (Failed to delete order)' };
     }
   };

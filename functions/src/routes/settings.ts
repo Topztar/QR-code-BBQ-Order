@@ -382,7 +382,7 @@ post('/admin/clear-test-data', requireStaffAuth, async (req, res) => {
     let storedHash = credsData.staffPinHash;
     if (!storedHash) {
       const systemDoc = await db.collection('settings').doc('system').get();
-      const legacyPin = systemDoc.data()?.liveStaffPin || '952788';
+      const legacyPin = systemDoc.data()?.liveStaffPin || '070718';
       storedHash = hashPin(legacyPin);
       await credsRef.set({ staffPinHash: storedHash }, { merge: true });
     }
@@ -418,7 +418,7 @@ post('/admin/clear-test-data', requireStaffAuth, async (req, res) => {
     });
     await batchTables.commit();
 
-    // 5. Reset takeout sequence and reset staff pin hash to default 952788
+    // 5. Reset takeout sequence and reset staff pin hash to default 070718
     const systemRef = db.collection('settings').doc('system');
     await systemRef.set({ 
       liveTakeoutSeq: 0, 
@@ -428,7 +428,7 @@ post('/admin/clear-test-data', requireStaffAuth, async (req, res) => {
     const pinResetAllowed = process.env.ALLOW_PIN_RESET === 'true';
     if (pinResetAllowed) {
       await credsRef.set({
-        staffPinHash: hashPin('952788'),
+        staffPinHash: hashPin('070718'),
         updatedAt: new Date().toISOString(),
         failedAttempts: 0,
         lockedUntil: null
@@ -443,7 +443,7 @@ post('/admin/clear-test-data', requireStaffAuth, async (req, res) => {
     
     invalidateAuthCache();
 
-    res.json({ success: true, message: pinResetAllowed ? '已成功清除系統內所有測試單據、顧客預約、桌位佔用，並將登入密碼重設為預設值 952788！' : '已成功清除系統內所有測試單據、顧客預約、桌位佔用！(安全密碼維持不變)' });
+    res.json({ success: true, message: pinResetAllowed ? '已成功清除系統內所有測試單據、顧客預約、桌位佔用，並將登入密碼重設為預設值 070718！' : '已成功清除系統內所有測試單據、顧客預約、桌位佔用！(安全密碼維持不變)' });
   } catch (error) {
     console.error('Error clearing test data:', error);
     sendErrorResponse(res, error);

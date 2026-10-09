@@ -1,6 +1,7 @@
 // src/lib/orders.ts
 import { db } from './firebase';
-import { doc, updateDoc, deleteDoc, getDoc } from 'firebase/firestore';
+import { doc, deleteDoc, setDoc } from 'firebase/firestore';
+import { apiFetch } from './api';
 
 export interface DeleteOrderOptions {
   hardDelete?: boolean; // Default to safe soft delete
@@ -17,26 +18,61 @@ export const removeOrCancelOrder = async (
     return { success: false, error: 'INVALID_DOCUMENT_ID' };
   }
 
-  const orderRef = doc(db, 'orders', documentId);
-
+  // 1. First attempt deletion via backend API (works across local dev, cloud functions, and tests)
   try {
-    const snap = await getDoc(orderRef);
-    if (!snap.exists()) {
-      throw new Error(`Order document ${documentId} does not exist in Firestore.`);
-    }
+    const res = await apiFetch(`/api/orders/${documentId}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        hardDelete: options.hardDelete || false,
+        reason: options.reason || 'Cashier manual deletion',
+        operatorId: options.operatorId || 'cashier_terminal'
+      })
+    });
 
+    if (res.ok) {
+      // Backend deletion succeeded!
+      // Also sync local Firestore cache if available, but don't fail if offline
+      try {
+        const orderRef = doc(db, 'orders', documentId);
+        if (options.hardDelete) {
+          await deleteDoc(orderRef).catch(() => {});
+        } else {
+          await setDoc(orderRef, {
+            status: 'cancelled',
+            isDeleted: true,
+            deletedAt: new Date().toISOString(),
+            deletionReason: options.reason || 'Cashier manual deletion',
+            cancelledBy: options.operatorId || 'cashier_terminal'
+          }, { merge: true }).catch(() => {});
+        }
+      } catch (_) {}
+
+      return { success: true };
+    } else {
+      const errData = await res.json().catch(() => ({}));
+      console.warn(`[removeOrCancelOrder] API returned status ${res.status}:`, errData);
+    }
+  } catch (apiErr: any) {
+    console.warn('[removeOrCancelOrder] API delete fetch failed, trying Firestore fallback:', apiErr?.message);
+  }
+
+  // 2. Direct Firestore fallback (e.g. if API is offline or pure Firestore setup)
+  try {
+    const orderRef = doc(db, 'orders', documentId);
     if (options.hardDelete) {
       await deleteDoc(orderRef);
     } else {
-      await updateDoc(orderRef, {
+      await setDoc(orderRef, {
         status: 'cancelled',
         isDeleted: true,
         deletedAt: new Date().toISOString(),
         deletionReason: options.reason || 'Cashier manual deletion',
         cancelledBy: options.operatorId || 'cashier_terminal'
-      });
+      }, { merge: true });
     }
-
     return { success: true };
   } catch (err: any) {
     console.error('[Firestore Rejection] Deletion rejected by server, causing frontend rollback:', err);

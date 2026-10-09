@@ -190,7 +190,7 @@ const defaultCategories = [...liveCategories];
 
 import 'dotenv/config';
 
-let liveStaffPin = process.env.DEFAULT_STAFF_PIN || '000000';
+let liveStaffPin = process.env.DEFAULT_STAFF_PIN || '070718';
 let liveSystemVersion = '1.0.0';
 
 let liveTables: TableConfig[] = [
@@ -1228,8 +1228,8 @@ function loadStateFromDisk() {
         if (parsed.liveStaffPin !== undefined && parsed.liveStaffPin !== null) {
           liveStaffPin = String(parsed.liveStaffPin);
           if (!/^\d{6}$/.test(liveStaffPin)) {
-            console.log(`⚠️ Legacy PIN detected (${liveStaffPin}), migrating to secure default '888888'`);
-            liveStaffPin = '888888';
+            console.log(`⚠️ Legacy PIN detected (${liveStaffPin}), migrating to secure default '070718'`);
+            liveStaffPin = '070718';
           }
         }
         if (parsed.livePrinterIp) {
@@ -1494,7 +1494,7 @@ app.post('/api/images/upload', async (req, res) => {
     return res.status(401).json({ error: '未授權存取：缺少有效安全憑證 (Unauthorized)' });
   }
   const token = authHeader.split('Bearer ')[1]?.trim();
-  if (!token || (token !== 'valid-staff-session' && !token.startsWith('st_'))) {
+  if (!token || !token.startsWith('st_')) {
     return res.status(401).json({ error: '安全憑證無效或已過期' });
   }
 
@@ -2119,7 +2119,7 @@ app.post('/api/settings/version', (req, res) => {
       return res.status(401).json({ error: '未授權存取：憑證格式不正確' });
     }
     const token = authHeader.split('Bearer ')[1]?.trim();
-    if (token && token !== 'valid-staff-session' && !token.startsWith('st_') && token !== 'authenticated') {
+    if (token && !token.startsWith('st_') && token !== 'authenticated') {
       return res.status(403).json({ error: '安全憑證無效或已過期，請確認管理員權限' });
     }
   }
@@ -2554,7 +2554,7 @@ app.get('/api/reservations', (req, res) => {
     return res.status(401).json({ error: '未授權存取：憑證格式不正確' });
   }
   const token = authHeader.split('Bearer ')[1]?.trim();
-  if (!token || (token !== 'valid-staff-session' && !token.startsWith('st_') && token !== 'authenticated')) {
+  if (!token || (!token.startsWith('st_') && token !== 'authenticated')) {
     return res.status(403).json({ error: '安全憑證無效或已過期，請確認管理員權限' });
   }
   cleanupUnlistedReservationData();
@@ -2763,7 +2763,7 @@ app.get('/api/staff/verify', (req, res) => {
     return res.status(401).json({ valid: false, error: '未授權存取：缺少有效安全憑證 (Unauthorized)' });
   }
   const token = authHeader.split('Bearer ')[1]?.trim();
-  if (token && (token === 'valid-staff-session' || token.startsWith('st_'))) {
+  if (token && token.startsWith('st_')) {
     return res.json({ valid: true });
   }
   return res.status(401).json({ valid: false, error: '安全憑證無效或已過期' });
@@ -2848,7 +2848,7 @@ app.put('/api/staff/pin', handleStaffPinUpdate);
 // Admin Sanitize Test Data Endpoint (Parity with Cloud Functions)
 app.post(['/api/admin/clear-test-data', '/admin/clear-test-data'], (req, res) => {
   const token = req.headers.authorization?.split('Bearer ')[1];
-  if (!token || (token !== 'valid-staff-session' && !token.startsWith('st_'))) {
+  if (!token || !token.startsWith('st_')) {
     return res.status(401).json({ error: '安全憑證無效或已過期' });
   }
 
@@ -2889,7 +2889,7 @@ app.post(['/api/admin/clear-test-data', '/admin/clear-test-data'], (req, res) =>
   liveTables = liveTables.map(t => ({ ...t, status: 'available', preservedFor: '' }));
   liveTakeoutSeq = 0;
   if (process.env.RESET_PIN_ON_CLEAR === 'true') {
-    liveStaffPin = '952788';
+    liveStaffPin = '070718';
   }
 
   saveStateToDisk();

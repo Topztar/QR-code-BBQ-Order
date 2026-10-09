@@ -56300,7 +56300,34 @@ var require_orders = __commonJS({
         }
       });
       del("/orders/:id", requireStaffAuth, async (req, res) => {
-        return res.status(403).json({ error: "\u5B89\u5168\u9650\u5236\uFF1A\u7981\u6B62\u5BE6\u9AD4\u522A\u9664\u8A02\u55AE\uFF0C\u8ACB\u4F7F\u7528\u4F5C\u5EE2/\u8EDF\u522A\u9664\u6216\u900F\u904E Admin SDK \u8655\u7406" });
+        try {
+          const { id } = req.params;
+          if (!id || typeof id !== "string") {
+            return res.status(400).json({ error: "Missing or invalid order ID" });
+          }
+          const orderRef = db2.collection("orders").doc(id);
+          const snap = await orderRef.get();
+          if (!snap.exists) {
+            return res.status(404).json({ error: "Order not found" });
+          }
+          const reason = req.body?.reason || "Cashier manual deletion";
+          const operatorId = req.staffUser?.uid || req.body?.operatorId || "cashier_terminal";
+          await orderRef.update({
+            status: "cancelled",
+            isDeleted: true,
+            deletedAt: firestore_12.FieldValue.serverTimestamp(),
+            deletionReason: reason,
+            cancelledBy: operatorId
+          });
+          return res.json({
+            success: true,
+            message: `Successfully cancelled/deleted order #${id}`,
+            orderId: id
+          });
+        } catch (error) {
+          console.error("[Delete Order Error]", error);
+          return res.status(500).json({ error: error?.message || "\u7121\u6CD5\u522A\u9664\u8A02\u55AE" });
+        }
       });
       post("/orders/bulk-delete", requireStaffAuth, async (req, res) => {
         return res.status(403).json({ error: "\u5B89\u5168\u9650\u5236\uFF1A\u7981\u6B62\u5BE6\u9AD4\u522A\u9664\u8A02\u55AE\uFF0C\u8ACB\u4F7F\u7528\u4F5C\u5EE2/\u8EDF\u522A\u9664\u6216\u900F\u904E Admin SDK \u8655\u7406" });
@@ -56742,7 +56769,7 @@ var require_settings = __commonJS({
           let storedHash = credsData.staffPinHash;
           if (!storedHash) {
             const systemDoc = await db2.collection("settings").doc("system").get();
-            const legacyPin = systemDoc.data()?.liveStaffPin || "952788";
+            const legacyPin = systemDoc.data()?.liveStaffPin || "070718";
             storedHash = (0, auth_12.hashPin)(legacyPin);
             await credsRef.set({ staffPinHash: storedHash }, { merge: true });
           }
@@ -56776,7 +56803,7 @@ var require_settings = __commonJS({
           const pinResetAllowed = process.env.ALLOW_PIN_RESET === "true";
           if (pinResetAllowed) {
             await credsRef.set({
-              staffPinHash: (0, auth_12.hashPin)("952788"),
+              staffPinHash: (0, auth_12.hashPin)("070718"),
               updatedAt: (/* @__PURE__ */ new Date()).toISOString(),
               failedAttempts: 0,
               lockedUntil: null
@@ -56789,7 +56816,7 @@ var require_settings = __commonJS({
             }, { merge: true });
           }
           (0, auth_12.invalidateAuthCache)();
-          res.json({ success: true, message: pinResetAllowed ? "\u5DF2\u6210\u529F\u6E05\u9664\u7CFB\u7D71\u5167\u6240\u6709\u6E2C\u8A66\u55AE\u64DA\u3001\u9867\u5BA2\u9810\u7D04\u3001\u684C\u4F4D\u4F54\u7528\uFF0C\u4E26\u5C07\u767B\u5165\u5BC6\u78BC\u91CD\u8A2D\u70BA\u9810\u8A2D\u503C 952788\uFF01" : "\u5DF2\u6210\u529F\u6E05\u9664\u7CFB\u7D71\u5167\u6240\u6709\u6E2C\u8A66\u55AE\u64DA\u3001\u9867\u5BA2\u9810\u7D04\u3001\u684C\u4F4D\u4F54\u7528\uFF01(\u5B89\u5168\u5BC6\u78BC\u7DAD\u6301\u4E0D\u8B8A)" });
+          res.json({ success: true, message: pinResetAllowed ? "\u5DF2\u6210\u529F\u6E05\u9664\u7CFB\u7D71\u5167\u6240\u6709\u6E2C\u8A66\u55AE\u64DA\u3001\u9867\u5BA2\u9810\u7D04\u3001\u684C\u4F4D\u4F54\u7528\uFF0C\u4E26\u5C07\u767B\u5165\u5BC6\u78BC\u91CD\u8A2D\u70BA\u9810\u8A2D\u503C 070718\uFF01" : "\u5DF2\u6210\u529F\u6E05\u9664\u7CFB\u7D71\u5167\u6240\u6709\u6E2C\u8A66\u55AE\u64DA\u3001\u9867\u5BA2\u9810\u7D04\u3001\u684C\u4F4D\u4F54\u7528\uFF01(\u5B89\u5168\u5BC6\u78BC\u7DAD\u6301\u4E0D\u8B8A)" });
         } catch (error) {
           console.error("Error clearing test data:", error);
           sendErrorResponse2(res, error);
@@ -56967,7 +56994,7 @@ var require_printer = __commonJS({
           let storedHash = credsDoc.data()?.staffPinHash;
           if (!storedHash) {
             const systemDoc = await db2.collection("settings").doc("system").get();
-            const legacyPin = systemDoc.data()?.liveStaffPin || "000000";
+            const legacyPin = systemDoc.data()?.liveStaffPin || "070718";
             storedHash = (0, auth_12.hashPin)(legacyPin);
           }
           if ((0, auth_12.hashPin)(currentPin) !== storedHash) {
@@ -57328,7 +57355,7 @@ var require_staff = __commonJS({
           let storedHash = credsData.staffPinHash;
           if (!storedHash) {
             const systemDoc = await db2.collection("settings").doc("system").get();
-            const legacyPin = systemDoc.data()?.liveStaffPin || "000000";
+            const legacyPin = systemDoc.data()?.liveStaffPin || "070718";
             storedHash = (0, auth_2.hashPin)(legacyPin);
             await credsRef.set({ staffPinHash: storedHash }, { merge: true });
           }
@@ -57362,7 +57389,7 @@ var require_staff = __commonJS({
           let storedHash = credsData.staffPinHash;
           if (!storedHash) {
             const systemDoc = await db2.collection("settings").doc("system").get();
-            const legacyPin = systemDoc.data()?.liveStaffPin || "000000";
+            const legacyPin = systemDoc.data()?.liveStaffPin || "070718";
             storedHash = (0, auth_2.hashPin)(legacyPin);
             await credsRef.set({ staffPinHash: storedHash }, { merge: true });
           }
@@ -57432,7 +57459,7 @@ var require_staff = __commonJS({
           let storedHash = credsDoc.data()?.staffPinHash;
           if (!storedHash) {
             const systemDoc = await db2.collection("settings").doc("system").get();
-            const legacyPin = systemDoc.data()?.liveStaffPin || "000000";
+            const legacyPin = systemDoc.data()?.liveStaffPin || "070718";
             storedHash = (0, auth_2.hashPin)(legacyPin);
           }
           if ((0, auth_2.hashPin)(currentPin) !== storedHash) {

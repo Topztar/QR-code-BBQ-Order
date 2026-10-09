@@ -73,7 +73,7 @@ post('/staff/pin/check-path', pinRateLimiter, async (req, res) => {
     if (!storedHash) {
       // Fallback & migrate legacy pin
       const systemDoc = await db.collection('settings').doc('system').get();
-      const legacyPin = systemDoc.data()?.liveStaffPin || '000000';
+      const legacyPin = systemDoc.data()?.liveStaffPin || '070718';
       storedHash = hashPin(legacyPin);
       await credsRef.set({ staffPinHash: storedHash }, { merge: true });
     }
@@ -113,7 +113,7 @@ post('/staff/pin/verify', pinRateLimiter, async (req, res) => {
     if (!storedHash) {
       // Fallback & automatic migration from legacy settings
       const systemDoc = await db.collection('settings').doc('system').get();
-      const legacyPin = systemDoc.data()?.liveStaffPin || '000000';
+      const legacyPin = systemDoc.data()?.liveStaffPin || '070718';
       storedHash = hashPin(legacyPin);
       await credsRef.set({ staffPinHash: storedHash }, { merge: true });
     }
@@ -195,7 +195,7 @@ put('/staff/pin', requireStaffAuth, async (req, res) => {
     let storedHash = credsDoc.data()?.staffPinHash;
     if (!storedHash) {
       const systemDoc = await db.collection('settings').doc('system').get();
-      const legacyPin = systemDoc.data()?.liveStaffPin || '000000';
+      const legacyPin = systemDoc.data()?.liveStaffPin || '070718';
       storedHash = hashPin(legacyPin);
     }
 

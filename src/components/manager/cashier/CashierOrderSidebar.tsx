@@ -37,25 +37,25 @@ export const CashierOrderSidebar: React.FC<CashierOrderSidebarProps> = ({
   const filteredCashierOrders = useMemo(() => {
     switch (cashierListFilter) {
       case 'completed':
-        return orders.filter(o => !o.isPaid && o.status === 'completed');
+        return orders.filter(o => !o.isPaid && !o.isDeleted && o.status === 'completed');
       case 'dinein':
-        return orders.filter(o => !o.isPaid && o.tableNumber && !String(o.tableNumber || '').includes('外帶'));
+        return orders.filter(o => !o.isPaid && !o.isDeleted && o.status !== 'cancelled' && o.tableNumber && !String(o.tableNumber || '').includes('外帶'));
       case 'takeout':
-        return orders.filter(o => !o.isPaid && o.tableNumber && String(o.tableNumber || '').includes('外帶'));
+        return orders.filter(o => !o.isPaid && !o.isDeleted && o.status !== 'cancelled' && o.tableNumber && String(o.tableNumber || '').includes('外帶'));
       case 'all':
       default:
-        return orders.filter(o => !o.isPaid);
+        return orders.filter(o => !o.isPaid && !o.isDeleted && o.status !== 'cancelled');
     }
   }, [orders, cashierListFilter]);
 
   const activeTakeoutOrders = useMemo(() => {
-    return orders.filter(o => !o.isPaid && ((o.tableNumber && String(o.tableNumber || '').includes('外帶')) || o.takeoutInfo));
+    return orders.filter(o => !o.isPaid && !o.isDeleted && o.status !== 'cancelled' && ((o.tableNumber && String(o.tableNumber || '').includes('外帶')) || o.takeoutInfo));
   }, [orders]);
 
   const unpaidCountsByTable = useMemo(() => {
     const counts: Record<string, number> = {};
     for (const o of orders) {
-      if (!o.isPaid && o.status !== 'cancelled' && o.tableNumber) {
+      if (!o.isPaid && !o.isDeleted && o.status !== 'cancelled' && o.tableNumber) {
         const tableKey = String(o.tableNumber).trim();
         counts[tableKey] = (counts[tableKey] || 0) + 1;
       }
@@ -70,7 +70,7 @@ export const CashierOrderSidebar: React.FC<CashierOrderSidebarProps> = ({
                   <h5 className="font-black text-sm tracking-wide flex items-center justify-between">
                     <span>⏳ 待結帳帳單佇列 (點擊任一項目進行結帳)</span>
                     <span className="font-mono text-xs bg-amber-500/10 border border-amber-500/25 text-[#E5B453] px-2 py-0.5 rounded-full">
-                      {orders.filter(o => !o.isPaid).length} 筆未結
+                      {orders.filter(o => !o.isPaid && !o.isDeleted && o.status !== 'cancelled').length} 筆未結
                     </span>
                   </h5>
                 </div>
@@ -125,10 +125,10 @@ export const CashierOrderSidebar: React.FC<CashierOrderSidebarProps> = ({
                 {/* Sub-Queue Filter Tabs */}
                 <div className="flex flex-wrap gap-1 mt-3 mb-3">
                   {[
-                    { id: 'all', label: '🗂️ 全部未結', count: orders.filter(o => !o.isPaid).length },
-                    { id: 'completed', label: '✅ 廚房出餐完成', count: orders.filter(o => !o.isPaid && o.status === 'completed').length },
-                    { id: 'dinein', label: '🪑 客席桌出席', count: orders.filter(o => !o.isPaid && o.tableNumber && !String(o.tableNumber || '').includes('外帶')).length },
-                    { id: 'takeout', label: '🛍️ 外帶佇列', count: orders.filter(o => !o.isPaid && o.tableNumber && String(o.tableNumber || '').includes('外帶')).length }
+                    { id: 'all', label: '🗂️ 全部未結', count: orders.filter(o => !o.isPaid && !o.isDeleted && o.status !== 'cancelled').length },
+                    { id: 'completed', label: '✅ 廚房出餐完成', count: orders.filter(o => !o.isPaid && !o.isDeleted && o.status === 'completed').length },
+                    { id: 'dinein', label: '🪑 客席桌出席', count: orders.filter(o => !o.isPaid && !o.isDeleted && o.status !== 'cancelled' && o.tableNumber && !String(o.tableNumber || '').includes('外帶')).length },
+                    { id: 'takeout', label: '🛍️ 外帶佇列', count: orders.filter(o => !o.isPaid && !o.isDeleted && o.status !== 'cancelled' && o.tableNumber && String(o.tableNumber || '').includes('外帶')).length }
                   ].map((subT) => {
                     const subCount = subT.count;
                     const isActive = cashierListFilter === subT.id;
@@ -158,7 +158,7 @@ export const CashierOrderSidebar: React.FC<CashierOrderSidebarProps> = ({
 
                 {/* Grid Scroll Queue */}
                 <div className="flex-1 overflow-y-auto pr-1 font-sans mt-2">
-                  {orders.filter(o => !o.isPaid).length === 0 ? (
+                  {orders.filter(o => !o.isPaid && !o.isDeleted && o.status !== 'cancelled').length === 0 ? (
                     <div className="h-full flex flex-col items-center justify-center text-center p-6 text-white/30 space-y-2 py-32">
                       <Check className="text-emerald-500 mx-auto" size={32} />
                       <p className="text-xs font-bold text-white/80">

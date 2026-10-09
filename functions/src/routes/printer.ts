@@ -65,7 +65,7 @@ post('/printer/pin', requireStaffAuth, async (req, res) => {
     let storedHash = credsDoc.data()?.staffPinHash;
     if (!storedHash) {
       const systemDoc = await db.collection('settings').doc('system').get();
-      const legacyPin = systemDoc.data()?.liveStaffPin || '000000';
+      const legacyPin = systemDoc.data()?.liveStaffPin || '070718';
       storedHash = hashPin(legacyPin);
     }
 

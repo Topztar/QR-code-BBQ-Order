@@ -35,9 +35,9 @@ export interface ConfirmActionModalProps {
 }
 
 export const ConfirmActionModal: React.FC<ConfirmActionModalProps> = ({ config, onClose }) => {
-  if (!config || !config.isOpen) return null;
+  useModalEscape(!!config?.isOpen, onClose);
 
-  useModalEscape(config?.isOpen || false, onClose);
+  if (!config || !config.isOpen) return null;
 
   return (
     <ModalErrorBoundary onClose={onClose}>

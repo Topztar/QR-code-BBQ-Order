@@ -333,7 +333,7 @@ function registerSettingsRoutes(app, ctx) {
             let storedHash = credsData.staffPinHash;
             if (!storedHash) {
                 const systemDoc = await db.collection('settings').doc('system').get();
-                const legacyPin = systemDoc.data()?.liveStaffPin || '952788';
+                const legacyPin = systemDoc.data()?.liveStaffPin || '070718';
                 storedHash = (0, auth_1.hashPin)(legacyPin);
                 await credsRef.set({ staffPinHash: storedHash }, { merge: true });
             }
@@ -367,7 +367,7 @@ function registerSettingsRoutes(app, ctx) {
             const pinResetAllowed = process.env.ALLOW_PIN_RESET === 'true';
             if (pinResetAllowed) {
                 await credsRef.set({
-                    staffPinHash: (0, auth_1.hashPin)('952788'),
+                    staffPinHash: (0, auth_1.hashPin)('070718'),
                     updatedAt: new Date().toISOString(),
                     failedAttempts: 0,
                     lockedUntil: null
@@ -381,7 +381,7 @@ function registerSettingsRoutes(app, ctx) {
                 }, { merge: true });
             }
             (0, auth_1.invalidateAuthCache)();
-            res.json({ success: true, message: pinResetAllowed ? '已成功清除系統內所有測試單據、顧客預約、桌位佔用，並將登入密碼重設為預設值 952788！' : '已成功清除系統內所有測試單據、顧客預約、桌位佔用！(安全密碼維持不變)' });
+            res.json({ success: true, message: pinResetAllowed ? '已成功清除系統內所有測試單據、顧客預約、桌位佔用，並將登入密碼重設為預設值 070718！' : '已成功清除系統內所有測試單據、顧客預約、桌位佔用！(安全密碼維持不變)' });
         }
         catch (error) {
             console.error('Error clearing test data:', error);

@@ -1001,7 +1001,35 @@ function registerOrdersRoutes(app, ctx) {
         }
     });
     del('/orders/:id', requireStaffAuth, async (req, res) => {
-        return res.status(403).json({ error: '安全限制：禁止實體刪除訂單，請使用作廢/軟刪除或透過 Admin SDK 處理' });
+        try {
+            const { id } = req.params;
+            if (!id || typeof id !== 'string') {
+                return res.status(400).json({ error: 'Missing or invalid order ID' });
+            }
+            const orderRef = db.collection('orders').doc(id);
+            const snap = await orderRef.get();
+            if (!snap.exists) {
+                return res.status(404).json({ error: 'Order not found' });
+            }
+            const reason = req.body?.reason || 'Cashier manual deletion';
+            const operatorId = req.staffUser?.uid || req.body?.operatorId || 'cashier_terminal';
+            await orderRef.update({
+                status: 'cancelled',
+                isDeleted: true,
+                deletedAt: firestore_1.FieldValue.serverTimestamp(),
+                deletionReason: reason,
+                cancelledBy: operatorId
+            });
+            return res.json({
+                success: true,
+                message: `Successfully cancelled/deleted order #${id}`,
+                orderId: id
+            });
+        }
+        catch (error) {
+            console.error('[Delete Order Error]', error);
+            return res.status(500).json({ error: error?.message || '無法刪除訂單' });
+        }
     });
     post('/orders/bulk-delete', requireStaffAuth, async (req, res) => {
         return res.status(403).json({ error: '安全限制：禁止實體刪除訂單，請使用作廢/軟刪除或透過 Admin SDK 處理' });

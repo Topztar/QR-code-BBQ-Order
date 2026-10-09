@@ -7,7 +7,7 @@ let _appCheckTokenExpiry: number = 0;
 export const getAuthHeader = async (opts: { skipAuth?: boolean } = {}) => {
   const headers: Record<string, string> = {};
   if (!opts.skipAuth) {
-    const token = localStorage.getItem('sabay_jwt_token');
+    const token = typeof localStorage !== 'undefined' ? localStorage.getItem('sabay_jwt_token') : null;
     if (token) headers['Authorization'] = `Bearer ${token}`;
   }
 

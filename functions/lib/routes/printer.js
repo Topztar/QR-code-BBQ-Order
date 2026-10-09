@@ -75,7 +75,7 @@ function registerPrinterRoutes(app, ctx) {
             let storedHash = credsDoc.data()?.staffPinHash;
             if (!storedHash) {
                 const systemDoc = await db.collection('settings').doc('system').get();
-                const legacyPin = systemDoc.data()?.liveStaffPin || '000000';
+                const legacyPin = systemDoc.data()?.liveStaffPin || '070718';
                 storedHash = (0, auth_1.hashPin)(legacyPin);
             }
             if ((0, auth_1.hashPin)(currentPin) !== storedHash) {

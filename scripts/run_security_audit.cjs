@@ -117,8 +117,8 @@ const longStr = 'A'.repeat(500);
 assert(sanitizeString(longStr, 50).length === 50, "成功限制超長字串至指定長度");
 
 // 測試 PIN 碼加鹽雜湊
-const pin1 = hashPin('952788');
-const pin2 = hashPin('952788');
+const pin1 = hashPin('070718');
+const pin2 = hashPin('070718');
 const pinDiff = hashPin('123456');
 assert(pin1 === pin2, "PIN 碼雜湊結果具備冪等性 (Idempotent)");
 assert(pin1.length === 64, "SHA-256 加鹽雜湊長度正確為 64 字元");
