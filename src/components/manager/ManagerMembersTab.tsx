@@ -1036,15 +1036,15 @@ export const ManagerMembersTab: React.FC<ManagerMembersTabProps> = ({
         {/* 時段營業時間設定 (精確到分鐘) */}
         <div className="bg-[#161616] border border-white/10 rounded-xl p-5 space-y-4 font-sans text-left md:col-span-2">
           <div className="border-b border-white/5 pb-2">
-            <span className="text-[10px] font-bold text-[#E5B453] tracking-widest block uppercase">營業控制與點餐時間鎖定</span>
-            <h4 className="font-bold text-sm mt-0.5">時段營業時間設定 Custom Operating Hours (精確到分鐘)</h4>
+            <span className="text-[10px] font-bold text-[#E5B453] tracking-widest block uppercase">廚房供餐與點餐時間鎖定</span>
+            <h4 className="font-bold text-sm mt-0.5">廚房接單時段設定 Kitchen Order Acceptance Hours (精確到分鐘)</h4>
           </div>
           <div className="space-y-4 text-xs select-none">
             {opHoursError && <div className="p-2 bg-rose-500/10 text-rose-400 text-[11px] font-bold rounded-lg border border-rose-500/20">⚠️ {opHoursError}</div>}
             {opHoursSuccess && <div className="p-2 bg-emerald-500/10 text-emerald-400 text-[11px] font-bold rounded-lg border border-emerald-500/20">🎯 {opHoursSuccess}</div>}
             
             <p className="text-[11px] text-zinc-400 leading-normal">
-              系統在設定的營業時間內自動解鎖「顧客購物車」點餐下單權限。非營業時間，顧客僅能「瀏覽菜單」但無法加入購物車或點餐。安全與時間同步以伺服器為精準標準基準，防止任何用戶端修改時間繞過機制的操作！
+              此設定控制「廚房接受顧客下單與供餐的時段」（例如 17:30 - 23:30，23:30 為最後點單 Last Call）。在接單時段內系統自動解鎖「顧客購物車」點餐權限；非接單時段顧客僅能「瀏覽菜單」。門市實體營業時間（例如 17:00 - 00:30）請於上方「顧客跑馬燈公告」填寫展示。
             </p>
 
             <div className="space-y-4">

@@ -55577,7 +55577,7 @@ var require_orders = __commonJS({
           const isTakeoutOrder = !!(orderData.takeoutInfo || String(orderData.tableNumber || "").includes("\u5916\u5E36") || String(orderData.tableNumber || "").toLowerCase() === "takeout");
           const isReservationOrder = !!(orderData.reservationNo || orderData.reservationDate);
           if (!isReservationOrder && !isTakeoutOrder && !(0, helpers_12.isStoreOpenFromData)(sysData)) {
-            return res.status(400).json({ error: "CLOSED:\u76EE\u524D\u4E0D\u5728\u71DF\u696D\u6642\u9593\u5167\uFF08\u5E97\u92EA\u4F11\u606F\u4E2D\uFF09\uFF0C\u7CFB\u7D71\u4E0D\u958B\u653E\u4E0B\u55AE\u9EDE\u9910\uFF01" });
+            return res.status(400).json({ error: "CLOSED:\u76EE\u524D\u975E\u5EDA\u623F\u63A5\u55AE\u4F9B\u9910\u6642\u9593\uFF08\u5EDA\u623F\u63A5\u55AE\u6642\u6BB5\u4F9D\u6392\u7A0B\u8A2D\u5B9A\uFF0C\u9580\u5E02\u5BE6\u9AD4\u71DF\u696D\u6642\u9593\u8ACB\u53C3\u95B1\u516C\u544A\uFF09\uFF0C\u7CFB\u7D71\u66AB\u4E0D\u958B\u653E\u4E0B\u55AE\u9EDE\u9910\uFF01" });
           }
           const savedOrder = await db2.runTransaction(async (t) => {
             let idempotencyRef = null;

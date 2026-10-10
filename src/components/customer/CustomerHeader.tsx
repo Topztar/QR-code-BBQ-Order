@@ -198,17 +198,17 @@ const CustomerHeaderBase: React.FC<CustomerHeaderProps> = ({
                 ? '● 今日公休店休中 Rest Day / Holiday - Browsing Only'
                 : isCurrentSlotReservableOnly && !isHasReservation
                   ? '🔒 目前為【預約專用時段】 (Reservable Slot Only)'
-                  : '● 店鋪休息中 (僅供瀏覽餐點) Store Closed - Browsing Only'}
+                  : '● 非廚房接單時段 (僅供瀏覽菜單) Kitchen Order Acceptance Closed - Browsing Only'}
             </h5>
             <p className="text-[11px] sm:text-xs text-rose-400/80 leading-relaxed">
               {isTaiwanRestDay
                 ? '今日為設定的特殊休假公休日，全天不提供購物車點餐服務。系統已鎖定點餐與加點功能，您可以自由瀏覽菜單與菜色內容！'
                 : isCurrentSlotReservableOnly && !isHasReservation
                   ? '當前時段為餐廳「可預約專用時段」，僅開放給已預約桌席之顧客進場點餐。若您已完成預約，請點選上方【預約訂位點餐專區】進行預約或驗證！'
-                  : '當前不在設定之合法營業時間內。系統已鎖定購物車加點與點餐結帳功能，您可以自由瀏覽菜單餐點與價格。'}
+                  : '目前非廚房接單供餐時段（門市實體營業時間請參閱上方公告）。系統已鎖定購物車加點與點餐結帳功能，您可以自由瀏覽菜單餐點與價格。'}
               {!isTaiwanRestDay && operatingHours && operatingHours.length > 0 && (
                 <span className="block mt-1 text-rose-400 font-mono font-bold text-[10px] sm:text-[11px]">
-                  ⏰ 營業時段 Operating Hours:{' '}
+                  🍳 廚房接單時段 Kitchen Order Acceptance Hours:{' '}
                   {operatingHours
                     .filter((s: any) => s.isActive)
                     .map(

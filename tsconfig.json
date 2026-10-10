@@ -28,7 +28,9 @@
       "vite-plugin-pwa/client"
     ],
     "allowImportingTsExtensions": true,
-    "noEmit": true
+    "noEmit": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true
   },
   "exclude": [
     "node_modules",

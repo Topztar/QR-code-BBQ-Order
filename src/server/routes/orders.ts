@@ -173,7 +173,7 @@ export function registerOrdersRoutes(app: express.Express, ctx: OrderRouteContex
     const isTakeoutOrder = !!(takeoutInfo || isTakeoutTable(mappedTableNumber));
     const isReservationOrder = !!(reservationNo || reservationDate);
     if (!isReservationOrder && !isTakeoutOrder && !isStoreOpen()) {
-      return res.status(403).json({ error: '目前不在營業時間內（店鋪休息中），系統不開放下單點餐！' });
+      return res.status(403).json({ error: '目前非廚房接單供餐時間（廚房接單時段依排程設定，門市實體營業時間請參閱公告），系統暫不開放下單點餐！' });
     }
 
     // Defense-in-depth: Validate takeout pickup time format if provided

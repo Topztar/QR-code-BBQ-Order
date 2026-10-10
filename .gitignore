@@ -50,9 +50,10 @@ logs/
 .nyc_output
 
 # 套件產生的暫存
-package-lock.json
-# 若你不要忽略 package-lock，就把上面那行開頭加 # 註解掉
-# package-lock.json
+bun.lock
+bun.lockb
+prompt.md
+prompt.txt
 
 # Python（如果專案混用python才保留，前端可刪）
 __pycache__/

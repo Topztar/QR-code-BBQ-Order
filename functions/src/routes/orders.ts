@@ -329,7 +329,7 @@ post('/orders', requireAppCheck, orderRateLimiter, async (req, res) => {
     const isTakeoutOrder = !!(orderData.takeoutInfo || String(orderData.tableNumber || '').includes('外帶') || String(orderData.tableNumber || '').toLowerCase() === 'takeout');
     const isReservationOrder = !!(orderData.reservationNo || orderData.reservationDate);
     if (!isReservationOrder && !isTakeoutOrder && !isStoreOpenFromData(sysData)) {
-      return res.status(400).json({ error: 'CLOSED:目前不在營業時間內（店鋪休息中），系統不開放下單點餐！' });
+      return res.status(400).json({ error: 'CLOSED:目前非廚房接單供餐時間（廚房接單時段依排程設定，門市實體營業時間請參閱公告），系統暫不開放下單點餐！' });
     }
 
     const savedOrder = await db.runTransaction(async (t) => {
