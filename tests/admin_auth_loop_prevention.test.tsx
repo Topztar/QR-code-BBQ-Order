@@ -2,6 +2,7 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import React from 'react';
 import { render, screen, fireEvent, act, cleanup } from '@testing-library/react';
 import { apiFetch } from '../src/lib/api';
 import { sessionAuth } from '../src/lib/sessionAuth';

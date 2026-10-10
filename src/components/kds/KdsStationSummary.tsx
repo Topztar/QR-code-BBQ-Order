@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { MenuItem, Category, Ingredient, Language } from '../../types';
 import { getLocalizedText } from '../../utils/i18n';
 import { InlineRetryMessage } from '../InlineRetryMessage';

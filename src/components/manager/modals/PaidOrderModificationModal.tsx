@@ -1,4 +1,4 @@
-import { Component } from 'react';
+import React, { Component } from 'react';
 import { Language, PaidModDetails } from '../../../types';
 import { getLocalizedText } from '../../../utils/i18n';
 import { useModalEscape } from '../../../hooks/useModalEscape';

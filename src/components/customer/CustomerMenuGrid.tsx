@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { Category, MenuItem, Language } from '../../types';
 import { getLocalizedText } from '../../utils/i18n';
 import { Clock, ChevronRight } from 'lucide-react';

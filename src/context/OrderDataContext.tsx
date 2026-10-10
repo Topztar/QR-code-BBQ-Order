@@ -1,5 +1,5 @@
-import { createContext, useContext, useMemo, ReactNode } from 'react';
-import { Order, OrderItem, MenuItem, TableConfig, OrderStatus, KdsSession } from '../types';
+import React, { createContext, useContext, useMemo, ReactNode } from 'react';
+import { Order, OrderItem, MenuItem, TableConfig, Reservation, OrderStatus, KdsSession } from '../types';
 
 import { QueuedRequest } from '../lib/offlineQueue';
 import { useOrderSubmit } from '../hooks/useOrderSubmit';

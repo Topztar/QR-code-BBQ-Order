@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, Suspense } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, Suspense } from 'react';
 import {
   MenuItem,
   OrderItem,

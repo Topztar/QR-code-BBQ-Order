@@ -1,4 +1,4 @@
-import { Suspense } from 'react';
+import React, { Suspense } from 'react';
 import { useRestaurantData } from '../context/RestaurantDataContext';
 import { useOrderData } from '../context/OrderDataContext';
 import { PrinterDataProvider, usePrinterData } from '../context/PrinterDataContext';

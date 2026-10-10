@@ -44,7 +44,7 @@ describe('Order Audit Fixes Tests', () => {
 
     registerOrdersRoutes(testApp, {
       getLiveOrders: () => mockOrders,
-      setLiveOrders: (_o: any[]) => {},
+      setLiveOrders: (o: any[]) => {},
       getLiveTables: () => [],
       getLiveMenu: () => [{ id: 'dish-1', price: 100 }, { id: 'dish-2', price: 200 }] as any,
       getLiveReservations: () => [],
@@ -85,7 +85,7 @@ describe('Order Audit Fixes Tests', () => {
     expect(cancelJson.error).toContain('已結帳或已取消');
 
     // 3. Pending order should succeed and recompute subtotal
-    let _pendStatus = 0;
+    let pendStatus = 0;
     let pendJson: any = null;
     const resPend: any = {
       status(s: number) { pendStatus = s; return this; },

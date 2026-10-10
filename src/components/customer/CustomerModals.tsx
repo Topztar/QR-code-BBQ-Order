@@ -1,10 +1,10 @@
-import { Component } from 'react';
+import React, { Component } from 'react';
 import { safeStorage } from '../../lib/safeStorage';
 import { sanitizePhoneDigits, isValidTaiwanPhone, TAIWAN_PHONE_ERROR_MSG } from '../../utils/phoneValidator';
 import { getTaiwanTimeParts } from '../../utils/dateUtils';
 import { useModalEscape } from '../../hooks/useModalEscape';
 
-const _localStorage = safeStorage;
+const localStorage = safeStorage;
 
 class ModalErrorBoundary extends Component<{children: React.ReactNode, onClose: () => void, isInline?: boolean}, {hasError: boolean}> {
   state = { hasError: false };

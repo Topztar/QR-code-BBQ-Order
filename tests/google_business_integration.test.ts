@@ -235,7 +235,7 @@ describe('Google Business Profile Integration Tests', () => {
     });
 
     it('must retain real-time Firestore Table snapshot and TableStatusSync derivation logic (Phase 3.3 S-06)', () => {
-      const _orderDataCode = fs.readFileSync(path.join(__dirname, '../src/context/OrderDataContext.tsx'), 'utf-8');
+      const orderDataCode = fs.readFileSync(path.join(__dirname, '../src/context/OrderDataContext.tsx'), 'utf-8');
       const tableSyncCode = fs.readFileSync(path.join(__dirname, '../src/components/TableStatusSync.tsx'), 'utf-8');
       const restaurantDataCode = fs.readFileSync(path.join(__dirname, '../src/context/RestaurantDataContext.tsx'), 'utf-8');
 

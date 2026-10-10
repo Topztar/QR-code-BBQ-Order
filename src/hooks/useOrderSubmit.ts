@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { Order, OrderItem, MenuItem } from '../types';
 import { apiFetch } from '../lib/api';
 import { addRequestToQueue } from '../lib/offlineQueue';

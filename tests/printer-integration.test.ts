@@ -12,7 +12,7 @@ vi.mock('serialport', () => {
       config,
       open: vi.fn((cb: any) => { if (cb) cb(null); }),
       on: vi.fn(),
-      write: vi.fn((_data: any, cb: any) => { if (cb) cb(null); }),
+      write: vi.fn((data: any, cb: any) => { if (cb) cb(null); }),
       drain: vi.fn((cb: any) => { if (cb) cb(null); }),
       close: vi.fn()
     };
@@ -43,7 +43,7 @@ describe('Printer Integration and Cash Drawer Trigger', () => {
         removeAllListeners: vi.fn()
       };
       
-      mockSocket.connect.mockImplementation((port, _ip) => {
+      mockSocket.connect.mockImplementation((port, ip) => {
          const onConnect = mockSocket.on.mock.calls.find(call => call[0] === 'connect');
          if (onConnect) onConnect[1]();
       });

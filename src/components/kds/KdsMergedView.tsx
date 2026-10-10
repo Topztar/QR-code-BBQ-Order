@@ -1,3 +1,4 @@
+import React from 'react';
 import { Language, Order, MergedDishItem } from '../../types';
 import { getLocalizedText } from '../../utils/i18n';
 import { ChefHat, Clock, Eye } from 'lucide-react';
@@ -17,7 +18,7 @@ export const KdsMergedView: React.FC<KdsMergedViewProps> = React.memo(({
   currentLang,
   t,
   getElapsedTime,
-  _operatingHours = [],
+  operatingHours = [],
   setQuickViewOrder,
 }) => {
   return (

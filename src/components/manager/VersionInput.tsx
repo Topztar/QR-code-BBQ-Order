@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Tag, Save, Check, AlertCircle, RefreshCw, ShieldCheck } from 'lucide-react';
 import { useRestaurantData } from '../../context/RestaurantDataContext';
 

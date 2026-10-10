@@ -1,5 +1,5 @@
 import { apiFetch } from "../lib/api";
-import { useState, useEffect, useRef, useMemo, useCallback, useDeferredValue } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback, useDeferredValue } from 'react';
 import {
   Order,
   OrderStatus,
@@ -119,12 +119,12 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
     stopSpeech,
     beepSim,
     setBeepSim: _setBeepSim,
-    _notifyNewOrders,
+    notifyNewOrders,
     notifyStatusChange,
   } = useKdsAudio(currentLang);
 
   // 🔔 KDS Continuous Alarm Loop
-  const { _pendingCount, unlockAudioContext } = useKDSContinuousAlarm({
+  const { pendingCount, unlockAudioContext } = useKDSContinuousAlarm({
     orders: deferredOrders,
     intervalMs: 8000,
     enabled: ttsEnabled,

@@ -31,6 +31,7 @@ const dataJson = JSON.parse(fs.readFileSync('./public/data.json', 'utf-8'));
 const { INITIAL_MENU, INITIAL_INGREDIENTS, INITIAL_CATEGORIES } = dataJson;
 import {
   triggerRealCashDrawer,
+  printKitchenTicket,
   printCustomerReceipt
 } from './hardware/printerDriver';
 import { sendReservationNotifications, sendTestNotification } from './functions/src/services/notification';

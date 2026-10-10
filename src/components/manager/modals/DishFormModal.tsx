@@ -1,4 +1,4 @@
-import { Component, useState, useEffect } from 'react';
+import React, { Component, useState, useEffect } from 'react';
 import { Category, Ingredient, Language } from '../../../types';
 import { getLocalizedText, translateTextToLanguage } from '../../../utils/i18n';
 import { getAuthHeader } from '../../../lib/api';

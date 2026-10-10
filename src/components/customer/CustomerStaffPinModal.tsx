@@ -1,9 +1,9 @@
-import { Component } from 'react';
+import React, { Component } from 'react';
 import { safeStorage } from '../../lib/safeStorage';
 
 import { sessionAuth } from '../../lib/sessionAuth';
 
-const _localStorage = safeStorage;
+const localStorage = safeStorage;
 
 import { useModalEscape } from '../../hooks/useModalEscape';
 

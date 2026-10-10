@@ -1,4 +1,4 @@
-import { Component } from 'react';
+import React, { Component } from 'react';
 import { TableConfig } from '../../types';
 import { Calendar, Check, AlertTriangle, Loader2 } from 'lucide-react';
 import { sanitizePhoneDigits } from '../../utils/phoneValidator';

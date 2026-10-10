@@ -1,4 +1,4 @@
-import { Component } from 'react';
+import React, { Component } from 'react';
 import { Minus, Plus, Coins } from 'lucide-react';
 import { Order, OrderStatus, Language, TableConfig } from '../../../types';
 import { getLocalizedText } from '../../../utils/i18n';

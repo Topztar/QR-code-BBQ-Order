@@ -823,7 +823,7 @@ post('/orders/bulk-checkout', requireStaffAuth, async (req, res) => {
   const { paymentMethod, cashTendered, changeAmount, checkoutRecord } = validation.sanitizedData;
 
   try {
-    const _batch = db.batch();
+    const batch = db.batch();
     const resolvedOrderStatuses: Record<string, string> = {};
     const tableSet = new Set<string>();
 

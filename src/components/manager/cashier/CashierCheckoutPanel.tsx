@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { Coins } from 'lucide-react';
 import { useDashboardStore } from '../../../stores/dashboard/useDashboardStore';
 import { memberService } from '../../../services/memberService';

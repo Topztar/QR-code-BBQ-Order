@@ -115,10 +115,8 @@ export interface Order {
   pickupTime?: string;
   takeoutInfo?: {
     customerName?: string;
-    phone?: string;
-
-  };
-
+    phone?: string;
+  };
   rating?: number;
   syncFailed?: boolean;
   feedback?: string;

@@ -1,4 +1,4 @@
-import { useState, useEffect, Component } from 'react';
+import React, { useState, useEffect, Component } from 'react';
 import { Coins } from 'lucide-react';
 import { getMaskedEmail as defaultGetMaskedEmail } from '../ManagerDashboardUtils';
 import { useModalEscape } from '../../../hooks/useModalEscape';

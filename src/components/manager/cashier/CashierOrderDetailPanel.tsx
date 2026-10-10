@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { Maximize2, ShoppingBag, Minus, Plus, Trash2 } from 'lucide-react';
 import { useDashboardStore } from '../../../stores/dashboard/useDashboardStore';
 import { orderCalculationService } from '@sabay/shared';

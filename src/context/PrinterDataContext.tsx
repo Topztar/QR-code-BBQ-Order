@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
 import { apiFetch } from '../lib/api';
 import { PRINTER_CONSTANTS } from '@sabay/shared';
 import { printViaBridge, normalizePort, DEFAULT_POS_BRIDGE_URL } from '../lib/posBridgeClient';

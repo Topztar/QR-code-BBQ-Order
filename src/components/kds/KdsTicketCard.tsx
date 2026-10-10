@@ -1,3 +1,4 @@
+import React from 'react';
 import { Order, MenuItem, Category, TableConfig, Reservation, Language } from '../../types';
 import { getLocalizedText } from '../../utils/i18n';
 import { buildKitchenReceipt } from '../../utils/receiptBuilder';
@@ -89,7 +90,7 @@ export const KdsTicketCard: React.FC<KdsTicketCardProps> = React.memo(({
   t,
   selectedCategory,
   printerIp,
-  _operatingHours = [],
+  operatingHours = [],
   dragStates,
   handleCardTouchStart,
   handleCardTouchMove,

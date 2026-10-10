@@ -1,3 +1,4 @@
+import React from 'react';
 import { User, Phone, Clock, FileText } from 'lucide-react';
 import { Order } from '../../types';
 import { orderCalculationService } from '@sabay/shared';

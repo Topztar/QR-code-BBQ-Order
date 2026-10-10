@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Coins, Plus, Trash2, QrCode, ShoppingBag, Copy, Check, ExternalLink } from 'lucide-react';
 import { TableConfig } from '../../types';
 import { getLocalizedText } from '../../utils/i18n';

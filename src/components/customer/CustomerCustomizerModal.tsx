@@ -1,4 +1,4 @@
-import { Component } from 'react';
+import React, { Component } from 'react';
 import { MenuItem, CustomAddOn, Language, Ingredient, SoldOutType } from '../../types';
 import { getLocalizedText } from '../../utils/i18n';
 import { TRANSLATIONS } from '../../data';

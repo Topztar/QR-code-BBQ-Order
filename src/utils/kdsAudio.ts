@@ -12,7 +12,7 @@ import { Order, Language } from '../types';
 
 let globalAudioCtx: AudioContext | null = null;
 let cachedVoices: SpeechSynthesisVoice[] = [];
-let _activeUtterance: SpeechSynthesisUtterance | null = null;
+let activeUtterance: SpeechSynthesisUtterance | null = null;
 let utteranceHeartbeat: any = null;
 
 /**

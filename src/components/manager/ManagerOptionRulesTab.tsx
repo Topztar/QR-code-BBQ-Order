@@ -1,3 +1,4 @@
+import React from 'react';
 import { Category } from '../../types';
 import { getLocalizedText } from '../../utils/i18n';
 

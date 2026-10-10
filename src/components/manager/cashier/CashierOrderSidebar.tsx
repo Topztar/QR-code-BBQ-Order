@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { VirtuosoGrid } from 'react-virtuoso';
 import { Check } from 'lucide-react';
 import { Order, MenuItem, Language } from '../../../types';

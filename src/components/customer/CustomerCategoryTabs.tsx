@@ -1,4 +1,4 @@
-import { useRef, useEffect, useMemo } from 'react';
+import React, { useRef, useEffect, useMemo } from 'react';
 import { Category, Language } from '../../types';
 import { getLocalizedText } from '../../utils/i18n';
 import { TRANSLATIONS } from '../../data';
