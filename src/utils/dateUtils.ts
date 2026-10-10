@@ -27,10 +27,20 @@ export function parseSafeDate(
     if (!trimmed) return fallbackToNow ? new Date() : new Date(NaN);
 
     // Convert "YYYY-MM-DD HH:mm:ss" or "YYYY-MM-DD HH:mm" -> "YYYY-MM-DDTHH:mm:ss" for WebKit compatibility
-    const isoNormalized = trimmed.replace(
+    let isoNormalized = trimmed.replace(
       /^(\d{4}[-/]\d{1,2}[-/]\d{1,2})\s+(\d{1,2}:\d{2}(?::\d{2}(?:\.\d+)?)?)/,
       '$1T$2'
     );
+
+    // If string has date & time but lacks an explicit timezone offset (e.g. "2026-10-10 16:30:00" or "2026-10-10T16:30:00"),
+    // attach Taiwan standard timezone (+08:00) so UTC / CI environments parse it as Taiwan local time
+    // instead of host local time, preventing off-by-one day bugs in getTaiwanTimeParts.
+    if (
+      /^(\d{4}[-/]\d{1,2}[-/]\d{1,2})T(\d{1,2}:\d{2}(?::\d{2}(?:\.\d+)?)?)$/.test(isoNormalized)
+    ) {
+      isoNormalized += '+08:00';
+    }
+
     const parsed = new Date(isoNormalized);
     if (!isNaN(parsed.getTime())) {
       return parsed;
