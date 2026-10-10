@@ -64,7 +64,7 @@ try {
       // Use persistentMultipleTabManager if BroadcastChannel exists, or fallback to persistentSingleTabManager.
       const tabManager = (isBroadcastChannelSupported && !isIOSSafari) 
         ? persistentMultipleTabManager() 
-        : persistentSingleTabManager();
+        : persistentSingleTabManager({});
 
       firestoreInstance = initializeFirestore(app, {
         localCache: persistentLocalCache({
