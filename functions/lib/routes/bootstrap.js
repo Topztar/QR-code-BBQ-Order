@@ -89,6 +89,7 @@ function registerBootstrapRoutes(app, ctx) {
                     ? db.collection('reservations').select('id', 'customerName', 'phone', 'notes', 'createdAt', 'guestCount', 'tableNumber', 'date', 'time', 'status', 'reservationNo').where('date', '>=', todayStr).limit(100).get()
                     : Promise.resolve({ docs: [] })
             ]);
+            const img = (v) => isStaffRequest ? (v ?? '') : (0, helpers_1.sanitizePublicImageUrl)(v);
             const now = new Date();
             const items = menuSnap.docs.map(doc => {
                 const d = doc.data();
@@ -97,10 +98,10 @@ function registerBootstrapRoutes(app, ctx) {
                     category: d.category ?? 'uncategorized',
                     name: d.name ?? { zh: '' },
                     price: typeof d.price === 'number' ? d.price : 0,
-                    image: d.image ?? '',
-                    thumbnailUrl: d.thumbnailUrl ?? '',
-                    avifUrl: d.avifUrl ?? '',
-                    avifThumbnailUrl: d.avifThumbnailUrl ?? '',
+                    image: img(d.image),
+                    thumbnailUrl: img(d.thumbnailUrl),
+                    avifUrl: img(d.avifUrl),
+                    avifThumbnailUrl: img(d.avifThumbnailUrl),
                     description: d.description ?? { zh: '' },
                     available: !!d.available || !!d.isAvailable,
                     soldOutType: d.soldOutType || (d.available || d.isAvailable ? 'none' : 'permanent'),

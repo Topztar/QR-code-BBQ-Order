@@ -4,14 +4,14 @@ import { appCheck } from './firebase';
 let _cachedAppCheckToken: string | null = null;
 let _appCheckTokenExpiry: number = 0;
 
-export const getAuthHeader = async (opts: { skipAuth?: boolean } = {}) => {
+export const getAuthHeader = async (opts: { skipAuth?: boolean; skipAppCheck?: boolean } = {}) => {
   const headers: Record<string, string> = {};
   if (!opts.skipAuth) {
     const token = typeof localStorage !== 'undefined' ? localStorage.getItem('sabay_jwt_token') : null;
     if (token) headers['Authorization'] = `Bearer ${token}`;
   }
 
-  if (appCheck) {
+  if (appCheck && !opts.skipAppCheck) {
     try {
       const now = Date.now();
       if (!_cachedAppCheckToken || now > _appCheckTokenExpiry) {
@@ -33,7 +33,9 @@ export const apiFetch = async (url: string, options: any = {}) => {
   const isPublicGet = method === 'GET' && /^\/api\/(bootstrap|store-status|menu|categories|settings\/version)/.test(url);
   const skipAuth = options.skipAuth ?? (isPublicGet && !options.forceAuth);
 
-  const authHeaders = await getAuthHeader({ skipAuth });
+  // ⚡ 公開 GET (bootstrap/store-status/menu) 不等待 reCAPTCHA App Check：
+  // 後端 requireAppCheck 為軟性放行，iOS WebKit (Safari/Firefox, ITP) 取得 token 常耗時數秒，阻塞菜單首載
+  const authHeaders = await getAuthHeader({ skipAuth, skipAppCheck: isPublicGet && !options.forceAuth });
   const headers = {
     'Content-Type': 'application/json',
     ...options.headers,

@@ -672,6 +672,7 @@ var require_helpers = __commonJS({
     exports2.processMenuItemSoldOut = processMenuItemSoldOut;
     exports2.extractStoragePathFromUrl = extractStoragePathFromUrl;
     exports2.cleanupStorageImage = cleanupStorageImage;
+    exports2.sanitizePublicImageUrl = sanitizePublicImageUrl;
     var shared_1 = (init_src(), __toCommonJS(src_exports));
     var net = __importStar2(require("net"));
     exports2.cachedMenu = null;
@@ -948,6 +949,18 @@ var require_helpers = __commonJS({
         console.warn(`[Storage Cleanup] Note: Failed to delete image (${targetPath}):`, err?.message);
         return false;
       }
+    }
+    var MAX_PUBLIC_IMAGE_URL_LENGTH = 2048;
+    function sanitizePublicImageUrl(value) {
+      if (typeof value !== "string" || !value)
+        return "";
+      if (value.length > MAX_PUBLIC_IMAGE_URL_LENGTH)
+        return "";
+      if (value.startsWith("data:"))
+        return "";
+      if (/\/o\/data%3A/i.test(value))
+        return "";
+      return value;
     }
   }
 });
@@ -54207,6 +54220,7 @@ var require_bootstrap = __commonJS({
             isStaffRequest ? db2.collection("ingredients").select("id", "name", "stock", "minThreshold", "unit").get() : Promise.resolve({ docs: [] }),
             isStaffRequest ? db2.collection("reservations").select("id", "customerName", "phone", "notes", "createdAt", "guestCount", "tableNumber", "date", "time", "status", "reservationNo").where("date", ">=", todayStr).limit(100).get() : Promise.resolve({ docs: [] })
           ]);
+          const img = (v) => isStaffRequest ? v ?? "" : (0, helpers_12.sanitizePublicImageUrl)(v);
           const now = /* @__PURE__ */ new Date();
           const items = menuSnap.docs.map((doc) => {
             const d = doc.data();
@@ -54215,10 +54229,10 @@ var require_bootstrap = __commonJS({
               category: d.category ?? "uncategorized",
               name: d.name ?? { zh: "" },
               price: typeof d.price === "number" ? d.price : 0,
-              image: d.image ?? "",
-              thumbnailUrl: d.thumbnailUrl ?? "",
-              avifUrl: d.avifUrl ?? "",
-              avifThumbnailUrl: d.avifThumbnailUrl ?? "",
+              image: img(d.image),
+              thumbnailUrl: img(d.thumbnailUrl),
+              avifUrl: img(d.avifUrl),
+              avifThumbnailUrl: img(d.avifThumbnailUrl),
               description: d.description ?? { zh: "" },
               available: !!d.available || !!d.isAvailable,
               soldOutType: d.soldOutType || (d.available || d.isAvailable ? "none" : "permanent"),

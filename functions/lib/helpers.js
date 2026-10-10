@@ -48,6 +48,7 @@ exports.createHandleSavePrinterSettings = createHandleSavePrinterSettings;
 exports.processMenuItemSoldOut = processMenuItemSoldOut;
 exports.extractStoragePathFromUrl = extractStoragePathFromUrl;
 exports.cleanupStorageImage = cleanupStorageImage;
+exports.sanitizePublicImageUrl = sanitizePublicImageUrl;
 const shared_1 = require("@sabay/shared");
 const net = __importStar(require("net"));
 exports.cachedMenu = null;
@@ -328,5 +329,17 @@ async function cleanupStorageImage(imageUrl, storageBucket) {
         console.warn(`[Storage Cleanup] Note: Failed to delete image (${targetPath}):`, err?.message);
         return false;
     }
+}
+const MAX_PUBLIC_IMAGE_URL_LENGTH = 2048;
+function sanitizePublicImageUrl(value) {
+    if (typeof value !== 'string' || !value)
+        return '';
+    if (value.length > MAX_PUBLIC_IMAGE_URL_LENGTH)
+        return '';
+    if (value.startsWith('data:'))
+        return '';
+    if (/\/o\/data%3A/i.test(value))
+        return '';
+    return value;
 }
 //# sourceMappingURL=helpers.js.map

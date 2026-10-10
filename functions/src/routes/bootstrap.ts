@@ -3,7 +3,7 @@ import express from 'express';
 import { Firestore } from 'firebase-admin/firestore';
 import { Bucket } from '@google-cloud/storage';
 import * as crypto from 'crypto';
-import { processMenuItemSoldOut, isStoreOpenFromData, setCachedMenu, setCachedCategories } from '../helpers';
+import { processMenuItemSoldOut, isStoreOpenFromData, setCachedMenu, setCachedCategories, sanitizePublicImageUrl } from '../helpers';
 import { getStoredActiveToken } from '../auth';
 
 // ============================================================
@@ -90,6 +90,9 @@ export function registerBootstrapRoutes(app: express.Application, ctx: RouteCont
           : Promise.resolve({ docs: [] })
       ]);
 
+      // 🧹 顧客端 payload 過濾畸形/內嵌 base64 圖片，避免 bootstrap 膨脹 (員工端保留原值以免編輯時覆寫)
+      const img = (v: unknown) => isStaffRequest ? (v ?? '') : sanitizePublicImageUrl(v);
+
       const now = new Date();
       const items = menuSnap.docs.map(doc => {
         const d = doc.data() as any;
@@ -98,10 +101,10 @@ export function registerBootstrapRoutes(app: express.Application, ctx: RouteCont
           category: d.category ?? 'uncategorized',
           name: d.name ?? { zh: '' },
           price: typeof d.price === 'number' ? d.price : 0,
-          image: d.image ?? '',
-          thumbnailUrl: d.thumbnailUrl ?? '',
-          avifUrl: d.avifUrl ?? '',
-          avifThumbnailUrl: d.avifThumbnailUrl ?? '',
+          image: img(d.image),
+          thumbnailUrl: img(d.thumbnailUrl),
+          avifUrl: img(d.avifUrl),
+          avifThumbnailUrl: img(d.avifThumbnailUrl),
           description: d.description ?? { zh: '' },
           available: !!d.available || !!d.isAvailable, // fallback for legacy, but map to available
           soldOutType: d.soldOutType || (d.available || d.isAvailable ? 'none' : 'permanent'),

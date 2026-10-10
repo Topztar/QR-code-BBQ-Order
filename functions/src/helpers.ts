@@ -348,3 +348,19 @@ export async function cleanupStorageImage(imageUrl: string | undefined, storageB
   }
 }
 
+// ============================================================
+// 🧹 sanitizePublicImageUrl — 公開 Payload 圖片欄位防膨脹
+// 拒絕內嵌 base64 (data:) 與「把 base64 塞進 Storage 物件路徑」的畸形 URL
+// (例: .../o/data%3Aimage%2Fjpeg%3Bbase64...?alt=media，單筆可達 600 KB)
+// 這類值曾使 /api/bootstrap 膨脹至 ~6.5 MB，iOS 行動網路下超過 20s 逾時導致菜單無法載入
+// ============================================================
+const MAX_PUBLIC_IMAGE_URL_LENGTH = 2048;
+
+export function sanitizePublicImageUrl(value: unknown): string {
+  if (typeof value !== 'string' || !value) return '';
+  if (value.length > MAX_PUBLIC_IMAGE_URL_LENGTH) return '';
+  if (value.startsWith('data:')) return '';
+  if (/\/o\/data%3A/i.test(value)) return '';
+  return value;
+}
+
