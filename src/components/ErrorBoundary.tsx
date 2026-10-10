@@ -1,5 +1,6 @@
 import React, { ReactNode } from 'react';
 import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
+import { isChunkLoadError, attemptChunkRecovery } from '../lib/chunkRecovery';
 
 interface Props {
   children: ReactNode;
@@ -31,6 +32,9 @@ export class ErrorBoundary extends React.Component<Props, State> {
   public override componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error('[ErrorBoundary] Uncaught component error caught by boundary:', error, errorInfo);
     this.setState({ error, errorInfo });
+    if (isChunkLoadError(error)) {
+      attemptChunkRecovery(error, 'ErrorBoundary').catch(() => {});
+    }
   }
 
   private handleReset = () => {
@@ -65,11 +69,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
 
   public override render(): ReactNode {
     if (this.state.hasError) {
-      const isChunkError =
-        this.state.error?.name === 'ChunkLoadError' ||
-        this.state.error?.message?.includes('Failed to fetch dynamically imported module') ||
-        this.state.error?.message?.includes('dynamically imported module') ||
-        this.state.error?.message?.includes('loading chunk');
+      const isChunkError = isChunkLoadError(this.state.error);
 
       return (
         <div className="min-h-[60vh] flex flex-col items-center justify-center p-6 text-center max-w-lg mx-auto">

@@ -4,6 +4,7 @@ import { getLocalizedText } from '../../utils/i18n';
 import { apiFetch } from '../../lib/api';
 import { Clock, Check, Star, Sparkles, Flame, ShoppingCart } from 'lucide-react';
 import { orderCalculationService } from '@sabay/shared';
+import { parseSafeDate } from '../../utils/dateUtils';
 
 const statusColors: Record<string, string> = {
   pending: 'text-amber-400 border-amber-400/20 bg-amber-400/5',
@@ -188,7 +189,7 @@ export const CustomerOrderTracker: React.FC<CustomerOrderTrackerProps> = ({
                                   {order.id}
                                 </span>
                                 <span className="text-xs text-white/40 pl-2">
-                                  {new Date(order.createdAt).toLocaleTimeString()} ·{' '}
+                                  {order.createdAt ? parseSafeDate(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'} ·{' '}
                                   {order.takeoutInfo ||
                                   String(order.tableNumber || '').includes('外帶') ||
                                   order.tableNumber === 'takeout'

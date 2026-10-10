@@ -2,7 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import { RootErrorBoundary } from './components/RootErrorBoundary';
-import { attemptChunkRecovery } from './lib/chunkRecovery';
+import { attemptChunkRecovery, isChunkLoadError } from './lib/chunkRecovery';
 import './index.css';
 
 // Global error and unhandled promise rejection resilience handlers
@@ -30,9 +30,19 @@ if (typeof window !== 'undefined') {
   });
 
   window.addEventListener('unhandledrejection', (event) => {
-    const isBenign = event.reason?.message?.includes('ResizeObserver') || event.reason?.message?.includes('play() can only be initiated by a user gesture');
+    const isBenign = 
+      event.reason?.message?.includes('ResizeObserver') || 
+      event.reason?.message?.includes('play() can only be initiated by a user gesture') ||
+      event.reason?.name === 'QuotaExceededError' ||
+      event.reason?.name === 'SecurityError' ||
+      event.reason?.message?.includes('The operation is insecure');
     if (isBenign) {
       event.preventDefault();
+      return;
+    }
+    if (isChunkLoadError(event.reason)) {
+      event.preventDefault();
+      attemptChunkRecovery(event.reason, 'unhandledrejection');
       return;
     }
     console.error('[Global UnhandledRejection] Promise error:', event.reason);

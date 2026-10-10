@@ -10,7 +10,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { RestaurantDataProvider, useRestaurantData } from './context/RestaurantDataContext';
 import { OrderDataProvider, useOrderData } from './context/OrderDataContext';
 import { useAdminHotkey } from './hooks/useAdminHotkey';
-import { attemptChunkRecovery } from './lib/chunkRecovery';
+import { attemptChunkRecovery, isChunkLoadError } from './lib/chunkRecovery';
 import { TableStatusSync } from './components/TableStatusSync';
 
 // Wrapper for lazy loading with retry to prevent chunk load errors causing black screens
@@ -22,12 +22,7 @@ export const resilientLazy = <T extends React.ComponentType<any>>(
       const component = await componentImport();
       return component;
     } catch (error: any) {
-      const isChunkError =
-        error?.message?.includes('Failed to fetch dynamically imported module') ||
-        error?.message?.includes('Unexpected token') ||
-        error?.name === 'ChunkLoadError';
-
-      if (isChunkError) {
+      if (isChunkLoadError(error)) {
         const reloaded = await attemptChunkRecovery(error, 'resilientLazy');
         if (reloaded) {
           // If we dispatched a reload, wait briefly to let the browser navigate away.

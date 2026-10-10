@@ -1,6 +1,7 @@
 import { Order } from '../types';
 import { getLocalizedText } from './i18n';
 import { isTakeoutOrder } from './orderUtils';
+import { parseSafeDate } from './dateUtils';
 
 export function buildKitchenReceipt(order: Order, currentLang: any = 'zh', printerIp: string = '192.168.1.100', isReprint = false): string {
   const specLines = order.items.map((it: any) => {
@@ -24,7 +25,7 @@ export function buildKitchenReceipt(order: Order, currentLang: any = 'zh', print
 ========================================
 單號 ID: ${order.id || 'N/A'}
 出單 IP : ${printerIp} (VIRTUAL LAN_9100)
-時間 TIME: ${order.createdAt ? new Date(order.createdAt).toLocaleTimeString() : 'N/A'}
+時間 TIME: ${order.createdAt ? parseSafeDate(order.createdAt).toLocaleTimeString() : 'N/A'}
 狀態 STATE: ${(order.status || '').toUpperCase()}
 ----------------------------------------
 餐點項目與客製需求 Kitchen Item(s):
@@ -51,7 +52,7 @@ export function buildCustomerReceipt(order: Order, currentLang: any = 'zh', prin
 ========================================
 單號 ID: ${order.id || 'N/A'}
 出單 IP : ${printerIp} (VIRTUAL LAN_9100)
-時間 TIME: ${order.createdAt ? new Date(order.createdAt).toLocaleTimeString() : 'N/A'}
+時間 TIME: ${order.createdAt ? parseSafeDate(order.createdAt).toLocaleTimeString() : 'N/A'}
 付款方式: ${order.paymentMethod ? order.paymentMethod.toUpperCase() : 'CASH'}
 累積儲值會員: ${order.isMember ? '是 (小計累積點數中)' : '否'}
 ----------------------------------------

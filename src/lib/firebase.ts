@@ -1,6 +1,16 @@
 import { initializeApp } from 'firebase/app';
 import type { User } from 'firebase/auth';
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, memoryLocalCache, connectFirestoreEmulator, getFirestore, Firestore, enableNetwork } from 'firebase/firestore';
+import { 
+  initializeFirestore, 
+  persistentLocalCache, 
+  persistentMultipleTabManager, 
+  persistentSingleTabManager,
+  memoryLocalCache, 
+  connectFirestoreEmulator, 
+  getFirestore, 
+  Firestore, 
+  enableNetwork 
+} from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 export const app = initializeApp(firebaseConfig);
@@ -11,14 +21,32 @@ const isEmulatorMode = (import.meta as any).env?.VITE_USE_FIREBASE_EMULATOR === 
 
 let firestoreInstance: Firestore;
 
-// Helper to check indexedDB availability to prevent Firestore cache boot failures in sandboxed iframes
+// Helper to check indexedDB availability to prevent Firestore cache boot failures in sandboxed iframes and iOS WebKit Private Browsing
 const checkIndexedDB = (): boolean => {
   try {
-    return typeof window !== 'undefined' && 'indexedDB' in window && !!window.indexedDB;
-  } catch (_e) {
+    if (typeof window === 'undefined' || !('indexedDB' in window) || !window.indexedDB) {
+      return false;
+    }
+    // Safari Private Browsing / strict sandboxes throw SecurityError on open() synchronously
+    const probeReq = window.indexedDB.open('__sabay_idb_probe__');
+    probeReq.onerror = (e) => {
+      // Prevent unhandled error event bubbling
+      e.preventDefault?.();
+    };
+    return true;
+  } catch (err) {
+    console.warn('[Firebase] IndexedDB probe blocked (WebKit/Private Mode/Sandbox):', err);
     return false;
   }
 };
+
+const isIOSSafari = typeof navigator !== 'undefined' && 
+  /iPad|iPhone|iPod/.test(navigator.userAgent) && 
+  /Safari/.test(navigator.userAgent) && 
+  !/Chrome/.test(navigator.userAgent);
+
+// Check if multi-tab coordination (BroadcastChannel) is supported
+const isBroadcastChannelSupported = typeof window !== 'undefined' && 'BroadcastChannel' in window;
 
 try {
   if (isEmulatorMode) {
@@ -30,16 +58,35 @@ try {
     connectFirestoreEmulator(firestoreInstance, 'localhost', 8080);
     console.log('[Firebase] Connected to Local Firestore Emulator (Port 8080) with memoryLocalCache.');
   } else if (checkIndexedDB()) {
-    const isIOSSafari = typeof navigator !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent) && /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent);
-    // Configure persistent local cache with multi-tab manager for sub-millisecond cache speed and optimal quota conservation
-    firestoreInstance = initializeFirestore(app, {
-      localCache: persistentLocalCache({
-        tabManager: persistentMultipleTabManager(),
-        cacheSizeBytes: isIOSSafari ? 20 * 1024 * 1024 : 100 * 1024 * 1024 // 縮減 iOS 配額
-      })
-    }, FIRESTORE_DATABASE_ID);
+    try {
+      // WebKit / iOS compatibility:
+      // If BroadcastChannel is unavailable or on iOS Safari, multi-tab locks can deadlock.
+      // Use persistentMultipleTabManager if BroadcastChannel exists, or fallback to persistentSingleTabManager.
+      const tabManager = (isBroadcastChannelSupported && !isIOSSafari) 
+        ? persistentMultipleTabManager() 
+        : persistentSingleTabManager();
+
+      firestoreInstance = initializeFirestore(app, {
+        localCache: persistentLocalCache({
+          tabManager,
+          cacheSizeBytes: isIOSSafari ? 20 * 1024 * 1024 : 100 * 1024 * 1024 // 縮減 iOS 配額
+        })
+      }, FIRESTORE_DATABASE_ID);
+    } catch (cacheErr: any) {
+      console.warn('[Firebase Cache] Persistent cache setup failed. Degrading to memoryLocalCache:', cacheErr);
+      firestoreInstance = initializeFirestore(app, {
+        localCache: memoryLocalCache()
+      }, FIRESTORE_DATABASE_ID);
+    }
   } else {
-    firestoreInstance = getFirestore(app, FIRESTORE_DATABASE_ID);
+    // IndexedDB completely unavailable / restricted
+    try {
+      firestoreInstance = initializeFirestore(app, {
+        localCache: memoryLocalCache()
+      }, FIRESTORE_DATABASE_ID);
+    } catch {
+      firestoreInstance = getFirestore(app, FIRESTORE_DATABASE_ID);
+    }
   }
 } catch (error: any) {
   if (error?.code === 'failed-precondition') {
@@ -63,6 +110,24 @@ try {
 }
 
 export const db = firestoreInstance;
+
+// Asynchronous probe to detect and quietly handle latent IndexedDB SecurityError / QuotaExceededError in WebKit
+if (typeof window !== 'undefined' && !isEmulatorMode) {
+  setTimeout(async () => {
+    try {
+      const { doc, getDocFromCache } = await import('firebase/firestore');
+      const probeDoc = doc(firestoreInstance, '_system', 'probe');
+      await getDocFromCache(probeDoc).catch((e: any) => {
+        // Document not existing in cache is normal ('unavailable'); catch actual storage security/quota errors
+        if (e?.name === 'SecurityError' || e?.name === 'QuotaExceededError') {
+          console.warn('[Firebase Cache Probe] IndexedDB storage quota or security constraint detected:', e);
+        }
+      });
+    } catch {
+      // Benign probe failure
+    }
+  }, 100);
+}
 
 let rtdbInstance: any = null;
 export const getLazyRtdb = async () => {

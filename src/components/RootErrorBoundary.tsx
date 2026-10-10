@@ -1,5 +1,6 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { AlertTriangle, RefreshCw, Trash2 } from 'lucide-react';
+import { isChunkLoadError, attemptChunkRecovery } from '../lib/chunkRecovery';
 
 interface State {
   hasError: boolean;
@@ -15,6 +16,9 @@ export class RootErrorBoundary extends Component<{ children: ReactNode }, State>
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('[RootErrorBoundary] Fatal top-level crash:', error, errorInfo);
+    if (isChunkLoadError(error)) {
+      attemptChunkRecovery(error, 'RootErrorBoundary').catch(() => {});
+    }
   }
 
   handleReload = () => {

@@ -88,10 +88,13 @@ export default defineConfig(({ mode }) => {
         }
       }
     },
-  build: {
-    // 指定目標為現代瀏覽器與 Safari 14，確保向下相容性與最佳化 Tree-shaking
-    target: ['es2020', 'safari14'],
-    cssTarget: 'safari14',
+    esbuild: {
+      target: ['es2020', 'safari14'],
+    },
+    build: {
+      // 指定目標為現代瀏覽器與 Safari 14，確保向下相容性與最佳化 Tree-shaking
+      target: ['es2020', 'safari14'],
+      cssTarget: 'safari14',
     // 減少 chunk 大小警告門檻
     chunkSizeWarningLimit: 600,
     modulePreload: {
