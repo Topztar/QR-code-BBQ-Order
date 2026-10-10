@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Component } from 'react';
+import { useState, useEffect, Component } from 'react';
 import { Sparkles } from 'lucide-react';
 import { Ingredient } from '../../../types';
 import { getLocalizedText } from '../../../utils/i18n';

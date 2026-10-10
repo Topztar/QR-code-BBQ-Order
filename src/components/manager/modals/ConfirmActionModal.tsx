@@ -1,4 +1,4 @@
-import React, { Component } from 'react';
+import { Component } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { useModalEscape } from '../../../hooks/useModalEscape';
 

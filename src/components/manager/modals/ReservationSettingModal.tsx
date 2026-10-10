@@ -1,4 +1,4 @@
-import React, { Component, useState } from 'react';
+import { Component } from 'react';
 import { TableConfig, Reservation } from '../../../types';
 import { sanitizePhoneDigits } from '../../../utils/phoneValidator';
 

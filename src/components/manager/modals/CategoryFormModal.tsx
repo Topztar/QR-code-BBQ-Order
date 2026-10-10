@@ -10,7 +10,7 @@ export interface CategoryFormModalProps {
   catError: string | null;
 }
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 
 export const CategoryFormModal: React.FC<CategoryFormModalProps> = ({
   isOpen,

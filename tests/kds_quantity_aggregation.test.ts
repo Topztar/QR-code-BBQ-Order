@@ -7,7 +7,7 @@ import * as net from 'net';
 
 const PROJECT_ID = 'demo-test';
 let testEnv: any;
-let db: any;
+let _db: any;
 let isEmulatorRunning = false;
 
 async function checkEmulatorOpen(port: number = 8080): Promise<boolean> {

@@ -1,4 +1,3 @@
-import React from 'react';
 import { Order, MenuItem, Category, Language } from '../../types';
 import { getLocalizedText } from '../../utils/i18n';
 import { apiFetch } from '../../lib/api';

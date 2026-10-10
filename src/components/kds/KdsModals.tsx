@@ -1,4 +1,3 @@
-import React from 'react';
 import { Order, Language } from '../../types';
 import { getLocalizedText } from '../../utils/i18n';
 import { buildKitchenReceipt } from '../../utils/receiptBuilder';
@@ -38,7 +37,7 @@ export const KdsQuickViewModal: React.FC<KdsQuickViewModalProps> = ({
   currentLang,
   t,
   getElapsedTime,
-  operatingHours = [],
+  _operatingHours = [],
   getTableOccupancyElapsedTime,
   orders,
   printerIp,

@@ -2,7 +2,6 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import React from 'react';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import { DishFormModal } from '../src/components/manager/modals/DishFormModal';
 import { ManagerMenuTab } from '../src/components/manager/ManagerMenuTab';

@@ -1,5 +1,4 @@
 import { PRINTER_CONSTANTS } from '@sabay/shared';
-import React from 'react';
 import { Cpu, RefreshCw, Unlock, Printer, Download, Trash2 } from 'lucide-react';
 import { safeStorage } from '../../lib/safeStorage';
 import { apiFetch } from '../../lib/api';

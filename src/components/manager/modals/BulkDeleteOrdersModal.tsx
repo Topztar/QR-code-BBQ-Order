@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Component } from 'react';
+import { useState, useEffect, Component } from 'react';
 import { AlertTriangle, Download, Trash2 } from 'lucide-react';
 import { useModalEscape } from '../../../hooks/useModalEscape';
 

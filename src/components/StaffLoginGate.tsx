@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { ShieldCheck, ArrowLeft, KeyRound, AlertCircle, Clock } from 'lucide-react';
 import { sessionAuth } from '../lib/sessionAuth';
 import { authenticateFirebaseCustomToken } from '../lib/firebase';

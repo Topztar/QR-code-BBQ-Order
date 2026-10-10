@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useRef, useMemo, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, useMemo, ReactNode } from 'react';
 import { MenuItem, Ingredient, Category, TableConfig, OperatingHourSlot, Reservation, Language, SoldOutType } from '../types';
 import { evaluateDishAvailability } from '../utils/menuAvailability';
 import { apiFetch } from '../lib/api';

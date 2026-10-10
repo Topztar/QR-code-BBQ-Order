@@ -185,7 +185,7 @@ describe('Firebase-Hosted E2E 12-Workflow Simulation Suite', () => {
     const idempotencyStore = new Map<string, { orderId: string; createdAt: string }>();
     const clientOrderId = 'client-uuid-9876';
 
-    const submitOrder = (cId: string, orderPayload: any) => {
+    const submitOrder = (cId: string, _orderPayload: any) => {
       if (idempotencyStore.has(cId)) {
         const existing = idempotencyStore.get(cId)!;
         return { isExisting: true, orderId: existing.orderId, statusCode: 200 };

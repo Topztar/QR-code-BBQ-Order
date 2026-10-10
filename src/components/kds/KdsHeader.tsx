@@ -1,4 +1,3 @@
-import React from 'react';
 import { Category, Language } from '../../types';
 import { getLocalizedText } from '../../utils/i18n';
 import { unlockAudio } from '../../utils/kdsAudio';

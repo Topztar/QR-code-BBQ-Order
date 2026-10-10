@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Lock, Unlock, Check, QrCode, Edit, Trash2 } from 'lucide-react';
 import { TableConfig } from '../../../types';
 import { useDashboardStore } from '../../../stores/dashboard/useDashboardStore';

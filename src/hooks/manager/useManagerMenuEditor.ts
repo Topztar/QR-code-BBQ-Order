@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Category } from '../../types';
 import { useDashboardStore } from '../../stores/dashboard/useDashboardStore';
 import { useShallow } from 'zustand/react/shallow';

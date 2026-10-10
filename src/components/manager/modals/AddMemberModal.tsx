@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Component } from 'react';
+import { useState, useEffect, Component } from 'react';
 import { Plus } from 'lucide-react';
 import { memberService } from '../../../services/memberService';
 import { useModalEscape } from '../../../hooks/useModalEscape';

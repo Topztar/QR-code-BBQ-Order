@@ -74,7 +74,7 @@ describe('Cashier Order Deletion Integration & Anti-Regression Suite', () => {
 
     // Test 404 on non-existent order
     let status404 = 200;
-    let json404: any = null;
+    let _json404: any = null;
     const req404: any = {
       params: { id: 'ORD-NON-EXISTENT' },
       body: {}

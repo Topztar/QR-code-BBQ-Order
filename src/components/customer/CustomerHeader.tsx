@@ -1,4 +1,3 @@
-import React from 'react';
 import { TableConfig, Order, Language, Reservation } from '../../types';
 import { TRANSLATIONS } from '../../data';
 import { getMappedTableId } from '../../utils/tableUtils';
@@ -70,7 +69,6 @@ const CustomerHeaderBase: React.FC<CustomerHeaderProps> = ({
   setToasts,
   customerNotice,
   isStoreCurrentlyOpen,
-  effectiveIsStoreCurrentlyOpen,
   isTakeoutMode = false,
   isTaiwanRestDay,
   isCurrentSlotReservableOnly,
@@ -100,7 +98,6 @@ const CustomerHeaderBase: React.FC<CustomerHeaderProps> = ({
   orderError,
   lineProfile,
   userPoints = 0,
-  userBalance = 0,
   memberPointsRatio = 20,
   vipThreshold = 1000,
   vipDiscountRate = 0.9,

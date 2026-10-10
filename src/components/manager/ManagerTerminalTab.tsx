@@ -1,4 +1,3 @@
-import React from 'react';
 import { ShoppingBag, Minimize2, Maximize2, ShoppingCart, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Category, Language, TableConfig } from '../../types';
 import { getLocalizedText } from '../../utils/i18n';

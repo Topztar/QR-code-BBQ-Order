@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Plus, Layers, Edit, Trash2 } from 'lucide-react';
 import { Category, Language, MenuItem, SoldOutType } from '../../types';
 import { getLocalizedText } from '../../utils/i18n';

@@ -1,4 +1,3 @@
-import React from "react";
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { CashierCheckoutPanel } from './cashier/CashierCheckoutPanel';
 import { CashierOrderDetailPanel } from './cashier/CashierOrderDetailPanel';
@@ -111,16 +110,16 @@ export const ManagerCashierTab: React.FC<ManagerCashierTabProps> = (props) => {
     setIsAdjustingDiscount,
     setIsAdjustingSurcharge,
     takeoutDetailModalOrder, setTakeoutDetailModalOrder,
-    isCashierWidthAuto,
+    _isCashierWidthAuto,
     
-    setIsCashierWidthAuto, setSimulatedElapsedOrders, setCopiedTakeoutPhone, setCopiedGoogleLinkNotice,
+    _setIsCashierWidthAuto, setSimulatedElapsedOrders, setCopiedTakeoutPhone, setCopiedGoogleLinkNotice,
     setBatchSuccessMessage, setIsBatchProcessing, setSelectedResIds,
     setSelectedCalendarStatusFilter,
     
     reservationToDeleteId, setReservationToDeleteId,
-    editingOrderTableId, setEditingOrderTableId,
-    editingOrderTableValue, setEditingOrderTableValue,
-    simulatedElapsedOrders, copiedTakeoutPhone, copiedGoogleLinkNotice,
+    _editingOrderTableId, setEditingOrderTableId,
+    _editingOrderTableValue, setEditingOrderTableValue,
+    _simulatedElapsedOrders, copiedTakeoutPhone, copiedGoogleLinkNotice,
     batchSuccessMessage, isBatchProcessing, selectedResIds,
     selectedCalendarStatusFilter
   } = useDashboardStore();

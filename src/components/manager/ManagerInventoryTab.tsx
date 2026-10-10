@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { AlertTriangle, Package, Download, Loader2 } from 'lucide-react';
 import { Ingredient } from '../../types';
 import { getLocalizedText } from '../../utils/i18n';
@@ -44,7 +44,7 @@ interface ManagerInventoryTabProps {
 }
 
 export const ManagerInventoryTab: React.FC<ManagerInventoryTabProps> = ({
-  analytics,
+  _analytics,
   ingredients: propIngredients,
   menuItems,
   restockAmount,

@@ -1,4 +1,3 @@
-import React from 'react';
 import { OrderItem, Language, MenuItem } from '../../types';
 import { getLocalizedText } from '../../utils/i18n';
 import { TRANSLATIONS } from '../../data';
