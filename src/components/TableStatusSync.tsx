@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useCallback } from 'react';
+import { useEffect, useMemo, useRef, useCallback } from 'react';
 import { useOrderData } from '../context/OrderDataContext';
 import { useRestaurantData } from '../context/RestaurantDataContext';
 import { deriveTableStatuses } from '@sabay/shared';

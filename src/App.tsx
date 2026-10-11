@@ -266,29 +266,16 @@ function AppContent({
     handleSavePromoComboConfig,
     handleUpdateMinSpend,
     handleUpdateOperatingHours,
-    handleUpdateCustomerNotice,
-    handleUpdatePopularItemIds,
   } = useRestaurantData();
 
   const {
     orders,
-
     offlineQueue,
     isSyncing,
     syncProgressMsg,
     isNetworkOnline,
     handlePlaceOrder,
-    handleUpdateOrderStatus,
-    handleToggleOrderItemComplete,
-    handleUpdateTableNumber,
-    handleUpdateQuickNotes,
-    handleToggleOrderFlag,
-    handleUpdateOrderItems,
-    handlePayOrder,
-    handleBulkPayOrders,
-    handleDeleteOrder,
     handleForceSync,
-
   } = useOrderData();
 
   return (

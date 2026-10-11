@@ -4,7 +4,7 @@ import { ErrorBoundary } from './ErrorBoundary';
 import { ChunkErrorBoundary } from './ChunkErrorBoundary';
 import React, { useState, useEffect, useMemo, useCallback, Suspense } from 'react';
 import { resilientLazy } from '../App';
-import { Ingredient, Language, Category, TableConfig, Order, OrderStatus, Reservation, SoldOutType, PrinterConfig, PaidModDetails } from '../types';
+import { Ingredient, Language, Category, TableConfig, Order, OrderStatus, Reservation, SoldOutType, PrinterConfig } from '../types';
 import { getLocalizedText } from '../utils/i18n';
 import { safeStorage } from '../lib/safeStorage';
 import { getStatusMeta } from '../utils/orderUtils';
@@ -603,7 +603,6 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   const popularItemIdsStr = JSON.stringify(popularItemIds);
   useEffect(() => {
     setLocalPopularIds(popularItemIds);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [popularItemIdsStr]);
 
 

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Order, OrderStatus, TableConfig, Reservation } from '../types';
+import { Order, OrderStatus, TableConfig } from '../types';
 import { orderCalculationService } from '@sabay/shared';
 import { apiFetch } from '../lib/api';
 import { db, isFirebaseSyncEnabled, ensureFirebaseAuthReady } from '../lib/firebase';

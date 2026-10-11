@@ -4,8 +4,6 @@ import { apiFetch } from '../../lib/api';
 import { getLocalizedText } from '../../utils/i18n';
 import { orderCalculationService } from '@sabay/shared';
 import { memberService } from '../../services/memberService';
-import { db } from '../../lib/firebase';
-import { collection, query, where, getDocs } from 'firebase/firestore';
 
 export interface CheckoutSuccessData {
   id: string;
