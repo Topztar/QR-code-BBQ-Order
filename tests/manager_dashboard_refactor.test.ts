@@ -67,13 +67,13 @@ describe('Manager Dashboard Refactoring & Security Tests', () => {
       const addRes = memberService.updateMemberPoints('user@test.com', 30);
       expect(addRes.success).toBe(true);
       expect(addRes.newPoints).toBe(80);
-      expect(localStorage.getItem('google-points-user@test.com')).toBe('80');
+      expect(memberService.getMemberByEmail('user@test.com')?.points).toBe(80);
 
       // Deduct points (prevent negative)
       const deductRes = memberService.updateMemberPoints('user@test.com', -100);
       expect(deductRes.success).toBe(true);
       expect(deductRes.newPoints).toBe(0);
-      expect(localStorage.getItem('google-points-user@test.com')).toBe('0');
+      expect(memberService.getMemberByEmail('user@test.com')?.points).toBe(0);
 
       expect(dispatchSpy).toHaveBeenCalled();
     });
@@ -94,13 +94,12 @@ describe('Manager Dashboard Refactoring & Security Tests', () => {
       expect(updated?.balance).toBe(600);
     });
 
-    it('should delete member and remove corresponding point key', () => {
+    it('should delete member from storage properly', () => {
       const mockMembers = [
         { email: 'user1@test.com', name: 'User 1' },
         { email: 'user2@test.com', name: 'User 2' },
       ];
       memberService.saveMembers(mockMembers);
-      localStorage.setItem('google-points-user1@test.com', '100');
 
       const delRes = memberService.deleteMember('user1@test.com');
       expect(delRes.success).toBe(true);
@@ -108,7 +107,19 @@ describe('Manager Dashboard Refactoring & Security Tests', () => {
       const remaining = memberService.getMembers();
       expect(remaining).toHaveLength(1);
       expect(remaining[0].email).toBe('user2@test.com');
-      expect(localStorage.getItem('google-points-user1@test.com')).toBeNull();
+    });
+
+    it('should seamlessly migrate legacy google-members-database storage key', () => {
+      localStorage.removeItem(MEMBERS_STORAGE_KEY);
+      const legacyData = [{ email: 'migrated@test.com', name: 'Migrated User' }];
+      localStorage.setItem('google-members-database', JSON.stringify(legacyData));
+
+      const members = memberService.getMembers();
+      expect(members).toHaveLength(1);
+      expect(members[0].email).toBe('migrated@test.com');
+      // Legacy key should be cleaned and new key set
+      expect(localStorage.getItem('google-members-database')).toBeNull();
+      expect(localStorage.getItem(MEMBERS_STORAGE_KEY)).not.toBeNull();
     });
   });
 

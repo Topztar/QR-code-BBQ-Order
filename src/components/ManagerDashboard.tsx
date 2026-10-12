@@ -1068,13 +1068,13 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
       serviceCharge: o.serviceCharge || 0,
       total: o.total || 0,
       status: getStatusMeta(o.status).label,
-      isMember: o.isMember ? 'Google會員' : '非會員一般餐客'
+      isMember: o.isMember ? '實體貴賓會員' : '非會員一般餐客'
     }));
     const map = {
       id: '訂單單號', createdAt: '銷售日期時間', tableNumber: '桌位號碼',
       customerName: '客戶名稱', paymentMethod: '付清途徑',
       subtotal: '餐點小計金額', serviceCharge: '服務費', total: '結賬實付總金額',
-      status: '點單狀態', isMember: '是否已綁載Google會員'
+      status: '點單狀態', isMember: '是否為實體會員'
     };
     exportToCSV(flatData, map, `沙貝燒烤-銷售財務報表-${new Date().toISOString().split('T')[0]}.csv`);
   };

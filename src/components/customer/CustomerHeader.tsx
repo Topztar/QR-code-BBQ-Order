@@ -3,14 +3,12 @@ import { TableConfig, Order, Language, Reservation } from '../../types';
 import { TRANSLATIONS } from '../../data';
 import { getMappedTableId } from '../../utils/tableUtils';
 import { getLocalizedText } from '../../utils/i18n';
-import { orderCalculationService } from '@sabay/shared';
 import {
   BellRing,
   AlertTriangle,
   QrCode,
   Check,
   X,
-  Coins,
   Calendar,
   Loader2,
 } from 'lucide-react';
@@ -50,17 +48,6 @@ export interface CustomerHeaderProps {
   setOrderSentSuccess: (val: string | null) => void;
   activeOrders: Order[];
   orderError: string | null;
-  lineProfile?: any;
-  userPoints?: number;
-  userBalance?: number;
-  memberPointsRatio?: number;
-  vipThreshold?: number;
-  vipDiscountRate?: number;
-  enablePointsDiscount?: boolean;
-  pointsRedeemRate?: number;
-  redeemMessage?: string | null;
-  REWARD_ITEMS: any[];
-  handleRedeemReward: (reward: any) => void;
   activeCustomerReservation: Reservation | null;
   setShowReservationModal: (val: boolean) => void;
 }
@@ -97,16 +84,6 @@ const CustomerHeaderBase: React.FC<CustomerHeaderProps> = ({
   setOrderSentSuccess,
   activeOrders,
   orderError,
-  lineProfile,
-  userPoints = 0,
-  memberPointsRatio = 20,
-  vipThreshold = 1000,
-  vipDiscountRate = 0.9,
-  enablePointsDiscount = true,
-  pointsRedeemRate = 1,
-  redeemMessage,
-  REWARD_ITEMS,
-  handleRedeemReward,
   activeCustomerReservation,
   setShowReservationModal,
 }) => {
@@ -819,145 +796,6 @@ const CustomerHeaderBase: React.FC<CustomerHeaderProps> = ({
           </div>
         </div>
       )}
-
-      {/* Google Loyalty Program Banner */}
-      {!isSimplifiedMode &&
-        (lineProfile ? (
-          <div className="bg-[#121212] border border-white/5 rounded-3xl p-5 text-left flex flex-col space-y-4 shadow-xl animate-fade-in my-4 font-sans">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-              <div className="flex items-center space-x-3.5">
-                <div className="relative">
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#E5B453] to-amber-600 p-[2px] shadow-lg shadow-amber-500/20">
-                    <img
-                      src={lineProfile.pictureUrl || 'https://via.placeholder.com/150'}
-                      alt="profile"
-                      className="w-full h-full rounded-full border-2 border-[#121212] object-cover bg-zinc-800"
-                    />
-                  </div>
-                  <div className="absolute -bottom-1 -right-1 bg-blue-500 rounded-full p-1 border-2 border-[#121212]">
-                    <Coins size={10} className="text-white" />
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <h4 className="text-white font-extrabold text-sm sm:text-base tracking-wide flex items-center gap-2">
-                    <span>Google 會員專屬累點好禮中心</span>
-                    {orderCalculationService.calculateVipStatus(userPoints, vipThreshold).isVip ? (
-                      <span className="bg-gradient-to-r from-amber-500/30 to-yellow-500/20 text-[#E5B453] border border-amber-500/50 text-[10px] font-black px-2.5 py-0.5 rounded-full shadow-sm">
-                        👑 VIP 尊榮貴賓 ({Math.round(vipDiscountRate * 100)}% 專屬結帳)
-                      </span>
-                    ) : (
-                      <span className="bg-zinc-800 text-zinc-300 text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-white/10">
-                        一般會員
-                      </span>
-                    )}
-                  </h4>
-                  <p className="text-slate-400 text-xs">
-                    歡迎回來，<strong className="text-white font-black">{lineProfile.displayName}</strong>
-                    ！每 {memberPointsRatio} 元消費可累積 1 點{enablePointsDiscount ? `，點數可按 ${pointsRedeemRate} 點抵 NT$1 折現` : ''}或兌換熱銷串燒好禮！
-                    {!orderCalculationService.calculateVipStatus(userPoints, vipThreshold).isVip && (
-                      <span className="block text-amber-400/90 text-[11px] font-medium mt-0.5">
-                        ✨ 距離升級 👑 VIP 尊榮貴賓（享全單 {Math.round(vipDiscountRate * 100)}% 折扣）還差 <strong className="font-bold">{orderCalculationService.calculateVipStatus(userPoints, vipThreshold).pointsToNext} 點</strong>！
-                      </span>
-                    )}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-3.5">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest font-mono flex items-center gap-1 font-sans">
-                  <span>🔥 點數立即兌換專區 (Points Redemption)</span>
-                </span>
-                <span className="text-[10px] text-blue-400 font-bold bg-blue-500/10 px-2.5 py-0.5 rounded border border-blue-500/15">
-                  點數立即抵扣 結帳自動帶入 NT$ 0 免費送
-                </span>
-              </div>
-
-              {redeemMessage && (
-                <div className="bg-emerald-500/10 border border-emerald-500/20 text-[#00C300] rounded-2xl p-4 text-xs font-black leading-relaxed flex items-center space-x-2 animate-pulse">
-                  <span>🎉</span>
-                  <span>{redeemMessage}</span>
-                </div>
-              )}
-
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-3.5">
-                {REWARD_ITEMS.map((item) => {
-                  const isEligible = orderCalculationService.canRedeemReward(userPoints, item.cost);
-                  return (
-                    <div
-                      key={item.id}
-                      className={`bg-zinc-950/50 rounded-2xl p-4 border flex flex-col justify-between space-y-4 relative overflow-hidden transition-all duration-300 ${
-                        isEligible
-                          ? 'border-blue-500/20 hover:border-blue-400/50 bg-blue-950/5 hover:bg-blue-950/20 hover:translate-y-[-2px]'
-                          : 'border-white/5 opacity-40'
-                      }`}
-                    >
-                      <div className="space-y-1.5 flex-1 text-left">
-                        <div className="flex items-center justify-between">
-                          <span
-                            className={`text-[9px] font-black px-2 py-0.5 rounded-md ${
-                              isEligible
-                                ? 'bg-blue-500/15 text-blue-300 border border-blue-400/10 font-sans'
-                                : 'bg-white/5 text-slate-500'
-                            }`}
-                          >
-                            🪙 {item.cost} 點
-                          </span>
-                        </div>
-                        <h5 className="font-extrabold text-xs text-white leading-snug">
-                          {getLocalizedText(item.name, currentLang)}
-                        </h5>
-                        <span className="text-[10px] text-zinc-500 block">
-                          市價 NT$ {item.originalPrice}
-                        </span>
-                      </div>
-
-                      <button
-                        type="button"
-                        disabled={!isEligible}
-                        onClick={() => handleRedeemReward(item)}
-                        className={`w-full py-2.5 rounded-xl text-[11px] font-black transition active:scale-95 flex items-center justify-center space-x-1 cursor-pointer ${
-                          isEligible
-                            ? 'bg-[#4285F4] hover:bg-blue-600 text-white shadow-md shadow-blue-500/10'
-                            : 'bg-zinc-900 text-zinc-650 cursor-not-allowed font-medium'
-                        }`}
-                      >
-                        {isEligible ? '立即兌換' : `賸餘 ${Math.max(0, item.cost - (userPoints || 0))} 點`}
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="bg-gradient-to-r from-blue-950/20 via-slate-900/40 to-transparent border border-blue-500/15 rounded-3xl p-5 text-left flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 animate-fade-in my-4">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 rounded-xl bg-blue-500/15 flex items-center justify-center text-blue-400 shrink-0">
-                <Coins size={18} />
-              </div>
-              <div>
-                <h5 className="text-white font-bold text-sm">
-                  💡 登入 Google 帳號，尊享超值累點與美食兌換！
-                </h5>
-                <p className="text-slate-400 text-xs">
-                  每 {memberPointsRatio} 元消費可累積 1 點{enablePointsDiscount ? `，點數可按 ${pointsRedeemRate} 點抵 NT$1 折現` : ''}或兌換熱銷串燒好禮！
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                const loginBtn = document.getElementById('google-login-trigger-btn');
-                if (loginBtn) loginBtn.click();
-              }}
-              className="bg-[#4285F4] hover:bg-blue-600 text-white font-black text-xs px-5 py-2.5 rounded-xl cursor-pointer transition shrink-0 active:scale-95 shadow-lg shadow-blue-500/10 font-sans"
-            >
-              立即登入累點
-            </button>
-          </div>
-        ))}
 
       {/* Reservation Banner */}
       {!urlReservationParams?.reservationNo && (

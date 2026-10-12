@@ -1652,26 +1652,6 @@ export const INITIAL_TRANSLATIONS: { [key: string]: { [lang in Language]?: strin
     "ru": "Итого к оплате сегодня",
     "es": "Total a Pagar Hoy"
   },
-  "googleLoginPromo": {
-    "zh": "💡 綁定 Google 帳戶可累積點數！",
-    "en": "💡 Link Google account to earn reward points!",
-    "ko": "💡 구글 계정을 연동하면 포인트를 적립할 수 있습니다!",
-    "ja": "💡 Googleアカウント連携でポイントが貯まります！",
-    "th": "💡 เชื่อมต่อบัญชี Google เพื่อสะสมคะแนน!",
-    "vi": "💡 Liên kết tài khoản Google để tích điểm thành viên!",
-    "ru": "💡 Привяжите аккаунт Google для накопления баллов!",
-    "es": "💡 ¡Vincula tu cuenta de Google para acumular puntos!"
-  },
-  "loginNow": {
-    "zh": "手刀登入",
-    "en": "Login Now",
-    "ko": "지금 로그인",
-    "ja": "今すぐログイン",
-    "th": "เข้าสู่ระบบทันที",
-    "vi": "Đăng nhập ngay",
-    "ru": "Войти сейчас",
-    "es": "Iniciar Sesión"
-  },
   "kitchenPaused": {
     "zh": "⚠️ 廚房暫停接單中，暫時停用下單 (Kitchen Paused)",
     "en": "⚠️ Kitchen paused. Ordering is temporarily disabled.",

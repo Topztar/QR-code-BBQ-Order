@@ -29,41 +29,6 @@ function registerMembersRoutes(app, ctx) {
             sendErrorResponse(res, err, '取得會員失敗');
         }
     });
-    post('/members', async (req, res) => {
-        try {
-            const { email, name, avatar, idToken } = req.body;
-            if (!email)
-                return res.status(400).json({ error: '缺少會員信箱' });
-            const normalEmail = String(email).toLowerCase();
-            const docRef = membersRef.doc(normalEmail);
-            await db.runTransaction(async (t) => {
-                const doc = await t.get(docRef);
-                if (doc.exists) {
-                    t.update(docRef, {
-                        name: String(name || doc.data()?.name || '').trim(),
-                        avatar: avatar ? String(avatar) : doc.data()?.avatar,
-                        updatedAt: Date.now()
-                    });
-                }
-                else {
-                    t.set(docRef, {
-                        email: normalEmail,
-                        name: String(name || '').trim(),
-                        avatar: avatar ? String(avatar) : '',
-                        points: 0,
-                        balance: 0,
-                        joinDate: Date.now(),
-                        updatedAt: Date.now()
-                    });
-                }
-            });
-            const updatedDoc = await docRef.get();
-            res.json({ success: true, member: updatedDoc.data() });
-        }
-        catch (err) {
-            sendErrorResponse(res, err, '更新會員資料失敗');
-        }
-    });
     post('/members/:email/topup', requireStaffAuth, async (req, res) => {
         try {
             const email = String(req.params.email).toLowerCase();

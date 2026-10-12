@@ -130,6 +130,22 @@ function AppContent({
     navigateTo('/', { replace: true });
   }, [navigateTo]);
 
+  // Clean legacy loyalty storage keys from client browsers
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        for (let i = localStorage.length - 1; i >= 0; i--) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith('google-points-')) {
+            localStorage.removeItem(key);
+          }
+        }
+      }
+    } catch (_e) {
+      // Safe fallback for strict sandboxes/iOS Private Mode
+    }
+  }, []);
+
   useEffect(() => {
     if (isStaff) {
       sessionAuth.verify().then(isValid => {

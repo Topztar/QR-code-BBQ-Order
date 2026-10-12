@@ -437,7 +437,7 @@ ${kitchenDetails}
 ========================================
 單號: ${order.id}
 出單位址: ${livePrinterIp} (TCP/3000)
-付費方式: ${order.paymentMethod.toUpperCase()} (Google會員: ${order.isMember ? '是(累積點數)' : '否'})
+付費方式: ${order.paymentMethod.toUpperCase()} (貴賓會員: ${order.isMember ? '是' : '否'})
 時間: ${new Date(order.createdAt).toLocaleTimeString()}
 ----------------------------------------
 餐點明細:

@@ -706,10 +706,10 @@ let liveMemberRewards = [
           }
         ];
 
-// ─── Google Identity Protection: Server-side Member Registry ─────────────────
-// Members are now the authoritative source of truth on the backend.
-// The frontend localStorage 'google-members-database' is treated as a
-// read-through cache only — all balance mutations go through these APIs.
+// ─── Store Member Registry: Server-side Member Store ─────────────────────────
+// Members are authoritative on the backend.
+// The frontend localStorage 'sabay-members-database' is treated as a
+// read-through cache — balance mutations go through cashier APIs.
 interface MemberRecord {
   id: string;        // Stable ID = base64(email)
   email: string;
@@ -2291,36 +2291,6 @@ app.get('/api/members/:email', (req, res) => {
   const member = liveMembers.find(m => m.email.toLowerCase() === email);
   if (!member) return res.status(404).json({ error: '會員帳號不存在 / Member not found' });
   res.json(member);
-});
-
-// POST /api/members — upsert a member (create or update name/avatar/points from Google sign-in)
-app.post('/api/members', (req, res) => {
-  const { email, name, avatar, balance, points } = req.body;
-  if (!email || !name) return res.status(400).json({ error: '缺少必要欄位 email / name' });
-  const normalEmail = String(email).trim().toLowerCase();
-  const existingIdx = liveMembers.findIndex(m => m.email.toLowerCase() === normalEmail);
-  if (existingIdx >= 0) {
-    // Update non-financial fields (name / avatar); financial fields only via /topup & /deduct
-    liveMembers[existingIdx].name = String(name).trim();
-    if (avatar) liveMembers[existingIdx].avatar = String(avatar);
-    liveMembers[existingIdx].updatedAt = Date.now();
-    saveStateToDisk();
-    return res.json({ success: true, member: liveMembers[existingIdx] });
-  }
-  // New member
-  const newMember: MemberRecord = {
-    id: memberId(normalEmail),
-    email: normalEmail,
-    name: String(name).trim(),
-    avatar: avatar ? String(avatar) : undefined,
-    balance: Math.max(0, Number(balance) || 0),
-    points: Math.max(0, Number(points) || 0),
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-  };
-  liveMembers.push(newMember);
-  saveStateToDisk();
-  return res.json({ success: true, member: newMember });
 });
 
 // POST /api/members/:email/topup — add stored-value balance (staff cashier top-up)

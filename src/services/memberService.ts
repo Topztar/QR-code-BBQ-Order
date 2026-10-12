@@ -9,7 +9,7 @@ export interface Member {
   [key: string]: any;
 }
 
-export const MEMBERS_STORAGE_KEY = 'google-members-database';
+export const MEMBERS_STORAGE_KEY = 'sabay-members-database';
 export const MEMBERS_UPDATED_EVENT = 'local-points-updated';
 
 class MemberService {
@@ -20,7 +20,18 @@ class MemberService {
     if (typeof window === 'undefined' || !window.localStorage) {
       return [];
     }
-    const raw = localStorage.getItem(MEMBERS_STORAGE_KEY);
+    let raw = localStorage.getItem(MEMBERS_STORAGE_KEY);
+    if (!raw) {
+      // 舊快取平滑遷移
+      const legacyRaw = localStorage.getItem('google-members-database');
+      if (legacyRaw) {
+        raw = legacyRaw;
+        try {
+          localStorage.setItem(MEMBERS_STORAGE_KEY, legacyRaw);
+          localStorage.removeItem('google-members-database');
+        } catch (_err) {}
+      }
+    }
     if (!raw) return [];
     try {
       const parsed = JSON.parse(raw);
@@ -101,11 +112,6 @@ class MemberService {
       updatedAt: new Date().toISOString()
     };
 
-    // 同步歷史點數 key
-    if (typeof window !== 'undefined' && window.localStorage) {
-      localStorage.setItem(`google-points-${members[targetIdx].email}`, String(finalPoints));
-    }
-
     this.saveMembers(members, true);
     return { success: true, newPoints: finalPoints };
   }
@@ -176,10 +182,6 @@ class MemberService {
 
     members.push(member);
 
-    if (typeof window !== 'undefined' && window.localStorage) {
-      localStorage.setItem(`google-points-${cleanEmail}`, String(member.points));
-    }
-
     this.saveMembers(members, true);
     return { success: true, member };
   }
@@ -227,10 +229,6 @@ class MemberService {
 
     if (filtered.length === members.length) {
       return { success: false, error: '找不到該會員或已被刪除！' };
-    }
-
-    if (typeof window !== 'undefined' && window.localStorage) {
-      localStorage.removeItem(`google-points-${email}`);
     }
 
     this.saveMembers(filtered, true);

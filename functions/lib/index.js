@@ -57381,9 +57381,16 @@ var require_staff = __commonJS({
         }
       });
       post("/staff/pin/verify", pinRateLimiter, async (req, res) => {
-        const { pin } = req.body;
+        let body = req.body || {};
+        if (typeof body === "string") {
+          try {
+            body = JSON.parse(body);
+          } catch (_) {
+          }
+        }
+        const pin = body.pin;
         if (!pin || typeof pin !== "string") {
-          return res.status(400).json({ success: false, error: "\u8ACB\u8F38\u5165\u6709\u6548\u7684 6 \u4F4D\u6578\u91D1\u9470" });
+          return res.status(400).json({ success: false, error: "\u8ACB\u8F38\u5165\u6709\u6548\u7684 6 \u4F4D\u6578\u91D1\u9470", receivedBody: body });
         }
         try {
           const credsRef = db2.collection("secrets").doc("credentials");
@@ -57589,39 +57596,6 @@ var require_members = __commonJS({
           res.json(doc.data());
         } catch (err) {
           sendErrorResponse2(res, err, "\u53D6\u5F97\u6703\u54E1\u5931\u6557");
-        }
-      });
-      post("/members", async (req, res) => {
-        try {
-          const { email, name, avatar, idToken } = req.body;
-          if (!email)
-            return res.status(400).json({ error: "\u7F3A\u5C11\u6703\u54E1\u4FE1\u7BB1" });
-          const normalEmail = String(email).toLowerCase();
-          const docRef = membersRef.doc(normalEmail);
-          await db2.runTransaction(async (t) => {
-            const doc = await t.get(docRef);
-            if (doc.exists) {
-              t.update(docRef, {
-                name: String(name || doc.data()?.name || "").trim(),
-                avatar: avatar ? String(avatar) : doc.data()?.avatar,
-                updatedAt: Date.now()
-              });
-            } else {
-              t.set(docRef, {
-                email: normalEmail,
-                name: String(name || "").trim(),
-                avatar: avatar ? String(avatar) : "",
-                points: 0,
-                balance: 0,
-                joinDate: Date.now(),
-                updatedAt: Date.now()
-              });
-            }
-          });
-          const updatedDoc = await docRef.get();
-          res.json({ success: true, member: updatedDoc.data() });
-        } catch (err) {
-          sendErrorResponse2(res, err, "\u66F4\u65B0\u6703\u54E1\u8CC7\u6599\u5931\u6557");
         }
       });
       post("/members/:email/topup", requireStaffAuth, async (req, res) => {

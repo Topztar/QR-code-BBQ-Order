@@ -86,9 +86,13 @@ post('/staff/pin/check-path', pinRateLimiter, async (req, res) => {
 });
 
 post('/staff/pin/verify', pinRateLimiter, async (req, res) => {
-  const { pin } = req.body;
+  let body = req.body || {};
+  if (typeof body === 'string') {
+    try { body = JSON.parse(body); } catch (_) {}
+  }
+  const pin = body.pin;
   if (!pin || typeof pin !== 'string') {
-    return res.status(400).json({ success: false, error: '請輸入有效的 6 位數金鑰' });
+    return res.status(400).json({ success: false, error: '請輸入有效的 6 位數金鑰', receivedBody: body });
   }
 
   try {

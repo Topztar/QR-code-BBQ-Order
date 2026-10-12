@@ -1,0 +1,79 @@
+{
+  "timestamp": "2026-10-12T08:01:37.712Z",
+  "environment": "Firebase Emulator (Hosting + Functions)",
+  "customer": {
+    "staticDataJson": {
+      "status": 200,
+      "sizeKB": 238.87,
+      "coldLoadMs": 16.15,
+      "warmAvgMs": 8.56,
+      "cacheControl": "none",
+      "categoriesCount": 12,
+      "menuItemsCount": 114
+    },
+    "publicApiBootstrap": {
+      "status": 200,
+      "sizeKB": 212.86,
+      "coldLoadMs": 12215.85,
+      "warmAvgMs": 14.09,
+      "etagValidation304Ms": 12.31,
+      "cacheControl": "public, max-age=60, s-maxage=180, stale-while-revalidate=600",
+      "categoriesCount": 12,
+      "menuItemsCount": 115
+    },
+    "storeStatus": {
+      "status": 200,
+      "loadMs": 314.03,
+      "sizeKB": 0.16
+    },
+    "compositeParallelLoadMs": 1780.71
+  },
+  "admin": {
+    "staffAuth": {
+      "status": 200,
+      "timeMs": 2814.82,
+      "tokenAcquired": true
+    },
+    "staffBootstrap": {
+      "status": 200,
+      "sizeKB": 6394.38,
+      "coldLoadMs": 15450.28,
+      "warmAvgMs": 25603.82,
+      "counts": {
+        "categories": 12,
+        "menu": 115,
+        "tables": 8,
+        "ingredients": 8,
+        "reservations": 0
+      }
+    },
+    "orders": {
+      "status": 200,
+      "timeMs": 749.87,
+      "sizeKB": 68.53,
+      "ordersCount": 27
+    },
+    "tables": {
+      "status": 200,
+      "timeMs": 50.11,
+      "sizeKB": 1.26
+    },
+    "ingredients": {
+      "status": 200,
+      "timeMs": 47.8,
+      "sizeKB": 1.81
+    },
+    "inventoryStats": {
+      "status": 200,
+      "timeMs": 48.85,
+      "sizeKB": 0.03
+    },
+    "members": {
+      "status": 200,
+      "timeMs": 59.71,
+      "sizeKB": 0,
+      "membersCount": 0
+    },
+    "compositeParallelLoadMs": 23558.26
+  }
+}

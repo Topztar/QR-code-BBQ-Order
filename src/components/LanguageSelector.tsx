@@ -130,6 +130,7 @@ export const LanguageSelector: React.FC<LanguageSelectorProps> = ({
   return (
     <div className="relative" ref={containerRef} id="lang-selector-custom-dropdown">
       <button
+        id="lang-selector-trigger"
         type="button"
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center space-x-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full px-2 py-1 transition-all shadow-md active:scale-95 cursor-pointer"
@@ -147,12 +148,14 @@ export const LanguageSelector: React.FC<LanguageSelectorProps> = ({
             {options.map((opt) => (
               <button
                 key={opt.code}
+                id={`lang-opt-${opt.code}`}
+                data-lang={opt.code}
                 type="button"
                 onClick={() => {
                   onLanguageChange(opt.code);
                   setIsOpen(false);
                 }}
-                className={`w-full flex items-center space-x-2.5 px-3 py-2 text-left text-xs hover:bg-white/10 transition-colors ${
+                className={`w-full flex items-center space-x-2.5 px-3 py-2 text-left text-xs hover:bg-white/10 transition-colors cursor-pointer ${
                   currentLang === opt.code ? 'text-[#E5B453] bg-white/5 font-bold' : 'text-white/80'
                 }`}
               >

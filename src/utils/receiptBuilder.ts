@@ -54,7 +54,7 @@ export function buildCustomerReceipt(order: Order, currentLang: any = 'zh', prin
 出單 IP : ${printerIp} (VIRTUAL LAN_9100)
 時間 TIME: ${order.createdAt ? parseSafeDate(order.createdAt).toLocaleTimeString() : 'N/A'}
 付款方式: ${order.paymentMethod ? order.paymentMethod.toUpperCase() : 'CASH'}
-累積儲值會員: ${order.isMember ? '是 (小計累積點數中)' : '否'}
+店內儲值會員: ${order.isMember ? '是' : '否'}
 ----------------------------------------
 消費明細 Billing details:
 ${customerDetails}

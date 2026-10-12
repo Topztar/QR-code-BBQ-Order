@@ -154,7 +154,7 @@ export const OrderDetailDrilldownModal: React.FC<OrderDetailDrilldownModalProps>
                     <img src={selectedOrder.customerAvatar || 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=150'} defaultValue="" alt="avatar" className="w-10 h-10 rounded-full object-cover border border-white/10" referrerPolicy="no-referrer" />
                     <div>
                       <h4 className="font-bold text-white text-sm">{selectedOrder.customerName}</h4>
-                      <p className="text-[10px] text-zinc-500 font-mono">會員身份：{selectedOrder.isMember ? '⭐ Google Quick 會員' : '本桌一般餐客'}</p>
+                      <p className="text-[10px] text-zinc-500 font-mono">會員身份：{selectedOrder.isMember ? '⭐ 實體貴賓會員' : '本桌一般餐客'}</p>
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-4 text-xs">
@@ -439,8 +439,8 @@ export const OrderDetailDrilldownModal: React.FC<OrderDetailDrilldownModalProps>
                       </div>
                       {selectedOrder.isMember && (
                         <div className="flex justify-between text-emerald-400">
-                          <span>⭐ Google Quick 會員累點優惠</span>
-                          <span>0 元免點累存中</span>
+                          <span>⭐ 貴賓會員尊享</span>
+                          <span>已認證會員</span>
                         </div>
                       )}
                       <div className="flex justify-between border-t border-white/5 pt-3.5 text-sm font-extrabold text-white">
@@ -769,8 +769,8 @@ export const OrderDetailDrilldownModal: React.FC<OrderDetailDrilldownModalProps>
                       </div>
                       {selectedOrder.isMember && (
                         <div className="flex justify-between text-emerald-400">
-                          <span>⭐ Google Quick 會員累點優惠</span>
-                          <span>0 元免點累存中</span>
+                          <span>⭐ 貴賓會員尊享</span>
+                          <span>已認證會員</span>
                         </div>
                       )}
                       <div className="flex justify-between border-t border-white/5 pt-3.5 text-sm font-extrabold text-white">

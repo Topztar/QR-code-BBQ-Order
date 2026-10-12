@@ -35,43 +35,6 @@ export function registerMembersRoutes(app: express.Application, ctx: any) {
     }
   });
 
-  // POST /members — upsert a member (create or update name/avatar/points from Google sign-in)
-  post('/members', async (req: express.Request, res: express.Response) => {
-    try {
-      const { email, name, avatar, idToken } = req.body;
-      if (!email) return res.status(400).json({ error: '缺少會員信箱' });
-
-      const normalEmail = String(email).toLowerCase();
-      const docRef = membersRef.doc(normalEmail);
-
-      await db.runTransaction(async (t: any) => {
-        const doc = await t.get(docRef);
-        if (doc.exists) {
-          t.update(docRef, {
-            name: String(name || doc.data()?.name || '').trim(),
-            avatar: avatar ? String(avatar) : doc.data()?.avatar,
-            updatedAt: Date.now()
-          });
-        } else {
-          t.set(docRef, {
-            email: normalEmail,
-            name: String(name || '').trim(),
-            avatar: avatar ? String(avatar) : '',
-            points: 0,
-            balance: 0,
-            joinDate: Date.now(),
-            updatedAt: Date.now()
-          });
-        }
-      });
-
-      const updatedDoc = await docRef.get();
-      res.json({ success: true, member: updatedDoc.data() });
-    } catch (err) {
-      sendErrorResponse(res, err, '更新會員資料失敗');
-    }
-  });
-
   // POST /members/:email/topup — add stored-value balance (staff cashier top-up)
   post('/members/:email/topup', requireStaffAuth, async (req: express.Request, res: express.Response) => {
     try {

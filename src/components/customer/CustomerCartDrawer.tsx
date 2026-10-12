@@ -582,22 +582,6 @@ export const CustomerCartDrawer: React.FC<CustomerCartDrawerProps> = ({
                     })}
                   </>
                 )}
-
-                {/* Google Member Promo Banner */}
-                <div
-                  className={`text-[10px] border rounded-lg p-2.5 mt-2 flex items-center justify-between ${
-                    isSimplifiedMode
-                      ? 'bg-zinc-100 border-zinc-250 text-black'
-                      : 'bg-white/5 border-white/10 text-white/50'
-                  }`}
-                >
-                  <span>
-                    {TRANSLATIONS.googleLoginPromo?.[currentLang] || '💡 綁定 Google 帳戶可累積點數！'}
-                  </span>
-                  <span className="text-[#4285F4] font-black cursor-pointer">
-                    {TRANSLATIONS.loginNow?.[currentLang] || '手刀登入'}
-                  </span>
-                </div>
               </div>
             </div>
           )}

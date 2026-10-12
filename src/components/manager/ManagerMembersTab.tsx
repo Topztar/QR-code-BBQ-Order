@@ -530,8 +530,8 @@ export const ManagerMembersTab: React.FC<ManagerMembersTabProps> = ({
           <div className="flex items-center space-x-2">
             <Coins className="text-[#E5B453] shrink-0" size={17} />
             <div>
-              <h4 className="font-bold text-sm text-white font-serif tracking-wide">Google Quick Member / 顧客會員累計點數系統</h4>
-              <p className="text-white/40 text-xs">取代 LINE 傳統推播行銷，本介面詳實登錄全體 Google 帳戶顧客之累計點數。店員可在結算時手動輸入消除或微調點數。</p>
+              <h4 className="font-bold text-sm text-white font-serif tracking-wide">店內顧客會員與儲值金系統 (Store Member & Balance System)</h4>
+              <p className="text-white/40 text-xs">詳實登錄實體貴賓與儲值金會員記錄。收銀員可在結算時手動輸入儲值、扣款或調整點數。</p>
             </div>
           </div>
           <button

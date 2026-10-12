@@ -295,11 +295,6 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
     return localStorage.getItem('sabay_simplified_mode') === 'true';
   });
   const [showBackToTop, setShowBackToTop] = useState(false);
-  const [redeemMessage, _setRedeemMessage] = useState<string | null>(null);
-
-  // Loyalty Points
-  const userPoints = 0;
-  const userBalance = 0;
 
   // Operating schedule checks
   const isTaiwanRestDay = useMemo(() => {
@@ -596,10 +591,6 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
     handleReorderItems(orderItems, displayedMenuItems);
   };
 
-  const handleRedeemReward = (_reward: any) => {
-    showToast('抱歉，此功能僅限登入會員使用，請先登入帳號。', 'error');
-  };
-
   // Reservation helper dates
   const todayDateStr = useMemo(() => {
     const d = new Date();
@@ -734,8 +725,6 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
     }
   };
 
-  const REWARD_ITEMS = memberRewards.length > 0 ? memberRewards : [];
-
   const clientActiveOrders = useMemo(() => {
     return activeOrders.filter(
       (o) => o.tableNumber === selectedTable || o.tableNumber === selectedTable.replace('外帶', '').trim()
@@ -864,16 +853,6 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
         setOrderSentSuccess={setOrderSentSuccess}
         activeOrders={activeOrders}
         orderError={orderError}
-        userPoints={userPoints}
-        userBalance={userBalance}
-        memberPointsRatio={memberPointsRatio}
-        vipThreshold={memberVipThreshold}
-        vipDiscountRate={memberVipDiscountRate}
-        enablePointsDiscount={memberEnablePointsDiscount}
-        pointsRedeemRate={memberPointsRedeemRate}
-        redeemMessage={redeemMessage}
-        REWARD_ITEMS={REWARD_ITEMS}
-        handleRedeemReward={handleRedeemReward}
         activeCustomerReservation={activeCustomerReservation}
         setShowReservationModal={setShowReservationModal}
       />
@@ -1317,7 +1296,6 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
           promoComboDiscount={promoComboDiscount}
           activeCombosAndDiscounts={activeCombosAndDiscounts}
           expressFee={expressFee}
-          userBalance={userBalance}
           cartTotal={cartTotal}
           servicePaused={servicePaused}
           urlReservationParams={urlReservationParams}

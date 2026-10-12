@@ -2,7 +2,7 @@ const puppeteer = require('puppeteer-core');
 const fs = require('fs');
 
 const CHROME_PATH = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
-const BASE_URL = 'http://localhost:3000';
+const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
 const STAFF_PIN = '070718';
 
 const createdTestOrderIds = [];
