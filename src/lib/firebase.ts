@@ -29,6 +29,13 @@ const checkIndexedDB = (): boolean => {
     }
     // Safari Private Browsing / strict sandboxes throw SecurityError on open() synchronously
     const probeReq = window.indexedDB.open('__sabay_idb_probe__');
+    probeReq.onsuccess = (e) => {
+      try {
+        const probeDb = (e.target as any).result;
+        probeDb?.close();
+        window.indexedDB.deleteDatabase('__sabay_idb_probe__');
+      } catch (_) {}
+    };
     probeReq.onerror = (e) => {
       // Prevent unhandled error event bubbling
       e.preventDefault?.();
@@ -40,10 +47,11 @@ const checkIndexedDB = (): boolean => {
   }
 };
 
-const isIOSSafari = typeof navigator !== 'undefined' && 
-  /iPad|iPhone|iPod/.test(navigator.userAgent) && 
-  /Safari/.test(navigator.userAgent) && 
-  !/Chrome/.test(navigator.userAgent);
+const isIOSSafari = typeof navigator !== 'undefined' && (
+  /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+  (navigator.platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1) ||
+  /CriOS|FxiOS/.test(navigator.userAgent)
+);
 
 // Check if multi-tab coordination (BroadcastChannel) is supported
 const isBroadcastChannelSupported = typeof window !== 'undefined' && 'BroadcastChannel' in window;
@@ -238,7 +246,8 @@ import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
 // 🤖 Firebase App Check (Bot & Abuse Protection)
 let appCheckInstance: any = null;
 if (typeof window !== 'undefined') {
-  if (location.hostname === 'localhost' || location.hostname === '127.0.0.1' || isEmulatorMode) {
+  const host = location.hostname;
+  if (host === 'localhost' || host === '127.0.0.1' || host === '10.0.2.2' || isEmulatorMode) {
     // @ts-ignore
     self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
   }
