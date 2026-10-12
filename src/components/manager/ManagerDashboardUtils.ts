@@ -45,7 +45,7 @@ export const exportToCSV = (data: any[], headersMap: { [key: string]: string }, 
       if (escaped.includes(',') || escaped.includes('\n') || escaped.includes('"')) {
         return `"${escaped}"`;
       }
-      return `"${escaped}"`;
+      return escaped;
     }).join(',');
   });
   const csvContent = "\uFEFF" + [headersLine, ...rows].join('\n');

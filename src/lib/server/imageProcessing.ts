@@ -37,7 +37,7 @@ export async function processAndSaveImage(
       throw new Error(`不支援的圖片格式: ${metadata.format || 'unknown'}`);
     }
   } catch (error: any) {
-    throw new Error(`圖片解析失敗或格式不支援: ${error.message}`);
+    throw new Error(`圖片解析失敗或格式不支援: ${error.message}`, { cause: error });
   }
 
   const timestamp = Date.now();

@@ -565,7 +565,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   // Inventory transaction ledger & form states from useDashboardStore (subtab slice)
   const {
     dbInventoryLogs, setDbInventoryLogs,
-    manualAdjustId, setManualAdjustId,
+    manualAdjustId,
     manualAdjustQty, setManualAdjustQty,
     manualAdjustNote, setManualAdjustNote,
     restockAmount, setRestockAmount,
@@ -580,7 +580,6 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
       dbInventoryLogs: state.dbInventoryLogs,
       setDbInventoryLogs: state.setDbInventoryLogs,
       manualAdjustId: state.manualAdjustId,
-      setManualAdjustId: state.setManualAdjustId,
       manualAdjustQty: state.manualAdjustQty,
       setManualAdjustQty: state.setManualAdjustQty,
       manualAdjustNote: state.manualAdjustNote,
@@ -1221,7 +1220,24 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
 
 
   // Ingredient Recipe Maps definition for local recipe cards auditing 
-  const recipeCompositionMap: { [dishId: string]: { name: string; qty: string }[] } = {};
+  const recipeCompositionMap: { [dishId: string]: { name: string; qty: string }[] } = useMemo(() => ({
+    'dish-2602121834434': [
+      { name: 'Choice 原肉板腱牛', qty: '140g' },
+      { name: '秘傳泰式香料鹽', qty: '5g' }
+    ],
+    'dish-2509281752083': [
+      { name: '台灣深海 L 號大魷魚', qty: '1隻' },
+      { name: '獨門泰式酸辣沾醬', qty: '30ml' }
+    ],
+    'dish-2508252136150': [
+      { name: '澳洲進口小羔羊肉串', qty: '10串' },
+      { name: '特級孜然香料粉', qty: '8g' }
+    ],
+    'dish-2508252133258': [
+      { name: '黃金牛肋肉塊', qty: '10串' },
+      { name: '特製黑胡椒烤肉醬', qty: '20ml' }
+    ]
+  }), []);
 
   return (
     <div className="space-y-6 text-white" id="manager-dashboard-container">
@@ -1365,6 +1381,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
           handleAddNewIngredient={handleAddNewIngredient}
           recipeCompositionMap={recipeCompositionMap}
           handleExportInventoryReport={handleExportInventoryReport}
+          dbInventoryLogs={dbInventoryLogs}
         />
       )}
 

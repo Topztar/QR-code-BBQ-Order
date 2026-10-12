@@ -3,7 +3,6 @@ import {
   getLocalizedText,
   translateKey,
   SUPPORTED_LANGUAGES,
-  TRANSLATION_DICTIONARY,
 } from '../src/utils/i18n';
 import { INITIAL_TRANSLATIONS } from '../src/constants/translations';
 import { Language, MenuItem } from '../src/types';

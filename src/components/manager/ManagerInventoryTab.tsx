@@ -45,7 +45,7 @@ interface ManagerInventoryTabProps {
 }
 
 export const ManagerInventoryTab: React.FC<ManagerInventoryTabProps> = ({
-  analytics,
+  analytics: _analytics,
   ingredients: propIngredients,
   menuItems,
   restockAmount: propRestockAmount,
@@ -198,7 +198,8 @@ export const ManagerInventoryTab: React.FC<ManagerInventoryTabProps> = ({
     }
   };
 
-  const dbInventoryLogs = logsList.length > 0 ? logsList : (propDbInventoryLogs || store.dbInventoryLogs || []);
+  const rawLogs: any = logsList.length > 0 ? logsList : (propDbInventoryLogs || store.dbInventoryLogs || []);
+  const dbInventoryLogs: any[] = Array.isArray(rawLogs) ? rawLogs : (Array.isArray(rawLogs?.logs) ? rawLogs.logs : []);
 
   return (
     <div className="space-y-6 animate-fadeIn text-left" id="subtab-section-inventory">

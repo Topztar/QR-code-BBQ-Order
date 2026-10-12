@@ -1,6 +1,5 @@
 import express from 'express';
 import busboy from 'busboy';
-import path from 'path';
 import { processAndSaveImage } from '../../lib/server/imageProcessing';
 import { validateImageUploadPayload } from '../../../functions/src/validators';
 

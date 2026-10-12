@@ -1,5 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
-import express from 'express';
+import { describe, it, expect } from 'vitest';
 
 // Mocking the firestore admin logic to test the concurrent checkout transaction behavior
 describe('Concurrent Checkout Regression (M-D01)', () => {

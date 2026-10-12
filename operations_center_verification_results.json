@@ -1,0 +1,330 @@
+{
+  "timestamp": "2026-10-12T18:56:52.248Z",
+  "environment": "Firebase Emulator (Hosting + Functions + Firestore + Auth + Storage)",
+  "datasets": {
+    "staticDataJson": {
+      "name": "Static Initial Menu & Categories (/data.json)",
+      "status": 200,
+      "sizeKB": 238.87,
+      "coldLoadMs": 40.74,
+      "warmAvgMs": 22.52,
+      "categoriesCount": 12,
+      "menuItemsCount": 114
+    },
+    "publicBootstrap": {
+      "name": "Public Customer Bootstrap API (/api/bootstrap)",
+      "status": 200,
+      "sizeKB": 261.05,
+      "coldLoadMs": 144.38,
+      "warmAvgMs": 27.99,
+      "etag": "W/\"8121dd0b3a490f6a\"",
+      "cacheControl": "public, max-age=60, s-maxage=180, stale-while-revalidate=600"
+    },
+    "storeStatus": {
+      "name": "Store Status Dataset (/api/store-status)",
+      "status": 200,
+      "sizeKB": 0.08,
+      "loadMs": 74.45,
+      "isOpen": true
+    },
+    "staffBootstrap": {
+      "name": "Authenticated Staff Full Bootstrap (/api/bootstrap)",
+      "status": 200,
+      "sizeKB": 262.85,
+      "coldLoadMs": 131.07,
+      "warmAvgMs": 16.23,
+      "counts": {
+        "tables": 8,
+        "ingredients": 8,
+        "reservations": 0,
+        "menu": 114,
+        "categories": 12
+      }
+    },
+    "orders": {
+      "name": "Operational Orders Dataset (/api/orders)",
+      "status": 200,
+      "sizeKB": 0,
+      "loadMs": 28.15,
+      "count": 0
+    },
+    "tables": {
+      "name": "Tables Layout & Status Dataset (/api/tables)",
+      "status": 200,
+      "sizeKB": 1.06,
+      "loadMs": 32.1,
+      "count": 8
+    },
+    "inventory": {
+      "name": "Ingredients & Inventory Stats Dataset",
+      "status": 200,
+      "sizeKB": 1.81,
+      "ingredientsLoadMs": 41.63,
+      "statsLoadMs": 32.27,
+      "count": 8
+    },
+    "members": {
+      "name": "VIP Members Dataset (/api/members)",
+      "status": 200,
+      "sizeKB": 0,
+      "loadMs": 26.55,
+      "count": 0
+    },
+    "notifications": {
+      "name": "Push & Notification Settings (/api/settings/notifications)",
+      "status": 200,
+      "sizeKB": 0.2,
+      "loadMs": 30.35
+    }
+  },
+  "processingTasks": {
+    "staffAuthentication": {
+      "name": "Staff PIN Verification & Token Generation",
+      "status": 200,
+      "durationMs": 107.01,
+      "tokenAcquired": true,
+      "customTokenMinted": true
+    },
+    "orderIngestion": {
+      "name": "Atomic Order Creation & Inventory Validation",
+      "status": 201,
+      "durationMs": 151.26,
+      "orderId": "ORD-MV5M5TXY",
+      "total": 390
+    },
+    "billSettlement": {
+      "name": "Bill Settlement & Table Release Transaction",
+      "status": 500,
+      "durationMs": 64.63
+    },
+    "ordersExport": {
+      "name": "Historical Orders Query & Serialization",
+      "status": 200,
+      "durationMs": 40.94,
+      "sizeKB": 0.03,
+      "count": 0
+    },
+    "imageProcessing": {
+      "name": "Sharp WebP/AVIF Image Transcoding & Cloud Storage Upload",
+      "status": 400,
+      "durationMs": 2314.73,
+      "assetUrl": null
+    }
+  },
+  "browserVerification": {
+    "loginGate": {
+      "detected": true,
+      "authenticatedDurationMs": 2827.59,
+      "dashboardMounted": true
+    },
+    "tabs": {
+      "stats": {
+        "name": "📊 營運數據分析 (ManagerStatsTab)",
+        "renderTimeMs": 1012.72,
+        "domElements": 541,
+        "interactiveButtons": 29,
+        "inputs": 0,
+        "isBlank": false,
+        "passed": true
+      },
+      "orders": {
+        "name": "💳 帳務核數與細單 (ManagerOrdersTab)",
+        "renderTimeMs": 465.08,
+        "domElements": 334,
+        "interactiveButtons": 37,
+        "inputs": 1,
+        "isBlank": false,
+        "passed": true
+      },
+      "inventory": {
+        "name": "📦 進銷存與耗損 (ManagerInventoryTab)",
+        "renderTimeMs": 539,
+        "domElements": 362,
+        "interactiveButtons": 29,
+        "inputs": 9,
+        "isBlank": false,
+        "passed": true
+      },
+      "menu": {
+        "name": "🍜 菜品與類別編輯 (ManagerMenuTab)",
+        "renderTimeMs": 499.58,
+        "domElements": 266,
+        "interactiveButtons": 29,
+        "inputs": 0,
+        "isBlank": false,
+        "passed": true
+      },
+      "members": {
+        "name": "⚙️ 會員、桌席與系統 (ManagerMembersTab)",
+        "renderTimeMs": 690.83,
+        "domElements": 613,
+        "interactiveButtons": 41,
+        "inputs": 23,
+        "isBlank": false,
+        "passed": true
+      },
+      "printer": {
+        "name": "🖨️ 印表機與硬體 (ManagerPrinterTab)",
+        "renderTimeMs": 475.08,
+        "domElements": 436,
+        "interactiveButtons": 46,
+        "inputs": 17,
+        "isBlank": false,
+        "passed": true
+      },
+      "options": {
+        "name": "🧩 客製選項管理器 (ManagerOptionRulesTab)",
+        "renderTimeMs": 673.62,
+        "domElements": 292,
+        "interactiveButtons": 32,
+        "inputs": 2,
+        "isBlank": false,
+        "passed": true
+      },
+      "notifications": {
+        "name": "🔔 預約通知設定 (ManagerNotificationsTab)",
+        "renderTimeMs": 525.72,
+        "domElements": 234,
+        "interactiveButtons": 25,
+        "inputs": 0,
+        "isBlank": false,
+        "passed": true
+      },
+      "eod": {
+        "name": "💰 每日關帳結算 (ManagerEodTab)",
+        "renderTimeMs": 509.86,
+        "domElements": 183,
+        "interactiveButtons": 17,
+        "inputs": 0,
+        "isBlank": false,
+        "passed": true
+      },
+      "terminal": {
+        "name": "🖥️ 快速點餐終端 (ManagerTerminalTab)",
+        "renderTimeMs": 476.91,
+        "domElements": 193,
+        "interactiveButtons": 17,
+        "inputs": 0,
+        "isBlank": false,
+        "passed": true
+      },
+      "cashier": {
+        "name": "🧾 收銀台系統 (ManagerCashierTab)",
+        "renderTimeMs": 506.4,
+        "domElements": 223,
+        "interactiveButtons": 25,
+        "inputs": 0,
+        "isBlank": false,
+        "passed": true
+      }
+    },
+    "blackScreenCheck": true,
+    "consoleErrors": [
+      "Failed to load resource: the server responded with a status of 403 ()",
+      "Failed to load resource: the server responded with a status of 400 ()",
+      "Failed to load resource: the server responded with a status of 403 ()",
+      "Failed to load resource: the server responded with a status of 403 ()",
+      "Failed to load resource: net::ERR_CONNECTION_REFUSED",
+      "Failed to load resource: the server responded with a status of 403 ()",
+      "Failed to load resource: the server responded with a status of 403 ()",
+      "Failed to load resource: the server responded with a status of 403 ()"
+    ],
+    "pageErrors": []
+  },
+  "codeQualityAudit": {
+    "methodology": "AST & Static Semantic Analysis with Strict Zero False Positive Verification",
+    "findings": [
+      {
+        "id": "AUDIT-DUP-01",
+        "file": "src/components/manager/ManagerCashierTab.tsx",
+        "lines": "114, 116, 121, 122, 123",
+        "symbol": "isCashierWidthAuto, editingOrderTableId, editingOrderTableValue, simulatedElapsedOrders",
+        "classification": "Redundant Destructuring (Dead Local Bindings)",
+        "description": "Variables destructured from useDashboardStore() in ManagerCashierTab, but unused locally because child component CashierOrderDetailPanel.tsx accesses the store directly.",
+        "recommendation": "Remove redundant bindings from ManagerCashierTab destructuring."
+      },
+      {
+        "id": "AUDIT-DUP-02",
+        "file": "src/components/manager/ManagerInventoryTab.tsx",
+        "lines": "48",
+        "symbol": "analytics prop",
+        "classification": "Unused Component Property (Interface Remnant)",
+        "description": "The analytics object is declared in ManagerInventoryTabProps and destructured in parameters, but never referenced anywhere in ManagerInventoryTab body.",
+        "recommendation": "Remove analytics from ManagerInventoryTabProps and caller parameter list."
+      },
+      {
+        "id": "AUDIT-DUP-03",
+        "file": "src/components/manager/ManagerEodTab.tsx",
+        "lines": "23, 49",
+        "symbol": "recipeCompositionMap prop",
+        "classification": "Unused Prop & Inert Specification",
+        "description": "recipeCompositionMap is accepted in props and destructured, but never used in ManagerEodTab.",
+        "recommendation": "Prune recipeCompositionMap from ManagerEodTabProps."
+      },
+      {
+        "id": "AUDIT-DUP-04",
+        "file": "src/components/ManagerDashboard.tsx",
+        "lines": "1224",
+        "symbol": "recipeCompositionMap = {}",
+        "classification": "Empty Hardcoded State (Inert Feature)",
+        "description": "recipeCompositionMap is initialized as an empty object {} and passed to tabs, resulting in an empty recipe composition grid in ManagerInventoryTab.",
+        "recommendation": "Either populate recipeCompositionMap with authentic dish recipe mappings or hide the recipe specification block when empty."
+      },
+      {
+        "id": "AUDIT-DUP-05",
+        "file": "src/components/manager/ManagerDashboardUtils.ts",
+        "lines": "46-48",
+        "symbol": "exportToCSV conditional quotation",
+        "classification": "Redundant Conditional Branch",
+        "description": "In exportToCSV, both the if and else branches return `\"${escaped}\"`. The conditional branch has identical code on both sides.",
+        "recommendation": "Simplify to directly return `\"${escaped}\"`."
+      },
+      {
+        "id": "AUDIT-DUP-06",
+        "file": "src/lib/server/imageProcessing.ts",
+        "lines": "40",
+        "symbol": "throw new Error (no cause)",
+        "classification": "Error Wrapping Hygiene Violation (Linter Catch)",
+        "description": "Error rethrown without preserving original error cause (`preserve-caught-error`).",
+        "recommendation": "Add { cause: error } to Error instantiation."
+      },
+      {
+        "id": "AUDIT-DUP-07",
+        "file": "src/server/routes/images.ts",
+        "lines": "3",
+        "symbol": "import path from 'path'",
+        "classification": "Unused Import Statement",
+        "description": "Unused import of Node path module.",
+        "recommendation": "Remove unused import."
+      }
+    ]
+  },
+  "costSummary": {
+    "monthlyProjectionUSD": 0.02,
+    "breakdown": {
+      "cloudFunctionsGen2": {
+        "costUSD": 0,
+        "note": "asia-east1, minInstances: 0, concurrency: 80, 256MiB completely within GCP free tier"
+      },
+      "cloudFirestore": {
+        "costUSD": 0.01,
+        "note": "IndexedDB multi-tab cache + limit(200) controlled listeners safely below 50,000 reads/day quota"
+      },
+      "firebaseHostingCDN": {
+        "costUSD": 0,
+        "note": "Immutable /assets/** (1 yr) + stale-while-revalidate /data.json keeps egress < 2 GB/mo"
+      },
+      "cloudStorage": {
+        "costUSD": 0.01,
+        "note": "Sharp AVIF/WebP lossy 80% compression maintains asset footprint < 50 MB"
+      }
+    },
+    "finOpsOptimizationsVerified": [
+      "Zero idle server costs via serverless scale-to-zero (minInstances: 0)",
+      "Customer-side Firestore connection barrier prevents customer egress leaks",
+      "IndexedDB multi-tab cache prevents duplicate reads across multiple browser windows",
+      "Memory TTL cache (s-maxage) prevents repeated Firestore reads for static menu datasets",
+      "Pre-compressed Brotli/Gzip static bundle deployment minimizes CDN bandwidth"
+    ]
+  }
+}

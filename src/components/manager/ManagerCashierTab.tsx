@@ -111,16 +111,12 @@ export const ManagerCashierTab: React.FC<ManagerCashierTabProps> = (props) => {
     setIsAdjustingDiscount,
     setIsAdjustingSurcharge,
     takeoutDetailModalOrder, setTakeoutDetailModalOrder,
-    isCashierWidthAuto,
-    
-    setIsCashierWidthAuto, setSimulatedElapsedOrders, setCopiedTakeoutPhone, setCopiedGoogleLinkNotice,
+    setSimulatedElapsedOrders, setCopiedTakeoutPhone, setCopiedGoogleLinkNotice,
     setBatchSuccessMessage, setIsBatchProcessing, setSelectedResIds,
     setSelectedCalendarStatusFilter,
     
     reservationToDeleteId, setReservationToDeleteId,
-    editingOrderTableId, setEditingOrderTableId,
-    editingOrderTableValue, setEditingOrderTableValue,
-    simulatedElapsedOrders, copiedTakeoutPhone, copiedGoogleLinkNotice,
+    copiedTakeoutPhone, copiedGoogleLinkNotice,
     batchSuccessMessage, isBatchProcessing, selectedResIds,
     selectedCalendarStatusFilter
   } = useDashboardStore();

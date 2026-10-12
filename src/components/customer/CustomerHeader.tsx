@@ -2,7 +2,6 @@ import React from 'react';
 import { TableConfig, Order, Language, Reservation } from '../../types';
 import { TRANSLATIONS } from '../../data';
 import { getMappedTableId } from '../../utils/tableUtils';
-import { getLocalizedText } from '../../utils/i18n';
 import {
   BellRing,
   AlertTriangle,

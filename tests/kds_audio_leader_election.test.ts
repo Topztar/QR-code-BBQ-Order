@@ -3,9 +3,6 @@ import {
   KdsAudioLeaderElection,
   BroadcastChannelLike,
   isAudioLeader,
-  getAudioLeaderId,
-  claimAudioLeadership,
-  resignAudioLeadership,
   getKdsAudioLeaderManager,
 } from '../src/utils/kdsAudioLeader';
 import { announceOrderNotification } from '../src/utils/kdsAudio';
