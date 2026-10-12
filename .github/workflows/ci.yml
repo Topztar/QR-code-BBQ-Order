@@ -29,7 +29,9 @@ jobs:
         run: npm ci
 
       - name: Install Functions Dependencies
-        run: cd functions && npm ci
+        if: hashFiles('functions/package-lock.json') != ''
+        working-directory: functions
+        run: npm ci
 
       - name: Run Custom Quality Gate Audits (Security, Perf, Cost)
         run: |
