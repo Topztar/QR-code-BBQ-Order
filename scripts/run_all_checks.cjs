@@ -42,7 +42,7 @@ const stages = [
     name: 'Vitest 全端自動化單元與整合測試 (200+ Tests)',
     command: 'npx vitest run',
     badge: '🧪 [Vitest Suite]',
-    expectedCount: '207/207 通過'
+    expectedCount: '280/280 通過'
   },
   {
     name: 'Vite + esbuild 生產環境雙重預壓縮建置 (Gzip & Brotli)',

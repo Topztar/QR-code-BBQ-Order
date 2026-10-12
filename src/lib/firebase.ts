@@ -57,19 +57,23 @@ try {
 
     connectFirestoreEmulator(firestoreInstance, 'localhost', 8080);
     console.log('[Firebase] Connected to Local Firestore Emulator (Port 8080) with memoryLocalCache.');
+  } else if (isIOSSafari) {
+    // 🛡️ iOS WebKit 安全防護：直通 memoryLocalCache，完全免疫 IndexedDB Web Lock 死鎖、孤兒租約與配額例外
+    console.log('[Firebase] iOS Safari / WKWebView detected. Enforcing safe memoryLocalCache.');
+    firestoreInstance = initializeFirestore(app, {
+      localCache: memoryLocalCache()
+    }, FIRESTORE_DATABASE_ID);
   } else if (checkIndexedDB()) {
     try {
-      // WebKit / iOS compatibility:
-      // If BroadcastChannel is unavailable or on iOS Safari, multi-tab locks can deadlock.
-      // Use persistentMultipleTabManager if BroadcastChannel exists, or fallback to persistentSingleTabManager.
-      const tabManager = (isBroadcastChannelSupported && !isIOSSafari) 
+      // Desktop / Android: BroadcastChannel supported -> multi-tab; fallback -> single-tab
+      const tabManager = isBroadcastChannelSupported 
         ? persistentMultipleTabManager() 
         : persistentSingleTabManager({});
 
       firestoreInstance = initializeFirestore(app, {
         localCache: persistentLocalCache({
           tabManager,
-          cacheSizeBytes: isIOSSafari ? 20 * 1024 * 1024 : 100 * 1024 * 1024 // 縮減 iOS 配額
+          cacheSizeBytes: 100 * 1024 * 1024
         })
       }, FIRESTORE_DATABASE_ID);
     } catch (cacheErr: any) {

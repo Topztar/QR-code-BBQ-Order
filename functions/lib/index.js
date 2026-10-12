@@ -54175,9 +54175,12 @@ var require_bootstrap = __commonJS({
     var helpers_12 = require_helpers();
     var auth_12 = require_auth();
     var cachedPublicBootstrap = null;
+    var cachedStaffBootstrap = null;
     var BOOTSTRAP_CACHE_TTL_MS = 180 * 1e3;
+    var STAFF_BOOTSTRAP_CACHE_TTL_MS = 45 * 1e3;
     function invalidatePublicBootstrapCache() {
       cachedPublicBootstrap = null;
+      cachedStaffBootstrap = null;
       (0, helpers_12.setCachedMenu)(null);
       (0, helpers_12.setCachedCategories)(null);
     }
@@ -54211,6 +54214,15 @@ var require_bootstrap = __commonJS({
               return res.status(304).end();
             }
             return res.json(cachedPublicBootstrap.payload);
+          }
+          if (isStaffRequest && cachedStaffBootstrap && nowMs - cachedStaffBootstrap.timestamp < STAFF_BOOTSTRAP_CACHE_TTL_MS) {
+            res.setHeader("ETag", cachedStaffBootstrap.etag);
+            res.setHeader("Vary", "Authorization");
+            res.setHeader("Cache-Control", "private, max-age=0, no-cache");
+            if (req.headers["if-none-match"] === cachedStaffBootstrap.etag) {
+              return res.status(304).end();
+            }
+            return res.json(cachedStaffBootstrap.payload);
           }
           const [categoriesSnap, menuSnap, tablesSnap, systemDoc, ingredientsSnap, reservationsSnap] = await Promise.all([
             db2.collection("categories").select("id", "name", "showOnCustomerPage", "orderIndex").orderBy("orderIndex").get(),
@@ -54309,6 +54321,12 @@ var require_bootstrap = __commonJS({
           const etag = `W/"${crypto.createHash("md5").update(rawString).digest("hex").substring(0, 16)}"`;
           if (!isStaffRequest) {
             cachedPublicBootstrap = {
+              payload: responsePayload,
+              etag,
+              timestamp: Date.now()
+            };
+          } else {
+            cachedStaffBootstrap = {
               payload: responsePayload,
               etag,
               timestamp: Date.now()

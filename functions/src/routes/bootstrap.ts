@@ -21,14 +21,17 @@ export interface RouteContext {
 }
 
 let cachedPublicBootstrap: { payload: any; etag: string; timestamp: number } | null = null;
+let cachedStaffBootstrap: { payload: any; etag: string; timestamp: number } | null = null;
 const BOOTSTRAP_CACHE_TTL_MS = 180 * 1000; // 3 minutes in-memory TTL to eliminate read storms
+const STAFF_BOOTSTRAP_CACHE_TTL_MS = 45 * 1000; // 45 seconds in-memory TTL for staff management portal
 
 /**
- * ⚡ 主動清除公開 Bootstrap 快取
+ * ⚡ 主動清除公開與管理員 Bootstrap 快取
  * 當管理員新增/修改/刪除菜單品項、分類、桌位或營業設定時調用
  */
 export function invalidatePublicBootstrapCache() {
   cachedPublicBootstrap = null;
+  cachedStaffBootstrap = null;
   setCachedMenu(null);
   setCachedCategories(null);
 }
@@ -68,6 +71,16 @@ export function registerBootstrapRoutes(app: express.Application, ctx: RouteCont
           return res.status(304).end();
         }
         return res.json(cachedPublicBootstrap.payload);
+      }
+
+      if (isStaffRequest && cachedStaffBootstrap && (nowMs - cachedStaffBootstrap.timestamp < STAFF_BOOTSTRAP_CACHE_TTL_MS)) {
+        res.setHeader('ETag', cachedStaffBootstrap.etag);
+        res.setHeader('Vary', 'Authorization');
+        res.setHeader('Cache-Control', 'private, max-age=0, no-cache');
+        if (req.headers['if-none-match'] === cachedStaffBootstrap.etag) {
+          return res.status(304).end();
+        }
+        return res.json(cachedStaffBootstrap.payload);
       }
       
       const [
@@ -189,6 +202,12 @@ export function registerBootstrapRoutes(app: express.Application, ctx: RouteCont
 
       if (!isStaffRequest) {
         cachedPublicBootstrap = {
+          payload: responsePayload,
+          etag,
+          timestamp: Date.now()
+        };
+      } else {
+        cachedStaffBootstrap = {
           payload: responsePayload,
           etag,
           timestamp: Date.now()

@@ -356,11 +356,24 @@ export function useLiveOrders(
     };
     window.addEventListener('online', handleOnline);
 
+    // 🛡️ iOS WebKit 喚醒守門員：iPad 鎖定螢幕喚醒後立即觸發主動更新，防禦 WebSocket 靜默斷線
+    const handleVisibility = () => {
+      if (!isCancelled && typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        fetchOrdersFromApi();
+      }
+    };
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', handleVisibility);
+    }
+
     return () => {
       isCancelled = true;
       if (reconnectTimer) clearTimeout(reconnectTimer);
       if (fallbackPollInterval) clearInterval(fallbackPollInterval);
       window.removeEventListener('online', handleOnline);
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', handleVisibility);
+      }
       setTimeout(() => {
         try {
           unsubscribeOrders();

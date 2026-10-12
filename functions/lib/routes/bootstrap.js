@@ -40,9 +40,12 @@ const crypto = __importStar(require("crypto"));
 const helpers_1 = require("../helpers");
 const auth_1 = require("../auth");
 let cachedPublicBootstrap = null;
+let cachedStaffBootstrap = null;
 const BOOTSTRAP_CACHE_TTL_MS = 180 * 1000;
+const STAFF_BOOTSTRAP_CACHE_TTL_MS = 45 * 1000;
 function invalidatePublicBootstrapCache() {
     cachedPublicBootstrap = null;
+    cachedStaffBootstrap = null;
     (0, helpers_1.setCachedMenu)(null);
     (0, helpers_1.setCachedCategories)(null);
 }
@@ -76,6 +79,15 @@ function registerBootstrapRoutes(app, ctx) {
                     return res.status(304).end();
                 }
                 return res.json(cachedPublicBootstrap.payload);
+            }
+            if (isStaffRequest && cachedStaffBootstrap && (nowMs - cachedStaffBootstrap.timestamp < STAFF_BOOTSTRAP_CACHE_TTL_MS)) {
+                res.setHeader('ETag', cachedStaffBootstrap.etag);
+                res.setHeader('Vary', 'Authorization');
+                res.setHeader('Cache-Control', 'private, max-age=0, no-cache');
+                if (req.headers['if-none-match'] === cachedStaffBootstrap.etag) {
+                    return res.status(304).end();
+                }
+                return res.json(cachedStaffBootstrap.payload);
             }
             const [categoriesSnap, menuSnap, tablesSnap, systemDoc, ingredientsSnap, reservationsSnap] = await Promise.all([
                 db.collection('categories').select('id', 'name', 'showOnCustomerPage', 'orderIndex').orderBy('orderIndex').get(),
@@ -178,6 +190,13 @@ function registerBootstrapRoutes(app, ctx) {
             const etag = `W/"${crypto.createHash('md5').update(rawString).digest('hex').substring(0, 16)}"`;
             if (!isStaffRequest) {
                 cachedPublicBootstrap = {
+                    payload: responsePayload,
+                    etag,
+                    timestamp: Date.now()
+                };
+            }
+            else {
+                cachedStaffBootstrap = {
                     payload: responsePayload,
                     etag,
                     timestamp: Date.now()

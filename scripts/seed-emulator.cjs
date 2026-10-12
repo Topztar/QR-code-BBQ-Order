@@ -10,12 +10,13 @@ process.env.GCLOUD_PROJECT = 'sabay-bbq-order';
 
 const admin = require('firebase-admin');
 const { getFirestore } = require('firebase-admin/firestore');
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 
 const DATABASE_ID = 'ai-studio-sabaythaibbqtabl-84418196-9d0c-459c-bced-ddc424dfba07';
 
-if (!admin.apps.length) {
+if (!admin.getApps().length) {
   admin.initializeApp({ projectId: 'sabay-bbq-order' });
 }
 
@@ -50,6 +51,7 @@ async function seedData() {
   ];
 
   const defaultSystemSettings = {
+    liveStaffPin: '070718',
     liveOperatingHours: [
       { id: 'default-slot', days: ['1', '2', '3', '4', '5', '6', '0'], openTime: '17:00', closeTime: '23:30' }
     ],
@@ -129,6 +131,20 @@ async function seedData() {
   batch.set(sysRef, defaultSystemSettings);
   await commitBatchIfNeeded();
 
+  // 6. Seed Secrets Credentials
+  console.log(`[Seed Emulator] Queueing secrets/credentials document...`);
+  const credsRef = db.collection('secrets').doc('credentials');
+  const salt = process.env.PIN_SALT || 'sabay-bbq-secure-salt-2026';
+  const staffPinHash = crypto.createHash('sha256').update(`070718:${salt}`).digest('hex');
+  batch.set(credsRef, {
+    staffPinHash,
+    activeSessionToken: 'valid-staff-session',
+    tokenExpiresAt: Date.now() + (24 * 3600 * 1000),
+    failedAttempts: 0,
+    lockedUntil: null
+  });
+  await commitBatchIfNeeded();
+
   if (count > 0) {
     tasks.push(batch.commit());
   }
@@ -140,6 +156,7 @@ async function seedData() {
   console.log(`  - Ingredients: ${ingredients.length}`);
   console.log(`  - Tables: ${defaultTables.length}`);
   console.log(`  - Settings: system document created`);
+  console.log(`  - Secrets: credentials document created (PIN: 070718, Token: valid-staff-session)`);
 }
 
 seedData().catch((err) => {

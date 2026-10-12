@@ -3,6 +3,8 @@ import { ShieldCheck, ArrowLeft, KeyRound, AlertCircle, Clock } from 'lucide-rea
 import { sessionAuth } from '../lib/sessionAuth';
 import { authenticateFirebaseCustomToken } from '../lib/firebase';
 
+import { useSecureCooldown } from '../hooks/useSecureCooldown';
+
 interface StaffLoginGateProps {
   onLoginSuccess: () => void;
   onCancel: () => void;
@@ -19,8 +21,10 @@ export const StaffLoginGate: React.FC<StaffLoginGateProps> = ({ onLoginSuccess, 
   const [loading, setLoading] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const [hasManualInput, setHasManualInput] = useState(false);
-  const [cooldownSeconds, setCooldownSeconds] = useState(0);
-  const cooldownTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const isSubmittingRef = useRef(false);
+
+  // 🛡️ 牆鐘時間倒數計時鉤子：抵禦 iOS WebKit 背景節流凍結
+  const { remainingSeconds: cooldownSeconds, triggerCooldown } = useSecureCooldown('sabay_staff_lock_until');
 
   // 1. 掛載時強制清除任何殘留憑證，徹底封鎖任何自動靜默登入
   useEffect(() => {
@@ -33,35 +37,15 @@ export const StaffLoginGate: React.FC<StaffLoginGateProps> = ({ onLoginSuccess, 
 
       if (authExpiryTimestamps.length >= MAX_EXPIRY_EVENTS_THRESHOLD) {
         console.warn('[StaffLoginGate] Circuit breaker triggered: too many rapid auth expiry events. Activating 10s cooldown.');
-        setCooldownSeconds(10);
+        triggerCooldown(10);
       }
     };
 
     window.addEventListener('sabay_auth_expired', handleAuthExpiredEvent);
     return () => {
       window.removeEventListener('sabay_auth_expired', handleAuthExpiredEvent);
-      if (cooldownTimerRef.current) clearInterval(cooldownTimerRef.current);
     };
-  }, []);
-
-  // 倒數計時處理
-  useEffect(() => {
-    if (cooldownSeconds > 0) {
-      cooldownTimerRef.current = setInterval(() => {
-        setCooldownSeconds(prev => {
-          if (prev <= 1) {
-            if (cooldownTimerRef.current) clearInterval(cooldownTimerRef.current);
-            authExpiryTimestamps = [];
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    }
-    return () => {
-      if (cooldownTimerRef.current) clearInterval(cooldownTimerRef.current);
-    };
-  }, [cooldownSeconds]);
+  }, [triggerCooldown]);
 
   const handleNumberClick = (num: string) => {
     if (cooldownSeconds > 0) return;
@@ -86,10 +70,11 @@ export const StaffLoginGate: React.FC<StaffLoginGateProps> = ({ onLoginSuccess, 
 
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!hasManualInput || pin.length < 6 || loading || isVerifying || cooldownSeconds > 0) {
+    if (!hasManualInput || pin.length < 6 || loading || isVerifying || cooldownSeconds > 0 || isSubmittingRef.current) {
       return;
     }
 
+    isSubmittingRef.current = true;
     setLoading(true);
     setIsVerifying(true);
     setErrorMessage('');
@@ -119,6 +104,7 @@ export const StaffLoginGate: React.FC<StaffLoginGateProps> = ({ onLoginSuccess, 
     } finally {
       setLoading(false);
       setIsVerifying(false);
+      isSubmittingRef.current = false;
     }
   };
 
@@ -171,21 +157,20 @@ export const StaffLoginGate: React.FC<StaffLoginGateProps> = ({ onLoginSuccess, 
           ))}
         </div>
 
-        {cooldownSeconds > 0 && (
+        {/* 🛡️ 視覺層級：熔斷器冷卻提示優先於一般錯誤，杜絕雙重衝突訊息困擾 */}
+        {cooldownSeconds > 0 ? (
           <div className="bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs py-2 px-3 rounded-xl flex items-center justify-center space-x-2">
             <Clock size={14} className="shrink-0 animate-spin" />
             <span>驗證重試過於頻繁，系統保護中。請稍候 {cooldownSeconds} 秒再輸入。</span>
           </div>
-        )}
-
-        {errorMessage && (
+        ) : errorMessage ? (
           <div className="bg-red-500/15 border border-red-500/20 text-red-400 text-[11px] py-1.5 px-3 rounded-xl flex items-center justify-center space-x-1.5 animate-bounce">
             <AlertCircle size={13} className="shrink-0" />
             <span>{errorMessage}</span>
           </div>
-        )}
+        ) : null}
 
-        {/* Pin Numeric Pad */}
+        {/* Pin Numeric Pad with iOS WebKit gesture hardening */}
         <div className="grid grid-cols-3 gap-2 max-w-[260px] mx-auto py-1">
           {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map(num => (
             <button
@@ -193,8 +178,10 @@ export const StaffLoginGate: React.FC<StaffLoginGateProps> = ({ onLoginSuccess, 
               type="button"
               id={`pinpad-${num}`}
               aria-label={num}
+              style={{ touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent' }}
+              disabled={loading || isVerifying || cooldownSeconds > 0}
               onClick={() => handleNumberClick(num)}
-              className="bg-white/5 hover:bg-white/10 active:bg-white/15 h-12 rounded-2xl text-lg font-bold font-mono transition cursor-pointer select-none"
+              className="bg-white/5 hover:bg-white/10 active:bg-white/15 h-12 rounded-2xl text-lg font-bold font-mono transition cursor-pointer select-none disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {num}
             </button>
@@ -203,8 +190,10 @@ export const StaffLoginGate: React.FC<StaffLoginGateProps> = ({ onLoginSuccess, 
             type="button"
             id="pinpad-clear"
             aria-label="清除密碼"
+            style={{ touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent' }}
+            disabled={loading || isVerifying || cooldownSeconds > 0}
             onClick={handleClear}
-            className="text-xs text-white/45 bg-white/2 hover:bg-white/5 rounded-2xl hover:text-white font-semibold cursor-pointer transition select-none"
+            className="text-xs text-white/45 bg-white/2 hover:bg-white/5 rounded-2xl hover:text-white font-semibold cursor-pointer transition select-none disabled:opacity-40 disabled:cursor-not-allowed"
           >
             清除
           </button>
@@ -212,8 +201,10 @@ export const StaffLoginGate: React.FC<StaffLoginGateProps> = ({ onLoginSuccess, 
             type="button"
             id="pinpad-0"
             aria-label="0"
+            style={{ touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent' }}
+            disabled={loading || isVerifying || cooldownSeconds > 0}
             onClick={() => handleNumberClick('0')}
-            className="bg-white/5 hover:bg-white/10 active:bg-white/15 h-12 rounded-2xl text-lg font-bold font-mono transition cursor-pointer select-none"
+            className="bg-white/5 hover:bg-white/10 active:bg-white/15 h-12 rounded-2xl text-lg font-bold font-mono transition cursor-pointer select-none disabled:opacity-40 disabled:cursor-not-allowed"
           >
             0
           </button>
@@ -221,8 +212,10 @@ export const StaffLoginGate: React.FC<StaffLoginGateProps> = ({ onLoginSuccess, 
             type="button"
             id="pinpad-back"
             aria-label="刪除最後一位密碼"
+            style={{ touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent' }}
+            disabled={loading || isVerifying || cooldownSeconds > 0}
             onClick={handleBackspace}
-            className="text-xs text-white/45 bg-white/2 hover:bg-white/5 rounded-2xl hover:text-white font-semibold cursor-pointer transition select-none"
+            className="text-xs text-white/45 bg-white/2 hover:bg-white/5 rounded-2xl hover:text-white font-semibold cursor-pointer transition select-none disabled:opacity-40 disabled:cursor-not-allowed"
           >
             刪除
           </button>
@@ -232,6 +225,7 @@ export const StaffLoginGate: React.FC<StaffLoginGateProps> = ({ onLoginSuccess, 
           type="submit"
           disabled={pin.length < 6 || !hasManualInput || loading || isVerifying || cooldownSeconds > 0}
           id="pin-submit-button"
+          style={{ touchAction: 'manipulation' }}
           className={`w-full font-bold py-3 px-6 rounded-2xl transition-all duration-150 flex items-center justify-center space-x-1.5 cursor-pointer text-xs ${
             pin.length === 6 && hasManualInput && !loading && !isVerifying && cooldownSeconds === 0
               ? 'bg-[#E5B453] text-[#0F0F0F] font-black'
