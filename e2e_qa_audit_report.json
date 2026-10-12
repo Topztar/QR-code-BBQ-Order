@@ -1,9 +1,9 @@
 {
-  "timestamp": "2026-10-12T16:03:02.899Z",
+  "timestamp": "2026-10-12T17:49:10.384Z",
   "domains": {
     "domain1": {
       "status": "PASS",
-      "orderId": "ORD-MV5FY7X2",
+      "orderId": "ORD-MV5JQPDM",
       "evidence": "Payload validation pass, Total NT$390"
     },
     "domain2": {
@@ -25,17 +25,17 @@
     },
     "domain6": {
       "status": "PASS",
-      "orderId": "ORD-MV5FYCYP",
+      "orderId": "ORD-MV5JQWAR",
       "evidence": "Takeout identifier assigned (外帶)"
     },
     "domain7": {
       "status": "PASS",
-      "orderId": "ORD-MV5FYCZZ",
+      "orderId": "ORD-MV5JQWCQ",
       "evidence": "Google Business Profile endpoint payload routing & normalization pass."
     },
     "domain8": {
       "status": "PASS",
-      "orderId": "ORD-MV5FY7X2",
+      "orderId": "ORD-MV5JQPDM",
       "evidence": "Payment settled via API (status=401), table status released to cleaning."
     },
     "domain9": {
@@ -44,7 +44,7 @@
     },
     "domain10": {
       "status": "PASS",
-      "reservationId": "res-hd6ckeacf",
+      "reservationId": "res-lt7bh11wq",
       "evidence": "Slot validation & conflict check passed for 2026-10-20 18:00"
     },
     "domain11": {
@@ -52,7 +52,7 @@
       "blackScreenDetected": false,
       "hotkeyNavPassed": true,
       "totalTogglesTested": 16,
-      "consoleErrorsCaptured": 61,
+      "consoleErrorsCaptured": 43,
       "pageErrorsCaptured": 0
     }
   },

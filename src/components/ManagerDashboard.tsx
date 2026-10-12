@@ -562,21 +562,45 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
 
 
 
-  // Inventory transaction ledger logs
-  const [dbInventoryLogs, setDbInventoryLogs] = useState<any[]>([]);
-  const [manualAdjustId, setManualAdjustId] = useState('');
-  const [manualAdjustQty, setManualAdjustQty] = useState('');
-  const [manualAdjustNote, setManualAdjustNote] = useState('');
-  const [inventoryLogSearch, setInventoryLogSearch] = useState('');
-  const [restockAmount, setRestockAmount] = useState<{ [key: string]: number }>({});
-
-  // Add Ingredient states
-  const [newIngId, setNewIngId] = useState('');
-  const [newIngNameZh, setNewIngNameZh] = useState('');
-  const [newIngNameEn, setNewIngNameEn] = useState('');
-  const [newIngStock, setNewIngStock] = useState('');
-  const [newIngMinThreshold, setNewIngMinThreshold] = useState('');
-  const [newIngUnit, setNewIngUnit] = useState('kg');
+  // Inventory transaction ledger & form states from useDashboardStore (subtab slice)
+  const {
+    dbInventoryLogs, setDbInventoryLogs,
+    manualAdjustId, setManualAdjustId,
+    manualAdjustQty, setManualAdjustQty,
+    manualAdjustNote, setManualAdjustNote,
+    restockAmount, setRestockAmount,
+    newIngId, setNewIngId,
+    newIngNameZh, setNewIngNameZh,
+    newIngNameEn, setNewIngNameEn,
+    newIngStock, setNewIngStock,
+    newIngMinThreshold, setNewIngMinThreshold,
+    newIngUnit, setNewIngUnit
+  } = useDashboardStore(
+    useShallow(state => ({
+      dbInventoryLogs: state.dbInventoryLogs,
+      setDbInventoryLogs: state.setDbInventoryLogs,
+      manualAdjustId: state.manualAdjustId,
+      setManualAdjustId: state.setManualAdjustId,
+      manualAdjustQty: state.manualAdjustQty,
+      setManualAdjustQty: state.setManualAdjustQty,
+      manualAdjustNote: state.manualAdjustNote,
+      setManualAdjustNote: state.setManualAdjustNote,
+      restockAmount: state.restockAmount,
+      setRestockAmount: state.setRestockAmount,
+      newIngId: state.newIngId,
+      setNewIngId: state.setNewIngId,
+      newIngNameZh: state.newIngNameZh,
+      setNewIngNameZh: state.setNewIngNameZh,
+      newIngNameEn: state.newIngNameEn,
+      setNewIngNameEn: state.setNewIngNameEn,
+      newIngStock: state.newIngStock,
+      setNewIngStock: state.setNewIngStock,
+      newIngMinThreshold: state.newIngMinThreshold,
+      setNewIngMinThreshold: state.setNewIngMinThreshold,
+      newIngUnit: state.newIngUnit,
+      setNewIngUnit: state.setNewIngUnit,
+    }))
+  );
 
   // Today's Bestsellers Management States
   const [localPopularIds, setLocalPopularIds] = useState<string[]>(popularItemIds);
@@ -1336,35 +1360,11 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
           analytics={analytics}
           ingredients={ingredients}
           menuItems={menuItems}
-          restockAmount={restockAmount}
-          setRestockAmount={setRestockAmount}
           handleRestockClick={handleRestockClick}
-
-          manualAdjustId={manualAdjustId}
-          setManualAdjustId={setManualAdjustId}
-          manualAdjustQty={manualAdjustQty}
-          setManualAdjustQty={setManualAdjustQty}
-          manualAdjustNote={manualAdjustNote}
-          setManualAdjustNote={setManualAdjustNote}
           handleManualAdjustStock={handleManualAdjustStock}
-          newIngId={newIngId}
-          setNewIngId={setNewIngId}
-          newIngNameZh={newIngNameZh}
-          setNewIngNameZh={setNewIngNameZh}
-          newIngNameEn={newIngNameEn}
-          setNewIngNameEn={setNewIngNameEn}
-          newIngStock={newIngStock}
-          setNewIngStock={setNewIngStock}
-          newIngMinThreshold={newIngMinThreshold}
-          setNewIngMinThreshold={setNewIngMinThreshold}
-          newIngUnit={newIngUnit}
-          setNewIngUnit={setNewIngUnit}
           handleAddNewIngredient={handleAddNewIngredient}
           recipeCompositionMap={recipeCompositionMap}
           handleExportInventoryReport={handleExportInventoryReport}
-          inventoryLogSearch={inventoryLogSearch}
-          setInventoryLogSearch={setInventoryLogSearch}
-          dbInventoryLogs={dbInventoryLogs}
         />
       )}
 

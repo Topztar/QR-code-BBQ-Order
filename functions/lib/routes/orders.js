@@ -213,17 +213,30 @@ function registerOrdersRoutes(app, ctx) {
             const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 90);
             const thresholdMs = Date.now() - (days * 24 * 60 * 60 * 1000);
             const thresholdIso = new Date(thresholdMs).toISOString();
-            let query = db.collection('orders')
+            const activeQuery = db.collection('orders')
                 .where('status', '==', 'completed')
                 .where('createdAt', '>=', thresholdIso);
-            let snapshot;
-            try {
-                snapshot = await query.orderBy('createdAt', 'desc').limit(1000).get();
-            }
-            catch (_idxErr) {
-                snapshot = await query.limit(1000).get();
-            }
-            const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            const archivedQuery = db.collection('archived_orders')
+                .where('status', '==', 'completed')
+                .where('createdAt', '>=', thresholdIso);
+            const [activeSnapshot, archivedSnapshot] = await Promise.all([
+                activeQuery.limit(1000).get().catch(err => {
+                    console.warn('[orders/export] Active orders query fallback:', err);
+                    return { docs: [] };
+                }),
+                archivedQuery.limit(1000).get().catch(err => {
+                    console.warn('[orders/export] Archived orders query fallback:', err);
+                    return { docs: [] };
+                })
+            ]);
+            const orderMap = new Map();
+            archivedSnapshot.docs.forEach((doc) => {
+                orderMap.set(doc.id, { id: doc.id, ...doc.data() });
+            });
+            activeSnapshot.docs.forEach((doc) => {
+                orderMap.set(doc.id, { id: doc.id, ...doc.data() });
+            });
+            const orders = Array.from(orderMap.values());
             orders.sort((a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime());
             res.json({
                 orders,

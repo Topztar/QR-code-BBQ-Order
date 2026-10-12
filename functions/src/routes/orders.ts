@@ -266,7 +266,7 @@ get('/analytics', requireStaffAuth, async (req, res) => {
   }
 });
 
-// 15c. Historical Orders CSV Export Endpoint
+// 15c. Historical Orders CSV Export Endpoint (Query Router across orders & archived_orders)
 get('/orders/export', requireStaffAuth, async (req, res) => {
   try {
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
@@ -274,18 +274,34 @@ get('/orders/export', requireStaffAuth, async (req, res) => {
     const thresholdMs = Date.now() - (days * 24 * 60 * 60 * 1000);
     const thresholdIso = new Date(thresholdMs).toISOString();
 
-    let query: Query = db.collection('orders')
+    const activeQuery: Query = db.collection('orders')
       .where('status', '==', 'completed')
       .where('createdAt', '>=', thresholdIso);
 
-    let snapshot;
-    try {
-      snapshot = await query.orderBy('createdAt', 'desc').limit(1000).get();
-    } catch (_idxErr) {
-      snapshot = await query.limit(1000).get();
-    }
+    const archivedQuery: Query = db.collection('archived_orders')
+      .where('status', '==', 'completed')
+      .where('createdAt', '>=', thresholdIso);
 
-    const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const [activeSnapshot, archivedSnapshot] = await Promise.all([
+      activeQuery.limit(1000).get().catch(err => {
+        console.warn('[orders/export] Active orders query fallback:', err);
+        return { docs: [] } as any;
+      }),
+      archivedQuery.limit(1000).get().catch(err => {
+        console.warn('[orders/export] Archived orders query fallback:', err);
+        return { docs: [] } as any;
+      })
+    ]);
+
+    const orderMap = new Map<string, any>();
+    archivedSnapshot.docs.forEach((doc: any) => {
+      orderMap.set(doc.id, { id: doc.id, ...doc.data() });
+    });
+    activeSnapshot.docs.forEach((doc: any) => {
+      orderMap.set(doc.id, { id: doc.id, ...doc.data() });
+    });
+
+    const orders = Array.from(orderMap.values());
     orders.sort((a: any, b: any) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime());
 
     res.json({

@@ -55,6 +55,11 @@ service cloud.firestore {
       allow delete: if isAuthenticated() || resource.data.status == 'cancelled';
     }
 
+    match /archived_orders/{id} {
+      allow read: if isStaffOrAdmin();
+      allow write: if false;
+    }
+
     match /ingredients/{id} {
       allow read: if isStaffOrAdmin();
       allow write: if false;

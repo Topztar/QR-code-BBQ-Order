@@ -1,12 +1,12 @@
 {
-  "timestamp": "2026-10-12T16:02:53.277Z",
+  "timestamp": "2026-10-12T17:49:00.129Z",
   "environment": "Firebase Emulator (Hosting + Functions)",
   "customer": {
     "staticDataJson": {
       "status": 200,
       "sizeKB": 238.87,
-      "coldLoadMs": 19.56,
-      "warmAvgMs": 12.82,
+      "coldLoadMs": 26.73,
+      "warmAvgMs": 16.37,
       "cacheControl": "none",
       "categoriesCount": 12,
       "menuItemsCount": 114
@@ -14,66 +14,66 @@
     "publicApiBootstrap": {
       "status": 200,
       "sizeKB": 261.05,
-      "coldLoadMs": 106.23,
-      "warmAvgMs": 26.07,
-      "etagValidation304Ms": 15.56,
+      "coldLoadMs": 227.06,
+      "warmAvgMs": 39.55,
+      "etagValidation304Ms": 28.94,
       "cacheControl": "public, max-age=60, s-maxage=180, stale-while-revalidate=600",
       "categoriesCount": 12,
       "menuItemsCount": 114
     },
     "storeStatus": {
       "status": 200,
-      "loadMs": 48.68,
+      "loadMs": 80.75,
       "sizeKB": 0.08
     },
-    "compositeParallelLoadMs": 61.27
+    "compositeParallelLoadMs": 2240.92
   },
   "admin": {
     "staffAuth": {
       "status": 200,
-      "timeMs": 2787.2,
+      "timeMs": 75.69,
       "tokenAcquired": true
     },
     "staffBootstrap": {
       "status": 200,
-      "sizeKB": 263.06,
-      "coldLoadMs": 74.09,
-      "warmAvgMs": 15.9,
+      "sizeKB": 262.85,
+      "coldLoadMs": 120.93,
+      "warmAvgMs": 22.98,
       "counts": {
         "categories": 12,
         "menu": 114,
         "tables": 8,
         "ingredients": 8,
-        "reservations": 1
+        "reservations": 0
       }
     },
     "orders": {
       "status": 200,
-      "timeMs": 36.48,
-      "sizeKB": 1.43,
-      "ordersCount": 3
+      "timeMs": 34.86,
+      "sizeKB": 0,
+      "ordersCount": 0
     },
     "tables": {
       "status": 200,
-      "timeMs": 29.11,
+      "timeMs": 34.44,
       "sizeKB": 1.06
     },
     "ingredients": {
       "status": 200,
-      "timeMs": 30.24,
+      "timeMs": 29.65,
       "sizeKB": 1.81
     },
     "inventoryStats": {
       "status": 200,
-      "timeMs": 31.86,
+      "timeMs": 32.97,
       "sizeKB": 0.03
     },
     "members": {
       "status": 200,
-      "timeMs": 30.16,
+      "timeMs": 31.94,
       "sizeKB": 0,
       "membersCount": 0
     },
-    "compositeParallelLoadMs": 2485.93
+    "compositeParallelLoadMs": 3166.85
   }
 }

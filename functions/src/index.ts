@@ -1,6 +1,7 @@
 import { onRequest } from 'firebase-functions/v2/https';
 import { onDocumentWritten, onDocumentCreated } from 'firebase-functions/v2/firestore';
 import { sendReservationNotifications, sendOrderNotification } from './services/notification';
+import { archiveSettledOrders } from './services/orderArchival';
 import { createGetCachedNotificationSettings } from './helpers';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { setGlobalOptions } from 'firebase-functions/v2';
@@ -513,4 +514,25 @@ export const onOrderCompleted = onDocumentWritten(
     }
   }
 );
+
+// ============================================================
+// 🕰️ Cloud Scheduler — 定期封存歷史訂單 (Nightly Settled Order Archival)
+// 每日 04:00 (Asia/Taipei) 自動將結帳完成/取消超過 24 小時之訂單原子遷移至 archived_orders
+// ============================================================
+export const archiveSettledOrdersNightly = onSchedule(
+  {
+    schedule: '0 4 * * *',
+    timeZone: 'Asia/Taipei',
+    region: 'asia-east1',
+    memory: '256MiB',
+    timeoutSeconds: 120,
+    maxInstances: 1
+  },
+  async () => {
+    console.log('[archiveSettledOrdersNightly] Starting nightly archival job...');
+    const result = await archiveSettledOrders(db);
+    console.log('[archiveSettledOrdersNightly] Finished nightly archival job:', JSON.stringify(result));
+  }
+);
+
 

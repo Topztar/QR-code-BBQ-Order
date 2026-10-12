@@ -5,6 +5,7 @@ import { createTerminalSlice } from './createTerminalSlice';
 import { createTableSlice } from './createTableSlice';
 import { createMenuSlice } from './createMenuSlice';
 import { createUISlice } from './createUISlice';
+import { createInventorySlice } from './createInventorySlice';
 
 export const useDashboardStore = create<DashboardStore>()((...a) => ({
   ...createCashierSlice(...a),
@@ -12,4 +13,5 @@ export const useDashboardStore = create<DashboardStore>()((...a) => ({
   ...createTableSlice(...a),
   ...createMenuSlice(...a),
   ...createUISlice(...a),
+  ...createInventorySlice(...a),
 }));

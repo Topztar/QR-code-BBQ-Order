@@ -1,33 +1,57 @@
-﻿# Order Archival Design & State Transitions (M-D16)
+# Order Archival Design & State Transitions (M-D16)
 
-## Current State (As of Phase 4 Implementation)
-Currently, when an order is completed, settled (paid), or cancelled, the order document in Firestore remains in the orders collection indefinitely. There is no automated process or API route that archives these inactive orders into a separate rchived_orders collection or marks them for deletion.
+## 1. Overview & Current State
+When an order is completed, settled (paid), or cancelled, the order document in Firestore historically remained in the `orders` collection indefinitely. While `paid`, `completed`, and `cancelled` are terminal states, client applications (KDS, Cashier, Manager Dashboard) filter them out in memory based on status predicates. Over time, an unbounded `orders` collection increases scan overhead and index size.
 
-While status: 'paid' and status: 'cancelled' are effectively terminal states, the client apps (KDS, Manager Dashboard) filter them out in memory based on status predicates rather than querying a separate table. Over time, the orders collection will grow indefinitely, which will:
-1. Increase Firestore read costs (if full collection scans happen).
-2. Increase local emulator memory usage (during syncActive).
-3. Degrade dashboard payload sizes if clients pull historical data naively.
+## 2. Production Archival Architecture: Scheduled Nightly Batch
 
-## Proposed Archival Design (Future Implementation)
+To balance high-performance real-time operations, cashier post-checkout grace periods, same-day End-of-Day (EOD) audit trails, and long-term storage hygiene, the system uses a **Scheduled Cloud Function (Nightly Batch Archival)** rather than an immediate reactive trigger:
 
-To maintain a performant and cost-effective system, we recommend implementing a formal archival workflow.
+```
+[Active Operations (KDS, Cashier, Live Floor Plan)]
+                       │
+                       ▼
+          Firestore Collection: `orders`
+  (Holds active orders + current business day settled orders)
+                       │
+                       ▼ (Nightly 04:00 AM CST via Cloud Scheduler)
+  Batch filter: status in ['paid', 'completed', 'cancelled'] & createdAt < 24h ago
+                       │
+                       ▼ (Atomic db.batch)
+      Firestore Collection: `archived_orders`
+     (Read-only archive for historical reporting)
+```
 
-### 1. The rchived_orders Collection
-Create a parallel Firestore collection named rchived_orders. The schema for an archived order is identical to an active Order, with the addition of:
-- rchivedAt: Timestamp of when the order was moved.
-- rchivedReason: Enum ('settled', 'cancelled', 'abandoned').
+### Key Components
 
-### 2. Archival Trigger (Cloud Function)
-Instead of relying on the client to move the data (which poses security risks and OCC hazards), use a **Firestore Document Trigger** (onWrite or onUpdate):
-- When an order transitions to status: 'paid' or status: 'cancelled', the trigger executes.
-- The trigger writes the document to rchived_orders and deletes it from orders.
-- The transaction must be atomic to prevent data loss.
+### 1. The `archived_orders` Collection
+A parallel Firestore collection named `archived_orders`. The schema is identical to an active `Order`, enriched with archival metadata:
+- `archivedAt`: Server timestamp of when the order was migrated.
+- `archivedReason`: Status indicator ('paid', 'completed', 'cancelled').
+- `archivedBy`: Audit author string (e.g. `'cloud_scheduler_eod'`).
 
-### 3. Analytics and Reporting
-The Manager Dashboard analytics (e.g., daily revenue, popular items) should query the rchived_orders collection for historical reporting. Active orders should only be queried for real-time operational data.
+### 2. Scheduled Batch Trigger (Cloud Function)
+Instead of an immediate trigger on `status: 'paid'` (which would prematurely evict dine-in tables, break same-day EOD cash reconciliations, and race with cashier adjustments in `PaidOrderModificationModal`), archival is executed via `onSchedule`:
+- **Function:** `archiveSettledOrdersNightly`
+- **Schedule:** `0 4 * * *` (Daily at 04:00 AM Asia/Taipei, post-closing).
+- **Grace Period:** Orders must be older than 24 hours (preserving same-day shift records).
+- **Atomicity:** Uses `db.batch()` in batches of up to 400 documents to atomically write to `archived_orders` and delete from `orders`.
 
-### 4. Client-Side Cache Eviction
-When the order is moved, the active Firestore onSnapshot listener on the client will receive a emoved event for that document. The client store (e.g., Zustand) will automatically evict it from memory, freeing up client resources seamlessly.
+### 3. Historical Query Routing (`/orders/export`)
+The export API (`GET /api/orders/export`) provides a unified query layer:
+- For windows spanning historical periods (e.g., 30 days), it queries both `archived_orders` (for older settled records) and active `orders` (for the current 24 hours), deduplicates, and sorts chronologically.
 
-## Conclusion
-The current implementation handles correctness and concurrency (OCC), but lacks long-term storage hygiene. Implementing the Document Trigger archival strategy described above is the most robust path forward.
+### 4. Security Rules
+Client writes directly to `archived_orders` are forbidden. Authenticated staff may read historical archives:
+```protobuf
+match /archived_orders/{orderId} {
+  allow read: if request.auth != null;
+  allow write: if false; // Cloud Functions Admin SDK bypasses rules
+}
+```
+
+## 3. Operational Integrity
+This design guarantees:
+1. **Zero Table Turnover Glitches:** Paid dine-in tables remain visible until the party vacates and cleaning is complete.
+2. **Zero EOD Audit Breakdown:** Same-day cash drawer calculations and Z-reports reflect all shift orders.
+3. **No Race Conditions:** Managers can adjust or refund orders within the immediate post-checkout window without facing 404 errors.

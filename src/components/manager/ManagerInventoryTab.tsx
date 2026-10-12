@@ -5,6 +5,7 @@ import { getLocalizedText } from '../../utils/i18n';
 import { db, isFirebaseSyncEnabled } from '../../lib/firebase';
 import { collection, onSnapshot, query, limit } from 'firebase/firestore';
 import { apiFetch } from '../../lib/api';
+import { useDashboardStore } from '../../stores/dashboard/useDashboardStore';
 
 interface ManagerInventoryTabProps {
   analytics: {
@@ -12,71 +13,94 @@ interface ManagerInventoryTabProps {
   };
   ingredients: Ingredient[];
   menuItems: any[];
-  restockAmount: { [id: string]: number };
-  setRestockAmount: React.Dispatch<React.SetStateAction<{ [id: string]: number }>>;
+  restockAmount?: { [id: string]: number };
+  setRestockAmount?: React.Dispatch<React.SetStateAction<{ [id: string]: number }>>;
   handleRestockClick: (id: string) => void;
 
-  manualAdjustId: string;
-  setManualAdjustId: (id: string) => void;
-  manualAdjustQty: string;
-  setManualAdjustQty: (qty: string) => void;
-  manualAdjustNote: string;
-  setManualAdjustNote: (note: string) => void;
+  manualAdjustId?: string;
+  setManualAdjustId?: (id: string) => void;
+  manualAdjustQty?: string;
+  setManualAdjustQty?: (qty: string) => void;
+  manualAdjustNote?: string;
+  setManualAdjustNote?: (note: string) => void;
   handleManualAdjustStock: (e: React.FormEvent) => Promise<void>;
-  newIngId: string;
-  setNewIngId: (id: string) => void;
-  newIngNameZh: string;
-  setNewIngNameZh: (name: string) => void;
-  newIngNameEn: string;
-  setNewIngNameEn: (name: string) => void;
-  newIngStock: string;
-  setNewIngStock: (stock: string) => void;
-  newIngMinThreshold: string;
-  setNewIngMinThreshold: (thresh: string) => void;
-  newIngUnit: string;
-  setNewIngUnit: (unit: string) => void;
+  newIngId?: string;
+  setNewIngId?: (id: string) => void;
+  newIngNameZh?: string;
+  setNewIngNameZh?: (name: string) => void;
+  newIngNameEn?: string;
+  setNewIngNameEn?: (name: string) => void;
+  newIngStock?: string;
+  setNewIngStock?: (stock: string) => void;
+  newIngMinThreshold?: string;
+  setNewIngMinThreshold?: (thresh: string) => void;
+  newIngUnit?: string;
+  setNewIngUnit?: (unit: string) => void;
   handleAddNewIngredient: (e: React.FormEvent) => Promise<void>;
   recipeCompositionMap: { [dishId: string]: { name: string; qty: string }[] };
   handleExportInventoryReport: () => void;
-  inventoryLogSearch: string;
-  setInventoryLogSearch: (search: string) => void;
-  dbInventoryLogs: any[];
+  inventoryLogSearch?: string;
+  setInventoryLogSearch?: (search: string) => void;
+  dbInventoryLogs?: any[];
 }
 
 export const ManagerInventoryTab: React.FC<ManagerInventoryTabProps> = ({
   analytics,
   ingredients: propIngredients,
   menuItems,
-  restockAmount,
-  setRestockAmount,
+  restockAmount: propRestockAmount,
+  setRestockAmount: propSetRestockAmount,
   handleRestockClick,
 
-  manualAdjustId,
-  setManualAdjustId,
-  manualAdjustQty,
-  setManualAdjustQty,
-  manualAdjustNote,
-  setManualAdjustNote,
+  manualAdjustId: propManualAdjustId,
+  setManualAdjustId: propSetManualAdjustId,
+  manualAdjustQty: propManualAdjustQty,
+  setManualAdjustQty: propSetManualAdjustQty,
+  manualAdjustNote: propManualAdjustNote,
+  setManualAdjustNote: propSetManualAdjustNote,
   handleManualAdjustStock,
-  newIngId,
-  setNewIngId,
-  newIngNameZh,
-  setNewIngNameZh,
-  newIngNameEn,
-  setNewIngNameEn,
-  newIngStock,
-  setNewIngStock,
-  newIngMinThreshold,
-  setNewIngMinThreshold,
-  newIngUnit,
-  setNewIngUnit,
+  newIngId: propNewIngId,
+  setNewIngId: propSetNewIngId,
+  newIngNameZh: propNewIngNameZh,
+  setNewIngNameZh: propSetNewIngNameZh,
+  newIngNameEn: propNewIngNameEn,
+  setNewIngNameEn: propSetNewIngNameEn,
+  newIngStock: propNewIngStock,
+  setNewIngStock: propSetNewIngStock,
+  newIngMinThreshold: propNewIngMinThreshold,
+  setNewIngMinThreshold: propSetNewIngMinThreshold,
+  newIngUnit: propNewIngUnit,
+  setNewIngUnit: propSetNewIngUnit,
   handleAddNewIngredient,
   recipeCompositionMap,
   handleExportInventoryReport,
-  inventoryLogSearch,
-  setInventoryLogSearch,
+  inventoryLogSearch: propInventoryLogSearch,
+  setInventoryLogSearch: propSetInventoryLogSearch,
   dbInventoryLogs: propDbInventoryLogs,
 }) => {
+  const store = useDashboardStore();
+  const restockAmount = propRestockAmount !== undefined ? propRestockAmount : store.restockAmount;
+  const setRestockAmount = (propSetRestockAmount as any) || store.setRestockAmount;
+  const manualAdjustId = propManualAdjustId !== undefined ? propManualAdjustId : store.manualAdjustId;
+  const setManualAdjustId = propSetManualAdjustId || store.setManualAdjustId;
+  const manualAdjustQty = propManualAdjustQty !== undefined ? propManualAdjustQty : store.manualAdjustQty;
+  const setManualAdjustQty = propSetManualAdjustQty || store.setManualAdjustQty;
+  const manualAdjustNote = propManualAdjustNote !== undefined ? propManualAdjustNote : store.manualAdjustNote;
+  const setManualAdjustNote = propSetManualAdjustNote || store.setManualAdjustNote;
+  const newIngId = propNewIngId !== undefined ? propNewIngId : store.newIngId;
+  const setNewIngId = propSetNewIngId || store.setNewIngId;
+  const newIngNameZh = propNewIngNameZh !== undefined ? propNewIngNameZh : store.newIngNameZh;
+  const setNewIngNameZh = propSetNewIngNameZh || store.setNewIngNameZh;
+  const newIngNameEn = propNewIngNameEn !== undefined ? propNewIngNameEn : store.newIngNameEn;
+  const setNewIngNameEn = propSetNewIngNameEn || store.setNewIngNameEn;
+  const newIngStock = propNewIngStock !== undefined ? propNewIngStock : store.newIngStock;
+  const setNewIngStock = propSetNewIngStock || store.setNewIngStock;
+  const newIngMinThreshold = propNewIngMinThreshold !== undefined ? propNewIngMinThreshold : store.newIngMinThreshold;
+  const setNewIngMinThreshold = propSetNewIngMinThreshold || store.setNewIngMinThreshold;
+  const newIngUnit = propNewIngUnit !== undefined ? propNewIngUnit : store.newIngUnit;
+  const setNewIngUnit = propSetNewIngUnit || store.setNewIngUnit;
+  const inventoryLogSearch = propInventoryLogSearch !== undefined ? propInventoryLogSearch : store.inventoryLogSearch;
+  const setInventoryLogSearch = propSetInventoryLogSearch || store.setInventoryLogSearch;
   // ⚡ 1. 隔離式即時監聽 (Scoped Realtime Listener): 僅在此組件 Mount 時監聽 ingredients，Unmount 時自動中斷 (TC-PERF-INV-003)
   const [liveIngredients, setLiveIngredients] = useState<Ingredient[]>(propIngredients);
 
@@ -174,7 +198,7 @@ export const ManagerInventoryTab: React.FC<ManagerInventoryTabProps> = ({
     }
   };
 
-  const dbInventoryLogs = logsList.length > 0 ? logsList : propDbInventoryLogs;
+  const dbInventoryLogs = logsList.length > 0 ? logsList : (propDbInventoryLogs || store.dbInventoryLogs || []);
 
   return (
     <div className="space-y-6 animate-fadeIn text-left" id="subtab-section-inventory">

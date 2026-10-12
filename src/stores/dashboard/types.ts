@@ -203,7 +203,44 @@ export interface UISlice {
 
   addMemberModalOpen: boolean;
   setAddMemberModalOpen: (open: boolean) => void;
-
 }
 
-export type DashboardStore = CashierSlice & TerminalSlice & TableSlice & MenuSlice & UISlice;
+export interface InventorySlice {
+  dbInventoryLogs: any[];
+  setDbInventoryLogs: (logs: any[] | ((prev: any[]) => any[])) => void;
+
+  manualAdjustId: string;
+  setManualAdjustId: (id: string) => void;
+
+  manualAdjustQty: string;
+  setManualAdjustQty: (qty: string) => void;
+
+  manualAdjustNote: string;
+  setManualAdjustNote: (note: string) => void;
+
+  inventoryLogSearch: string;
+  setInventoryLogSearch: (search: string) => void;
+
+  restockAmount: { [id: string]: number };
+  setRestockAmount: (amount: { [id: string]: number } | ((prev: { [id: string]: number }) => { [id: string]: number })) => void;
+
+  newIngId: string;
+  setNewIngId: (id: string) => void;
+
+  newIngNameZh: string;
+  setNewIngNameZh: (name: string) => void;
+
+  newIngNameEn: string;
+  setNewIngNameEn: (name: string) => void;
+
+  newIngStock: string;
+  setNewIngStock: (stock: string) => void;
+
+  newIngMinThreshold: string;
+  setNewIngMinThreshold: (thresh: string) => void;
+
+  newIngUnit: string;
+  setNewIngUnit: (unit: string) => void;
+}
+
+export type DashboardStore = CashierSlice & TerminalSlice & TableSlice & MenuSlice & UISlice & InventorySlice;

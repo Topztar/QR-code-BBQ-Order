@@ -404,6 +404,75 @@ var require_notification = __commonJS({
   }
 });
 
+// lib/services/orderArchival.js
+var require_orderArchival = __commonJS({
+  "lib/services/orderArchival.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.TERMINAL_STATUSES = void 0;
+    exports2.archiveSettledOrders = archiveSettledOrders;
+    var firestore_12 = require("firebase-admin/firestore");
+    exports2.TERMINAL_STATUSES = ["completed", "paid", "cancelled"];
+    async function archiveSettledOrders(db2, options = {}) {
+      const startTime = Date.now();
+      const cutoffIso = options.cutoffIso || new Date(Date.now() - 24 * 60 * 60 * 1e3).toISOString();
+      const batchSize = Math.min(Math.max(options.batchSize || 400, 1), 450);
+      const maxBatches = options.maxBatches || 10;
+      const targetStatuses = options.statuses || exports2.TERMINAL_STATUSES;
+      const archivedBy = options.archivedBy || "cloud_scheduler_eod";
+      let totalArchived = 0;
+      const archivedByStatus = {};
+      const errors = [];
+      for (const status of targetStatuses) {
+        archivedByStatus[status] = 0;
+        let batchCount = 0;
+        while (batchCount < maxBatches) {
+          batchCount++;
+          try {
+            const snapshot = await db2.collection("orders").where("status", "==", status).where("createdAt", "<=", cutoffIso).limit(batchSize).get();
+            if (snapshot.empty) {
+              break;
+            }
+            const batch = db2.batch();
+            for (const doc of snapshot.docs) {
+              const data = doc.data();
+              const targetRef = db2.collection("archived_orders").doc(doc.id);
+              batch.set(targetRef, {
+                ...data,
+                archivedAt: firestore_12.FieldValue.serverTimestamp(),
+                archivedReason: status,
+                archivedBy
+              });
+              batch.delete(doc.ref);
+            }
+            await batch.commit();
+            const count = snapshot.size;
+            totalArchived += count;
+            archivedByStatus[status] += count;
+            if (count < batchSize) {
+              break;
+            }
+          } catch (err) {
+            const errMsg = `Failed archiving status ${status} in batch ${batchCount}: ${err?.message || String(err)}`;
+            console.error(`[OrderArchival] ${errMsg}`);
+            errors.push(errMsg);
+            break;
+          }
+        }
+      }
+      const durationMs = Date.now() - startTime;
+      console.log(`[OrderArchival] Completed in ${durationMs}ms: archived ${totalArchived} orders (cutoff: ${cutoffIso})`);
+      return {
+        totalArchived,
+        archivedByStatus,
+        cutoffIso,
+        durationMs,
+        errors
+      };
+    }
+  }
+});
+
 // ../shared/src/index.ts
 var src_exports = {};
 __export(src_exports, {
@@ -55568,14 +55637,26 @@ var require_orders = __commonJS({
           const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 90);
           const thresholdMs = Date.now() - days * 24 * 60 * 60 * 1e3;
           const thresholdIso = new Date(thresholdMs).toISOString();
-          let query = db2.collection("orders").where("status", "==", "completed").where("createdAt", ">=", thresholdIso);
-          let snapshot;
-          try {
-            snapshot = await query.orderBy("createdAt", "desc").limit(1e3).get();
-          } catch (_idxErr) {
-            snapshot = await query.limit(1e3).get();
-          }
-          const orders = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+          const activeQuery = db2.collection("orders").where("status", "==", "completed").where("createdAt", ">=", thresholdIso);
+          const archivedQuery = db2.collection("archived_orders").where("status", "==", "completed").where("createdAt", ">=", thresholdIso);
+          const [activeSnapshot, archivedSnapshot] = await Promise.all([
+            activeQuery.limit(1e3).get().catch((err) => {
+              console.warn("[orders/export] Active orders query fallback:", err);
+              return { docs: [] };
+            }),
+            archivedQuery.limit(1e3).get().catch((err) => {
+              console.warn("[orders/export] Archived orders query fallback:", err);
+              return { docs: [] };
+            })
+          ]);
+          const orderMap = /* @__PURE__ */ new Map();
+          archivedSnapshot.docs.forEach((doc) => {
+            orderMap.set(doc.id, { id: doc.id, ...doc.data() });
+          });
+          activeSnapshot.docs.forEach((doc) => {
+            orderMap.set(doc.id, { id: doc.id, ...doc.data() });
+          });
+          const orders = Array.from(orderMap.values());
           orders.sort((a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime());
           res.json({
             orders,
@@ -57724,11 +57805,12 @@ var __importDefault = exports && exports.__importDefault || function(mod) {
   return mod && mod.__esModule ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.onOrderCompleted = exports.onOrderCreated = exports.onReservationCreated = exports.autoDeleteExpiredIdempotencyKeys = exports.reconcileDailySoldOut = exports.onMenuItemWritten = exports.imageApi = exports.api = exports.requireAppCheck = exports.sendErrorResponse = exports.requireStaffAuth = void 0;
+exports.archiveSettledOrdersNightly = exports.onOrderCompleted = exports.onOrderCreated = exports.onReservationCreated = exports.autoDeleteExpiredIdempotencyKeys = exports.reconcileDailySoldOut = exports.onMenuItemWritten = exports.imageApi = exports.api = exports.requireAppCheck = exports.sendErrorResponse = exports.requireStaffAuth = void 0;
 exports.createRateLimiter = createRateLimiter;
 var https_1 = require("firebase-functions/v2/https");
 var firestore_1 = require("firebase-functions/v2/firestore");
 var notification_1 = require_notification();
+var orderArchival_1 = require_orderArchival();
 var helpers_1 = require_helpers();
 var scheduler_1 = require("firebase-functions/v2/scheduler");
 var v2_1 = require("firebase-functions/v2");
@@ -58100,6 +58182,18 @@ exports.onOrderCompleted = (0, firestore_1.onDocumentWritten)({
     await batch.commit();
     console.log(`[onOrderCompleted] Materialized view inventory_stats updated for order ${event.params.orderId}`);
   }
+});
+exports.archiveSettledOrdersNightly = (0, scheduler_1.onSchedule)({
+  schedule: "0 4 * * *",
+  timeZone: "Asia/Taipei",
+  region: "asia-east1",
+  memory: "256MiB",
+  timeoutSeconds: 120,
+  maxInstances: 1
+}, async () => {
+  console.log("[archiveSettledOrdersNightly] Starting nightly archival job...");
+  const result = await (0, orderArchival_1.archiveSettledOrders)(db);
+  console.log("[archiveSettledOrdersNightly] Finished nightly archival job:", JSON.stringify(result));
 });
 /*! Bundled license information:
 
