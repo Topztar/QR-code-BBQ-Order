@@ -238,6 +238,10 @@ import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
 // 🤖 Firebase App Check (Bot & Abuse Protection)
 let appCheckInstance: any = null;
 if (typeof window !== 'undefined') {
+  if (location.hostname === 'localhost' || location.hostname === '127.0.0.1' || isEmulatorMode) {
+    // @ts-ignore
+    self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+  }
   const recaptchaSiteKey = (window as any).__FIREBASE_APPCHECK_KEY__ || (import.meta as any).env?.VITE_RECAPTCHA_SITE_KEY;
   if (recaptchaSiteKey) {
     try {

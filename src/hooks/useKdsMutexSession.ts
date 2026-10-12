@@ -4,6 +4,7 @@ import { safeStorage } from '../lib/safeStorage';
 import { apiFetch } from '../lib/api';
 import { db, isFirebaseSyncEnabled } from '../lib/firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
+import { sessionAuth } from '../lib/sessionAuth';
 
 
 export function useKdsMutexSession(
@@ -11,6 +12,20 @@ export function useKdsMutexSession(
   isNetworkOnline: boolean,
   syncActive: boolean
 ) {
+  const [isStaffAuthenticated, setIsStaffAuthenticated] = useState<boolean>(() => sessionAuth.isAuthenticated());
+
+  useEffect(() => {
+    const handleAuthChange = () => {
+      setIsStaffAuthenticated(sessionAuth.isAuthenticated());
+    };
+    window.addEventListener('sabay_auth_changed', handleAuthChange);
+    window.addEventListener('sabay_auth_expired', handleAuthChange);
+    return () => {
+      window.removeEventListener('sabay_auth_changed', handleAuthChange);
+      window.removeEventListener('sabay_auth_expired', handleAuthChange);
+    };
+  }, []);
+
   const [currentDeviceId] = useState<string>(() => {
     try {
       let id = safeStorage.getItem('sabay_device_id');
@@ -33,7 +48,8 @@ export function useKdsMutexSession(
   }, [activeTab]);
 
   useEffect(() => {
-    if (activeTab === 'customer') return;
+    // GUARD: Do not attach listeners without verified session credentials
+    if (activeTab === 'customer' || !isStaffAuthenticated) return;
     let unsubscribeFirestore = () => {};
     let isCancelled = false;
 
@@ -64,10 +80,10 @@ export function useKdsMutexSession(
       isCancelled = true;
       unsubscribeFirestore();
     };
-  }, [syncActive, currentDeviceId, activeTab]);
+  }, [syncActive, currentDeviceId, activeTab, isStaffAuthenticated]);
 
   useEffect(() => {
-    if (activeTab !== 'kitchen') return;
+    if (activeTab !== 'kitchen' || !isStaffAuthenticated) return;
 
     const handleBeforeUnload = () => {
       if (currentRoleRef.current === 'kitchen' && currentDeviceId) {
@@ -89,7 +105,7 @@ export function useKdsMutexSession(
 
 
     const heartbeatInterval = setInterval(async () => {
-      if (!isNetworkOnline) return;
+      if (!isNetworkOnline || !sessionAuth.isAuthenticated()) return;
       if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
 
       try {
@@ -113,7 +129,7 @@ export function useKdsMutexSession(
       window.removeEventListener('beforeunload', handleBeforeUnload);
       window.removeEventListener('pagehide', handleBeforeUnload);
     };
-  }, [activeTab, currentDeviceId, isNetworkOnline]);
+  }, [activeTab, currentDeviceId, isNetworkOnline, isStaffAuthenticated]);
 
   const handleClaimKitchenRole = useCallback(async (force: boolean = false): Promise<{ success: boolean; conflict?: boolean; activeKitchenDeviceId?: string }> => {
     try {

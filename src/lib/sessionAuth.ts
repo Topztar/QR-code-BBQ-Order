@@ -14,6 +14,9 @@ export const sessionAuth = {
       sessionStorage.setItem('sabay_jwt_token', token);
       sessionStorage.setItem('sabay-staff-auth', 'true');
     } catch {}
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('sabay_auth_changed', { detail: { isAuthenticated: true } }));
+    }
   },
   clear: () => {
     try {
@@ -25,6 +28,9 @@ export const sessionAuth = {
       sessionStorage.removeItem('sabay-staff-active-tab');
       sessionStorage.removeItem('sabay-staff-subtab');
     } catch {}
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('sabay_auth_changed', { detail: { isAuthenticated: false } }));
+    }
   },
   isAuthenticated: () => {
     try {

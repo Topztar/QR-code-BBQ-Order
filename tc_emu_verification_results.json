@@ -1,0 +1,26 @@
+{
+  "timestamp": "2026-10-12T18:17:03.398Z",
+  "environment": "Firebase Emulator (Hosting + Functions + Firestore)",
+  "testCases": {
+    "TC-EMU-01": {
+      "description": "Observe Network Tab for 15s when logged out: 0 outgoing requests to /api/orders. No 401s.",
+      "status": "PASSED",
+      "evidence": "Outgoing /api/orders requests: 0, 401 responses: 0"
+    },
+    "TC-EMU-02": {
+      "description": "Inspect Console Tab when logged out: Zero [KDS Presence] permission errors.",
+      "status": "PASSED",
+      "evidence": "[KDS Presence] permission error occurrences: 0"
+    },
+    "TC-EMU-03": {
+      "description": "Gate locked (Active 10s cooldown): Wait for countdown to hit 0s. NO auto retry request. Input re-enabled.",
+      "status": "PASSED",
+      "evidence": "Reached 0: true, Auto-retry sent: false, Keypad re-enabled: true"
+    },
+    "TC-EMU-04": {
+      "description": "Gate unlocked: Input valid 6-digit PIN and click Unlock. Functions validates PIN. Auth token saved. KDS loads.",
+      "status": "PASSED",
+      "evidence": "KDS loaded: true (4860ms), Auth token saved: true"
+    }
+  }
+}

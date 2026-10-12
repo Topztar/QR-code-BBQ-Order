@@ -7,6 +7,7 @@ import { collection, onSnapshot, query, limit, where, orderBy } from 'firebase/f
 import { removeOrCancelOrder } from '../lib/orders';
 import { getOfflineQueue, addRequestToQueue, removeOrderRequestsFromQueue, processOfflineQueue } from '../lib/offlineQueue';
 import { safeStorage } from '../lib/safeStorage';
+import { sessionAuth } from '../lib/sessionAuth';
 
 // ?? 0 ?�端?�本跨�??�即?�廣?�頻??(Zero-Cost Local Cross-Tab Sync)
 let ordersBroadcastChannel: BroadcastChannel | null = null;
@@ -92,6 +93,19 @@ export function useLiveOrders(
   const recentStatusTransitionsRef = useRef<Map<string, RecentOrderTransition>>(new Map());
   const deletedOrderIdsRef = useRef<BoundedSet<string>>(new BoundedSet(1000));
   const isStaffView = activeTab !== 'customer';
+  const [isStaffAuthenticated, setIsStaffAuthenticated] = useState<boolean>(() => sessionAuth.isAuthenticated());
+
+  useEffect(() => {
+    const handleAuthChange = () => {
+      setIsStaffAuthenticated(sessionAuth.isAuthenticated());
+    };
+    window.addEventListener('sabay_auth_changed', handleAuthChange);
+    window.addEventListener('sabay_auth_expired', handleAuthChange);
+    return () => {
+      window.removeEventListener('sabay_auth_changed', handleAuthChange);
+      window.removeEventListener('sabay_auth_expired', handleAuthChange);
+    };
+  }, []);
 
   const reconcileOrders = useCallback((incomingOrders: Order[]): Order[] => {
     if (!Array.isArray(incomingOrders)) return [];
@@ -210,13 +224,15 @@ export function useLiveOrders(
     let unsubscribeOrders = () => {};
     let isCancelled = false;
 
-    if (!isStaffView) {
+    // GUARD: Do not poll or listen to orders if not on staff view, or if unauthenticated
+    if (!isStaffView || !isStaffAuthenticated) {
       return () => {
         unsubscribeOrders();
       };
     }
 
     const fetchOrdersFromApi = async () => {
+      if (!sessionAuth.isAuthenticated() || isCancelled) return;
       try {
         let url = `/api/orders?_t=${Date.now()}`;
         const res = await apiFetch(url);
@@ -243,9 +259,10 @@ export function useLiveOrders(
     let retryCount = 0;
 
     const setupRealtimeListener = async () => {
+      if (!sessionAuth.isAuthenticated() || isCancelled) return;
       try {
         const user = await ensureFirebaseAuthReady();
-        if (isCancelled) return;
+        if (isCancelled || !sessionAuth.isAuthenticated()) return;
 
         if (fallbackPollInterval) {
           clearInterval(fallbackPollInterval);
@@ -253,12 +270,14 @@ export function useLiveOrders(
         }
 
         if (!user) {
-          fetchOrdersFromApi();
-          if (!reconnectTimer && !isCancelled) {
-            reconnectTimer = setTimeout(() => {
-              reconnectTimer = null;
-              setupRealtimeListener();
-            }, 3000);
+          if (sessionAuth.isAuthenticated()) {
+            fetchOrdersFromApi();
+            if (!reconnectTimer && !isCancelled) {
+              reconnectTimer = setTimeout(() => {
+                reconnectTimer = null;
+                setupRealtimeListener();
+              }, 3000);
+            }
           }
           return;
         }
@@ -380,7 +399,7 @@ export function useLiveOrders(
         } catch (_) {}
       }, 0);
     };
-  }, [isStaffView, syncActive, reconcileOrders]);
+  }, [isStaffView, isStaffAuthenticated, syncActive, reconcileOrders]);
 
   const handleUpdateOrderStatus = async (orderId: string, status: OrderStatus) => {
     const description = `?�新 ?�� 訂單 #${orderId.replace('offline_temp_', '?��?')} ?�?�至??{status}?�`;
