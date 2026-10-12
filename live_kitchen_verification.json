@@ -1,0 +1,54 @@
+{
+  "pageData": {
+    "title": "沙貝燒烤 SABAY BBQ | 線上預約訂位與點餐系統 Online Reservation & Order",
+    "bodyText": "沙貝泰式燒烤 經營管理中心\n🛡️ 員工專屬隔離安全驗證終端 (Autonomous Admin Terminal)\nSECURE AUTH PORTAL MODE\nTW\n🔒 ADMINISTRATIVE CONTROL PORTAL\n沙貝管理後台獨立驗證門戶\n\n本頁面為管理階層專屬之獨立防護選單。已與顧客共用選單安全防禦硬化，防止任何未授權之側錄、入侵或探測。\n\n返回點餐前台\nSTAFF ONLY GATE\n經營管理後台登入\n\n此區域為餐飲管理、廚房配單及數據庫存後端。請輸入 6 位數員工金鑰以完成安全驗證。\n\n1\n2\n3\n4\n5\n6\n7\n8\n9\n清除\n0\n刪除\n解鎖進入後台系統\n\nDESIGNED BY\nFLYSHINE A.S.R. SYSTEM TECHNOLOGY.\n\nCUSTOMER VIEW\nA.S.R. CLOUD ENGINE V4.2 // SECURED CONNECTION TERMINAL",
+    "hasPinContainer": true,
+    "pinDotsCount": 6,
+    "hasSubmitBtn": true,
+    "submitBtnDisabled": true,
+    "submitBtnText": "解鎖進入後台系統",
+    "hasReturnBtn": true,
+    "pinButtons": [
+      "pinpad-1",
+      "pinpad-2",
+      "pinpad-3",
+      "pinpad-4",
+      "pinpad-5",
+      "pinpad-6",
+      "pinpad-7",
+      "pinpad-8",
+      "pinpad-9",
+      "pinpad-clear",
+      "pinpad-0",
+      "pinpad-back"
+    ],
+    "headings": [
+      "沙貝泰式燒烤 經營管理中心",
+      "沙貝管理後台獨立驗證門戶",
+      "經營管理後台登入"
+    ],
+    "spans": [
+      "沙貝泰式燒烤 經營管理中心",
+      "🛡️ 員工專屬隔離安全驗證終端 (Autonomous Admin Terminal)",
+      "SECURE AUTH PORTAL MODE",
+      "TW",
+      "🔒 ADMINISTRATIVE CONTROL PORTAL",
+      "返回點餐前台",
+      "STAFF ONLY GATE",
+      "解鎖進入後台系統",
+      "DESIGNED BY",
+      "FLYSHINE A.S.R. SYSTEM TECHNOLOGY.",
+      "CUSTOMER VIEW",
+      "A.S.R. CLOUD ENGINE V4.2 // SECURED CONNECTION TERMINAL"
+    ]
+  },
+  "checks": {
+    "C-01 Title/Header": true,
+    "C-02 6-digit PIN instruction": true,
+    "C-03 Cooldown/Protection": false,
+    "C-04 Scope text": true,
+    "C-05 Engine Attribution": true,
+    "C-06 Vendor Signature": true,
+    "Portal Isolation Copy": true
+  }
+}
