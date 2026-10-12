@@ -39,6 +39,8 @@ export interface KdsHeaderProps {
   currentLang: Language;
   beepSim: boolean;
   kdsHeaderRef?: React.RefObject<HTMLDivElement | null>;
+  isAudioLeader?: boolean;
+  claimAudioLeader?: () => void;
 }
 
 export const KdsHeader: React.FC<KdsHeaderProps> = React.memo(({
@@ -65,6 +67,8 @@ export const KdsHeader: React.FC<KdsHeaderProps> = React.memo(({
   categories,
   currentLang,
   beepSim,
+  isAudioLeader,
+  claimAudioLeader,
 }) => {
   return (
     <>
@@ -410,6 +414,31 @@ export const KdsHeader: React.FC<KdsHeaderProps> = React.memo(({
                 title="測試播放音量與語音廣播"
               >
                 {currentLang === 'zh' ? '測試 (Test)' : 'Test'}
+              </button>
+            )}
+
+            {/* Cross-Tab Audio Leader Election Indicator */}
+            {typeof isAudioLeader === 'boolean' && (
+              <button
+                id="kds-audio-leader-badge"
+                type="button"
+                onClick={() => {
+                  if (!isAudioLeader && claimAudioLeader) {
+                    claimAudioLeader();
+                  }
+                }}
+                className={`flex items-center space-x-1 px-2.5 py-1 rounded-lg text-[10px] font-bold transition cursor-pointer ${
+                  isAudioLeader
+                    ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                    : 'bg-white/5 text-white/50 border border-white/10 hover:text-white hover:border-white/30'
+                }`}
+                title={
+                  isAudioLeader
+                    ? '👑 主播報分頁：此分頁正負責本設備的語音出單播報'
+                    : '👥 副窗靜音待命：已開啟跨分頁自動防重疊機制，此分頁靜音中。點擊可切換為主播報分頁'
+                }
+              >
+                <span>{isAudioLeader ? '👑 主音訊' : '👥 副窗待命'}</span>
               </button>
             )}
           </div>

@@ -9,6 +9,8 @@
  */
 
 import { Order, Language } from '../types';
+import { isAudioLeader } from './kdsAudioLeader';
+export { isAudioLeader } from './kdsAudioLeader';
 
 let globalAudioCtx: AudioContext | null = null;
 let cachedVoices: SpeechSynthesisVoice[] = [];
@@ -386,10 +388,27 @@ export function speakUtterance(text: string, lang: Language = 'zh'): Promise<voi
   });
 }
 
+export interface AnnounceOrderOptions {
+  force?: boolean;
+}
+
 /**
  * Dual Notification Sequencing: Plays Web Audio chime first, followed by voice announcement.
+ * 
+ * Cross-Tab Leader Election:
+ * By default, only the elected Leader tab executes the announcement.
+ * Pass force = true or { force: true } for manual test sounds or user actions.
  */
-export async function announceOrderNotification(text: string, withChime: boolean = true, lang: Language = 'zh'): Promise<void> {
+export async function announceOrderNotification(
+  text: string,
+  withChime: boolean = true,
+  lang: Language = 'zh',
+  optionsOrForce?: AnnounceOrderOptions | boolean
+): Promise<void> {
+  const isForce = typeof optionsOrForce === 'boolean' ? optionsOrForce : Boolean(optionsOrForce?.force);
+  if (!isForce && !isAudioLeader()) {
+    return;
+  }
   if (withChime) {
     await playOrderChimeSound();
   }

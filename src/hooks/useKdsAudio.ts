@@ -11,10 +11,17 @@ import {
   playOvertimeBeepSound,
 } from '../utils/kdsAudio';
 import { safeStorage, safeSessionStorage } from '../lib/safeStorage';
+import { useKdsAudioLeader } from './useKdsAudioLeader';
 
 const localStorage = safeStorage;
 
 export function useKdsAudio(currentLang: Language = 'zh') {
+  const { 
+    isLeader: isAudioLeader, 
+    leaderId: audioLeaderId, 
+    tabId: audioTabId, 
+    claimLeadership: claimAudioLeader 
+  } = useKdsAudioLeader();
   const [ttsEnabled, setTtsEnabled] = useState<boolean>(() => {
     try {
       const saved = localStorage.getItem('kds-tts-enabled');
@@ -91,7 +98,7 @@ export function useKdsAudio(currentLang: Language = 'zh') {
         ru: 'Голосовые оповещения включены',
         es: 'Locución de voz activada'
       };
-      announceOrderNotification(enabledMsg[currentLang] || enabledMsg.zh, true, currentLang);
+      announceOrderNotification(enabledMsg[currentLang] || enabledMsg.zh, true, currentLang, { force: true });
     }
   }, [ttsEnabled, currentLang]);
 
@@ -101,6 +108,9 @@ export function useKdsAudio(currentLang: Language = 'zh') {
   const notifyNewOrders = useCallback(
     (newOrders: Order[]) => {
       if (!newOrders || newOrders.length === 0) return;
+
+      // 👑 Leader Election: Only the elected leader tab announces to prevent audio overlap
+      if (!isAudioLeader) return;
 
       if (ttsEnabled) {
         // High-frequency chime followed sequentially by multilingual TTS (桌號 / 外帶單號)
@@ -118,7 +128,7 @@ export function useKdsAudio(currentLang: Language = 'zh') {
         }
       }, 3000);
     },
-    [ttsEnabled, currentLang]
+    [ttsEnabled, currentLang, isAudioLeader]
   );
 
   const notifyNewOrder = useCallback(
@@ -159,6 +169,10 @@ export function useKdsAudio(currentLang: Language = 'zh') {
     formatOrderAnnouncementText,
     stopSpeech,
     speakUtterance,
+    isAudioLeader,
+    audioLeaderId,
+    audioTabId,
+    claimAudioLeader,
   };
 }
 

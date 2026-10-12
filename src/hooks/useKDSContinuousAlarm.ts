@@ -1,6 +1,6 @@
 import { useEffect, useRef, useMemo, useCallback } from 'react';
 import { Order } from '../types';
-import { announceOrderNotification, formatOrderAnnouncementText, stopSpeech, unlockAudio } from '../utils/kdsAudio';
+import { announceOrderNotification, formatOrderAnnouncementText, stopSpeech, unlockAudio, isAudioLeader } from '../utils/kdsAudio';
 
 interface UseKDSAlarmOptions {
   orders: Order[];
@@ -26,6 +26,8 @@ export const useKDSContinuousAlarm = ({
   // 2. Execution cycle: Chime -> Vocalize using existing KDS audio utilities
   const executeAlarmCycle = useCallback(async () => {
     if (isPlayingRef.current || pendingOrders.length === 0) return;
+    // Cross-Tab Leader Election: Follower tabs remain silent
+    if (!isAudioLeader()) return;
 
     isPlayingRef.current = true;
     try {

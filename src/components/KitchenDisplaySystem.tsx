@@ -121,6 +121,8 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
     setBeepSim: _setBeepSim,
     notifyNewOrders,
     notifyStatusChange,
+    isAudioLeader,
+    claimAudioLeader,
   } = useKdsAudio(currentLang);
 
   // 🔔 KDS Continuous Alarm Loop
@@ -795,6 +797,8 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
           categories={categories}
           currentLang={currentLang}
           beepSim={beepSim}
+          isAudioLeader={isAudioLeader}
+          claimAudioLeader={claimAudioLeader}
         />
 
         {/* View Mode Router */}
