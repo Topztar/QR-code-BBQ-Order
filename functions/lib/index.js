@@ -54580,6 +54580,7 @@ var require_menu = __commonJS({
       const get = (routePath, ...handlers) => app2.get([`/api${routePath}`, routePath], ...handlers);
       const post = (routePath, ...handlers) => app2.post([`/api${routePath}`, routePath], ...handlers);
       const put = (routePath, ...handlers) => app2.put([`/api${routePath}`, routePath], ...handlers);
+      const patch = (routePath, ...handlers) => app2.patch([`/api${routePath}`, routePath], ...handlers);
       const del = (routePath, ...handlers) => app2.delete([`/api${routePath}`, routePath], ...handlers);
       post("/images/upload", requireStaffAuth, async (req, res) => {
         try {
@@ -54819,7 +54820,7 @@ var require_menu = __commonJS({
           sendErrorResponse2(res, error);
         }
       });
-      put("/menu/:id", requireStaffAuth, async (req, res) => {
+      const updateMenuItemHandler = async (req, res) => {
         try {
           const id = req.params.id;
           const data = req.body;
@@ -54868,7 +54869,13 @@ var require_menu = __commonJS({
           console.error("Error updating menu:", error);
           sendErrorResponse2(res, error);
         }
-      });
+      };
+      put("/menu/:id", requireStaffAuth, updateMenuItemHandler);
+      patch("/menu/:id", requireStaffAuth, updateMenuItemHandler);
+      put("/admin/dishes/:id", requireStaffAuth, updateMenuItemHandler);
+      patch("/admin/dishes/:id", requireStaffAuth, updateMenuItemHandler);
+      put("/dishes/:id", requireStaffAuth, updateMenuItemHandler);
+      patch("/dishes/:id", requireStaffAuth, updateMenuItemHandler);
       del("/menu/:id", requireStaffAuth, async (req, res) => {
         try {
           const id = req.params.id;
@@ -57506,6 +57513,7 @@ var require_staff = __commonJS({
               remainingMinutes
             });
           }
+          const currentFailedAttempts = lockedUntil && now >= lockedUntil ? 0 : credsData.failedAttempts || 0;
           let storedHash = credsData.staffPinHash;
           if (!storedHash) {
             const systemDoc = await db2.collection("settings").doc("system").get();
@@ -57538,7 +57546,7 @@ var require_staff = __commonJS({
               expires_in: 28800
             });
           }
-          const failedAttempts = (credsData.failedAttempts || 0) + 1;
+          const failedAttempts = currentFailedAttempts + 1;
           const updateData = {
             failedAttempts,
             lastFailedAt: (/* @__PURE__ */ new Date()).toISOString()
@@ -57554,11 +57562,15 @@ var require_staff = __commonJS({
               remainingMinutes: 15
             });
           }
+          if (lockedUntil && now >= lockedUntil) {
+            updateData.lockedUntil = null;
+          }
           await credsRef.set(updateData, { merge: true });
           const remainingTries = 5 - failedAttempts;
           return res.status(400).json({
             success: false,
-            error: `\u89E3\u9396\u91D1\u9470\u932F\u8AA4\uFF01\u5269\u9918\u5617\u8A66\u6B21\u6578\uFF1A${remainingTries} \u6B21`
+            error: `\u89E3\u9396\u91D1\u9470\u932F\u8AA4\uFF01(\u5269\u9918\u91CD\u8A66\u6B21\u6578: ${remainingTries} \u6B21)`,
+            remainingTries
           });
         } catch (error) {
           console.error("Error verifying PIN:", error);
@@ -57832,6 +57844,7 @@ var db = (0, firestore_2.getFirestore)("ai-studio-sabaythaibbqtabl-84418196-9d0c
 db.settings({ ignoreUndefinedProperties: true });
 var storageBucket = (0, storage_1.getStorage)().bucket("sabay-bbq-order.firebasestorage.app");
 var app = (0, express_1.default)();
+app.set("trust proxy", 1);
 var auth_1 = require_auth();
 exports.requireStaffAuth = (0, auth_1.createStaffAuthMiddleware)(db);
 var allowedOrigins = [

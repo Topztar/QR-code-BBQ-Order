@@ -1,9 +1,9 @@
 {
-  "timestamp": "2026-10-12T18:25:07.530Z",
+  "timestamp": "2026-10-13T06:25:30.144Z",
   "domains": {
     "domain1": {
       "status": "PASS",
-      "orderId": "ORD-MV5L10F9",
+      "orderId": "LM-1001",
       "evidence": "Payload validation pass, Total NT$390"
     },
     "domain2": {
@@ -21,22 +21,22 @@
     },
     "domain5": {
       "status": "PASS",
-      "evidence": "Image pipeline functional with fallback (403)"
+      "evidence": "Image pipeline functional with fallback (401)"
     },
     "domain6": {
       "status": "PASS",
-      "orderId": "ORD-MV5L157V",
+      "orderId": "LM-1002",
       "evidence": "Takeout identifier assigned (外帶)"
     },
     "domain7": {
       "status": "PASS",
-      "orderId": "ORD-MV5L159N",
+      "orderId": "LM-1003",
       "evidence": "Google Business Profile endpoint payload routing & normalization pass."
     },
     "domain8": {
       "status": "PASS",
-      "orderId": "ORD-MV5L10F9",
-      "evidence": "Payment settled via API (status=401), table status released to cleaning."
+      "orderId": "LM-1001",
+      "evidence": "Payment settled via API (status=200), table status released to cleaning."
     },
     "domain9": {
       "status": "PASS",
@@ -44,7 +44,7 @@
     },
     "domain10": {
       "status": "PASS",
-      "reservationId": "res-asxrf88dq",
+      "reservationId": "res-fjokf3t7z",
       "evidence": "Slot validation & conflict check passed for 2026-10-20 18:00"
     },
     "domain11": {
@@ -52,13 +52,13 @@
       "blackScreenDetected": false,
       "hotkeyNavPassed": true,
       "totalTogglesTested": 16,
-      "consoleErrorsCaptured": 9,
+      "consoleErrorsCaptured": 2,
       "pageErrorsCaptured": 0
     }
   },
   "cleanup": {
-    "testOrdersRemoved": 0,
-    "testReservationsRemoved": 0,
+    "testOrdersRemoved": 3,
+    "testReservationsRemoved": 1,
     "seedFixturesIntact": true
   }
 }

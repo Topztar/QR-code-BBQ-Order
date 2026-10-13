@@ -117,6 +117,7 @@ function registerStaffRoutes(app, ctx) {
                     remainingMinutes
                 });
             }
+            const currentFailedAttempts = (lockedUntil && now >= lockedUntil) ? 0 : (credsData.failedAttempts || 0);
             let storedHash = credsData.staffPinHash;
             if (!storedHash) {
                 const systemDoc = await db.collection('settings').doc('system').get();
@@ -150,7 +151,7 @@ function registerStaffRoutes(app, ctx) {
                     expires_in: 28800
                 });
             }
-            const failedAttempts = (credsData.failedAttempts || 0) + 1;
+            const failedAttempts = currentFailedAttempts + 1;
             const updateData = {
                 failedAttempts,
                 lastFailedAt: new Date().toISOString()
@@ -166,11 +167,15 @@ function registerStaffRoutes(app, ctx) {
                     remainingMinutes: 15
                 });
             }
+            if (lockedUntil && now >= lockedUntil) {
+                updateData.lockedUntil = null;
+            }
             await credsRef.set(updateData, { merge: true });
             const remainingTries = 5 - failedAttempts;
             return res.status(400).json({
                 success: false,
-                error: `解鎖金鑰錯誤！剩餘嘗試次數：${remainingTries} 次`
+                error: `解鎖金鑰錯誤！(剩餘重試次數: ${remainingTries} 次)`,
+                remainingTries
             });
         }
         catch (error) {

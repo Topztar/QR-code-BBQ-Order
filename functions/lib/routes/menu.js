@@ -14,6 +14,7 @@ function registerMenuRoutes(app, ctx) {
     const get = (routePath, ...handlers) => app.get([`/api${routePath}`, routePath], ...handlers);
     const post = (routePath, ...handlers) => app.post([`/api${routePath}`, routePath], ...handlers);
     const put = (routePath, ...handlers) => app.put([`/api${routePath}`, routePath], ...handlers);
+    const patch = (routePath, ...handlers) => app.patch([`/api${routePath}`, routePath], ...handlers);
     const del = (routePath, ...handlers) => app.delete([`/api${routePath}`, routePath], ...handlers);
     post('/images/upload', requireStaffAuth, async (req, res) => {
         try {
@@ -264,7 +265,7 @@ function registerMenuRoutes(app, ctx) {
             sendErrorResponse(res, error);
         }
     });
-    put('/menu/:id', requireStaffAuth, async (req, res) => {
+    const updateMenuItemHandler = async (req, res) => {
         try {
             const id = req.params.id;
             const data = req.body;
@@ -315,7 +316,13 @@ function registerMenuRoutes(app, ctx) {
             console.error('Error updating menu:', error);
             sendErrorResponse(res, error);
         }
-    });
+    };
+    put('/menu/:id', requireStaffAuth, updateMenuItemHandler);
+    patch('/menu/:id', requireStaffAuth, updateMenuItemHandler);
+    put('/admin/dishes/:id', requireStaffAuth, updateMenuItemHandler);
+    patch('/admin/dishes/:id', requireStaffAuth, updateMenuItemHandler);
+    put('/dishes/:id', requireStaffAuth, updateMenuItemHandler);
+    patch('/dishes/:id', requireStaffAuth, updateMenuItemHandler);
     del('/menu/:id', requireStaffAuth, async (req, res) => {
         try {
             const id = req.params.id;
