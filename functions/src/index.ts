@@ -29,6 +29,7 @@ const db = getFirestore('ai-studio-sabaythaibbqtabl-84418196-9d0c-459c-bced-ddc4
 db.settings({ ignoreUndefinedProperties: true });
 const storageBucket = getStorage().bucket('sabay-bbq-order.firebasestorage.app');
 const app = express();
+app.set('trust proxy', 1); // 信任 Firebase Hosting 反向代理帶入之 X-Forwarded-For 客戶端真實 IP
 
 // 🔐 安全認證與驗證模組
 import { createStaffAuthMiddleware } from './auth';

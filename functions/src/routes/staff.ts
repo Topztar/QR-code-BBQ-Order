@@ -113,6 +113,9 @@ post('/staff/pin/verify', pinRateLimiter, async (req, res) => {
       });
     }
 
+    // 🛡️ 鎖定過期後重置失敗次數，消除「過期後錯 1 次立刻重鎖 15 分鐘」的殭屍次數陷阱
+    const currentFailedAttempts = (lockedUntil && now >= lockedUntil) ? 0 : (credsData.failedAttempts || 0);
+
     let storedHash = credsData.staffPinHash;
     if (!storedHash) {
       // Fallback & automatic migration from legacy settings
@@ -153,7 +156,7 @@ post('/staff/pin/verify', pinRateLimiter, async (req, res) => {
     }
 
     // PIN 錯誤：累計失敗次數並進行安全防護
-    const failedAttempts = (credsData.failedAttempts || 0) + 1;
+    const failedAttempts = currentFailedAttempts + 1;
     const updateData: any = {
       failedAttempts,
       lastFailedAt: new Date().toISOString()
@@ -171,11 +174,17 @@ post('/staff/pin/verify', pinRateLimiter, async (req, res) => {
       });
     }
 
+    // 鎖定已過期後的首次錯誤，同步清空已失效之過期時間戳
+    if (lockedUntil && now >= lockedUntil) {
+      updateData.lockedUntil = null;
+    }
+
     await credsRef.set(updateData, { merge: true });
     const remainingTries = 5 - failedAttempts;
     return res.status(400).json({
       success: false,
-      error: `解鎖金鑰錯誤！剩餘嘗試次數：${remainingTries} 次`
+      error: `解鎖金鑰錯誤！(剩餘重試次數: ${remainingTries} 次)`,
+      remainingTries
     });
   } catch (error) {
     console.error('Error verifying PIN:', error);

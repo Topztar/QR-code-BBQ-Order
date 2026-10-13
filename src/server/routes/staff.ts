@@ -49,6 +49,11 @@ export function registerStaffRoutes(app: express.Express, ctx: StaffRouteContext
       });
     }
 
+    if (staffLockedUntil && now >= staffLockedUntil) {
+      staffFailedAttempts = 0;
+      staffLockedUntil = null;
+    }
+
     const inputHash = hashPinLocal(pin);
     const targetHash = hashPinLocal(ctx.getLiveStaffPin());
 

@@ -92,6 +92,10 @@ export const StaffLoginGate: React.FC<StaffLoginGateProps> = ({ onLoginSuccess, 
         }
         onLoginSuccess();
       } else {
+        if (res.status === 429 && (data?.locked || data?.remainingMinutes)) {
+          const lockSeconds = Math.max(10, (Number(data.remainingMinutes) || 1) * 60);
+          triggerCooldown(lockSeconds);
+        }
         setErrorMessage(data?.error || '解鎖金鑰錯誤！(請輸入正確的 6 位數金鑰)');
         setPin('');
         setHasManualInput(false);
