@@ -284,4 +284,4 @@ export function deriveTableStatuses(
   return { tables: newTables, reservations: newReservations };
 }
 
-export * from './utils/tableAllocation';
+export * from './utils';
