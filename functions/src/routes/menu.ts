@@ -34,6 +34,7 @@ export function registerMenuRoutes(app: express.Application, ctx: RouteContext) 
   const get: RouteRegister = (routePath, ...handlers) => app.get([`/api${routePath}`, routePath], ...handlers);
   const post: RouteRegister = (routePath, ...handlers) => app.post([`/api${routePath}`, routePath], ...handlers);
   const put: RouteRegister = (routePath, ...handlers) => app.put([`/api${routePath}`, routePath], ...handlers);
+  const patch: RouteRegister = (routePath, ...handlers) => app.patch([`/api${routePath}`, routePath], ...handlers);
   const del: RouteRegister = (routePath, ...handlers) => app.delete([`/api${routePath}`, routePath], ...handlers);
 
   // 1. Upload Image to Google Cloud Storage (雙模式：支援 multipart/form-data 二進位串流 與 JSON Base64 向下相容)
@@ -316,8 +317,8 @@ export function registerMenuRoutes(app: express.Application, ctx: RouteContext) 
     }
   });
 
-  // 6. Update Menu Item
-  put('/menu/:id', requireStaffAuth, async (req, res) => {
+  // 6. Update Menu Item (支援 /menu/:id, /admin/dishes/:id, /dishes/:id 之 PUT / PATCH)
+  const updateMenuItemHandler: express.RequestHandler = async (req, res) => {
     try {
       const id = req.params.id as string;
       const data = req.body;
@@ -370,7 +371,14 @@ export function registerMenuRoutes(app: express.Application, ctx: RouteContext) 
       console.error('Error updating menu:', error);
       sendErrorResponse(res, error);
     }
-  });
+  };
+
+  put('/menu/:id', requireStaffAuth, updateMenuItemHandler);
+  patch('/menu/:id', requireStaffAuth, updateMenuItemHandler);
+  put('/admin/dishes/:id', requireStaffAuth, updateMenuItemHandler);
+  patch('/admin/dishes/:id', requireStaffAuth, updateMenuItemHandler);
+  put('/dishes/:id', requireStaffAuth, updateMenuItemHandler);
+  patch('/dishes/:id', requireStaffAuth, updateMenuItemHandler);
 
   // 7. Delete Menu Item
   del('/menu/:id', requireStaffAuth, async (req, res) => {

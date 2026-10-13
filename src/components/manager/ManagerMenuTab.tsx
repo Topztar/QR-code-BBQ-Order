@@ -394,6 +394,11 @@ export const ManagerMenuTab: React.FC<ManagerMenuTabProps> = ({
                               alt={getLocalizedText(item.name, currentLang)}
                               className="w-10 h-10 object-cover rounded-lg bg-black flex-shrink-0 border border-white/10"
                               referrerPolicy="no-referrer"
+                              onError={(e) => {
+                                const target = e.target as HTMLImageElement;
+                                console.warn(`[ManagerMenuTab Image Error] Dish ID: ${item.id}, URL: ${target.currentSrc || target.src}`);
+                                target.style.display = 'none';
+                              }}
                             />
                           </picture>
                         ) : (

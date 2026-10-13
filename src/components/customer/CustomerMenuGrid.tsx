@@ -78,7 +78,9 @@ const DishCard = React.memo<DishCardProps>(({
               className="w-full h-full object-cover hover:scale-105 transition duration-500"
               referrerPolicy="no-referrer"
               onError={(e) => {
-                (e.target as HTMLElement).style.display = 'none';
+                const target = e.target as HTMLImageElement;
+                console.warn(`[CustomerMenuGrid Image Error] Dish ID: ${item.id}, URL: ${target.currentSrc || target.src}`);
+                target.style.display = 'none';
               }}
             />
           </picture>

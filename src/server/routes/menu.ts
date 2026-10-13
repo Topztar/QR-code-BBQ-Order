@@ -145,8 +145,8 @@ export function registerMenuRoutes(app: express.Express, ctx: MenuRouteContext) 
     res.json({ success: true, menu: reordered.map(toPublicMenuItem) });
   });
 
-  // Update live menu item
-  app.put('/api/menu/:id', (req, res) => {
+  // Update live menu item (支援 PUT / PATCH on /api/menu/:id, /api/admin/dishes/:id, /api/dishes/:id)
+  const updateMenuHandler: express.RequestHandler = (req, res) => {
     const { id } = req.params;
     const { category, name, price, image, thumbnailUrl, avifUrl, avifThumbnailUrl, description, available, soldOutType, soldOutDate, isSetMeal, requiredSaucesOption, hasNoodlesOption, hasCoconutsMilkOption, containsBeef, containsPork, containsSeafood, isNotSpicy, isTakeoutAvailable, customAddOns, recipe, trackInventory, inventoryCount } = req.body;
     
@@ -200,7 +200,10 @@ export function registerMenuRoutes(app: express.Express, ctx: MenuRouteContext) 
       return res.json(toPublicMenuItem(liveMenu[itemIndex]));
     }
     res.status(404).json({ error: 'Item not found' });
-  });
+  };
+
+  app.put(['/api/menu/:id', '/api/admin/dishes/:id', '/api/dishes/:id'], updateMenuHandler);
+  app.patch(['/api/menu/:id', '/api/admin/dishes/:id', '/api/dishes/:id'], updateMenuHandler);
 
   // Toggle item availability
   app.post('/api/menu/toggle-available', (req, res) => {

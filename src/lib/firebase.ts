@@ -1,4 +1,5 @@
 import { initializeApp } from 'firebase/app';
+import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
 import type { User } from 'firebase/auth';
 import { 
   initializeFirestore, 
@@ -18,6 +19,29 @@ export const app = initializeApp(firebaseConfig);
 export const FIRESTORE_DATABASE_ID = firebaseConfig.firestoreDatabaseId || 'ai-studio-sabaythaibbqtabl-84418196-9d0c-459c-bced-ddc424dfba07';
 
 const isEmulatorMode = (import.meta as any).env?.VITE_USE_FIREBASE_EMULATOR === 'true';
+
+// 🤖 Firebase App Check (Bot & Abuse Protection - 必須於 Firestore 之前初始化)
+let appCheckInstance: any = null;
+if (typeof window !== 'undefined') {
+  const host = location.hostname;
+  if (host === 'localhost' || host === '127.0.0.1' || host === '10.0.2.2' || isEmulatorMode || (import.meta as any).env?.DEV) {
+    // @ts-ignore
+    self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+  }
+  const recaptchaSiteKey = (window as any).__FIREBASE_APPCHECK_KEY__ || (import.meta as any).env?.VITE_RECAPTCHA_SITE_KEY;
+  if (recaptchaSiteKey) {
+    try {
+      appCheckInstance = initializeAppCheck(app, {
+        provider: new ReCaptchaV3Provider(recaptchaSiteKey),
+        isTokenAutoRefreshEnabled: true
+      });
+      console.log('[Firebase AppCheck] Initialized successfully with ReCaptchaV3Provider');
+    } catch (err) {
+      console.warn('[Firebase AppCheck] Initialization skipped or debug fallback active:', err);
+    }
+  }
+}
+export const appCheck = appCheckInstance;
 
 let firestoreInstance: Firestore;
 
@@ -240,31 +264,6 @@ export const startFirebaseSync = async () => {
     console.warn('[Firebase Sync] Error enabling network:', err);
   }
 };
-
-import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
-
-// 🤖 Firebase App Check (Bot & Abuse Protection)
-let appCheckInstance: any = null;
-if (typeof window !== 'undefined') {
-  const host = location.hostname;
-  if (host === 'localhost' || host === '127.0.0.1' || host === '10.0.2.2' || isEmulatorMode) {
-    // @ts-ignore
-    self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
-  }
-  const recaptchaSiteKey = (window as any).__FIREBASE_APPCHECK_KEY__ || (import.meta as any).env?.VITE_RECAPTCHA_SITE_KEY;
-  if (recaptchaSiteKey) {
-    try {
-      appCheckInstance = initializeAppCheck(app, {
-        provider: new ReCaptchaV3Provider(recaptchaSiteKey),
-        isTokenAutoRefreshEnabled: true
-      });
-      console.log('[Firebase AppCheck] Initialized successfully with ReCaptchaV3Provider');
-    } catch (err) {
-      console.warn('[Firebase AppCheck] Initialization skipped or debug fallback active:', err);
-    }
-  }
-}
-export const appCheck = appCheckInstance;
 
 // 🚀 Firebase Performance Monitoring (生產環境非同步動態載入，零首屏體積負擔)
 if (typeof window !== 'undefined' && (import.meta as any).env?.PROD && !isEmulatorMode) {
