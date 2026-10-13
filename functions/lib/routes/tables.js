@@ -199,6 +199,10 @@ function registerTablesRoutes(app, ctx) {
                         }
                     }
                 }
+                const hoardingValidation = (0, validators_1.validateReservationCapacityAndHoarding)(requestedTableObjs, newGuestCount, availableTables);
+                if (!hoardingValidation.isValid) {
+                    throw new Error(`HOARDING:${hoardingValidation.error}`);
+                }
                 for (const r of overlapping) {
                     const rTables = String(r.tableNumber || '').split(',').map(t => t.trim()).filter(Boolean);
                     const conflictingTable = requestedTables.find(t => rTables.includes(t));
@@ -226,6 +230,9 @@ function registerTablesRoutes(app, ctx) {
         catch (error) {
             if (error instanceof Error && error.message.startsWith('CONFLICT:')) {
                 return res.status(409).json({ error: error.message.replace('CONFLICT:', '') });
+            }
+            if (error instanceof Error && error.message.startsWith('HOARDING:')) {
+                return res.status(400).json({ error: error.message.replace('HOARDING:', '') });
             }
             console.error('Error creating reservation in transaction:', error);
             sendErrorResponse(res, error);

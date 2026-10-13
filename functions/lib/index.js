@@ -473,6 +473,105 @@ var require_orderArchival = __commonJS({
   }
 });
 
+// ../shared/src/utils/tableAllocation.ts
+function getTableCapacity(t) {
+  if (typeof t.capacity === "number") return t.capacity;
+  if (typeof t.maxCapacity === "number") return t.maxCapacity;
+  return 4;
+}
+function findOptimalTableCombination(availableTables, guestCount) {
+  if (guestCount <= 0 || !availableTables || availableTables.length === 0) {
+    return [];
+  }
+  const validTables = availableTables.filter((t) => getTableCapacity(t) > 0);
+  if (validTables.length === 0) return [];
+  const sortedTables = [...validTables].sort((a, b) => {
+    const numA = parseInt(a.id, 10);
+    const numB = parseInt(b.id, 10);
+    if (!isNaN(numA) && !isNaN(numB)) {
+      return numA - numB;
+    }
+    return a.id.localeCompare(b.id);
+  });
+  const singleTableMatches = sortedTables.filter((t) => getTableCapacity(t) >= guestCount).sort((a, b) => {
+    const capA = getTableCapacity(a);
+    const capB = getTableCapacity(b);
+    if (capA !== capB) return capA - capB;
+    const numA = parseInt(a.id, 10);
+    const numB = parseInt(b.id, 10);
+    if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+    return a.id.localeCompare(b.id);
+  });
+  if (singleTableMatches.length > 0) {
+    return [singleTableMatches[0]];
+  }
+  let bestCombination = [];
+  let minOverflow = Infinity;
+  let minTableCount = Infinity;
+  let minMaxCapacity = Infinity;
+  const totalCombinations = 1 << sortedTables.length;
+  for (let i = 1; i < totalCombinations; i++) {
+    const currentCombo = [];
+    let totalCapacity = 0;
+    let currentMaxCap = 0;
+    for (let j = 0; j < sortedTables.length; j++) {
+      if (i >> j & 1) {
+        const tbl = sortedTables[j];
+        const cap = getTableCapacity(tbl);
+        currentCombo.push(tbl);
+        totalCapacity += cap;
+        if (cap > currentMaxCap) {
+          currentMaxCap = cap;
+        }
+      }
+    }
+    if (totalCapacity >= guestCount) {
+      const overflow = totalCapacity - guestCount;
+      const tableCount = currentCombo.length;
+      if (overflow < minOverflow || overflow === minOverflow && tableCount < minTableCount || overflow === minOverflow && tableCount === minTableCount && currentMaxCap < minMaxCapacity) {
+        minOverflow = overflow;
+        minTableCount = tableCount;
+        minMaxCapacity = currentMaxCap;
+        bestCombination = currentCombo;
+      }
+    }
+  }
+  if (bestCombination.length === 0 && sortedTables.length > 0) {
+    return sortedTables;
+  }
+  return bestCombination;
+}
+function validateReservationCapacityAndHoarding(requestedTableObjs, guestCount, availableTables) {
+  const validRequested = (requestedTableObjs || []).filter((t) => getTableCapacity(t) > 0);
+  const selectedTablesCapacity = validRequested.reduce((sum, t) => sum + getTableCapacity(t), 0);
+  if (selectedTablesCapacity > 0 && selectedTablesCapacity < guestCount) {
+    return {
+      isValid: false,
+      error: `\u6307\u5B9A\u684C\u865F\u52A0\u7E3D\u4EBA\u6578\u4E0A\u9650 (${selectedTablesCapacity}\u4EBA) \u4E0D\u8DB3\uFF1A\u4E0D\u53EF\u4F4E\u65BC\u7528\u9910\u4EBA\u6578 (${guestCount}\u4EBA)\uFF01`
+    };
+  }
+  const overflow = selectedTablesCapacity - guestCount;
+  if (overflow > 3 && Array.isArray(availableTables) && availableTables.length > 0) {
+    const optimalCombo = findOptimalTableCombination(availableTables, guestCount);
+    if (optimalCombo.length > 0) {
+      const optimalCapacity = optimalCombo.reduce((sum, t) => sum + getTableCapacity(t), 0);
+      const optimalOverflow = optimalCapacity - guestCount;
+      if (optimalOverflow < overflow) {
+        return {
+          isValid: false,
+          error: `\u904E\u5EA6\u4F54\u7528\u684C\u5E2D\u5BB9\u91CF\uFF1A\u7528\u9910\u4EBA\u6578 (${guestCount}\u4EBA) \u6240\u9078\u684C\u4F4D\u7E3D\u5BB9\u91CF (${selectedTablesCapacity}\u4EBA) \u6EA2\u51FA\u904E\u591A\uFF0C\u5DF2\u6709\u66F4\u7DCA\u6E4A\u7684\u53EF\u7528\u684C\u5E2D\u7D44\u5408\uFF0C\u8ACB\u7CBE\u7C21\u6307\u5B9A\u684C\u865F\uFF01(Selected tables excessively occupy seating capacity)`
+        };
+      }
+    }
+  }
+  return { isValid: true };
+}
+var init_tableAllocation = __esm({
+  "../shared/src/utils/tableAllocation.ts"() {
+    "use strict";
+  }
+});
+
 // ../shared/src/index.ts
 var src_exports = {};
 __export(src_exports, {
@@ -480,7 +579,10 @@ __export(src_exports, {
   checkItemCompleteConcurrency: () => checkItemCompleteConcurrency,
   checkRefundLogsGate: () => checkRefundLogsGate,
   deriveTableStatuses: () => deriveTableStatuses,
-  orderCalculationService: () => orderCalculationService
+  findOptimalTableCombination: () => findOptimalTableCombination,
+  getTableCapacity: () => getTableCapacity,
+  orderCalculationService: () => orderCalculationService,
+  validateReservationCapacityAndHoarding: () => validateReservationCapacityAndHoarding
 });
 function checkItemCompleteConcurrency(expectedVersion, currentVersion, lastUpdatedByRole, modifierRole) {
   if (typeof expectedVersion === "number" && expectedVersion < currentVersion) {
@@ -574,6 +676,7 @@ var orderCalculationService, PRINTER_CONSTANTS;
 var init_src = __esm({
   "../shared/src/index.ts"() {
     "use strict";
+    init_tableAllocation();
     orderCalculationService = {
       computeOrderItemUnitPrice: (it, menuItemsList = []) => {
         if (!it) return 0;
@@ -53965,12 +54068,23 @@ var require_validators = __commonJS({
   "lib/validators.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.validateReservationCapacityAndHoarding = exports2.findOptimalTableCombination = exports2.getTableCapacity = void 0;
     exports2.sanitizeString = sanitizeString;
     exports2.validateOrderPayload = validateOrderPayload;
     exports2.validateReservationPayload = validateReservationPayload;
     exports2.validateImageUploadPayload = validateImageUploadPayload;
     exports2.validateRatingPayload = validateRatingPayload;
     exports2.validateCheckoutPayload = validateCheckoutPayload;
+    var shared_1 = (init_src(), __toCommonJS(src_exports));
+    Object.defineProperty(exports2, "getTableCapacity", { enumerable: true, get: function() {
+      return shared_1.getTableCapacity;
+    } });
+    Object.defineProperty(exports2, "findOptimalTableCombination", { enumerable: true, get: function() {
+      return shared_1.findOptimalTableCombination;
+    } });
+    Object.defineProperty(exports2, "validateReservationCapacityAndHoarding", { enumerable: true, get: function() {
+      return shared_1.validateReservationCapacityAndHoarding;
+    } });
     function sanitizeString(input, maxLength = 255) {
       if (input === null || input === void 0)
         return "";
@@ -55380,6 +55494,10 @@ var require_tables = __commonJS({
                 }
               }
             }
+            const hoardingValidation = (0, validators_1.validateReservationCapacityAndHoarding)(requestedTableObjs, newGuestCount, availableTables);
+            if (!hoardingValidation.isValid) {
+              throw new Error(`HOARDING:${hoardingValidation.error}`);
+            }
             for (const r of overlapping) {
               const rTables = String(r.tableNumber || "").split(",").map((t) => t.trim()).filter(Boolean);
               const conflictingTable = requestedTables.find((t) => rTables.includes(t));
@@ -55406,6 +55524,9 @@ var require_tables = __commonJS({
         } catch (error) {
           if (error instanceof Error && error.message.startsWith("CONFLICT:")) {
             return res.status(409).json({ error: error.message.replace("CONFLICT:", "") });
+          }
+          if (error instanceof Error && error.message.startsWith("HOARDING:")) {
+            return res.status(400).json({ error: error.message.replace("HOARDING:", "") });
           }
           console.error("Error creating reservation in transaction:", error);
           sendErrorResponse2(res, error);

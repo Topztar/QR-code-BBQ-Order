@@ -271,15 +271,15 @@ describe('TC-COMBO：多桌組合場景（無單桌可容納時）', () => {
     expect(selected).toHaveLength(2);
   });
 
-  it('TC-COMBO-02：用餐12人，最大桌10人 → 組合最少桌數達標', () => {
+  it('TC-COMBO-02：用餐12人，最大桌10人 → 組合最少溢出/零浪費與最少桌數 (8+4=12)', () => {
     const availableTables = [
       makeTable('T10A', 10),
       makeTable('T8A', 8),
       makeTable('T4A', 4),
     ];
     const selected = autoSelectOptimalTables(availableTables, 12);
-    expect(selected).toContain('T10A');
     expect(selected).toContain('T8A');
+    expect(selected).toContain('T4A');
     expect(selected).toHaveLength(2);
   });
 
@@ -298,7 +298,7 @@ describe('TC-COMBO：多桌組合場景（無單桌可容納時）', () => {
     expect(selected).toContain('T8A');
   });
 
-  it('TC-COMBO-05：多桌組合應以降序確保最少桌數', () => {
+  it('TC-COMBO-05：多桌組合應以零浪費精準吻合優先 (10+4=14)', () => {
     const availableTables = [
       makeTable('T4A', 4),
       makeTable('T2A', 2),
@@ -307,7 +307,7 @@ describe('TC-COMBO：多桌組合場景（無單桌可容納時）', () => {
     ];
     const selected = autoSelectOptimalTables(availableTables, 14);
     expect(selected).toContain('T10A');
-    expect(selected).toContain('T6A');
+    expect(selected).toContain('T4A');
     expect(selected).toHaveLength(2);
   });
 

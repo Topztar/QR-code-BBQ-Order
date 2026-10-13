@@ -245,10 +245,24 @@ export function calculateReservationAvailability(
   };
 }
 
+import {
+  findOptimalTableCombination,
+  validateReservationCapacityAndHoarding,
+  type Table,
+  getTableCapacity,
+} from '@sabay/shared';
+
+export {
+  findOptimalTableCombination,
+  validateReservationCapacityAndHoarding,
+  type Table,
+  getTableCapacity,
+};
+
 /**
- * Auto-assigns optimal tables for guestCount.
- * 1. Prefer single table that satisfies guestCount (exact or minimum excess capacity)
- * 2. Otherwise sort descending by maxCapacity to assign minimum number of tables
+ * Auto-assigns optimal tables for guestCount using bounded knapsack / exact fit algorithm.
+ * Selects the optimal table subset with minimum excess capacity, minimum table count,
+ * and large table preservation.
  */
 export function autoSelectOptimalTables(
   availableTables: any[] = [],
@@ -258,31 +272,8 @@ export function autoSelectOptimalTables(
     return [];
   }
 
-  // Guard: exclude tables explicitly set to 0 capacity (avoids 0 || 4 default inflation)
-  const tablesCopy = [...availableTables].filter((t) => t.maxCapacity !== 0);
-  if (tablesCopy.length === 0) return [];
-
-  // 1. Prefer single table that satisfies guestCount
-  const exactFit = tablesCopy
-    .filter((t) => (t.maxCapacity || 4) >= guestCount)
-    .sort((a, b) => (a.maxCapacity || 4) - (b.maxCapacity || 4))[0];
-
-  if (exactFit) {
-    return [exactFit.id];
-  }
-
-  // 2. Otherwise sort descending by maxCapacity to assign minimum number of tables
-  tablesCopy.sort((a, b) => (b.maxCapacity || 4) - (a.maxCapacity || 4));
-  let currentCap = 0;
-  const selectedIds: string[] = [];
-
-  for (const t of tablesCopy) {
-    if (currentCap >= guestCount) break;
-    selectedIds.push(t.id);
-    currentCap += t.maxCapacity || 4;
-  }
-
-  return selectedIds;
+  const optimalTables = findOptimalTableCombination(availableTables, guestCount);
+  return optimalTables.map((t) => t.id);
 }
 
 /**

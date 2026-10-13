@@ -1,7 +1,7 @@
 import express from 'express';
 import { Firestore } from 'firebase-admin/firestore';
 import { Bucket } from '@google-cloud/storage';
-import { validateReservationPayload } from '../validators';
+import { validateReservationPayload, validateReservationCapacityAndHoarding } from '../validators';
 import { createGetCachedSettings } from '../helpers';
 import { invalidatePublicBootstrapCache } from './bootstrap';
 import { getStoredActiveToken } from '../auth';
@@ -243,6 +243,16 @@ post('/reservations', reservationRateLimiter, async (req, res) => {
         }
       }
 
+      // 2.2.2 Anti-hoarding Check: prevent malicious reservations where overflow > 3 while more compact combinations exist
+      const hoardingValidation = validateReservationCapacityAndHoarding(
+        requestedTableObjs,
+        newGuestCount,
+        availableTables
+      );
+      if (!hoardingValidation.isValid) {
+        throw new Error(`HOARDING:${hoardingValidation.error}`);
+      }
+
       // 2.3 Table Conflict Check
       for (const r of overlapping) {
         const rTables = String(r.tableNumber || '').split(',').map(t => t.trim()).filter(Boolean);
@@ -275,6 +285,9 @@ post('/reservations', reservationRateLimiter, async (req, res) => {
   } catch (error: any) {
     if (error instanceof Error && error.message.startsWith('CONFLICT:')) {
       return res.status(409).json({ error: error.message.replace('CONFLICT:', '') });
+    }
+    if (error instanceof Error && error.message.startsWith('HOARDING:')) {
+      return res.status(400).json({ error: error.message.replace('HOARDING:', '') });
     }
     console.error('Error creating reservation in transaction:', error);
     sendErrorResponse(res, error);

@@ -431,10 +431,22 @@ export const CustomerReservationModal: React.FC<CustomerReservationModalProps> =
                         .filter((t) => resTableNumbers.includes(t.id))
                         .reduce((sum, t) => sum + (t.maxCapacity || 4), 0);
 
-                      return tables.map((t) => {
+                      // 依桌號數值排序，確保介面呈現由小至大有序 (Table 1, 2, 3...)
+                      const sortedTables = [...tables].sort((a, b) => {
+                        const numA = parseInt(a.id, 10);
+                        const numB = parseInt(b.id, 10);
+                        if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+                        return a.id.localeCompare(b.id);
+                      });
+
+                      return sortedTables.map((t) => {
                         const isChecked = resTableNumbers.includes(t.id);
-                        // 防獨占核心規則：用餐人數尚未達到當前已選桌位的桌席人數上限時，禁止加選其他桌席
-                        const isDisabled = !isChecked && currentSelectedCapacity >= resGuests;
+                        const tableCap = t.maxCapacity || 4;
+                        // 防獨占規則：手動選取時，已選容量滿足人數後，限制加選總容量不可超過 guestCount + 2
+                        const isDisabled = !isChecked && (
+                          currentSelectedCapacity >= resGuests &&
+                          (currentSelectedCapacity >= resGuests + 2 || currentSelectedCapacity + tableCap > resGuests + 2)
+                        );
 
                         return (
                           <label
@@ -444,7 +456,7 @@ export const CustomerReservationModal: React.FC<CustomerReservationModalProps> =
                             }`}
                             title={
                               isDisabled
-                                ? `現有已選桌席容量 (${currentSelectedCapacity}人) 已足以容納用餐人數 (${resGuests}人)，若需加選其他桌請先調高用餐人數`
+                                ? `現有已選桌席容量 (${currentSelectedCapacity}人) 已足以容納用餐人數 (${resGuests}人)，且加選將超出容許彈性上限 (${resGuests + 2}人)，若需加選請先調高用餐人數`
                                 : undefined
                             }
                           >
@@ -480,7 +492,7 @@ export const CustomerReservationModal: React.FC<CustomerReservationModalProps> =
                     })()}
                   </div>
                   <p className="text-[10px] text-zinc-500 leading-tight">
-                    💡 <span className="text-zinc-400">防獨占規則</span>：用餐人數須達已選桌位之客席人數上限後，方可加選其他桌席。
+                    💡 <span className="text-zinc-400">防獨占規則</span>：手動指定桌席容量不可超過用餐人數 2 位以上，以釋出多餘空位避免過度佔用。
                   </p>
                 </div>
               </div>

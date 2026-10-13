@@ -171,9 +171,9 @@ describe('reservationValidator', () => {
     it('autoSelectOptimalTables selects minimum combination of tables if no single table fits', () => {
       // Guest count = 8. No single table fits (max is 6).
       // Available: B1(6), A1(4), A2(4).
-      // Should pick B1(6) + A1(4) = 10 capacity.
+      // Should pick A1(4) + A2(4) = 8 capacity (exact fit, 0 overflow) preserving B1(6).
       const selected = autoSelectOptimalTables(mockTables, 8);
-      expect(selected).toEqual(['B1', 'A1']);
+      expect(selected).toEqual(['A1', 'A2']);
     });
 
     it('validateTableMonopoly detects when multiple tables are unnecessarily selected', () => {

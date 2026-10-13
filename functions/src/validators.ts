@@ -10,6 +10,13 @@ export interface ValidationResult<T> {
   error?: string;
 }
 
+export {
+  type Table,
+  getTableCapacity,
+  findOptimalTableCombination,
+  validateReservationCapacityAndHoarding,
+} from '@sabay/shared';
+
 /**
  * Basic string sanitization: strips potentially dangerous tags and control characters
  */
