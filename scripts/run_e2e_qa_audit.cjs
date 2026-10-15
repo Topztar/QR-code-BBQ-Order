@@ -59,6 +59,22 @@ async function main() {
       }
     });
 
+    let activeStaffToken = '';
+    try {
+      const authRes = await fetch(`${BASE_URL}/api/staff/pin/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin: STAFF_PIN })
+      });
+      if (authRes.ok) {
+        const authData = await authRes.json();
+        activeStaffToken = authData.access_token || '';
+        console.log('  ✓ Staff Session authenticated successfully for E2E suite');
+      }
+    } catch (e) {
+      console.warn('  ⚠️ Initial staff auth attempt failed:', e.message);
+    }
+
     // =========================================================================
     // Domain 1: Customer In-Store QR Ordering (CustomerOrderView)
     // =========================================================================
@@ -146,8 +162,16 @@ async function main() {
         for (const num of STAFF_PIN) {
           await page.click(`#pinpad-${num}`);
         }
-        await page.click('#pin-submit-button');
-        await new Promise(r => setTimeout(r, 1000));
+        const [verifyResponse] = await Promise.all([
+          page.waitForResponse(res => res.url().includes('/api/staff/pin/verify') && res.status() === 200),
+          page.click('#pin-submit-button')
+        ]);
+        await new Promise(r => setTimeout(r, 1500));
+        const tokenFromBrowser = await page.evaluate(() => localStorage.getItem('sabay_jwt_token'));
+        if (tokenFromBrowser) {
+          activeStaffToken = tokenFromBrowser;
+          console.log(`  ✓ Updated activeStaffToken from browser session: ${activeStaffToken.substring(0, 10)}...`);
+        }
       }
 
       const cashierMounted = await page.evaluate(() => {
@@ -187,9 +211,9 @@ async function main() {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer valid-staff-session'
+          'Authorization': `Bearer ${activeStaffToken || 'valid-staff-session'}`
         },
-        body: JSON.stringify({ image: sampleBase64, filename: 'e2e_test_dish.png' })
+        body: JSON.stringify({ base64: sampleBase64, filename: 'e2e_test_dish.png' })
       });
       const uploadData = await uploadRes.json();
 
@@ -305,7 +329,10 @@ async function main() {
       if (targetOrderId) {
         const payRes = await fetch(`${BASE_URL}/api/orders/${targetOrderId}/checkout`, {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${activeStaffToken || 'valid-staff-session'}`
+          },
           body: JSON.stringify({ paymentMethod: 'cash', isPaid: true })
         });
         console.log(`  ✓ Settlement API executed for Order #${targetOrderId}: status=${payRes.status}`);
@@ -460,14 +487,20 @@ async function main() {
 
     for (const orderId of createdTestOrderIds) {
       try {
-        const delRes = await fetch(`${BASE_URL}/api/orders/${orderId}`, { method: 'DELETE' });
+        const delRes = await fetch(`${BASE_URL}/api/orders/${orderId}`, { 
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${activeStaffToken || 'valid-staff-session'}` }
+        });
         if (delRes.status === 200 || delRes.status === 204) cleanedOrdersCount++;
       } catch (e) { /* ignore */ }
     }
 
     for (const resId of createdTestReservationIds) {
       try {
-        const delRes = await fetch(`${BASE_URL}/api/reservations/${resId}`, { method: 'DELETE' });
+        const delRes = await fetch(`${BASE_URL}/api/reservations/${resId}`, { 
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${activeStaffToken || 'valid-staff-session'}` }
+        });
         if (delRes.status === 200 || delRes.status === 204) cleanedResCount++;
       } catch (e) { /* ignore */ }
     }

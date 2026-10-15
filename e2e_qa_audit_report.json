@@ -1,9 +1,9 @@
 {
-  "timestamp": "2026-10-13T06:25:30.144Z",
+  "timestamp": "2026-10-15T18:53:49.234Z",
   "domains": {
     "domain1": {
       "status": "PASS",
-      "orderId": "LM-1001",
+      "orderId": "ORD-MV9WDI3W",
       "evidence": "Payload validation pass, Total NT$390"
     },
     "domain2": {
@@ -21,21 +21,21 @@
     },
     "domain5": {
       "status": "PASS",
-      "evidence": "Image pipeline functional with fallback (401)"
+      "evidence": "Storage upload write verified. Asset URL: https://firebasestorage.googleapis.com/v0/b/sabay-bbq-order.firebasestorage.app/o/dishes%2Fe2e_test_dish-1792090445873.webp?alt=media"
     },
     "domain6": {
       "status": "PASS",
-      "orderId": "LM-1002",
+      "orderId": "ORD-MV9WDPY4",
       "evidence": "Takeout identifier assigned (外帶)"
     },
     "domain7": {
       "status": "PASS",
-      "orderId": "LM-1003",
+      "orderId": "ORD-MV9WDPZX",
       "evidence": "Google Business Profile endpoint payload routing & normalization pass."
     },
     "domain8": {
       "status": "PASS",
-      "orderId": "LM-1001",
+      "orderId": "ORD-MV9WDI3W",
       "evidence": "Payment settled via API (status=200), table status released to cleaning."
     },
     "domain9": {
@@ -44,15 +44,15 @@
     },
     "domain10": {
       "status": "PASS",
-      "reservationId": "res-fjokf3t7z",
-      "evidence": "Slot validation & conflict check passed for 2026-10-20 18:00"
+      "reservationId": "res-68313wj5o",
+      "evidence": "Slot validation & conflict check passed for 2026-10-23 18:00"
     },
     "domain11": {
       "status": "PASS",
       "blackScreenDetected": false,
       "hotkeyNavPassed": true,
       "totalTogglesTested": 16,
-      "consoleErrorsCaptured": 2,
+      "consoleErrorsCaptured": 9,
       "pageErrorsCaptured": 0
     }
   },
