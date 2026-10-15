@@ -11,6 +11,37 @@ const TABLES_CACHE_TTL_MS = 10 * 1000;
 function invalidateTablesCache() {
     cachedTablesData = null;
 }
+function getTaiwanDateString(date = new Date()) {
+    return new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Taipei',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+    }).format(date);
+}
+function getTaiwanTimeParts(date = new Date()) {
+    const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Asia/Taipei',
+        hour: 'numeric',
+        minute: 'numeric',
+        hour12: false,
+    }).formatToParts(date);
+    let hours = 0;
+    let minutes = 0;
+    for (const p of parts) {
+        if (p.type === 'hour')
+            hours = parseInt(p.value, 10);
+        if (p.type === 'minute')
+            minutes = parseInt(p.value, 10);
+    }
+    return { hours: hours === 24 ? 0 : hours, minutes };
+}
+function parseTimeToMinutes(t) {
+    if (!t)
+        return 0;
+    const [h, m] = t.split(':').map(Number);
+    return (h || 0) * 60 + (m || 0);
+}
 function registerTablesRoutes(app, ctx) {
     const { db, requireStaffAuth, createRateLimiter, sendErrorResponse } = ctx;
     const getCachedSettings = (0, helpers_1.createGetCachedSettings)(db);
@@ -52,8 +83,12 @@ function registerTablesRoutes(app, ctx) {
     get('/reservations', requireStaffAuth, async (_req, res) => {
         try {
             res.setHeader('Cache-Control', 'private, no-cache, no-store, must-revalidate');
-            const todayStr = new Date().toISOString().split('T')[0];
-            const snapshot = await db.collection('reservations').select('id', 'customerName', 'phone', 'guestCount', 'tableNumber', 'date', 'time', 'status', 'notes', 'createdAt', 'reservationNo').where('date', '>=', todayStr).limit(100).get();
+            const todayStr = getTaiwanDateString();
+            const snapshot = await db.collection('reservations')
+                .select('id', 'customerName', 'phone', 'guestCount', 'tableNumber', 'date', 'time', 'status', 'notes', 'createdAt', 'reservationNo')
+                .where('date', '>=', todayStr)
+                .limit(100)
+                .get();
             const reservations = snapshot.docs.map(doc => doc.data());
             res.json(reservations);
         }
@@ -105,12 +140,6 @@ function registerTablesRoutes(app, ctx) {
             sendErrorResponse(res, error);
         }
     });
-    function parseTimeToMinutes(t) {
-        if (!t)
-            return 0;
-        const [h, m] = t.split(':').map(Number);
-        return (h || 0) * 60 + (m || 0);
-    }
     post('/reservations', reservationRateLimiter, async (req, res) => {
         const validation = (0, validators_1.validateReservationPayload)(req.body);
         if (!validation.isValid || !validation.sanitizedData) {
@@ -119,12 +148,11 @@ function registerTablesRoutes(app, ctx) {
         const data = validation.sanitizedData;
         const now = new Date();
         now.setMonth(now.getMonth() + 3);
-        const maxDateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        const maxDateStr = getTaiwanDateString(now);
         if (data.date && data.date.trim() > maxDateStr) {
             return res.status(400).json({ error: `預約日期最多只能提前 3 個月 (最晚至 ${maxDateStr})！` });
         }
-        const todayNow = new Date();
-        const todayDateStr = `${todayNow.getFullYear()}-${String(todayNow.getMonth() + 1).padStart(2, '0')}-${String(todayNow.getDate()).padStart(2, '0')}`;
+        const todayDateStr = getTaiwanDateString();
         let validStaffOverride = false;
         if (req.body.isStaffOverride) {
             const authHeader = req.headers.authorization;
@@ -143,7 +171,8 @@ function registerTablesRoutes(app, ctx) {
         }
         if (data.date && data.date.trim() === todayDateStr && !validStaffOverride) {
             const targetMins = parseTimeToMinutes(data.time);
-            const currentMins = todayNow.getHours() * 60 + todayNow.getMinutes();
+            const twTime = getTaiwanTimeParts();
+            const currentMins = twTime.hours * 60 + twTime.minutes;
             if (targetMins < currentMins + 240) {
                 return res.status(400).json({ error: '預約時間必須為現在時間 4 小時之後，避免與現場顧客發生桌席衝突！' });
             }
@@ -156,8 +185,7 @@ function registerTablesRoutes(app, ctx) {
         };
         try {
             await db.runTransaction(async (transaction) => {
-                const dateReservationsQuery = db.collection('reservations')
-                    .where('date', '==', data.date.trim());
+                const dateReservationsQuery = db.collection('reservations').where('date', '==', data.date.trim());
                 const dateReservationsSnap = await transaction.get(dateReservationsQuery);
                 const tablesSnap = await transaction.get(db.collection('tables'));
                 const allTables = tablesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -212,19 +240,21 @@ function registerTablesRoutes(app, ctx) {
                 }
                 transaction.set(db.collection('reservations').doc(newReservation.id), newReservation);
                 if (newReservation.status === 'pending' && newReservation.tableNumber) {
-                    const todayStr = new Date().toISOString().split('T')[0];
-                    if (newReservation.date === todayStr) {
-                        const primaryTable = requestedTables[0];
-                        const tableDoc = allTables.find(t => String(t.id).trim() === primaryTable);
-                        if (tableDoc) {
-                            transaction.update(db.collection('tables').doc(primaryTable), {
-                                status: 'preserved',
-                                preservedFor: `${newReservation.customerName} (${newReservation.time})`
-                            });
+                    if (newReservation.date === todayDateStr) {
+                        for (const tId of requestedTables) {
+                            const tableDoc = allTables.find(t => String(t.id).trim() === tId);
+                            if (tableDoc) {
+                                transaction.update(db.collection('tables').doc(tId), {
+                                    status: 'preserved',
+                                    preservedFor: `${newReservation.customerName} (${newReservation.time})`
+                                });
+                            }
                         }
                     }
                 }
             });
+            invalidateTablesCache();
+            (0, bootstrap_1.invalidatePublicBootstrapCache)();
             res.status(201).json(newReservation);
         }
         catch (error) {
@@ -246,9 +276,14 @@ function registerTablesRoutes(app, ctx) {
                 const doc = await db.collection('reservations').doc(id).get();
                 const resData = doc.data();
                 if (resData && resData.tableNumber) {
-                    await db.collection('tables').doc(resData.tableNumber).update({ status: 'available', preservedFor: '' });
+                    const tablesToRelease = String(resData.tableNumber).split(',').map(t => t.trim()).filter(Boolean);
+                    for (const tId of tablesToRelease) {
+                        await db.collection('tables').doc(tId).update({ status: 'available', preservedFor: '' });
+                    }
                 }
                 await db.collection('reservations').doc(id).delete();
+                invalidateTablesCache();
+                (0, bootstrap_1.invalidatePublicBootstrapCache)();
                 res.json({ success: true, message: 'Reservation cancelled and deleted' });
                 return;
             }
@@ -257,15 +292,20 @@ function registerTablesRoutes(app, ctx) {
                 const doc = await db.collection('reservations').doc(id).get();
                 const resData = doc.data();
                 if (resData && resData.tableNumber) {
-                    const tableRef = db.collection('tables').doc(resData.tableNumber);
-                    if (updates.status === 'seated') {
-                        await tableRef.update({ status: 'in_use', preservedFor: '' });
-                    }
-                    else if (updates.status === 'pending') {
-                        await tableRef.update({ status: 'preserved', preservedFor: `${resData.customerName} (${resData.time})` });
+                    const tablesToSync = String(resData.tableNumber).split(',').map(t => t.trim()).filter(Boolean);
+                    for (const tId of tablesToSync) {
+                        const tableRef = db.collection('tables').doc(tId);
+                        if (updates.status === 'seated') {
+                            await tableRef.update({ status: 'in_use', preservedFor: '' });
+                        }
+                        else if (updates.status === 'pending') {
+                            await tableRef.update({ status: 'preserved', preservedFor: `${resData.customerName} (${resData.time})` });
+                        }
                     }
                 }
             }
+            invalidateTablesCache();
+            (0, bootstrap_1.invalidatePublicBootstrapCache)();
             res.json({ success: true });
         }
         catch (error) {
@@ -277,6 +317,8 @@ function registerTablesRoutes(app, ctx) {
         const id = req.params.id;
         try {
             await db.collection('reservations').doc(id).delete();
+            invalidateTablesCache();
+            (0, bootstrap_1.invalidatePublicBootstrapCache)();
             res.json({ success: true });
         }
         catch (error) {

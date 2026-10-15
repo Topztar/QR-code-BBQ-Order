@@ -199,8 +199,6 @@ let liveCategories: Category[] = [...INITIAL_CATEGORIES];
 
 const defaultCategories = [...liveCategories];
 
-import 'dotenv/config';
-
 let liveStaffPin = process.env.DEFAULT_STAFF_PIN || '070718';
 let liveSystemVersion = '1.0.0';
 
@@ -219,7 +217,7 @@ let liveTables: TableConfig[] = [
     "preservedFor": "",
     "positionX": 35,
     "positionY": 15,
-    "qrCodeUrl": "//?table=2",
+    "qrCodeUrl": "/?table=2",
     "id": "2",
     "status": "available",
     "mergedWith": "",
@@ -476,19 +474,19 @@ function validateReservationBooking(
   isStaffOverride: boolean,
   currentResId?: string
 ): { error?: string } {
-  const now = new Date();
-  now.setMonth(now.getMonth() + 3);
-  const maxDateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const futureNow = new Date();
+  futureNow.setMonth(futureNow.getMonth() + 3);
+  const maxDateStr = getTaiwanDateString(futureNow);
   if (date && date.trim() > maxDateStr && !isStaffOverride) {
     return { error: `預約日期最多只能提前 3 個月 (最晚至 ${maxDateStr})！` };
   }
 
   const targetMins = parseTimeToMinutes(time);
 
-  const todayNow = new Date();
-  const todayDateStr = `${todayNow.getFullYear()}-${String(todayNow.getMonth() + 1).padStart(2, '0')}-${String(todayNow.getDate()).padStart(2, '0')}`;
+  const todayDateStr = getTaiwanDateString();
   if (date && date.trim() === todayDateStr && !isStaffOverride) {
-    const currentMins = todayNow.getHours() * 60 + todayNow.getMinutes();
+    const twTime = getTaiwanTimeParts();
+    const currentMins = twTime.hours * 60 + twTime.minutes;
     if (targetMins < currentMins + 240) {
       return { error: '預約時間必須為現在時間 4 小時之後，避免與現場顧客發生桌席衝突！' };
     }
@@ -1561,7 +1559,7 @@ async function main() {
 
     // Background Task: Automatically reset takeout sequence to 0 at 12:00 AM Midnight every day
     const takeoutResetTimer = setInterval(() => {
-      const today = new Date().toDateString();
+      const today = getTaiwanDateString();
       if (lastTakeoutDate && today !== lastTakeoutDate) {
         console.log(`[Sabay Server] Midnight date change detected! Resetting takeout sequence from #${liveTakeoutSeq} to #0. (Old: ${lastTakeoutDate}, New: ${today})`);
         liveTakeoutSeq = 0;
@@ -1571,39 +1569,27 @@ async function main() {
     }, 10000); // Check every 10 seconds for real-time daily midnight reset
     takeoutResetTimer.unref();
 
-    // Background Task: Automatically check for upcoming reservations (<= 1 hour before reservation time)
+    // Background Task: Automatically check for upcoming reservations and sync table statuses
     const upcomingResTimer = setInterval(() => {
       try {
-        const now = new Date();
+        const prevStatuses = new Map(liveReservations.map(r => [r.id, r.status]));
+        syncTableStatusesWithTodayReservations();
+
         let changed = false;
-        
         liveReservations.forEach(res => {
-          if (res.status === 'confirmed') {
-            const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-            if (res.date.trim() === todayStr) {
-              const [year, month, day] = res.date.split('-').map(Number);
-              const [hour, minute] = res.time.split(':').map(Number);
-              if (!isNaN(year) && !isNaN(month) && !isNaN(day) && !isNaN(hour) && !isNaN(minute)) {
-                const resDateTime = new Date(year, month - 1, day, hour, minute);
-                const diffMinutes = (resDateTime.getTime() - now.getTime()) / (1000 * 60);
-                if (diffMinutes > -120 && diffMinutes <= 60) {
-                  res.status = 'upcoming';
-                  changed = true;
-                  console.log(`[Reservation Auto-Check] Automatically marked confirmed reservation ${res.id} (${res.customerName}) at ${res.date} ${res.time} as upcoming (same day).`);
-                }
-              }
-            }
+          if (res.status === 'upcoming' && prevStatuses.get(res.id) === 'confirmed') {
+            changed = true;
+            console.log(`[Reservation Auto-Check] Automatically marked confirmed reservation ${res.id} (${res.customerName}) at ${res.date} ${res.time} as upcoming (same day).`);
           }
         });
-        
+
         if (changed) {
-          syncTableStatusesWithTodayReservations();
           saveStateToDisk();
-          
+
           if (firestoreDb) {
             // Also sync changed reservations to Firestore in background
             liveReservations.forEach(async (res) => {
-              if (res.status === 'upcoming') {
+              if (res.status === 'upcoming' && prevStatuses.get(res.id) === 'confirmed') {
                 try {
                   await setDoc(doc(firestoreDb, 'reservations', res.id), res);
                 } catch (fsErr) {
@@ -1612,9 +1598,6 @@ async function main() {
               }
             });
           }
-        } else {
-          // Check and auto-release 15-min cleaning tables periodically
-          syncTableStatusesWithTodayReservations();
         }
       } catch (checkErr) {
         console.error('[Reservation Auto-Check Error]', checkErr);

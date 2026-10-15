@@ -7,8 +7,13 @@ import {
   sendGmailReservationNotification,
   sendReservationNotifications,
   sendTestNotification,
+  formatTaiwanDateTime,
+  getTaiwanDateString,
+  formatLineOrderMessage,
+  sendOrderNotification,
   type ReservationNotificationData,
-  type NotificationOptions
+  type NotificationOptions,
+  type OrderNotificationData
 } from '../../../functions/src/services/notification';
 
 const mockSendMail = vi.fn();
@@ -52,6 +57,39 @@ describe('Notification Service', () => {
     process.env = originalEnv;
   });
 
+  describe('formatTaiwanDateTime and getTaiwanDateString', () => {
+    it('should format UTC ISO timestamp to readable Taiwan time (UTC+8)', () => {
+      // 2026-10-15T09:28:13.950Z -> 2026-10-15 17:28:13 (+8 hours)
+      const formatted = formatTaiwanDateTime('2026-10-15T09:28:13.950Z');
+      expect(formatted).toBe('2026-10-15 17:28:13');
+
+      const formattedOrder = formatTaiwanDateTime('2026-10-15T09:31:09.165Z');
+      expect(formattedOrder).toBe('2026-10-15 17:31:09');
+    });
+
+    it('should keep already formatted YYYY-MM-DD HH:mm:ss string without re-shifting', () => {
+      const alreadyFormatted = '2026-10-15 17:28:13';
+      expect(formatTaiwanDateTime(alreadyFormatted)).toBe('2026-10-15 17:28:13');
+    });
+
+    it('should handle Firestore Timestamp object format', () => {
+      const mockTimestamp = {
+        toDate: () => new Date('2026-10-15T09:28:13.950Z')
+      };
+      expect(formatTaiwanDateTime(mockTimestamp)).toBe('2026-10-15 17:28:13');
+
+      const mockSecondsTs = {
+        _seconds: 1792056493 // 2026-10-15T09:28:13Z
+      };
+      expect(formatTaiwanDateTime(mockSecondsTs)).toBe('2026-10-15 17:28:13');
+    });
+
+    it('should format getTaiwanDateString as YYYY-MM-DD', () => {
+      const d = new Date('2026-10-15T18:00:00.000Z'); // 10/16 02:00 in Taiwan
+      expect(getTaiwanDateString(d)).toBe('2026-10-16');
+    });
+  });
+
   describe('escapeHtml', () => {
     it('should correctly escape special HTML characters', () => {
       expect(escapeHtml('<script>alert("hello & bye")</script>')).toBe(
@@ -78,6 +116,12 @@ describe('Notification Service', () => {
       expect(msg).toContain('🪑 預約桌號：A1, A2 桌');
       expect(msg).toContain('📝 特殊備註：需要兒童椅 & 靠窗座位');
       expect(msg).toContain('🆔 預約編號：R20260910-001');
+    });
+
+    it('should include formatted Taiwan time in ⏱️ 登記時間', () => {
+      const msg = formatLineReservationMessage(sampleReservation);
+      // sampleReservation has createdAt: '2026-09-05T12:00:00.000Z' (+8 hours -> 20:00:00)
+      expect(msg).toContain('⏱️ 登記時間：2026-09-05 20:00:00');
     });
 
     it('should provide sensible fallbacks when optional fields are empty', () => {
@@ -373,6 +417,46 @@ describe('Notification Service', () => {
       expect(results).toHaveLength(2);
       expect(results[0].status).toBe('fulfilled');
       expect(results[1].status).toBe('fulfilled');
+    });
+  });
+
+  describe('formatLineOrderMessage', () => {
+    it('should safely format order push message when tableNumber is numeric without throwing', () => {
+      const orderWithNumericTable: OrderNotificationData = {
+        id: 'ORD-NUM-001',
+        tableNumber: 5 as any,
+        items: [{ name: '泰式椒麻雞', qty: 2, price: 180 }],
+        total: 360,
+        customerName: '王小美',
+        customerPhone: '0900111222',
+        createdAt: '2026-10-15T09:31:09.165Z'
+      };
+
+      const msg = formatLineOrderMessage(orderWithNumericTable);
+      expect(msg).toContain('🔔 【新點餐訂單通知】SABAY BBQ 沙貝燒烤');
+      expect(msg).toContain('🪑 桌號：5 桌');
+      expect(msg).toContain('💰 訂單金額：$360 元');
+      expect(msg).toContain('👤 顧客姓名：王小美 (0900111222)');
+      expect(msg).toContain('🆔 訂單編號：ORD-NUM-001');
+      expect(msg).toContain('⏱️ 下單時間：2026-10-15 17:31:09');
+      expect(msg).toContain('• 泰式椒麻雞 x2 ($360)');
+    });
+
+    it('should format takeout order appropriately', () => {
+      const takeoutOrder: OrderNotificationData = {
+        id: 'ORD-TAKEOUT-002',
+        tableNumber: '外帶 859',
+        items: [{ name: { zh: '泰式海鮮.米線' }, qty: 1, price: 240 }],
+        total: 240,
+        customerName: '老楊胡椒蝦',
+        customerPhone: '0928203037',
+        createdAt: '2026-10-15T09:31:09.165Z'
+      };
+
+      const msg = formatLineOrderMessage(takeoutOrder);
+      expect(msg).toContain('🛍️ 外帶訂單 (外帶 859)');
+      expect(msg).toContain('⏱️ 下單時間：2026-10-15 17:31:09');
+      expect(msg).toContain('• 泰式海鮮.米線 x1 ($240)');
     });
   });
 });

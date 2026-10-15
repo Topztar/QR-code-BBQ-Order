@@ -216,7 +216,12 @@ get('/analytics', requireStaffAuth, async (req, res) => {
       if (o.createdAt) {
         const d = new Date(o.createdAt);
         if (!isNaN(d.getTime())) {
-          const slot = `${d.getHours().toString().padStart(2, '0')}:00`;
+          const twHour = new Intl.DateTimeFormat('en-US', {
+            timeZone: 'Asia/Taipei',
+            hour: '2-digit',
+            hour12: false,
+          }).format(d);
+          const slot = `${twHour === '24' ? '00' : twHour}:00`;
           hourMap[slot] = (hourMap[slot] || 0) + 1;
         }
       }
@@ -839,7 +844,6 @@ post('/orders/bulk-checkout', requireStaffAuth, async (req, res) => {
   const { paymentMethod, cashTendered, changeAmount, checkoutRecord } = validation.sanitizedData;
 
   try {
-    const batch = db.batch();
     const resolvedOrderStatuses: Record<string, string> = {};
     const tableSet = new Set<string>();
 

@@ -44,6 +44,145 @@ export interface NotificationOptions {
   };
 }
 
+export interface OrderNotificationData {
+  id: string;
+  tableNumber: string;
+  items: Array<{ name: any; qty: number; price: number }>;
+  total: number;
+  status?: string;
+  customerName?: string;
+  customerPhone?: string;
+  takeoutInfo?: any;
+  source?: string;
+  utm_medium?: string;
+  createdAt?: string;
+}
+
+/**
+ * 將任意時間輸入（UTC ISO 字串、Firestore Timestamp、Date、Number）
+ * 統一轉換為台灣時區 (Asia/Taipei, UTC+8) 的易讀格式：YYYY-MM-DD HH:mm:ss
+ */
+export function formatTaiwanDateTime(input?: unknown): string {
+  let date: Date;
+  if (!input) {
+    date = new Date();
+  } else if (input instanceof Date) {
+    date = input;
+  } else if (typeof input === 'string') {
+    const trimmed = input.trim();
+    // 若已是 YYYY-MM-DD HH:mm(:ss) 格式且無時區後綴，直接保留避免二次偏移
+    if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}(:\d{2})?$/.test(trimmed)) {
+      return trimmed;
+    }
+    date = new Date(trimmed);
+    if (Number.isNaN(date.getTime())) {
+      return trimmed; // 若為自訂非標準字串，安全回傳原字串避免 Invalid Date
+    }
+  } else if (typeof input === 'number') {
+    date = new Date(input);
+  } else if (typeof input === 'object' && input !== null) {
+    const maybeTs = input as { toDate?: () => Date; _seconds?: number; seconds?: number };
+    if (typeof maybeTs.toDate === 'function') {
+      date = maybeTs.toDate();
+    } else if (typeof maybeTs._seconds === 'number') {
+      date = new Date(maybeTs._seconds * 1000);
+    } else if (typeof maybeTs.seconds === 'number') {
+      date = new Date(maybeTs.seconds * 1000);
+    } else {
+      date = new Date();
+    }
+  } else {
+    date = new Date();
+  }
+
+  if (Number.isNaN(date.getTime())) {
+    date = new Date();
+  }
+
+  return new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'Asia/Taipei',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).format(date);
+}
+
+/**
+ * 取得台灣時區 (Asia/Taipei) 當前日期字串：YYYY-MM-DD
+ */
+export function getTaiwanDateString(date: Date = new Date()): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Taipei',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date);
+}
+
+/**
+ * 統一正規化預約欄位預設值，消除 LINE 與 Gmail 模板間的重複計算
+ */
+function normalizeReservationFields(reservation: ReservationNotificationData) {
+  return {
+    table: reservation.tableNumber ? `${reservation.tableNumber} 桌` : '未指定 / 待安排',
+    notes: reservation.notes?.trim() ? reservation.notes.trim() : '無特殊備註',
+    orderId: reservation.reservationNo || reservation.id || 'N/A',
+    createdTime: formatTaiwanDateTime(reservation.createdAt),
+    isGoogle: reservation.source === 'google_business',
+  };
+}
+
+/**
+ * 內部共用：發送 LINE Push 訊息（消除預約推播與訂單推播的重複邏輯）
+ */
+async function dispatchLinePushMessage(
+  messageText: string,
+  logTag: string,
+  targetId: string,
+  options?: NotificationOptions
+): Promise<NotificationResult> {
+  const config = options?.notificationConfig;
+  if (config?.lineEnabled === false) {
+    return { success: false, channel: 'LINE', reason: 'disabled' };
+  }
+
+  const token = (config?.lineToken || process.env.LINE_CHANNEL_ACCESS_TOKEN || '').trim();
+  const adminId = (config?.lineAdminId || process.env.LINE_ADMIN_USER_ID || '').trim();
+
+  if (!token || !adminId) {
+    console.warn(`[${logTag}] Skipped: LINE channel token or admin user ID is not configured.`);
+    return { success: false, channel: 'LINE', reason: 'unconfigured' };
+  }
+
+  const client = options?.axiosClient || axios;
+  try {
+    await client.post(
+      'https://api.line.me/v2/bot/message/push',
+      {
+        to: adminId,
+        messages: [{ type: 'text', text: messageText }],
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        timeout: 8000,
+      }
+    );
+    console.log(`[${logTag}] Push sent successfully for ${targetId}`);
+    return { success: true, channel: 'LINE' };
+  } catch (err: any) {
+    const errorDetails = err?.response?.data ? JSON.stringify(err.response.data) : err.message || String(err);
+    console.error(`[${logTag}] Failed to send push message: ${errorDetails}`);
+    return { success: false, channel: 'LINE', error: errorDetails };
+  }
+}
+
 /**
  * Escapes HTML characters to prevent XSS / HTML injection in email templates
  */
@@ -61,12 +200,7 @@ export function escapeHtml(str: any): string {
  * Formats a clean, structured text message for LINE Messaging API
  */
 export function formatLineReservationMessage(reservation: ReservationNotificationData): string {
-  const table = reservation.tableNumber ? `${reservation.tableNumber} 桌` : '未指定 / 待安排';
-  const notes = reservation.notes?.trim() ? reservation.notes.trim() : '無特殊備註';
-  const orderId = reservation.reservationNo || reservation.id || 'N/A';
-  const createdTime = reservation.createdAt || new Date().toISOString();
-
-  const isGoogle = reservation.source === 'google_business';
+  const { table, notes, orderId, createdTime, isGoogle } = normalizeReservationFields(reservation);
   const header = isGoogle
     ? '🔔 【Google 商家新預約訂位】SABAY BBQ 沙貝燒烤'
     : '🔔 【新預約訂位通知】SABAY BBQ 沙貝燒烤';
@@ -88,7 +222,7 @@ export function formatLineReservationMessage(reservation: ReservationNotificatio
     `🆔 預約編號：${orderId}`,
     `⏱️ 登記時間：${createdTime}`,
     '━━━━━━━━━━━━━━━━━━━━',
-    '💡 請至管理後台【操作面板】確認預約並保留席位。'
+    '💡 請至管理後台【操作面板】確認預約並保留席位。',
   ].join('\n');
 }
 
@@ -100,15 +234,16 @@ export function formatGmailReservationContent(reservation: ReservationNotificati
   text: string;
   html: string;
 } {
+  const { table, notes, orderId, createdTime } = normalizeReservationFields(reservation);
   const safeName = escapeHtml(reservation.customerName);
   const safePhone = escapeHtml(reservation.phone);
   const safeDate = escapeHtml(reservation.date);
   const safeTime = escapeHtml(reservation.time);
   const safeGuests = escapeHtml(reservation.guestCount);
-  const safeTable = reservation.tableNumber ? `${escapeHtml(reservation.tableNumber)} 桌` : '未指定 / 待安排';
-  const safeNotes = reservation.notes?.trim() ? escapeHtml(reservation.notes.trim()) : '無特殊備註';
-  const safeOrderId = escapeHtml(reservation.reservationNo || reservation.id || 'N/A');
-  const safeCreated = escapeHtml(reservation.createdAt || new Date().toISOString());
+  const safeTable = escapeHtml(table);
+  const safeNotes = escapeHtml(notes);
+  const safeOrderId = escapeHtml(orderId);
+  const safeCreated = escapeHtml(createdTime);
 
   const subject = `[New Reservation] ${reservation.date} ${reservation.time} - ${reservation.customerName} (${reservation.guestCount} guests)`;
   const safeSubject = escapeHtml(subject);
@@ -121,12 +256,12 @@ export function formatGmailReservationContent(reservation: ReservationNotificati
     `預約日期：${reservation.date}`,
     `預約時間：${reservation.time}`,
     `用餐人數：${reservation.guestCount} 位`,
-    `預約桌號：${reservation.tableNumber ? reservation.tableNumber + ' 桌' : '未指定 / 待安排'}`,
-    `特殊備註：${reservation.notes?.trim() || '無'}`,
-    `預約編號：${reservation.reservationNo || reservation.id || 'N/A'}`,
-    `登記時間：${reservation.createdAt || new Date().toISOString()}`,
+    `預約桌號：${table}`,
+    `特殊備註：${notes}`,
+    `預約編號：${orderId}`,
+    `登記時間：${createdTime}`,
     '',
-    '請至管理後台進行預約確認與席位安排。'
+    '請至管理後台進行預約確認與席位安排。',
   ].join('\n');
 
   const html = `
@@ -153,7 +288,7 @@ export function formatGmailReservationContent(reservation: ReservationNotificati
               </p>
             </td>
           </tr>
-          
+
           <!-- Key Meta Highlights -->
           <tr>
             <td style="padding: 24px 32px 16px 32px;">
@@ -232,65 +367,13 @@ export async function sendLineReservationNotification(
   reservation: ReservationNotificationData,
   options?: NotificationOptions
 ): Promise<NotificationResult> {
-  const config = options?.notificationConfig;
-
-  // 檢查開關狀態 (若明確設為 false 則跳過)
-  if (config?.lineEnabled === false) {
-    return {
-      success: false,
-      channel: 'LINE',
-      reason: 'disabled'
-    };
-  }
-
-  // 優先讀取 Firestore 動態設定，次之回退至環境變數
-  const token = (config?.lineToken || process.env.LINE_CHANNEL_ACCESS_TOKEN || '').trim();
-  const adminId = (config?.lineAdminId || process.env.LINE_ADMIN_USER_ID || '').trim();
-
-  if (!token || !adminId) {
-    console.warn('[Notification:LINE] Skipped: LINE channel token or admin user ID is not configured.');
-    return {
-      success: false,
-      channel: 'LINE',
-      reason: 'unconfigured'
-    };
-  }
-
   const messageText = formatLineReservationMessage(reservation);
-  const client = options?.axiosClient || axios;
-
-  try {
-    await client.post(
-      'https://api.line.me/v2/bot/message/push',
-      {
-        to: adminId,
-        messages: [
-          {
-            type: 'text',
-            text: messageText
-          }
-        ]
-      },
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        timeout: 8000
-      }
-    );
-
-    console.log(`[Notification:LINE] Push sent successfully for reservation ${reservation.id || reservation.customerName}`);
-    return { success: true, channel: 'LINE' };
-  } catch (err: any) {
-    const errorDetails = err?.response?.data ? JSON.stringify(err.response.data) : err.message || String(err);
-    console.error(`[Notification:LINE] Failed to send push message: ${errorDetails}`);
-    return {
-      success: false,
-      channel: 'LINE',
-      error: errorDetails
-    };
-  }
+  return dispatchLinePushMessage(
+    messageText,
+    'Notification:LINE',
+    `reservation ${reservation.id || reservation.customerName}`,
+    options
+  );
 }
 
 /**
@@ -302,27 +385,17 @@ export async function sendGmailReservationNotification(
 ): Promise<NotificationResult> {
   const config = options?.notificationConfig;
 
-  // 檢查開關狀態 (若明確設為 false 則跳過)
   if (config?.gmailEnabled === false) {
-    return {
-      success: false,
-      channel: 'Gmail',
-      reason: 'disabled'
-    };
+    return { success: false, channel: 'Gmail', reason: 'disabled' };
   }
 
-  // 優先讀取 Firestore 動態設定，次之回退至環境變數，並清理應用程式密碼中的空格
   const gmailUser = (config?.gmailUser || process.env.GMAIL_USER || '').trim();
   const rawPass = config?.gmailAppPass || process.env.GMAIL_APP_PASS || '';
   const gmailPass = rawPass.replace(/\s+/g, '').trim();
 
   if (!gmailUser || !gmailPass) {
     console.warn('[Notification:Gmail] Skipped: GMAIL_USER or GMAIL_APP_PASS is not configured.');
-    return {
-      success: false,
-      channel: 'Gmail',
-      reason: 'unconfigured'
-    };
+    return { success: false, channel: 'Gmail', reason: 'unconfigured' };
   }
 
   const { subject, text, html } = formatGmailReservationContent(reservation);
@@ -333,8 +406,8 @@ export async function sendGmailReservationNotification(
       service: 'gmail',
       auth: {
         user: gmailUser,
-        pass: gmailPass
-      }
+        pass: gmailPass,
+      },
     } as any);
 
     await transporter.sendMail({
@@ -342,7 +415,7 @@ export async function sendGmailReservationNotification(
       to: gmailUser,
       subject,
       text,
-      html
+      html,
     });
 
     console.log(`[Notification:Gmail] Email sent successfully for reservation ${reservation.id || reservation.customerName}`);
@@ -350,11 +423,7 @@ export async function sendGmailReservationNotification(
   } catch (err: any) {
     const errorMsg = err.message || String(err);
     console.error(`[Notification:Gmail] Failed to send email: ${errorMsg}`);
-    return {
-      success: false,
-      channel: 'Gmail',
-      error: errorMsg
-    };
+    return { success: false, channel: 'Gmail', error: errorMsg };
   }
 }
 
@@ -370,7 +439,7 @@ export async function sendReservationNotifications(
 
   const results = await Promise.allSettled([
     sendLineReservationNotification(reservation, options),
-    sendGmailReservationNotification(reservation, options)
+    sendGmailReservationNotification(reservation, options),
   ]);
 
   results.forEach((res) => {
@@ -397,6 +466,7 @@ export async function sendTestNotification(
   config?: any,
   options?: NotificationOptions
 ): Promise<NotificationResult> {
+  const now = new Date();
   const testReservation: ReservationNotificationData = {
     id: 'TEST-CONN',
     reservationNo: 'RES-TEST-001',
@@ -404,15 +474,15 @@ export async function sendTestNotification(
     phone: '0912345678',
     guestCount: 2,
     tableNumber: '1',
-    date: new Date().toISOString().split('T')[0],
+    date: getTaiwanDateString(now),
     time: '18:00',
     notes: '這是由管理後台發出的即時連線測試訊息，確認通知管道運作正常！',
-    createdAt: new Date().toISOString()
+    createdAt: formatTaiwanDateTime(now),
   };
 
   const opts: NotificationOptions = {
     ...options,
-    notificationConfig: config
+    notificationConfig: config,
   };
 
   if (channel === 'LINE') {
@@ -420,20 +490,6 @@ export async function sendTestNotification(
   } else {
     return sendGmailReservationNotification(testReservation, opts);
   }
-}
-
-export interface OrderNotificationData {
-  id: string;
-  tableNumber: string;
-  items: Array<{ name: any; qty: number; price: number }>;
-  total: number;
-  status?: string;
-  customerName?: string;
-  customerPhone?: string;
-  takeoutInfo?: any;
-  source?: string;
-  utm_medium?: string;
-  createdAt?: string;
 }
 
 /**
@@ -444,13 +500,21 @@ export function formatLineOrderMessage(order: OrderNotificationData): string {
   const header = isGoogle
     ? '🔔 【Google 商家新訂單通知】SABAY BBQ 沙貝燒烤'
     : '🔔 【新點餐訂單通知】SABAY BBQ 沙貝燒烤';
+
+  const rawTableStr = String(order.tableNumber ?? '').trim();
   const isTakeout = Boolean(
-    (order.tableNumber && (String(order.tableNumber).includes('外帶') || order.tableNumber.toLowerCase() === 'takeout')) ||
+    (rawTableStr && (rawTableStr.includes('外帶') || rawTableStr.toLowerCase() === 'takeout')) ||
     order.takeoutInfo
   );
-  const tableStr = isTakeout ? `🛍️ 外帶訂單 (${order.tableNumber || '外帶'})` : `🪑 桌號：${order.tableNumber} 桌`;
-  const originStr = isGoogle ? '🌐 渠道來源：Google 商家檔案 (Online Ordering)' : '📱 渠道來源：現場/官方掃碼';
-  const customerStr = order.customerName ? `👤 顧客姓名：${order.customerName} (${order.customerPhone || '未留電話'})` : '';
+  const tableStr = isTakeout ? `🛍️ 外帶訂單 (${rawTableStr || '外帶'})` : `🪑 桌號：${rawTableStr} 桌`;
+  const originStr = isGoogle
+    ? '🌐 渠道來源：Google 商家檔案 (Online Ordering)'
+    : '📱 渠道來源：現場/官方掃碼';
+
+  const customerStr = order.customerName
+    ? `👤 顧客姓名：${order.customerName} (${order.customerPhone || '未留電話'})`
+    : '';
+
   const itemsList = (order.items || [])
     .map((i: any) => {
       const name = typeof i.name === 'object' ? (i.name.zh || i.name.en || JSON.stringify(i.name)) : i.name;
@@ -461,6 +525,8 @@ export function formatLineOrderMessage(order: OrderNotificationData): string {
     .join('\n');
   const moreItems = (order.items || []).length > 15 ? `\n...其餘 ${(order.items || []).length - 15} 項餐點` : '';
 
+  const createdTime = formatTaiwanDateTime(order.createdAt);
+
   const lines = [
     header,
     '━━━━━━━━━━━━━━━━━━━━',
@@ -469,11 +535,11 @@ export function formatLineOrderMessage(order: OrderNotificationData): string {
     originStr,
     customerStr,
     `🆔 訂單編號：${order.id}`,
-    `⏱️ 下單時間：${order.createdAt || new Date().toISOString()}`,
+    `⏱️ 下單時間：${createdTime}`,
     '📋 餐點明細：',
     itemsList + moreItems,
     '━━━━━━━━━━━━━━━━━━━━',
-    '🍳 廚房 KDS 與收銀終端已即時同步，請現場確認接單！'
+    '🍳 廚房 KDS 與收銀終端已即時同步，請現場確認接單！',
   ].filter(Boolean);
 
   return lines.join('\n');
@@ -486,49 +552,11 @@ export async function sendOrderNotification(
   order: OrderNotificationData,
   options?: NotificationOptions
 ): Promise<NotificationResult> {
-  const config = options?.notificationConfig;
-
-  if (config?.lineEnabled === false) {
-    return { success: false, channel: 'LINE', reason: 'disabled' };
-  }
-
-  const token = (config?.lineToken || process.env.LINE_CHANNEL_ACCESS_TOKEN || '').trim();
-  const adminId = (config?.lineAdminId || process.env.LINE_ADMIN_USER_ID || '').trim();
-
-  if (!token || !adminId) {
-    console.warn('[Notification:LINE:Order] Skipped: LINE channel token or admin user ID is not configured.');
-    return { success: false, channel: 'LINE', reason: 'unconfigured' };
-  }
-
   const messageText = formatLineOrderMessage(order);
-  const client = options?.axiosClient || axios;
-
-  try {
-    await client.post(
-      'https://api.line.me/v2/bot/message/push',
-      {
-        to: adminId,
-        messages: [
-          {
-            type: 'text',
-            text: messageText
-          }
-        ]
-      },
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        timeout: 8000
-      }
-    );
-
-    console.log(`[Notification:LINE:Order] Push sent successfully for order #${order.id}`);
-    return { success: true, channel: 'LINE' };
-  } catch (err: any) {
-    const errorDetails = err?.response?.data ? JSON.stringify(err.response.data) : err.message || String(err);
-    console.error(`[Notification:LINE:Order] Failed to send push message: ${errorDetails}`);
-    return { success: false, channel: 'LINE', error: errorDetails };
-  }
+  return dispatchLinePushMessage(
+    messageText,
+    'Notification:LINE:Order',
+    `order #${order.id}`,
+    options
+  );
 }

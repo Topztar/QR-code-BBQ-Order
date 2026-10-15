@@ -7,9 +7,19 @@ const auth_1 = require("../auth");
 const helpers_1 = require("../helpers");
 const notification_1 = require("../services/notification");
 const bootstrap_1 = require("./bootstrap");
+const DEFAULT_OPTION_RULES = [
+    { id: 'rule-1784360566576', name: '加河粉', category: '加配料', price: 20 },
+    { id: 'rule-1784360574891', name: '加米線', category: '加配料', price: 20 },
+    { id: 'rule-1784360613823', name: '升級套餐(烤蔬菜+泰奶一杯)', category: '加配料', price: 140 }
+];
 function registerSettingsRoutes(app, ctx) {
     const { db, requireStaffAuth, sendErrorResponse } = ctx;
     const getCachedSettings = (0, helpers_1.createGetCachedSettings)(db);
+    const invalidateAllSettingsCaches = () => {
+        (0, helpers_1.setCachedSettings)(null);
+        (0, helpers_1.setCachedServicePause)(null);
+        (0, bootstrap_1.invalidatePublicBootstrapCache)();
+    };
     const get = (routePath, ...handlers) => app.get([`/api${routePath}`, routePath], ...handlers);
     const post = (routePath, ...handlers) => app.post([`/api${routePath}`, routePath], ...handlers);
     const del = (routePath, ...handlers) => app.delete([`/api${routePath}`, routePath], ...handlers);
@@ -19,11 +29,6 @@ function registerSettingsRoutes(app, ctx) {
             res.setHeader('Cache-Control', 'public, max-age=120, s-maxage=600, stale-while-revalidate=1800');
             const sysData = await getCachedSettings();
             const isOpen = sysData ? (0, helpers_1.isStoreOpenFromData)(sysData) : true;
-            const defaultOptionRules = [
-                { id: 'rule-1784360566576', name: '加河粉', category: '加配料', price: 20 },
-                { id: 'rule-1784360574891', name: '加米線', category: '加配料', price: 20 },
-                { id: 'rule-1784360613823', name: '升級套餐(烤蔬菜+泰奶一杯)', category: '加配料', price: 140 }
-            ];
             res.json({
                 minSpend: sysData?.liveMinSpendPerPerson ?? 200,
                 operatingHours: {
@@ -35,7 +40,7 @@ function registerSettingsRoutes(app, ctx) {
                 servicePaused: sysData?.liveServicePaused || false,
                 promoCombo: sysData?.livePromoCombo || { enabled: false, requiredQty: 0, discountAmount: 0, eligibleItemIds: [] },
                 popularItemIds: sysData?.livePopularItemIds || [],
-                optionRules: sysData?.liveOptionRules || defaultOptionRules,
+                optionRules: sysData?.liveOptionRules || DEFAULT_OPTION_RULES,
                 membersConfig: {
                     pointsRatio: sysData?.liveMemberPointsRatio ?? 20,
                     vipThreshold: sysData?.liveMemberVipThreshold ?? 1000,
@@ -120,8 +125,7 @@ function registerSettingsRoutes(app, ctx) {
                 version: version,
                 versionUpdatedAt: new Date().toISOString()
             }, { merge: true });
-            (0, helpers_1.setCachedSettings)(null);
-            (0, bootstrap_1.invalidatePublicBootstrapCache)();
+            invalidateAllSettingsCaches();
             res.json({ success: true, version });
         }
         catch (error) {
@@ -170,27 +174,7 @@ function registerSettingsRoutes(app, ctx) {
         try {
             res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=600, stale-while-revalidate=1800');
             const sysData = await getCachedSettings();
-            const defaultRules = [
-                {
-                    id: 'rule-1784360566576',
-                    name: '加河粉',
-                    category: '加配料',
-                    price: 20
-                },
-                {
-                    id: 'rule-1784360574891',
-                    name: '加米線',
-                    category: '加配料',
-                    price: 20
-                },
-                {
-                    id: 'rule-1784360613823',
-                    name: '升級套餐(烤蔬菜+泰奶一杯)',
-                    category: '加配料',
-                    price: 140
-                }
-            ];
-            res.json(sysData?.liveOptionRules || defaultRules);
+            res.json(sysData?.liveOptionRules || DEFAULT_OPTION_RULES);
         }
         catch (error) {
             sendErrorResponse(res, error);
@@ -200,6 +184,7 @@ function registerSettingsRoutes(app, ctx) {
         const { servicePaused } = req.body;
         try {
             await db.collection('settings').doc('system').set({ liveServicePaused: !!servicePaused }, { merge: true });
+            invalidateAllSettingsCaches();
             res.json({ success: true });
         }
         catch (error) {
@@ -210,6 +195,7 @@ function registerSettingsRoutes(app, ctx) {
         const { minSpend } = req.body;
         try {
             await db.collection('settings').doc('system').set({ liveMinSpendPerPerson: Number(minSpend) }, { merge: true });
+            invalidateAllSettingsCaches();
             res.json({ success: true, minSpend: Number(minSpend) });
         }
         catch (error) {
@@ -223,9 +209,10 @@ function registerSettingsRoutes(app, ctx) {
                 liveOperatingHours: slots,
                 liveRestDays: restDays
             }, { merge: true });
+            invalidateAllSettingsCaches();
             const systemDoc = await db.collection('settings').doc('system').get();
-            const servicePaused = systemDoc.data()?.liveServicePaused || false;
-            res.json({ success: true, slots, restDays, isOpen: !servicePaused });
+            const isOpen = (0, helpers_1.isStoreOpenFromData)(systemDoc.data() || {});
+            res.json({ success: true, slots, restDays, isOpen });
         }
         catch (error) {
             sendErrorResponse(res, error);
@@ -235,6 +222,7 @@ function registerSettingsRoutes(app, ctx) {
         const { notice } = req.body;
         try {
             await db.collection('settings').doc('system').set({ liveCustomerNotice: String(notice) }, { merge: true });
+            invalidateAllSettingsCaches();
             res.json({ success: true, notice: String(notice) });
         }
         catch (error) {
@@ -246,6 +234,7 @@ function registerSettingsRoutes(app, ctx) {
         const targetIds = popularItemIds || ids || [];
         try {
             await db.collection('settings').doc('system').set({ livePopularItemIds: targetIds }, { merge: true });
+            invalidateAllSettingsCaches();
             res.json({ success: true, popularItemIds: targetIds });
         }
         catch (error) {
@@ -256,6 +245,7 @@ function registerSettingsRoutes(app, ctx) {
         const data = req.body;
         try {
             await db.collection('settings').doc('system').set({ livePromoCombo: data, livePromoCombos: data.combos }, { merge: true });
+            invalidateAllSettingsCaches();
             res.json({ success: true });
         }
         catch (error) {
@@ -273,6 +263,7 @@ function registerSettingsRoutes(app, ctx) {
                 liveMemberPointsRedeemRate: pointsRedeemRate !== undefined ? Number(pointsRedeemRate) : 1,
                 liveMemberRewards: rewards || []
             }, { merge: true });
+            invalidateAllSettingsCaches();
             res.json({ success: true });
         }
         catch (error) {
@@ -289,9 +280,10 @@ function registerSettingsRoutes(app, ctx) {
         };
         try {
             const systemDoc = await db.collection('settings').doc('system').get();
-            let rules = systemDoc.data()?.liveOptionRules || [];
+            let rules = systemDoc.data()?.liveOptionRules || DEFAULT_OPTION_RULES;
             rules.push(newRule);
             await db.collection('settings').doc('system').set({ liveOptionRules: rules }, { merge: true });
+            invalidateAllSettingsCaches();
             res.status(201).json(newRule);
         }
         catch (error) {
@@ -302,9 +294,10 @@ function registerSettingsRoutes(app, ctx) {
         const { id } = req.params;
         try {
             const systemDoc = await db.collection('settings').doc('system').get();
-            let rules = systemDoc.data()?.liveOptionRules || [];
+            let rules = systemDoc.data()?.liveOptionRules || DEFAULT_OPTION_RULES;
             rules = rules.filter((r) => r.id !== id);
             await db.collection('settings').doc('system').set({ liveOptionRules: rules }, { merge: true });
+            invalidateAllSettingsCaches();
             res.json({ success: true });
         }
         catch (error) {
@@ -381,6 +374,7 @@ function registerSettingsRoutes(app, ctx) {
                 }, { merge: true });
             }
             (0, auth_1.invalidateAuthCache)();
+            invalidateAllSettingsCaches();
             res.json({ success: true, message: pinResetAllowed ? '已成功清除系統內所有測試單據、顧客預約、桌位佔用，並將登入密碼重設為預設值 070718！' : '已成功清除系統內所有測試單據、顧客預約、桌位佔用！(安全密碼維持不變)' });
         }
         catch (error) {
@@ -419,8 +413,6 @@ function registerSettingsRoutes(app, ctx) {
         try {
             const { lineEnabled, lineToken, lineAdminId, gmailEnabled, gmailUser, gmailAppPass } = req.body;
             const docRef = db.collection('secrets').doc('notifications');
-            const doc = await docRef.get();
-            const existing = doc.data() || {};
             const updates = {
                 updatedAt: new Date().toISOString()
             };

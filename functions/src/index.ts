@@ -448,9 +448,17 @@ export const onOrderCreated = onDocumentCreated(
     try {
       const notifConfig = await getCachedNotificationSettings();
       // 推播過濾：優先針對 Google 商家線上訂單與線上外帶訂單發送即時推播
-      if (order.source === 'google_business' || String(order.tableNumber || '').includes('外帶') || order.takeoutInfo) {
-        await sendOrderNotification(order, { notificationConfig: notifConfig });
+      const isEligibleForNotification =
+        order.source === 'google_business' ||
+        String(order.tableNumber || '').includes('外帶') ||
+        Boolean(order.takeoutInfo);
+
+      if (!isEligibleForNotification) {
+        // 現場內用訂單無需發送即時推播，直接返回，避免產生無效的 Firestore 寫入與觸發後續 onOrderCompleted
+        return;
       }
+
+      await sendOrderNotification(order, { notificationConfig: notifConfig });
 
       await orderSnapshot.ref.update({
         notifiedAt: FieldValue.serverTimestamp(),

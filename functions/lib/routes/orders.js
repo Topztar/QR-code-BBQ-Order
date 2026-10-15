@@ -165,7 +165,12 @@ function registerOrdersRoutes(app, ctx) {
                 if (o.createdAt) {
                     const d = new Date(o.createdAt);
                     if (!isNaN(d.getTime())) {
-                        const slot = `${d.getHours().toString().padStart(2, '0')}:00`;
+                        const twHour = new Intl.DateTimeFormat('en-US', {
+                            timeZone: 'Asia/Taipei',
+                            hour: '2-digit',
+                            hour12: false,
+                        }).format(d);
+                        const slot = `${twHour === '24' ? '00' : twHour}:00`;
                         hourMap[slot] = (hourMap[slot] || 0) + 1;
                     }
                 }
@@ -691,7 +696,6 @@ function registerOrdersRoutes(app, ctx) {
         }
         const { paymentMethod, cashTendered, changeAmount, checkoutRecord } = validation.sanitizedData;
         try {
-            const batch = db.batch();
             const resolvedOrderStatuses = {};
             const tableSet = new Set();
             if (Array.isArray(tableNumbers)) {

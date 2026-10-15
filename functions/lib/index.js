@@ -1,27 +1,8 @@
 "use strict";
-var __defProp = Object.defineProperty;
-var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
-var __hasOwnProp = Object.prototype.hasOwnProperty;
-var __esm = (fn, res) => function __init() {
-  return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
-};
 var __commonJS = (cb, mod) => function __require() {
   return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
 };
-var __export = (target, all) => {
-  for (var name in all)
-    __defProp(target, name, { get: all[name], enumerable: true });
-};
-var __copyProps = (to, from, except, desc) => {
-  if (from && typeof from === "object" || typeof from === "function") {
-    for (let key of __getOwnPropNames(from))
-      if (!__hasOwnProp.call(to, key) && key !== except)
-        __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
-  }
-  return to;
-};
-var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
 // lib/services/notification.js
 var require_notification = __commonJS({
@@ -31,6 +12,8 @@ var require_notification = __commonJS({
       return mod && mod.__esModule ? mod : { "default": mod };
     };
     Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.formatTaiwanDateTime = formatTaiwanDateTime;
+    exports2.getTaiwanDateString = getTaiwanDateString;
     exports2.escapeHtml = escapeHtml;
     exports2.formatLineReservationMessage = formatLineReservationMessage;
     exports2.formatGmailReservationContent = formatGmailReservationContent;
@@ -42,17 +25,106 @@ var require_notification = __commonJS({
     exports2.sendOrderNotification = sendOrderNotification;
     var axios_1 = __importDefault2(require("axios"));
     var nodemailer_1 = __importDefault2(require("nodemailer"));
+    function formatTaiwanDateTime(input) {
+      let date;
+      if (!input) {
+        date = /* @__PURE__ */ new Date();
+      } else if (input instanceof Date) {
+        date = input;
+      } else if (typeof input === "string") {
+        const trimmed = input.trim();
+        if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}(:\d{2})?$/.test(trimmed)) {
+          return trimmed;
+        }
+        date = new Date(trimmed);
+        if (Number.isNaN(date.getTime())) {
+          return trimmed;
+        }
+      } else if (typeof input === "number") {
+        date = new Date(input);
+      } else if (typeof input === "object" && input !== null) {
+        const maybeTs = input;
+        if (typeof maybeTs.toDate === "function") {
+          date = maybeTs.toDate();
+        } else if (typeof maybeTs._seconds === "number") {
+          date = new Date(maybeTs._seconds * 1e3);
+        } else if (typeof maybeTs.seconds === "number") {
+          date = new Date(maybeTs.seconds * 1e3);
+        } else {
+          date = /* @__PURE__ */ new Date();
+        }
+      } else {
+        date = /* @__PURE__ */ new Date();
+      }
+      if (Number.isNaN(date.getTime())) {
+        date = /* @__PURE__ */ new Date();
+      }
+      return new Intl.DateTimeFormat("sv-SE", {
+        timeZone: "Asia/Taipei",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: false
+      }).format(date);
+    }
+    function getTaiwanDateString(date = /* @__PURE__ */ new Date()) {
+      return new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Taipei",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit"
+      }).format(date);
+    }
+    function normalizeReservationFields(reservation) {
+      return {
+        table: reservation.tableNumber ? `${reservation.tableNumber} \u684C` : "\u672A\u6307\u5B9A / \u5F85\u5B89\u6392",
+        notes: reservation.notes?.trim() ? reservation.notes.trim() : "\u7121\u7279\u6B8A\u5099\u8A3B",
+        orderId: reservation.reservationNo || reservation.id || "N/A",
+        createdTime: formatTaiwanDateTime(reservation.createdAt),
+        isGoogle: reservation.source === "google_business"
+      };
+    }
+    async function dispatchLinePushMessage(messageText, logTag, targetId, options) {
+      const config = options?.notificationConfig;
+      if (config?.lineEnabled === false) {
+        return { success: false, channel: "LINE", reason: "disabled" };
+      }
+      const token = (config?.lineToken || process.env.LINE_CHANNEL_ACCESS_TOKEN || "").trim();
+      const adminId = (config?.lineAdminId || process.env.LINE_ADMIN_USER_ID || "").trim();
+      if (!token || !adminId) {
+        console.warn(`[${logTag}] Skipped: LINE channel token or admin user ID is not configured.`);
+        return { success: false, channel: "LINE", reason: "unconfigured" };
+      }
+      const client = options?.axiosClient || axios_1.default;
+      try {
+        await client.post("https://api.line.me/v2/bot/message/push", {
+          to: adminId,
+          messages: [{ type: "text", text: messageText }]
+        }, {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`
+          },
+          timeout: 8e3
+        });
+        console.log(`[${logTag}] Push sent successfully for ${targetId}`);
+        return { success: true, channel: "LINE" };
+      } catch (err) {
+        const errorDetails = err?.response?.data ? JSON.stringify(err.response.data) : err.message || String(err);
+        console.error(`[${logTag}] Failed to send push message: ${errorDetails}`);
+        return { success: false, channel: "LINE", error: errorDetails };
+      }
+    }
     function escapeHtml(str) {
       if (str === null || str === void 0)
         return "";
       return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
     }
     function formatLineReservationMessage(reservation) {
-      const table = reservation.tableNumber ? `${reservation.tableNumber} \u684C` : "\u672A\u6307\u5B9A / \u5F85\u5B89\u6392";
-      const notes = reservation.notes?.trim() ? reservation.notes.trim() : "\u7121\u7279\u6B8A\u5099\u8A3B";
-      const orderId = reservation.reservationNo || reservation.id || "N/A";
-      const createdTime = reservation.createdAt || (/* @__PURE__ */ new Date()).toISOString();
-      const isGoogle = reservation.source === "google_business";
+      const { table, notes, orderId, createdTime, isGoogle } = normalizeReservationFields(reservation);
       const header = isGoogle ? "\u{1F514} \u3010Google \u5546\u5BB6\u65B0\u9810\u7D04\u8A02\u4F4D\u3011SABAY BBQ \u6C99\u8C9D\u71D2\u70E4" : "\u{1F514} \u3010\u65B0\u9810\u7D04\u8A02\u4F4D\u901A\u77E5\u3011SABAY BBQ \u6C99\u8C9D\u71D2\u70E4";
       const originLine = isGoogle ? "\u{1F310} \u6E20\u9053\u4F86\u6E90\uFF1AGoogle \u5546\u5BB6\u6A94\u6848 (Google Business Profile)" : "\u{1F4F1} \u6E20\u9053\u4F86\u6E90\uFF1A\u73FE\u5834/\u5B98\u65B9\u7CFB\u7D71\u767B\u8A18";
       return [
@@ -73,15 +145,16 @@ var require_notification = __commonJS({
       ].join("\n");
     }
     function formatGmailReservationContent(reservation) {
+      const { table, notes, orderId, createdTime } = normalizeReservationFields(reservation);
       const safeName = escapeHtml(reservation.customerName);
       const safePhone = escapeHtml(reservation.phone);
       const safeDate = escapeHtml(reservation.date);
       const safeTime = escapeHtml(reservation.time);
       const safeGuests = escapeHtml(reservation.guestCount);
-      const safeTable = reservation.tableNumber ? `${escapeHtml(reservation.tableNumber)} \u684C` : "\u672A\u6307\u5B9A / \u5F85\u5B89\u6392";
-      const safeNotes = reservation.notes?.trim() ? escapeHtml(reservation.notes.trim()) : "\u7121\u7279\u6B8A\u5099\u8A3B";
-      const safeOrderId = escapeHtml(reservation.reservationNo || reservation.id || "N/A");
-      const safeCreated = escapeHtml(reservation.createdAt || (/* @__PURE__ */ new Date()).toISOString());
+      const safeTable = escapeHtml(table);
+      const safeNotes = escapeHtml(notes);
+      const safeOrderId = escapeHtml(orderId);
+      const safeCreated = escapeHtml(createdTime);
       const subject = `[New Reservation] ${reservation.date} ${reservation.time} - ${reservation.customerName} (${reservation.guestCount} guests)`;
       const safeSubject = escapeHtml(subject);
       const text = [
@@ -92,10 +165,10 @@ var require_notification = __commonJS({
         `\u9810\u7D04\u65E5\u671F\uFF1A${reservation.date}`,
         `\u9810\u7D04\u6642\u9593\uFF1A${reservation.time}`,
         `\u7528\u9910\u4EBA\u6578\uFF1A${reservation.guestCount} \u4F4D`,
-        `\u9810\u7D04\u684C\u865F\uFF1A${reservation.tableNumber ? reservation.tableNumber + " \u684C" : "\u672A\u6307\u5B9A / \u5F85\u5B89\u6392"}`,
-        `\u7279\u6B8A\u5099\u8A3B\uFF1A${reservation.notes?.trim() || "\u7121"}`,
-        `\u9810\u7D04\u7DE8\u865F\uFF1A${reservation.reservationNo || reservation.id || "N/A"}`,
-        `\u767B\u8A18\u6642\u9593\uFF1A${reservation.createdAt || (/* @__PURE__ */ new Date()).toISOString()}`,
+        `\u9810\u7D04\u684C\u865F\uFF1A${table}`,
+        `\u7279\u6B8A\u5099\u8A3B\uFF1A${notes}`,
+        `\u9810\u7D04\u7DE8\u865F\uFF1A${orderId}`,
+        `\u767B\u8A18\u6642\u9593\uFF1A${createdTime}`,
         "",
         "\u8ACB\u81F3\u7BA1\u7406\u5F8C\u53F0\u9032\u884C\u9810\u7D04\u78BA\u8A8D\u8207\u5E2D\u4F4D\u5B89\u6392\u3002"
       ].join("\n");
@@ -123,7 +196,7 @@ var require_notification = __commonJS({
               </p>
             </td>
           </tr>
-          
+
           <!-- Key Meta Highlights -->
           <tr>
             <td style="padding: 24px 32px 16px 32px;">
@@ -194,73 +267,20 @@ var require_notification = __commonJS({
       return { subject, text, html };
     }
     async function sendLineReservationNotification(reservation, options) {
-      const config = options?.notificationConfig;
-      if (config?.lineEnabled === false) {
-        return {
-          success: false,
-          channel: "LINE",
-          reason: "disabled"
-        };
-      }
-      const token = (config?.lineToken || process.env.LINE_CHANNEL_ACCESS_TOKEN || "").trim();
-      const adminId = (config?.lineAdminId || process.env.LINE_ADMIN_USER_ID || "").trim();
-      if (!token || !adminId) {
-        console.warn("[Notification:LINE] Skipped: LINE channel token or admin user ID is not configured.");
-        return {
-          success: false,
-          channel: "LINE",
-          reason: "unconfigured"
-        };
-      }
       const messageText = formatLineReservationMessage(reservation);
-      const client = options?.axiosClient || axios_1.default;
-      try {
-        await client.post("https://api.line.me/v2/bot/message/push", {
-          to: adminId,
-          messages: [
-            {
-              type: "text",
-              text: messageText
-            }
-          ]
-        }, {
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`
-          },
-          timeout: 8e3
-        });
-        console.log(`[Notification:LINE] Push sent successfully for reservation ${reservation.id || reservation.customerName}`);
-        return { success: true, channel: "LINE" };
-      } catch (err) {
-        const errorDetails = err?.response?.data ? JSON.stringify(err.response.data) : err.message || String(err);
-        console.error(`[Notification:LINE] Failed to send push message: ${errorDetails}`);
-        return {
-          success: false,
-          channel: "LINE",
-          error: errorDetails
-        };
-      }
+      return dispatchLinePushMessage(messageText, "Notification:LINE", `reservation ${reservation.id || reservation.customerName}`, options);
     }
     async function sendGmailReservationNotification(reservation, options) {
       const config = options?.notificationConfig;
       if (config?.gmailEnabled === false) {
-        return {
-          success: false,
-          channel: "Gmail",
-          reason: "disabled"
-        };
+        return { success: false, channel: "Gmail", reason: "disabled" };
       }
       const gmailUser = (config?.gmailUser || process.env.GMAIL_USER || "").trim();
       const rawPass = config?.gmailAppPass || process.env.GMAIL_APP_PASS || "";
       const gmailPass = rawPass.replace(/\s+/g, "").trim();
       if (!gmailUser || !gmailPass) {
         console.warn("[Notification:Gmail] Skipped: GMAIL_USER or GMAIL_APP_PASS is not configured.");
-        return {
-          success: false,
-          channel: "Gmail",
-          reason: "unconfigured"
-        };
+        return { success: false, channel: "Gmail", reason: "unconfigured" };
       }
       const { subject, text, html } = formatGmailReservationContent(reservation);
       const mailer = options?.nodemailerClient || nodemailer_1.default;
@@ -284,11 +304,7 @@ var require_notification = __commonJS({
       } catch (err) {
         const errorMsg = err.message || String(err);
         console.error(`[Notification:Gmail] Failed to send email: ${errorMsg}`);
-        return {
-          success: false,
-          channel: "Gmail",
-          error: errorMsg
-        };
+        return { success: false, channel: "Gmail", error: errorMsg };
       }
     }
     async function sendReservationNotifications(reservation, options) {
@@ -312,6 +328,7 @@ var require_notification = __commonJS({
       return results;
     }
     async function sendTestNotification(channel, config, options) {
+      const now = /* @__PURE__ */ new Date();
       const testReservation = {
         id: "TEST-CONN",
         reservationNo: "RES-TEST-001",
@@ -319,10 +336,10 @@ var require_notification = __commonJS({
         phone: "0912345678",
         guestCount: 2,
         tableNumber: "1",
-        date: (/* @__PURE__ */ new Date()).toISOString().split("T")[0],
+        date: getTaiwanDateString(now),
         time: "18:00",
         notes: "\u9019\u662F\u7531\u7BA1\u7406\u5F8C\u53F0\u767C\u51FA\u7684\u5373\u6642\u9023\u7DDA\u6E2C\u8A66\u8A0A\u606F\uFF0C\u78BA\u8A8D\u901A\u77E5\u7BA1\u9053\u904B\u4F5C\u6B63\u5E38\uFF01",
-        createdAt: (/* @__PURE__ */ new Date()).toISOString()
+        createdAt: formatTaiwanDateTime(now)
       };
       const opts = {
         ...options,
@@ -337,8 +354,9 @@ var require_notification = __commonJS({
     function formatLineOrderMessage(order) {
       const isGoogle = order.source === "google_business";
       const header = isGoogle ? "\u{1F514} \u3010Google \u5546\u5BB6\u65B0\u8A02\u55AE\u901A\u77E5\u3011SABAY BBQ \u6C99\u8C9D\u71D2\u70E4" : "\u{1F514} \u3010\u65B0\u9EDE\u9910\u8A02\u55AE\u901A\u77E5\u3011SABAY BBQ \u6C99\u8C9D\u71D2\u70E4";
-      const isTakeout = Boolean(order.tableNumber && (String(order.tableNumber).includes("\u5916\u5E36") || order.tableNumber.toLowerCase() === "takeout") || order.takeoutInfo);
-      const tableStr = isTakeout ? `\u{1F6CD}\uFE0F \u5916\u5E36\u8A02\u55AE (${order.tableNumber || "\u5916\u5E36"})` : `\u{1FA91} \u684C\u865F\uFF1A${order.tableNumber} \u684C`;
+      const rawTableStr = String(order.tableNumber ?? "").trim();
+      const isTakeout = Boolean(rawTableStr && (rawTableStr.includes("\u5916\u5E36") || rawTableStr.toLowerCase() === "takeout") || order.takeoutInfo);
+      const tableStr = isTakeout ? `\u{1F6CD}\uFE0F \u5916\u5E36\u8A02\u55AE (${rawTableStr || "\u5916\u5E36"})` : `\u{1FA91} \u684C\u865F\uFF1A${rawTableStr} \u684C`;
       const originStr = isGoogle ? "\u{1F310} \u6E20\u9053\u4F86\u6E90\uFF1AGoogle \u5546\u5BB6\u6A94\u6848 (Online Ordering)" : "\u{1F4F1} \u6E20\u9053\u4F86\u6E90\uFF1A\u73FE\u5834/\u5B98\u65B9\u6383\u78BC";
       const customerStr = order.customerName ? `\u{1F464} \u9867\u5BA2\u59D3\u540D\uFF1A${order.customerName} (${order.customerPhone || "\u672A\u7559\u96FB\u8A71"})` : "";
       const itemsList = (order.items || []).map((i) => {
@@ -348,6 +366,7 @@ var require_notification = __commonJS({
       }).slice(0, 15).join("\n");
       const moreItems = (order.items || []).length > 15 ? `
 ...\u5176\u9918 ${(order.items || []).length - 15} \u9805\u9910\u9EDE` : "";
+      const createdTime = formatTaiwanDateTime(order.createdAt);
       const lines = [
         header,
         "\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501",
@@ -356,7 +375,7 @@ var require_notification = __commonJS({
         originStr,
         customerStr,
         `\u{1F194} \u8A02\u55AE\u7DE8\u865F\uFF1A${order.id}`,
-        `\u23F1\uFE0F \u4E0B\u55AE\u6642\u9593\uFF1A${order.createdAt || (/* @__PURE__ */ new Date()).toISOString()}`,
+        `\u23F1\uFE0F \u4E0B\u55AE\u6642\u9593\uFF1A${createdTime}`,
         "\u{1F4CB} \u9910\u9EDE\u660E\u7D30\uFF1A",
         itemsList + moreItems,
         "\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501",
@@ -365,41 +384,8 @@ var require_notification = __commonJS({
       return lines.join("\n");
     }
     async function sendOrderNotification(order, options) {
-      const config = options?.notificationConfig;
-      if (config?.lineEnabled === false) {
-        return { success: false, channel: "LINE", reason: "disabled" };
-      }
-      const token = (config?.lineToken || process.env.LINE_CHANNEL_ACCESS_TOKEN || "").trim();
-      const adminId = (config?.lineAdminId || process.env.LINE_ADMIN_USER_ID || "").trim();
-      if (!token || !adminId) {
-        console.warn("[Notification:LINE:Order] Skipped: LINE channel token or admin user ID is not configured.");
-        return { success: false, channel: "LINE", reason: "unconfigured" };
-      }
       const messageText = formatLineOrderMessage(order);
-      const client = options?.axiosClient || axios_1.default;
-      try {
-        await client.post("https://api.line.me/v2/bot/message/push", {
-          to: adminId,
-          messages: [
-            {
-              type: "text",
-              text: messageText
-            }
-          ]
-        }, {
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`
-          },
-          timeout: 8e3
-        });
-        console.log(`[Notification:LINE:Order] Push sent successfully for order #${order.id}`);
-        return { success: true, channel: "LINE" };
-      } catch (err) {
-        const errorDetails = err?.response?.data ? JSON.stringify(err.response.data) : err.message || String(err);
-        console.error(`[Notification:LINE:Order] Failed to send push message: ${errorDetails}`);
-        return { success: false, channel: "LINE", error: errorDetails };
-      }
+      return dispatchLinePushMessage(messageText, "Notification:LINE:Order", `order #${order.id}`, options);
     }
   }
 });
@@ -473,213 +459,168 @@ var require_orderArchival = __commonJS({
   }
 });
 
-// ../shared/src/utils/tableAllocation.ts
-function getTableCapacity(t) {
-  if (typeof t.capacity === "number") return t.capacity;
-  if (typeof t.maxCapacity === "number") return t.maxCapacity;
-  return 4;
-}
-function findOptimalTableCombination(availableTables, guestCount) {
-  if (guestCount <= 0 || !availableTables || availableTables.length === 0) {
-    return [];
-  }
-  const validTables = availableTables.filter((t) => getTableCapacity(t) > 0);
-  if (validTables.length === 0) return [];
-  const sortedTables = [...validTables].sort((a, b) => {
-    const numA = parseInt(a.id, 10);
-    const numB = parseInt(b.id, 10);
-    if (!isNaN(numA) && !isNaN(numB)) {
-      return numA - numB;
+// ../shared/dist/utils/tableAllocation.js
+var require_tableAllocation = __commonJS({
+  "../shared/dist/utils/tableAllocation.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.getTableCapacity = getTableCapacity;
+    exports2.findOptimalTableCombination = findOptimalTableCombination;
+    exports2.validateReservationCapacityAndHoarding = validateReservationCapacityAndHoarding;
+    function getTableCapacity(t) {
+      if (typeof t.capacity === "number")
+        return t.capacity;
+      if (typeof t.maxCapacity === "number")
+        return t.maxCapacity;
+      return 4;
     }
-    return a.id.localeCompare(b.id);
-  });
-  const singleTableMatches = sortedTables.filter((t) => getTableCapacity(t) >= guestCount).sort((a, b) => {
-    const capA = getTableCapacity(a);
-    const capB = getTableCapacity(b);
-    if (capA !== capB) return capA - capB;
-    const numA = parseInt(a.id, 10);
-    const numB = parseInt(b.id, 10);
-    if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
-    return a.id.localeCompare(b.id);
-  });
-  if (singleTableMatches.length > 0) {
-    return [singleTableMatches[0]];
-  }
-  let bestCombination = [];
-  let minOverflow = Infinity;
-  let minTableCount = Infinity;
-  let minMaxCapacity = Infinity;
-  const totalCombinations = 1 << sortedTables.length;
-  for (let i = 1; i < totalCombinations; i++) {
-    const currentCombo = [];
-    let totalCapacity = 0;
-    let currentMaxCap = 0;
-    for (let j = 0; j < sortedTables.length; j++) {
-      if (i >> j & 1) {
-        const tbl = sortedTables[j];
-        const cap = getTableCapacity(tbl);
-        currentCombo.push(tbl);
-        totalCapacity += cap;
-        if (cap > currentMaxCap) {
-          currentMaxCap = cap;
+    function findOptimalTableCombination(availableTables, guestCount) {
+      if (guestCount <= 0 || !availableTables || availableTables.length === 0) {
+        return [];
+      }
+      const validTables = availableTables.filter((t) => getTableCapacity(t) > 0);
+      if (validTables.length === 0)
+        return [];
+      const sortedTables = [...validTables].sort((a, b) => {
+        const numA = parseInt(a.id, 10);
+        const numB = parseInt(b.id, 10);
+        if (!isNaN(numA) && !isNaN(numB)) {
+          return numA - numB;
+        }
+        return a.id.localeCompare(b.id);
+      });
+      const singleTableMatches = sortedTables.filter((t) => getTableCapacity(t) >= guestCount).sort((a, b) => {
+        const capA = getTableCapacity(a);
+        const capB = getTableCapacity(b);
+        if (capA !== capB)
+          return capA - capB;
+        const numA = parseInt(a.id, 10);
+        const numB = parseInt(b.id, 10);
+        if (!isNaN(numA) && !isNaN(numB))
+          return numA - numB;
+        return a.id.localeCompare(b.id);
+      });
+      if (singleTableMatches.length > 0) {
+        return [singleTableMatches[0]];
+      }
+      let bestCombination = [];
+      let minOverflow = Infinity;
+      let minTableCount = Infinity;
+      let minMaxCapacity = Infinity;
+      const totalCombinations = 1 << sortedTables.length;
+      for (let i = 1; i < totalCombinations; i++) {
+        const currentCombo = [];
+        let totalCapacity = 0;
+        let currentMaxCap = 0;
+        for (let j = 0; j < sortedTables.length; j++) {
+          if (i >> j & 1) {
+            const tbl = sortedTables[j];
+            const cap = getTableCapacity(tbl);
+            currentCombo.push(tbl);
+            totalCapacity += cap;
+            if (cap > currentMaxCap) {
+              currentMaxCap = cap;
+            }
+          }
+        }
+        if (totalCapacity >= guestCount) {
+          const overflow = totalCapacity - guestCount;
+          const tableCount = currentCombo.length;
+          if (overflow < minOverflow || overflow === minOverflow && tableCount < minTableCount || overflow === minOverflow && tableCount === minTableCount && currentMaxCap < minMaxCapacity) {
+            minOverflow = overflow;
+            minTableCount = tableCount;
+            minMaxCapacity = currentMaxCap;
+            bestCombination = currentCombo;
+          }
         }
       }
-    }
-    if (totalCapacity >= guestCount) {
-      const overflow = totalCapacity - guestCount;
-      const tableCount = currentCombo.length;
-      if (overflow < minOverflow || overflow === minOverflow && tableCount < minTableCount || overflow === minOverflow && tableCount === minTableCount && currentMaxCap < minMaxCapacity) {
-        minOverflow = overflow;
-        minTableCount = tableCount;
-        minMaxCapacity = currentMaxCap;
-        bestCombination = currentCombo;
+      if (bestCombination.length === 0 && sortedTables.length > 0) {
+        return sortedTables;
       }
+      return bestCombination;
     }
-  }
-  if (bestCombination.length === 0 && sortedTables.length > 0) {
-    return sortedTables;
-  }
-  return bestCombination;
-}
-function validateReservationCapacityAndHoarding(requestedTableObjs, guestCount, availableTables) {
-  const validRequested = (requestedTableObjs || []).filter((t) => getTableCapacity(t) > 0);
-  const selectedTablesCapacity = validRequested.reduce((sum, t) => sum + getTableCapacity(t), 0);
-  if (selectedTablesCapacity > 0 && selectedTablesCapacity < guestCount) {
-    return {
-      isValid: false,
-      error: `\u6307\u5B9A\u684C\u865F\u52A0\u7E3D\u4EBA\u6578\u4E0A\u9650 (${selectedTablesCapacity}\u4EBA) \u4E0D\u8DB3\uFF1A\u4E0D\u53EF\u4F4E\u65BC\u7528\u9910\u4EBA\u6578 (${guestCount}\u4EBA)\uFF01`
-    };
-  }
-  const overflow = selectedTablesCapacity - guestCount;
-  if (overflow > 3 && Array.isArray(availableTables) && availableTables.length > 0) {
-    const optimalCombo = findOptimalTableCombination(availableTables, guestCount);
-    if (optimalCombo.length > 0) {
-      const optimalCapacity = optimalCombo.reduce((sum, t) => sum + getTableCapacity(t), 0);
-      const optimalOverflow = optimalCapacity - guestCount;
-      if (optimalOverflow < overflow) {
+    function validateReservationCapacityAndHoarding(requestedTableObjs, guestCount, availableTables) {
+      const validRequested = (requestedTableObjs || []).filter((t) => getTableCapacity(t) > 0);
+      const selectedTablesCapacity = validRequested.reduce((sum, t) => sum + getTableCapacity(t), 0);
+      if (selectedTablesCapacity > 0 && selectedTablesCapacity < guestCount) {
         return {
           isValid: false,
-          error: `\u904E\u5EA6\u4F54\u7528\u684C\u5E2D\u5BB9\u91CF\uFF1A\u7528\u9910\u4EBA\u6578 (${guestCount}\u4EBA) \u6240\u9078\u684C\u4F4D\u7E3D\u5BB9\u91CF (${selectedTablesCapacity}\u4EBA) \u6EA2\u51FA\u904E\u591A\uFF0C\u5DF2\u6709\u66F4\u7DCA\u6E4A\u7684\u53EF\u7528\u684C\u5E2D\u7D44\u5408\uFF0C\u8ACB\u7CBE\u7C21\u6307\u5B9A\u684C\u865F\uFF01(Selected tables excessively occupy seating capacity)`
+          error: `\u6307\u5B9A\u684C\u865F\u52A0\u7E3D\u4EBA\u6578\u4E0A\u9650 (${selectedTablesCapacity}\u4EBA) \u4E0D\u8DB3\uFF1A\u4E0D\u53EF\u4F4E\u65BC\u7528\u9910\u4EBA\u6578 (${guestCount}\u4EBA)\uFF01`
         };
       }
+      const overflow = selectedTablesCapacity - guestCount;
+      if (overflow > 3 && Array.isArray(availableTables) && availableTables.length > 0) {
+        const optimalCombo = findOptimalTableCombination(availableTables, guestCount);
+        if (optimalCombo.length > 0) {
+          const optimalCapacity = optimalCombo.reduce((sum, t) => sum + getTableCapacity(t), 0);
+          const optimalOverflow = optimalCapacity - guestCount;
+          if (optimalOverflow < overflow) {
+            return {
+              isValid: false,
+              error: `\u904E\u5EA6\u4F54\u7528\u684C\u5E2D\u5BB9\u91CF\uFF1A\u7528\u9910\u4EBA\u6578 (${guestCount}\u4EBA) \u6240\u9078\u684C\u4F4D\u7E3D\u5BB9\u91CF (${selectedTablesCapacity}\u4EBA) \u6EA2\u51FA\u904E\u591A\uFF0C\u5DF2\u6709\u66F4\u7DCA\u6E4A\u7684\u53EF\u7528\u684C\u5E2D\u7D44\u5408\uFF0C\u8ACB\u7CBE\u7C21\u6307\u5B9A\u684C\u865F\uFF01(Selected tables excessively occupy seating capacity)`
+            };
+          }
+        }
+      }
+      return { isValid: true };
     }
-  }
-  return { isValid: true };
-}
-var init_tableAllocation = __esm({
-  "../shared/src/utils/tableAllocation.ts"() {
-    "use strict";
   }
 });
 
-// ../shared/src/index.ts
-var src_exports = {};
-__export(src_exports, {
-  PRINTER_CONSTANTS: () => PRINTER_CONSTANTS,
-  checkItemCompleteConcurrency: () => checkItemCompleteConcurrency,
-  checkRefundLogsGate: () => checkRefundLogsGate,
-  deriveTableStatuses: () => deriveTableStatuses,
-  findOptimalTableCombination: () => findOptimalTableCombination,
-  getTableCapacity: () => getTableCapacity,
-  orderCalculationService: () => orderCalculationService,
-  validateReservationCapacityAndHoarding: () => validateReservationCapacityAndHoarding
-});
-function checkItemCompleteConcurrency(expectedVersion, currentVersion, lastUpdatedByRole, modifierRole) {
-  if (typeof expectedVersion === "number" && expectedVersion < currentVersion) {
-    if (lastUpdatedByRole === "kitchen" && modifierRole === "staff") {
-      return { hasConflict: true, errorMessage: "\u8A72\u9910\u9EDE\u72C0\u614B\u5DF2\u88AB\u5EDA\u623F\u4E3B\u756B\u9762\u66F4\u65B0\uFF0C\u5DF2\u81EA\u52D5\u70BA\u60A8\u540C\u6B65\u6700\u65B0\u72C0\u614B\uFF01" };
-    }
-  }
-  return { hasConflict: false };
-}
-function checkRefundLogsGate(orderStatus, isPaid, refundLogs) {
-  const isPaidOrCancelled = orderStatus === "paid" || orderStatus === "cancelled" || isPaid === true;
-  if (isPaidOrCancelled) {
-    if (!Array.isArray(refundLogs) || refundLogs.length === 0) {
-      return { isLocked: true, errorMessage: "\u8A02\u55AE\u5DF2\u7D50\u5E33\u6216\u5DF2\u53D6\u6D88\uFF0C\u672A\u9644\u5E36\u9000\u63DB\u6838\u92B7\u7D00\u9304\u4E0D\u53EF\u4FEE\u6539\u9910\u9EDE\u5167\u5BB9\uFF01" };
-    }
-  }
-  return { isLocked: false };
-}
-function deriveTableStatuses(tables, orders, reservations, nowMs, todayStr) {
-  const now = new Date(nowMs);
-  const newTables = tables.map((tb) => ({ ...tb }));
-  const newReservations = reservations.map((r) => ({ ...r }));
-  newReservations.forEach((res) => {
-    if (res.status === "confirmed") {
-      const [year, month, day] = res.date.split("-").map(Number);
-      const [hour, minute] = res.time.split(":").map(Number);
-      if (!isNaN(year) && !isNaN(month) && !isNaN(day) && !isNaN(hour) && !isNaN(minute)) {
-        const resDateTime = new Date(year, month - 1, day, hour, minute);
-        const diffMinutes = (resDateTime.getTime() - now.getTime()) / (1e3 * 60);
-        if (diffMinutes > -120 && diffMinutes <= 60) {
-          res.status = "upcoming";
-        }
-      }
-    }
-  });
-  newTables.forEach((tb) => {
-    const tblId = tb.id.toString().trim();
-    const activeOrders = orders.filter(
-      (o) => String(o.tableNumber).trim() === tblId && o.status !== "cancelled"
-    );
-    const unpaidActiveOrders = activeOrders.filter((o) => !o.isPaid && o.status !== "completed" && o.status !== "paid");
-    if (unpaidActiveOrders.length > 0) {
-      if (tb.status !== "pending_checkout") {
-        tb.status = "in_use";
-        tb.preservedFor = "";
-        tb.cleaningStartedAt = null;
-      }
-      return;
-    }
-    if (tb.status === "in_use" || tb.status === "pending_checkout") {
-      tb.status = "cleaning";
-      if (!tb.cleaningStartedAt) {
-        tb.cleaningStartedAt = new Date(nowMs).toISOString();
-      }
-      return;
-    }
-    if (tb.status === "cleaning") {
-      let cleaningStartMs = tb.cleaningStartedAt ? new Date(tb.cleaningStartedAt).getTime() : 0;
-      if (!cleaningStartMs || isNaN(cleaningStartMs)) {
-        const latestOrder = activeOrders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
-        if (latestOrder && latestOrder.createdAt) {
-          cleaningStartMs = new Date(latestOrder.createdAt).getTime();
-        } else {
-          cleaningStartMs = nowMs;
-          tb.cleaningStartedAt = new Date(cleaningStartMs).toISOString();
-        }
-      }
-      if (nowMs - cleaningStartMs >= 15 * 60 * 1e3) {
-        tb.status = "available";
-        tb.cleaningStartedAt = null;
-      } else {
-        return;
-      }
-    }
-    const todayPendingRes = newReservations.find(
-      (r) => String(r.tableNumber).trim() === tblId && (r.status === "pending" || r.status === "upcoming" || r.status === "confirmed") && r.date.trim() === todayStr
-    );
-    if (todayPendingRes) {
-      tb.status = "preserved";
-      tb.preservedFor = `${todayPendingRes.customerName} (${todayPendingRes.time})`;
-    } else {
-      if (tb.status === "preserved") {
-        tb.status = "available";
-        tb.preservedFor = "";
-      }
-    }
-  });
-  return { tables: newTables, reservations: newReservations };
-}
-var orderCalculationService, PRINTER_CONSTANTS;
-var init_src = __esm({
-  "../shared/src/index.ts"() {
+// ../shared/dist/utils/index.js
+var require_utils = __commonJS({
+  "../shared/dist/utils/index.js"(exports2) {
     "use strict";
-    init_tableAllocation();
-    orderCalculationService = {
+    var __createBinding2 = exports2 && exports2.__createBinding || (Object.create ? (function(o, m, k, k2) {
+      if (k2 === void 0) k2 = k;
+      var desc = Object.getOwnPropertyDescriptor(m, k);
+      if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+        desc = { enumerable: true, get: function() {
+          return m[k];
+        } };
+      }
+      Object.defineProperty(o, k2, desc);
+    }) : (function(o, m, k, k2) {
+      if (k2 === void 0) k2 = k;
+      o[k2] = m[k];
+    }));
+    var __exportStar = exports2 && exports2.__exportStar || function(m, exports3) {
+      for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports3, p)) __createBinding2(exports3, m, p);
+    };
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    __exportStar(require_tableAllocation(), exports2);
+  }
+});
+
+// ../shared/dist/index.js
+var require_dist = __commonJS({
+  "../shared/dist/index.js"(exports2) {
+    "use strict";
+    var __createBinding2 = exports2 && exports2.__createBinding || (Object.create ? (function(o, m, k, k2) {
+      if (k2 === void 0) k2 = k;
+      var desc = Object.getOwnPropertyDescriptor(m, k);
+      if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+        desc = { enumerable: true, get: function() {
+          return m[k];
+        } };
+      }
+      Object.defineProperty(o, k2, desc);
+    }) : (function(o, m, k, k2) {
+      if (k2 === void 0) k2 = k;
+      o[k2] = m[k];
+    }));
+    var __exportStar = exports2 && exports2.__exportStar || function(m, exports3) {
+      for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports3, p)) __createBinding2(exports3, m, p);
+    };
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.PRINTER_CONSTANTS = exports2.orderCalculationService = void 0;
+    exports2.checkItemCompleteConcurrency = checkItemCompleteConcurrency;
+    exports2.checkRefundLogsGate = checkRefundLogsGate;
+    exports2.deriveTableStatuses = deriveTableStatuses;
+    var orderCalculationService = {
       computeOrderItemUnitPrice: (it, menuItemsList = []) => {
-        if (!it) return 0;
+        if (!it)
+          return 0;
         const baseP = Number(it.price) || 0;
         let addOnsTotal = 0;
         if (it.customization?.selectedAddOns && Array.isArray(it.customization.selectedAddOns)) {
@@ -708,13 +649,15 @@ var init_src = __esm({
         return baseP;
       },
       computeOrderItemsSubtotal: (items, menuItemsList = []) => {
-        if (!items || !Array.isArray(items)) return 0;
+        if (!items || !Array.isArray(items))
+          return 0;
         return items.reduce((sum, it) => {
           return sum + orderCalculationService.computeOrderItemUnitPrice(it, menuItemsList) * (Number(it.qty) || 1);
         }, 0);
       },
       calculateOrderPricing: (order, menuItemsList = []) => {
-        if (!order) return { subtotal: 0, serviceCharge: 0, discount: 0, total: 0 };
+        if (!order)
+          return { subtotal: 0, serviceCharge: 0, discount: 0, total: 0 };
         const itemsSub = orderCalculationService.computeOrderItemsSubtotal(order.items || [], menuItemsList);
         const isPaid = order.isPaid === true || order.status === "paid" || order.status === "completed";
         const subtotal = isPaid && order.subtotal !== void 0 && order.subtotal !== null && order.subtotal > 0 ? Math.max(order.subtotal, itemsSub) : itemsSub > 0 ? itemsSub : order.subtotal || 0;
@@ -779,11 +722,97 @@ var init_src = __esm({
         return userPoints >= itemCost;
       }
     };
-    PRINTER_CONSTANTS = {
+    exports2.orderCalculationService = orderCalculationService;
+    function checkItemCompleteConcurrency(expectedVersion, currentVersion, lastUpdatedByRole, modifierRole) {
+      if (typeof expectedVersion === "number" && expectedVersion < currentVersion) {
+        if (lastUpdatedByRole === "kitchen" && modifierRole === "staff") {
+          return { hasConflict: true, errorMessage: "\u8A72\u9910\u9EDE\u72C0\u614B\u5DF2\u88AB\u5EDA\u623F\u4E3B\u756B\u9762\u66F4\u65B0\uFF0C\u5DF2\u81EA\u52D5\u70BA\u60A8\u540C\u6B65\u6700\u65B0\u72C0\u614B\uFF01" };
+        }
+      }
+      return { hasConflict: false };
+    }
+    function checkRefundLogsGate(orderStatus, isPaid, refundLogs) {
+      const isPaidOrCancelled = orderStatus === "paid" || orderStatus === "cancelled" || isPaid === true;
+      if (isPaidOrCancelled) {
+        if (!Array.isArray(refundLogs) || refundLogs.length === 0) {
+          return { isLocked: true, errorMessage: "\u8A02\u55AE\u5DF2\u7D50\u5E33\u6216\u5DF2\u53D6\u6D88\uFF0C\u672A\u9644\u5E36\u9000\u63DB\u6838\u92B7\u7D00\u9304\u4E0D\u53EF\u4FEE\u6539\u9910\u9EDE\u5167\u5BB9\uFF01" };
+        }
+      }
+      return { isLocked: false };
+    }
+    exports2.PRINTER_CONSTANTS = {
       DEFAULT_IP: "192.168.123.100",
       DEFAULT_PORT: 9100,
       CONNECTION_TIMEOUT_MS: 3e3
     };
+    function deriveTableStatuses(tables, orders, reservations, nowMs, todayStr) {
+      const now = new Date(nowMs);
+      const newTables = tables.map((tb) => ({ ...tb }));
+      const newReservations = reservations.map((r) => ({ ...r }));
+      newReservations.forEach((res) => {
+        if (res.status === "confirmed") {
+          const [year, month, day] = res.date.split("-").map(Number);
+          const [hour, minute] = res.time.split(":").map(Number);
+          if (!isNaN(year) && !isNaN(month) && !isNaN(day) && !isNaN(hour) && !isNaN(minute)) {
+            const resDateTime = new Date(year, month - 1, day, hour, minute);
+            const diffMinutes = (resDateTime.getTime() - now.getTime()) / (1e3 * 60);
+            if (diffMinutes > -120 && diffMinutes <= 60) {
+              res.status = "upcoming";
+            }
+          }
+        }
+      });
+      newTables.forEach((tb) => {
+        const tblId = tb.id.toString().trim();
+        const activeOrders = orders.filter((o) => String(o.tableNumber).trim() === tblId && o.status !== "cancelled");
+        const unpaidActiveOrders = activeOrders.filter((o) => !o.isPaid && o.status !== "completed" && o.status !== "paid");
+        if (unpaidActiveOrders.length > 0) {
+          if (tb.status !== "pending_checkout") {
+            tb.status = "in_use";
+            tb.preservedFor = "";
+            tb.cleaningStartedAt = null;
+          }
+          return;
+        }
+        if (tb.status === "in_use" || tb.status === "pending_checkout") {
+          tb.status = "cleaning";
+          if (!tb.cleaningStartedAt) {
+            tb.cleaningStartedAt = new Date(nowMs).toISOString();
+          }
+          return;
+        }
+        if (tb.status === "cleaning") {
+          let cleaningStartMs = tb.cleaningStartedAt ? new Date(tb.cleaningStartedAt).getTime() : 0;
+          if (!cleaningStartMs || isNaN(cleaningStartMs)) {
+            const latestOrder = activeOrders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+            if (latestOrder && latestOrder.createdAt) {
+              cleaningStartMs = new Date(latestOrder.createdAt).getTime();
+            } else {
+              cleaningStartMs = nowMs;
+              tb.cleaningStartedAt = new Date(cleaningStartMs).toISOString();
+            }
+          }
+          if (nowMs - cleaningStartMs >= 15 * 60 * 1e3) {
+            tb.status = "available";
+            tb.cleaningStartedAt = null;
+          } else {
+            return;
+          }
+        }
+        const todayPendingRes = newReservations.find((r) => String(r.tableNumber).trim() === tblId && (r.status === "pending" || r.status === "upcoming" || r.status === "confirmed") && r.date.trim() === todayStr);
+        if (todayPendingRes) {
+          tb.status = "preserved";
+          tb.preservedFor = `${todayPendingRes.customerName} (${todayPendingRes.time})`;
+        } else {
+          if (tb.status === "preserved") {
+            tb.status = "available";
+            tb.preservedFor = "";
+          }
+        }
+      });
+      return { tables: newTables, reservations: newReservations };
+    }
+    __exportStar(require_utils(), exports2);
   }
 });
 
@@ -845,7 +874,7 @@ var require_helpers = __commonJS({
     exports2.extractStoragePathFromUrl = extractStoragePathFromUrl;
     exports2.cleanupStorageImage = cleanupStorageImage;
     exports2.sanitizePublicImageUrl = sanitizePublicImageUrl;
-    var shared_1 = (init_src(), __toCommonJS(src_exports));
+    var shared_1 = require_dist();
     var net = __importStar2(require("net"));
     exports2.cachedMenu = null;
     exports2.cachedCategories = null;
@@ -6856,7 +6885,7 @@ var require_on_finished = __commonJS({
 });
 
 // node_modules/type-is/node_modules/content-type/dist/index.js
-var require_dist = __commonJS({
+var require_dist2 = __commonJS({
   "node_modules/type-is/node_modules/content-type/dist/index.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
@@ -16559,7 +16588,7 @@ var require_media_typer = __commonJS({
 var require_type_is = __commonJS({
   "node_modules/type-is/index.js"(exports2, module2) {
     "use strict";
-    var contentType = require_dist();
+    var contentType = require_dist2();
     var mime = require_mime_types();
     var typer = require_media_typer();
     module2.exports = typeofrequest;
@@ -16647,7 +16676,7 @@ var require_type_is = __commonJS({
 });
 
 // node_modules/body-parser/node_modules/content-type/dist/index.js
-var require_dist2 = __commonJS({
+var require_dist3 = __commonJS({
   "node_modules/body-parser/node_modules/content-type/dist/index.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
@@ -16778,11 +16807,11 @@ var require_dist2 = __commonJS({
 });
 
 // node_modules/body-parser/lib/utils.js
-var require_utils = __commonJS({
+var require_utils2 = __commonJS({
   "node_modules/body-parser/lib/utils.js"(exports2, module2) {
     "use strict";
     var bytes = require_bytes();
-    var contentType = require_dist2();
+    var contentType = require_dist3();
     var typeis = require_type_is();
     module2.exports = {
       getCharset,
@@ -16839,7 +16868,7 @@ var require_read = __commonJS({
     var onFinished = require_on_finished();
     var zlib = require("node:zlib");
     var hasBody = require_type_is().hasBody;
-    var { getCharset } = require_utils();
+    var { getCharset } = require_utils2();
     module2.exports = read;
     function read(req, res, next, parse, debug, options) {
       if (onFinished.isFinished(req)) {
@@ -16993,7 +17022,7 @@ var require_json = __commonJS({
     "use strict";
     var debug = require_src()("body-parser:json");
     var read = require_read();
-    var { normalizeOptions } = require_utils();
+    var { normalizeOptions } = require_utils2();
     module2.exports = json;
     var FIRST_CHAR_REGEXP = /^[\x20\x09\x0a\x0d]*([^\x20\x09\x0a\x0d])/;
     var JSON_SYNTAX_CHAR = "#";
@@ -17092,7 +17121,7 @@ var require_raw = __commonJS({
     "use strict";
     var debug = require_src()("body-parser:raw");
     var read = require_read();
-    var { normalizeOptions, passthrough } = require_utils();
+    var { normalizeOptions, passthrough } = require_utils2();
     module2.exports = raw;
     function raw(options) {
       const normalizedOptions = normalizeOptions(options, "application/octet-stream");
@@ -17114,7 +17143,7 @@ var require_text = __commonJS({
     "use strict";
     var debug = require_src()("body-parser:text");
     var read = require_read();
-    var { normalizeOptions, passthrough } = require_utils();
+    var { normalizeOptions, passthrough } = require_utils2();
     module2.exports = text;
     function text(options) {
       const normalizedOptions = normalizeOptions(options, "text/plain");
@@ -18778,7 +18807,7 @@ var require_formats = __commonJS({
 });
 
 // node_modules/qs/lib/utils.js
-var require_utils2 = __commonJS({
+var require_utils3 = __commonJS({
   "node_modules/qs/lib/utils.js"(exports2, module2) {
     "use strict";
     var formats = require_formats();
@@ -19084,7 +19113,7 @@ var require_stringify = __commonJS({
   "node_modules/qs/lib/stringify.js"(exports2, module2) {
     "use strict";
     var getSideChannel = require_side_channel();
-    var utils = require_utils2();
+    var utils = require_utils3();
     var formats = require_formats();
     var has = Object.prototype.hasOwnProperty;
     var arrayPrefixGenerators = {
@@ -19371,7 +19400,7 @@ var require_stringify = __commonJS({
 var require_parse = __commonJS({
   "node_modules/qs/lib/parse.js"(exports2, module2) {
     "use strict";
-    var utils = require_utils2();
+    var utils = require_utils3();
     var has = Object.prototype.hasOwnProperty;
     var isArray = Array.isArray;
     var defaults = {
@@ -19719,7 +19748,7 @@ var require_urlencoded = __commonJS({
     var debug = require_src()("body-parser:urlencoded");
     var read = require_read();
     var qs = require_lib2();
-    var { normalizeOptions } = require_utils();
+    var { normalizeOptions } = require_utils2();
     module2.exports = urlencoded;
     function urlencoded(options) {
       const normalizedOptions = normalizeOptions(options, "application/x-www-form-urlencoded");
@@ -30682,7 +30711,7 @@ var require_proxy_addr = __commonJS({
 });
 
 // node_modules/express/lib/utils.js
-var require_utils3 = __commonJS({
+var require_utils4 = __commonJS({
   "node_modules/express/lib/utils.js"(exports2) {
     "use strict";
     var { METHODS } = require("node:http");
@@ -30894,7 +30923,7 @@ var require_is_promise = __commonJS({
 });
 
 // node_modules/path-to-regexp/dist/index.js
-var require_dist3 = __commonJS({
+var require_dist4 = __commonJS({
   "node_modules/path-to-regexp/dist/index.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
@@ -31267,7 +31296,7 @@ var require_layer = __commonJS({
   "node_modules/router/lib/layer.js"(exports2, module2) {
     "use strict";
     var isPromise = require_is_promise();
-    var pathRegexp = require_dist3();
+    var pathRegexp = require_dist4();
     var debug = require_src()("router:layer");
     var deprecate = require_depd()("router");
     var TRAILING_SLASH_REGEXP = /\/+$/;
@@ -31938,10 +31967,10 @@ var require_application = __commonJS({
     var debug = require_src()("express:application");
     var View = require_view();
     var http = require("node:http");
-    var methods = require_utils3().methods;
-    var compileETag = require_utils3().compileETag;
-    var compileQueryParser = require_utils3().compileQueryParser;
-    var compileTrust = require_utils3().compileTrust;
+    var methods = require_utils4().methods;
+    var compileETag = require_utils4().compileETag;
+    var compileQueryParser = require_utils4().compileQueryParser;
+    var compileTrust = require_utils4().compileTrust;
     var resolve = require("node:path").resolve;
     var once = require_once();
     var Router = require_router();
@@ -53073,9 +53102,9 @@ var require_response = __commonJS({
     var pathIsAbsolute = require("node:path").isAbsolute;
     var statuses = require_statuses();
     var sign = require_cookie_signature().sign;
-    var normalizeType = require_utils3().normalizeType;
-    var normalizeTypes = require_utils3().normalizeTypes;
-    var setCharset = require_utils3().setCharset;
+    var normalizeType = require_utils4().normalizeType;
+    var normalizeTypes = require_utils4().normalizeTypes;
+    var setCharset = require_utils4().setCharset;
     var cookie = require_cookie();
     var send = require_send();
     var extname = path.extname;
@@ -54075,7 +54104,7 @@ var require_validators = __commonJS({
     exports2.validateImageUploadPayload = validateImageUploadPayload;
     exports2.validateRatingPayload = validateRatingPayload;
     exports2.validateCheckoutPayload = validateCheckoutPayload;
-    var shared_1 = (init_src(), __toCommonJS(src_exports));
+    var shared_1 = require_dist();
     Object.defineProperty(exports2, "getTableCapacity", { enumerable: true, get: function() {
       return shared_1.getTableCapacity;
     } });
@@ -54353,7 +54382,7 @@ var require_bootstrap = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.invalidatePublicBootstrapCache = invalidatePublicBootstrapCache;
     exports2.registerBootstrapRoutes = registerBootstrapRoutes;
-    var shared_1 = (init_src(), __toCommonJS(src_exports));
+    var shared_1 = require_dist();
     var crypto = __importStar2(require("crypto"));
     var helpers_12 = require_helpers();
     var auth_12 = require_auth();
@@ -55315,6 +55344,37 @@ var require_tables = __commonJS({
     function invalidateTablesCache() {
       cachedTablesData = null;
     }
+    function getTaiwanDateString(date = /* @__PURE__ */ new Date()) {
+      return new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Taipei",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit"
+      }).format(date);
+    }
+    function getTaiwanTimeParts(date = /* @__PURE__ */ new Date()) {
+      const parts = new Intl.DateTimeFormat("en-US", {
+        timeZone: "Asia/Taipei",
+        hour: "numeric",
+        minute: "numeric",
+        hour12: false
+      }).formatToParts(date);
+      let hours = 0;
+      let minutes = 0;
+      for (const p of parts) {
+        if (p.type === "hour")
+          hours = parseInt(p.value, 10);
+        if (p.type === "minute")
+          minutes = parseInt(p.value, 10);
+      }
+      return { hours: hours === 24 ? 0 : hours, minutes };
+    }
+    function parseTimeToMinutes(t) {
+      if (!t)
+        return 0;
+      const [h, m] = t.split(":").map(Number);
+      return (h || 0) * 60 + (m || 0);
+    }
     function registerTablesRoutes(app2, ctx) {
       const { db: db2, requireStaffAuth, createRateLimiter: createRateLimiter2, sendErrorResponse: sendErrorResponse2 } = ctx;
       const getCachedSettings = (0, helpers_12.createGetCachedSettings)(db2);
@@ -55355,7 +55415,7 @@ var require_tables = __commonJS({
       get("/reservations", requireStaffAuth, async (_req, res) => {
         try {
           res.setHeader("Cache-Control", "private, no-cache, no-store, must-revalidate");
-          const todayStr = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+          const todayStr = getTaiwanDateString();
           const snapshot = await db2.collection("reservations").select("id", "customerName", "phone", "guestCount", "tableNumber", "date", "time", "status", "notes", "createdAt", "reservationNo").where("date", ">=", todayStr).limit(100).get();
           const reservations = snapshot.docs.map((doc) => doc.data());
           res.json(reservations);
@@ -55403,12 +55463,6 @@ var require_tables = __commonJS({
           sendErrorResponse2(res, error);
         }
       });
-      function parseTimeToMinutes(t) {
-        if (!t)
-          return 0;
-        const [h, m] = t.split(":").map(Number);
-        return (h || 0) * 60 + (m || 0);
-      }
       post("/reservations", reservationRateLimiter, async (req, res) => {
         const validation = (0, validators_1.validateReservationPayload)(req.body);
         if (!validation.isValid || !validation.sanitizedData) {
@@ -55417,12 +55471,11 @@ var require_tables = __commonJS({
         const data = validation.sanitizedData;
         const now = /* @__PURE__ */ new Date();
         now.setMonth(now.getMonth() + 3);
-        const maxDateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+        const maxDateStr = getTaiwanDateString(now);
         if (data.date && data.date.trim() > maxDateStr) {
           return res.status(400).json({ error: `\u9810\u7D04\u65E5\u671F\u6700\u591A\u53EA\u80FD\u63D0\u524D 3 \u500B\u6708 (\u6700\u665A\u81F3 ${maxDateStr})\uFF01` });
         }
-        const todayNow = /* @__PURE__ */ new Date();
-        const todayDateStr = `${todayNow.getFullYear()}-${String(todayNow.getMonth() + 1).padStart(2, "0")}-${String(todayNow.getDate()).padStart(2, "0")}`;
+        const todayDateStr = getTaiwanDateString();
         let validStaffOverride = false;
         if (req.body.isStaffOverride) {
           const authHeader = req.headers.authorization;
@@ -55441,7 +55494,8 @@ var require_tables = __commonJS({
         }
         if (data.date && data.date.trim() === todayDateStr && !validStaffOverride) {
           const targetMins = parseTimeToMinutes(data.time);
-          const currentMins = todayNow.getHours() * 60 + todayNow.getMinutes();
+          const twTime = getTaiwanTimeParts();
+          const currentMins = twTime.hours * 60 + twTime.minutes;
           if (targetMins < currentMins + 240) {
             return res.status(400).json({ error: "\u9810\u7D04\u6642\u9593\u5FC5\u9808\u70BA\u73FE\u5728\u6642\u9593 4 \u5C0F\u6642\u4E4B\u5F8C\uFF0C\u907F\u514D\u8207\u73FE\u5834\u9867\u5BA2\u767C\u751F\u684C\u5E2D\u885D\u7A81\uFF01" });
           }
@@ -55507,19 +55561,21 @@ var require_tables = __commonJS({
             }
             transaction.set(db2.collection("reservations").doc(newReservation.id), newReservation);
             if (newReservation.status === "pending" && newReservation.tableNumber) {
-              const todayStr = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
-              if (newReservation.date === todayStr) {
-                const primaryTable = requestedTables[0];
-                const tableDoc = allTables.find((t) => String(t.id).trim() === primaryTable);
-                if (tableDoc) {
-                  transaction.update(db2.collection("tables").doc(primaryTable), {
-                    status: "preserved",
-                    preservedFor: `${newReservation.customerName} (${newReservation.time})`
-                  });
+              if (newReservation.date === todayDateStr) {
+                for (const tId of requestedTables) {
+                  const tableDoc = allTables.find((t) => String(t.id).trim() === tId);
+                  if (tableDoc) {
+                    transaction.update(db2.collection("tables").doc(tId), {
+                      status: "preserved",
+                      preservedFor: `${newReservation.customerName} (${newReservation.time})`
+                    });
+                  }
                 }
               }
             }
           });
+          invalidateTablesCache();
+          (0, bootstrap_12.invalidatePublicBootstrapCache)();
           res.status(201).json(newReservation);
         } catch (error) {
           if (error instanceof Error && error.message.startsWith("CONFLICT:")) {
@@ -55540,9 +55596,14 @@ var require_tables = __commonJS({
             const doc = await db2.collection("reservations").doc(id).get();
             const resData = doc.data();
             if (resData && resData.tableNumber) {
-              await db2.collection("tables").doc(resData.tableNumber).update({ status: "available", preservedFor: "" });
+              const tablesToRelease = String(resData.tableNumber).split(",").map((t) => t.trim()).filter(Boolean);
+              for (const tId of tablesToRelease) {
+                await db2.collection("tables").doc(tId).update({ status: "available", preservedFor: "" });
+              }
             }
             await db2.collection("reservations").doc(id).delete();
+            invalidateTablesCache();
+            (0, bootstrap_12.invalidatePublicBootstrapCache)();
             res.json({ success: true, message: "Reservation cancelled and deleted" });
             return;
           }
@@ -55551,14 +55612,19 @@ var require_tables = __commonJS({
             const doc = await db2.collection("reservations").doc(id).get();
             const resData = doc.data();
             if (resData && resData.tableNumber) {
-              const tableRef = db2.collection("tables").doc(resData.tableNumber);
-              if (updates.status === "seated") {
-                await tableRef.update({ status: "in_use", preservedFor: "" });
-              } else if (updates.status === "pending") {
-                await tableRef.update({ status: "preserved", preservedFor: `${resData.customerName} (${resData.time})` });
+              const tablesToSync = String(resData.tableNumber).split(",").map((t) => t.trim()).filter(Boolean);
+              for (const tId of tablesToSync) {
+                const tableRef = db2.collection("tables").doc(tId);
+                if (updates.status === "seated") {
+                  await tableRef.update({ status: "in_use", preservedFor: "" });
+                } else if (updates.status === "pending") {
+                  await tableRef.update({ status: "preserved", preservedFor: `${resData.customerName} (${resData.time})` });
+                }
               }
             }
           }
+          invalidateTablesCache();
+          (0, bootstrap_12.invalidatePublicBootstrapCache)();
           res.json({ success: true });
         } catch (error) {
           console.error("Error updating reservation:", error);
@@ -55569,6 +55635,8 @@ var require_tables = __commonJS({
         const id = req.params.id;
         try {
           await db2.collection("reservations").doc(id).delete();
+          invalidateTablesCache();
+          (0, bootstrap_12.invalidatePublicBootstrapCache)();
           res.json({ success: true });
         } catch (error) {
           sendErrorResponse2(res, error);
@@ -55588,7 +55656,7 @@ var require_orders = __commonJS({
     var firestore_12 = require("firebase-admin/firestore");
     var validators_1 = require_validators();
     var helpers_12 = require_helpers();
-    var shared_1 = (init_src(), __toCommonJS(src_exports));
+    var shared_1 = require_dist();
     var auth_12 = require_auth();
     async function confirmOrderTransaction(db2, orderId, items) {
       const orderRef = db2.collection("orders").doc(orderId);
@@ -55727,7 +55795,12 @@ var require_orders = __commonJS({
             if (o.createdAt) {
               const d = new Date(o.createdAt);
               if (!isNaN(d.getTime())) {
-                const slot = `${d.getHours().toString().padStart(2, "0")}:00`;
+                const twHour = new Intl.DateTimeFormat("en-US", {
+                  timeZone: "Asia/Taipei",
+                  hour: "2-digit",
+                  hour12: false
+                }).format(d);
+                const slot = `${twHour === "24" ? "00" : twHour}:00`;
                 hourMap[slot] = (hourMap[slot] || 0) + 1;
               }
             }
@@ -56226,7 +56299,6 @@ var require_orders = __commonJS({
         }
         const { paymentMethod, cashTendered, changeAmount, checkoutRecord } = validation.sanitizedData;
         try {
-          const batch = db2.batch();
           const resolvedOrderStatuses = {};
           const tableSet = /* @__PURE__ */ new Set();
           if (Array.isArray(tableNumbers)) {
@@ -56704,9 +56776,19 @@ var require_settings = __commonJS({
     var helpers_12 = require_helpers();
     var notification_12 = require_notification();
     var bootstrap_12 = require_bootstrap();
+    var DEFAULT_OPTION_RULES = [
+      { id: "rule-1784360566576", name: "\u52A0\u6CB3\u7C89", category: "\u52A0\u914D\u6599", price: 20 },
+      { id: "rule-1784360574891", name: "\u52A0\u7C73\u7DDA", category: "\u52A0\u914D\u6599", price: 20 },
+      { id: "rule-1784360613823", name: "\u5347\u7D1A\u5957\u9910(\u70E4\u852C\u83DC+\u6CF0\u5976\u4E00\u676F)", category: "\u52A0\u914D\u6599", price: 140 }
+    ];
     function registerSettingsRoutes(app2, ctx) {
       const { db: db2, requireStaffAuth, sendErrorResponse: sendErrorResponse2 } = ctx;
       const getCachedSettings = (0, helpers_12.createGetCachedSettings)(db2);
+      const invalidateAllSettingsCaches = () => {
+        (0, helpers_12.setCachedSettings)(null);
+        (0, helpers_12.setCachedServicePause)(null);
+        (0, bootstrap_12.invalidatePublicBootstrapCache)();
+      };
       const get = (routePath, ...handlers) => app2.get([`/api${routePath}`, routePath], ...handlers);
       const post = (routePath, ...handlers) => app2.post([`/api${routePath}`, routePath], ...handlers);
       const del = (routePath, ...handlers) => app2.delete([`/api${routePath}`, routePath], ...handlers);
@@ -56716,11 +56798,6 @@ var require_settings = __commonJS({
           res.setHeader("Cache-Control", "public, max-age=120, s-maxage=600, stale-while-revalidate=1800");
           const sysData = await getCachedSettings();
           const isOpen = sysData ? (0, helpers_12.isStoreOpenFromData)(sysData) : true;
-          const defaultOptionRules = [
-            { id: "rule-1784360566576", name: "\u52A0\u6CB3\u7C89", category: "\u52A0\u914D\u6599", price: 20 },
-            { id: "rule-1784360574891", name: "\u52A0\u7C73\u7DDA", category: "\u52A0\u914D\u6599", price: 20 },
-            { id: "rule-1784360613823", name: "\u5347\u7D1A\u5957\u9910(\u70E4\u852C\u83DC+\u6CF0\u5976\u4E00\u676F)", category: "\u52A0\u914D\u6599", price: 140 }
-          ];
           res.json({
             minSpend: sysData?.liveMinSpendPerPerson ?? 200,
             operatingHours: {
@@ -56732,7 +56809,7 @@ var require_settings = __commonJS({
             servicePaused: sysData?.liveServicePaused || false,
             promoCombo: sysData?.livePromoCombo || { enabled: false, requiredQty: 0, discountAmount: 0, eligibleItemIds: [] },
             popularItemIds: sysData?.livePopularItemIds || [],
-            optionRules: sysData?.liveOptionRules || defaultOptionRules,
+            optionRules: sysData?.liveOptionRules || DEFAULT_OPTION_RULES,
             membersConfig: {
               pointsRatio: sysData?.liveMemberPointsRatio ?? 20,
               vipThreshold: sysData?.liveMemberVipThreshold ?? 1e3,
@@ -56811,8 +56888,7 @@ var require_settings = __commonJS({
             version,
             versionUpdatedAt: (/* @__PURE__ */ new Date()).toISOString()
           }, { merge: true });
-          (0, helpers_12.setCachedSettings)(null);
-          (0, bootstrap_12.invalidatePublicBootstrapCache)();
+          invalidateAllSettingsCaches();
           res.json({ success: true, version });
         } catch (error) {
           sendErrorResponse2(res, error);
@@ -56857,27 +56933,7 @@ var require_settings = __commonJS({
         try {
           res.setHeader("Cache-Control", "public, max-age=60, s-maxage=600, stale-while-revalidate=1800");
           const sysData = await getCachedSettings();
-          const defaultRules = [
-            {
-              id: "rule-1784360566576",
-              name: "\u52A0\u6CB3\u7C89",
-              category: "\u52A0\u914D\u6599",
-              price: 20
-            },
-            {
-              id: "rule-1784360574891",
-              name: "\u52A0\u7C73\u7DDA",
-              category: "\u52A0\u914D\u6599",
-              price: 20
-            },
-            {
-              id: "rule-1784360613823",
-              name: "\u5347\u7D1A\u5957\u9910(\u70E4\u852C\u83DC+\u6CF0\u5976\u4E00\u676F)",
-              category: "\u52A0\u914D\u6599",
-              price: 140
-            }
-          ];
-          res.json(sysData?.liveOptionRules || defaultRules);
+          res.json(sysData?.liveOptionRules || DEFAULT_OPTION_RULES);
         } catch (error) {
           sendErrorResponse2(res, error);
         }
@@ -56886,6 +56942,7 @@ var require_settings = __commonJS({
         const { servicePaused } = req.body;
         try {
           await db2.collection("settings").doc("system").set({ liveServicePaused: !!servicePaused }, { merge: true });
+          invalidateAllSettingsCaches();
           res.json({ success: true });
         } catch (error) {
           sendErrorResponse2(res, error);
@@ -56895,6 +56952,7 @@ var require_settings = __commonJS({
         const { minSpend } = req.body;
         try {
           await db2.collection("settings").doc("system").set({ liveMinSpendPerPerson: Number(minSpend) }, { merge: true });
+          invalidateAllSettingsCaches();
           res.json({ success: true, minSpend: Number(minSpend) });
         } catch (error) {
           sendErrorResponse2(res, error);
@@ -56907,9 +56965,10 @@ var require_settings = __commonJS({
             liveOperatingHours: slots,
             liveRestDays: restDays
           }, { merge: true });
+          invalidateAllSettingsCaches();
           const systemDoc = await db2.collection("settings").doc("system").get();
-          const servicePaused = systemDoc.data()?.liveServicePaused || false;
-          res.json({ success: true, slots, restDays, isOpen: !servicePaused });
+          const isOpen = (0, helpers_12.isStoreOpenFromData)(systemDoc.data() || {});
+          res.json({ success: true, slots, restDays, isOpen });
         } catch (error) {
           sendErrorResponse2(res, error);
         }
@@ -56918,6 +56977,7 @@ var require_settings = __commonJS({
         const { notice } = req.body;
         try {
           await db2.collection("settings").doc("system").set({ liveCustomerNotice: String(notice) }, { merge: true });
+          invalidateAllSettingsCaches();
           res.json({ success: true, notice: String(notice) });
         } catch (error) {
           sendErrorResponse2(res, error);
@@ -56928,6 +56988,7 @@ var require_settings = __commonJS({
         const targetIds = popularItemIds || ids || [];
         try {
           await db2.collection("settings").doc("system").set({ livePopularItemIds: targetIds }, { merge: true });
+          invalidateAllSettingsCaches();
           res.json({ success: true, popularItemIds: targetIds });
         } catch (error) {
           sendErrorResponse2(res, error);
@@ -56937,6 +56998,7 @@ var require_settings = __commonJS({
         const data = req.body;
         try {
           await db2.collection("settings").doc("system").set({ livePromoCombo: data, livePromoCombos: data.combos }, { merge: true });
+          invalidateAllSettingsCaches();
           res.json({ success: true });
         } catch (error) {
           sendErrorResponse2(res, error);
@@ -56953,6 +57015,7 @@ var require_settings = __commonJS({
             liveMemberPointsRedeemRate: pointsRedeemRate !== void 0 ? Number(pointsRedeemRate) : 1,
             liveMemberRewards: rewards || []
           }, { merge: true });
+          invalidateAllSettingsCaches();
           res.json({ success: true });
         } catch (error) {
           sendErrorResponse2(res, error);
@@ -56968,9 +57031,10 @@ var require_settings = __commonJS({
         };
         try {
           const systemDoc = await db2.collection("settings").doc("system").get();
-          let rules = systemDoc.data()?.liveOptionRules || [];
+          let rules = systemDoc.data()?.liveOptionRules || DEFAULT_OPTION_RULES;
           rules.push(newRule);
           await db2.collection("settings").doc("system").set({ liveOptionRules: rules }, { merge: true });
+          invalidateAllSettingsCaches();
           res.status(201).json(newRule);
         } catch (error) {
           sendErrorResponse2(res, error);
@@ -56980,9 +57044,10 @@ var require_settings = __commonJS({
         const { id } = req.params;
         try {
           const systemDoc = await db2.collection("settings").doc("system").get();
-          let rules = systemDoc.data()?.liveOptionRules || [];
+          let rules = systemDoc.data()?.liveOptionRules || DEFAULT_OPTION_RULES;
           rules = rules.filter((r) => r.id !== id);
           await db2.collection("settings").doc("system").set({ liveOptionRules: rules }, { merge: true });
+          invalidateAllSettingsCaches();
           res.json({ success: true });
         } catch (error) {
           sendErrorResponse2(res, error);
@@ -57057,6 +57122,7 @@ var require_settings = __commonJS({
             }, { merge: true });
           }
           (0, auth_12.invalidateAuthCache)();
+          invalidateAllSettingsCaches();
           res.json({ success: true, message: pinResetAllowed ? "\u5DF2\u6210\u529F\u6E05\u9664\u7CFB\u7D71\u5167\u6240\u6709\u6E2C\u8A66\u55AE\u64DA\u3001\u9867\u5BA2\u9810\u7D04\u3001\u684C\u4F4D\u4F54\u7528\uFF0C\u4E26\u5C07\u767B\u5165\u5BC6\u78BC\u91CD\u8A2D\u70BA\u9810\u8A2D\u503C 070718\uFF01" : "\u5DF2\u6210\u529F\u6E05\u9664\u7CFB\u7D71\u5167\u6240\u6709\u6E2C\u8A66\u55AE\u64DA\u3001\u9867\u5BA2\u9810\u7D04\u3001\u684C\u4F4D\u4F54\u7528\uFF01(\u5B89\u5168\u5BC6\u78BC\u7DAD\u6301\u4E0D\u8B8A)" });
         } catch (error) {
           console.error("Error clearing test data:", error);
@@ -57093,8 +57159,6 @@ var require_settings = __commonJS({
         try {
           const { lineEnabled, lineToken, lineAdminId, gmailEnabled, gmailUser, gmailAppPass } = req.body;
           const docRef = db2.collection("secrets").doc("notifications");
-          const doc = await docRef.get();
-          const existing = doc.data() || {};
           const updates = {
             updatedAt: (/* @__PURE__ */ new Date()).toISOString()
           };
@@ -57195,7 +57259,7 @@ var require_printer = __commonJS({
     })();
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.registerPrinterRoutes = registerPrinterRoutes;
-    var shared_1 = (init_src(), __toCommonJS(src_exports));
+    var shared_1 = require_dist();
     var firestore_12 = require("firebase-admin/firestore");
     var net = __importStar2(require("net"));
     var auth_12 = require_auth();
@@ -58265,9 +58329,11 @@ exports.onOrderCreated = (0, firestore_1.onDocumentCreated)({
   }
   try {
     const notifConfig = await getCachedNotificationSettings();
-    if (order.source === "google_business" || String(order.tableNumber || "").includes("\u5916\u5E36") || order.takeoutInfo) {
-      await (0, notification_1.sendOrderNotification)(order, { notificationConfig: notifConfig });
+    const isEligibleForNotification = order.source === "google_business" || String(order.tableNumber || "").includes("\u5916\u5E36") || Boolean(order.takeoutInfo);
+    if (!isEligibleForNotification) {
+      return;
     }
+    await (0, notification_1.sendOrderNotification)(order, { notificationConfig: notifConfig });
     await orderSnapshot.ref.update({
       notifiedAt: firestore_2.FieldValue.serverTimestamp(),
       notificationStatus: "dispatched",
