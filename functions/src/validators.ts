@@ -91,16 +91,23 @@ export function validateOrderPayload(body: any): ValidationResult<any> {
     };
   }
 
-  const sanitizedOrder = {
-    ...body,
+  const sanitizedOrder: Record<string, any> = {
     tableNumber,
     items: sanitizedItems,
     customerName: sanitizeString(body.customerName || '', 50),
     customerPhone: sanitizeString(body.customerPhone || body.phone || '', 30),
+    customerAvatar: sanitizeString(body.customerAvatar || '', 255) || undefined,
+    paymentMethod: ['cash', 'credit', 'member', 'twqr'].includes(body.paymentMethod) ? body.paymentMethod : 'cash',
+    guestCount: (typeof body.guestCount === 'number' && Number.isFinite(body.guestCount) && body.guestCount > 0) ? Math.min(Math.floor(body.guestCount), 100) : undefined,
     notes: sanitizeString(body.notes || '', 500),
     source: sanitizeString(body.source || 'direct', 50),
-    utm_medium: sanitizeString(body.utm_medium || '', 50),
+    utm_medium: sanitizeString(body.utm_medium || '', 50) || undefined,
     takeoutInfo: sanitizedTakeoutInfo,
+    clientOrderId: sanitizeString(body.clientOrderId || '', 100) || undefined,
+    reservationNo: sanitizeString(body.reservationNo || '', 50) || undefined,
+    reservationDate: sanitizeString(body.reservationDate || '', 20) || undefined,
+    reservationTime: sanitizeString(body.reservationTime || '', 20) || undefined,
+    isMember: Boolean(body.isMember),
     notificationSent: false
   };
 

@@ -174,33 +174,48 @@ export function removeOrderRequestsFromQueue(orderIdOrIds: string | string[]) {
   }
 }
 
-// Execute a queued request
+// Execute a queued request with 15s hard timeout to prevent background suspension hangs
 async function executeRequest(item: QueuedRequest): Promise<Response> {
   const token = typeof localStorage !== 'undefined' ? localStorage.getItem('sabay_jwt_token') : null;
   const authHeaders = token ? { 'Authorization': `Bearer ${token}` } : {};
-  return fetch(item.url, {
-    method: item.method,
-    headers: {
-      ...item.headers,
-      ...authHeaders
-    },
-    body: item.body
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
+  try {
+    return await fetch(item.url, {
+      method: item.method,
+      headers: {
+        ...item.headers,
+        ...authHeaders
+      },
+      body: item.body,
+      signal: controller.signal
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 let isQueuePaused = false;
 let isExecutingQueue = false; // Mutex to prevent overlapping drain loops
+let lastQueueLockTime = 0;
+const QUEUE_LOCK_TIMEOUT_MS = 45000; // 45 seconds TTL for cross-tab lock
 
 let queueBroadcast: BroadcastChannel | null = null;
-if (typeof window !== 'undefined') {
-  queueBroadcast = new BroadcastChannel('sabay_queue_lock');
-  queueBroadcast.onmessage = (event) => {
-    if (event.data === 'queue_start') {
-      isExecutingQueue = true; // Lock set by another tab
-    } else if (event.data === 'queue_end') {
-      isExecutingQueue = false; // Lock released by another tab
-    }
-  };
+if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+  try {
+    queueBroadcast = new BroadcastChannel('sabay_queue_lock');
+    queueBroadcast.onmessage = (event) => {
+      if (event.data === 'queue_start') {
+        isExecutingQueue = true; // Lock set by another tab
+        lastQueueLockTime = Date.now();
+      } else if (event.data === 'queue_end') {
+        isExecutingQueue = false; // Lock released by another tab
+        lastQueueLockTime = 0;
+      }
+    };
+  } catch (err) {
+    console.warn('[OfflineQueue] BroadcastChannel initialization note:', err);
+  }
 }
 
 export function isOfflineQueuePaused(): boolean {
@@ -222,14 +237,22 @@ export async function processOfflineQueue(onProgress?: (msg: string) => void): P
   }
 
   if (isExecutingQueue) {
-    console.warn('[OfflineQueue] Queue is already actively executing in another flight. Skipping concurrent invocation.');
-    return { successCount: 0, failureCount: 0 };
+    // Check if cross-tab lock is stale (>45s) due to background tab termination/suspension
+    if (lastQueueLockTime > 0 && Date.now() - lastQueueLockTime > QUEUE_LOCK_TIMEOUT_MS) {
+      console.warn('[OfflineQueue] Stale cross-tab lock detected (>45s). Clearing lock and proceeding.');
+      isExecutingQueue = false;
+      lastQueueLockTime = 0;
+    } else {
+      console.warn('[OfflineQueue] Queue is already actively executing in another flight. Skipping concurrent invocation.');
+      return { successCount: 0, failureCount: 0 };
+    }
   }
 
   let successCount = 0;
   let failureCount = 0;
 
   isExecutingQueue = true;
+  lastQueueLockTime = Date.now();
   if (queueBroadcast) queueBroadcast.postMessage('queue_start');
   try {
     const queue = getOfflineQueue();
@@ -377,6 +400,7 @@ export async function processOfflineQueue(onProgress?: (msg: string) => void): P
 
   } finally {
     isExecutingQueue = false;
+    lastQueueLockTime = 0;
     if (queueBroadcast) queueBroadcast.postMessage('queue_end');
   }
 

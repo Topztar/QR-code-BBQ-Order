@@ -33,6 +33,27 @@ describe('Order Audit Fixes Tests', () => {
     expect((result.sanitizedData as any).subtotal).toBeUndefined();
   });
 
+  it('should strictly strip sensitive client fields (id, status, isPaid, createdAt) to prevent order overwrite vulnerabilities', () => {
+    const maliciousPayload = {
+      id: 'existing-order-to-overwrite',
+      status: 'paid',
+      isPaid: true,
+      createdAt: '2020-01-01T00:00:00.000Z',
+      tableNumber: '5',
+      items: [{ menuItemId: 'dish-1', name: '串烤', price: 50, qty: 2 }],
+      total: 0,
+      subtotal: 0
+    };
+    const result = validateOrderPayload(maliciousPayload);
+    expect(result.isValid).toBe(true);
+    expect((result.sanitizedData as any).id).toBeUndefined();
+    expect((result.sanitizedData as any).status).toBeUndefined();
+    expect((result.sanitizedData as any).isPaid).toBeUndefined();
+    expect((result.sanitizedData as any).createdAt).toBeUndefined();
+    expect((result.sanitizedData as any).total).toBeUndefined();
+    expect(result.sanitizedData?.tableNumber).toBe('5');
+  });
+
   it('registerOrdersRoutes PUT /api/orders/:id/items should reject modifications on paid or cancelled orders with 409', () => {
     const testApp = express();
 

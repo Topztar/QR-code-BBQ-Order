@@ -341,7 +341,7 @@ post('/orders', requireAppCheck, orderRateLimiter, async (req, res) => {
   }
   const orderData = validation.sanitizedData;
   const clientOrderId = orderData.clientOrderId ? String(orderData.clientOrderId).trim() : null;
-  const orderId = orderData.id || `ORD-${Date.now().toString(36).toUpperCase()}`;
+  const orderId = `ORD-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
 
   try {
     const sysData = await getCachedSettings();
@@ -349,6 +349,12 @@ post('/orders', requireAppCheck, orderRateLimiter, async (req, res) => {
     // 預約專屬點餐 (reservationNo/reservationDate) 或 外帶點餐 (takeoutInfo/外帶) 豁免一般營業時間限制
     const isTakeoutOrder = !!(orderData.takeoutInfo || String(orderData.tableNumber || '').includes('外帶') || String(orderData.tableNumber || '').toLowerCase() === 'takeout');
     const isReservationOrder = !!(orderData.reservationNo || orderData.reservationDate);
+
+    // 🛑 驗證門市即時接單狀態 (liveServicePaused)
+    if (sysData?.liveServicePaused && !isReservationOrder) {
+      return res.status(503).json({ error: 'PAUSED:廚房目前暫停接單中，請稍候再試或洽現場服務人員。' });
+    }
+
     if (!isReservationOrder && !isTakeoutOrder && !isStoreOpenFromData(sysData)) {
       return res.status(400).json({ error: 'CLOSED:目前非廚房接單供餐時間（廚房接單時段依排程設定，門市實體營業時間請參閱公告），系統暫不開放下單點餐！' });
     }
@@ -483,8 +489,9 @@ post('/orders', requireAppCheck, orderRateLimiter, async (req, res) => {
         discount: verifiedPricing.discount,
         serviceCharge: verifiedPricing.serviceCharge,
         total: verifiedPricing.total,
-        status: orderData.status || 'pending',
-        createdAt: orderData.createdAt || new Date().toISOString(),
+        status: orderData.source === 'pos' ? 'pending_kitchen_verification' : 'pending',
+        isPaid: false,
+        createdAt: new Date().toISOString(),
       };
 
       // Record atomic idempotency key with 24h TTL
@@ -496,7 +503,7 @@ post('/orders', requireAppCheck, orderRateLimiter, async (req, res) => {
         });
       }
 
-      t.set(db.collection('orders').doc(orderId), orderToSave);
+      t.create(db.collection('orders').doc(orderId), orderToSave);
 
       // Mark table as in_use and clear cleaningStartedAt
       if (tableRef && tableSnap && tableSnap.exists) {
@@ -548,12 +555,13 @@ post('/orders', requireAppCheck, orderRateLimiter, async (req, res) => {
       ...savedOrder.data,
       priceReconciliation: savedOrder.priceReconciliation
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error submitting order:', error);
     if (error instanceof Error && error.message.startsWith('SOLDOUT:')) {
       return res.status(409).json({ error: error.message.replace('SOLDOUT:', '') });
     }
-    res.status(500).send(error);
+    const msg = error instanceof Error ? error.message : String(error);
+    return res.status(500).json({ error: msg || '伺服器處理訂單發生異常，請重試' });
   }
 });
 
