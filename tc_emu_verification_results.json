@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-10-12T18:17:03.398Z",
+  "timestamp": "2026-10-17T05:55:21.924Z",
   "environment": "Firebase Emulator (Hosting + Functions + Firestore)",
   "testCases": {
     "TC-EMU-01": {
@@ -20,7 +20,7 @@
     "TC-EMU-04": {
       "description": "Gate unlocked: Input valid 6-digit PIN and click Unlock. Functions validates PIN. Auth token saved. KDS loads.",
       "status": "PASSED",
-      "evidence": "KDS loaded: true (4860ms), Auth token saved: true"
+      "evidence": "KDS loaded: true (2873ms), Auth token saved: true"
     }
   }
 }
