@@ -1,5 +1,5 @@
 import express from 'express';
-import { MenuItem, Category } from '../../types';
+import { MenuItem, Category, SoldOutType } from '../../types';
 
 export interface MenuRouteContext {
   getLiveMenu: () => MenuItem[];
@@ -44,7 +44,10 @@ export function toPublicMenuItem(m: MenuItem) {
     recipe: m.recipe,
     orderIndex: m.orderIndex,
     isTakeoutAvailable: m.isTakeoutAvailable,
-    showOnCustomerPage: m.showOnCustomerPage
+    showOnCustomerPage: m.showOnCustomerPage,
+    trackInventory: !!m.trackInventory,
+    inventoryCount: m.trackInventory ? (typeof m.inventoryCount === 'number' ? m.inventoryCount : 0) : null,
+    stockStatus: m.stockStatus || (m.available ? 'AVAILABLE' : 'SOLD_OUT')
   };
 }
 
@@ -76,13 +79,27 @@ export function registerMenuRoutes(app: express.Express, ctx: MenuRouteContext) 
   app.post('/api/menu', (req, res) => {
     const { category, name, price, image, thumbnailUrl, avifUrl, avifThumbnailUrl, description, available, isSetMeal, requiredSaucesOption, hasNoodlesOption, hasCoconutsMilkOption, containsBeef, containsPork, containsSeafood, isNotSpicy, isTakeoutAvailable, customAddOns, recipe, trackInventory, inventoryCount } = req.body;
     
-    if (!category || !name || !price) {
+    if (!category || !name || price === undefined || price === null || !Number.isFinite(Number(price))) {
       return res.status(400).json({ error: 'Missing required fields (category, name, price)' });
     }
 
     const liveMenu = getLiveMenu();
     const isAvail = available !== undefined ? !!available : true;
     const cleanImage = typeof image === 'string' ? image.trim() : (image || '');
+    const isTrackInventory = trackInventory !== undefined ? !!trackInventory : false;
+    const finalInventoryCount = isTrackInventory ? (Number.isFinite(Number(inventoryCount)) ? Number(inventoryCount) : 0) : null;
+    let finalAvailable = isAvail;
+    let finalSoldOutType: SoldOutType = isAvail ? 'none' : 'permanent';
+    let finalSoldOutAt: string | null = !isAvail ? new Date().toISOString() : null;
+    let finalStockStatus: 'AVAILABLE' | 'SOLD_OUT' = isAvail ? 'AVAILABLE' : 'SOLD_OUT';
+
+    if (isTrackInventory && typeof finalInventoryCount === 'number' && finalInventoryCount <= 0) {
+      finalAvailable = false;
+      finalSoldOutType = 'permanent';
+      finalSoldOutAt = new Date().toISOString();
+      finalStockStatus = 'SOLD_OUT';
+    }
+
     const newItem: MenuItem = {
       id: `dish-${Date.now()}`,
       category,
@@ -93,8 +110,10 @@ export function registerMenuRoutes(app: express.Express, ctx: MenuRouteContext) 
       avifUrl: typeof avifUrl === 'string' ? avifUrl.trim() : (avifUrl || undefined),
       avifThumbnailUrl: typeof avifThumbnailUrl === 'string' ? avifThumbnailUrl.trim() : (avifThumbnailUrl || undefined),
       description: typeof description === 'object' ? description : { zh: description || '', en: description || '', ko: description || '', ja: description || '', th: description || '', vi: description || '', ru: description || '', es: description || '' },
-      available: isAvail,
-      soldOutAt: !isAvail ? new Date().toISOString() : null,
+      available: finalAvailable,
+      soldOutType: finalSoldOutType,
+      soldOutAt: finalSoldOutAt,
+      stockStatus: finalStockStatus,
       isSetMeal: !!isSetMeal,
       requiredSaucesOption: !!requiredSaucesOption,
       hasNoodlesOption: !!hasNoodlesOption,
@@ -104,8 +123,8 @@ export function registerMenuRoutes(app: express.Express, ctx: MenuRouteContext) 
       containsSeafood: !!containsSeafood,
       isNotSpicy: !!isNotSpicy,
       isTakeoutAvailable: isTakeoutAvailable !== undefined ? !!isTakeoutAvailable : true,
-      trackInventory: trackInventory !== undefined ? !!trackInventory : false,
-      inventoryCount: trackInventory ? Number(inventoryCount || 0) : undefined,
+      trackInventory: isTrackInventory,
+      inventoryCount: finalInventoryCount,
       customAddOns: Array.isArray(customAddOns) ? customAddOns : [],
       recipe: Array.isArray(recipe) ? recipe : undefined,
       orderIndex: liveMenu.length
@@ -167,6 +186,32 @@ export function registerMenuRoutes(app: express.Express, ctx: MenuRouteContext) 
         targetSoldOutAt = null;
       }
 
+      const targetTrackInventory = trackInventory !== undefined ? !!trackInventory : (liveMenu[itemIndex].trackInventory || false);
+      let targetInventoryCount = liveMenu[itemIndex].inventoryCount;
+      if (trackInventory !== undefined) {
+        if (!trackInventory) {
+          targetInventoryCount = null; // parity with functions/src/validators.ts (explicit null, JSON-safe)
+        } else {
+          targetInventoryCount = inventoryCount !== undefined && inventoryCount !== null && Number.isFinite(Number(inventoryCount))
+            ? Number(inventoryCount)
+            : (liveMenu[itemIndex].inventoryCount ?? 0);
+        }
+      } else if (inventoryCount !== undefined) {
+        targetInventoryCount = targetTrackInventory ? (inventoryCount === null ? null : (Number.isFinite(Number(inventoryCount)) ? Number(inventoryCount) : 0)) : null;
+      }
+
+      let finalAvailable = targetAvailable;
+      let finalSoldOutType = soldOutType !== undefined ? soldOutType : (targetAvailable ? 'none' : (liveMenu[itemIndex].soldOutType || 'permanent'));
+      let finalSoldOutAt = targetSoldOutAt;
+      let finalStockStatus = liveMenu[itemIndex].stockStatus || (targetAvailable ? 'AVAILABLE' : 'SOLD_OUT');
+
+      if (targetTrackInventory && typeof targetInventoryCount === 'number' && targetInventoryCount <= 0) {
+        finalAvailable = false;
+        finalSoldOutType = 'permanent';
+        finalSoldOutAt = finalSoldOutAt || new Date().toISOString();
+        finalStockStatus = 'SOLD_OUT';
+      }
+
       liveMenu[itemIndex] = {
         ...liveMenu[itemIndex],
         category: category || liveMenu[itemIndex].category,
@@ -177,10 +222,11 @@ export function registerMenuRoutes(app: express.Express, ctx: MenuRouteContext) 
         avifUrl: cleanAvif,
         avifThumbnailUrl: cleanAvifThumb,
         description: description !== undefined ? (typeof description === 'object' ? description : { zh: description || '', en: description || '', ko: description || '', ja: description || '', th: description || '', vi: description || '', ru: description || '', es: description || '' }) : liveMenu[itemIndex].description,
-        available: targetAvailable,
-        soldOutType: soldOutType !== undefined ? soldOutType : (targetAvailable ? 'none' : (liveMenu[itemIndex].soldOutType || 'permanent')),
+        available: finalAvailable,
+        soldOutType: finalSoldOutType,
         soldOutDate: soldOutDate !== undefined ? soldOutDate : liveMenu[itemIndex].soldOutDate,
-        soldOutAt: targetSoldOutAt,
+        soldOutAt: finalSoldOutAt,
+        stockStatus: finalStockStatus,
         isSetMeal: isSetMeal !== undefined ? !!isSetMeal : liveMenu[itemIndex].isSetMeal,
         requiredSaucesOption: requiredSaucesOption !== undefined ? !!requiredSaucesOption : liveMenu[itemIndex].requiredSaucesOption,
         hasNoodlesOption: hasNoodlesOption !== undefined ? !!hasNoodlesOption : liveMenu[itemIndex].hasNoodlesOption,
@@ -190,8 +236,8 @@ export function registerMenuRoutes(app: express.Express, ctx: MenuRouteContext) 
         containsSeafood: containsSeafood !== undefined ? !!containsSeafood : liveMenu[itemIndex].containsSeafood,
         isNotSpicy: isNotSpicy !== undefined ? !!isNotSpicy : liveMenu[itemIndex].isNotSpicy,
         isTakeoutAvailable: isTakeoutAvailable !== undefined ? !!isTakeoutAvailable : (liveMenu[itemIndex].isTakeoutAvailable !== undefined ? liveMenu[itemIndex].isTakeoutAvailable : true),
-        trackInventory: trackInventory !== undefined ? !!trackInventory : (liveMenu[itemIndex].trackInventory || false),
-        inventoryCount: trackInventory ? Number(inventoryCount || 0) : liveMenu[itemIndex].inventoryCount,
+        trackInventory: targetTrackInventory,
+        inventoryCount: targetInventoryCount,
         customAddOns: Array.isArray(customAddOns) ? customAddOns : liveMenu[itemIndex].customAddOns,
         recipe: Array.isArray(recipe) ? recipe : liveMenu[itemIndex].recipe
       };

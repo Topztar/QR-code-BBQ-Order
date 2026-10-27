@@ -420,13 +420,13 @@ export const ManagerMenuTab: React.FC<ManagerMenuTabProps> = ({
 
                     {/* 庫存數量 */}
                     <td className="p-2.5 border-r border-white/10 text-center font-mono">
-                      {!item.trackInventory ? (
+                      {!item.trackInventory || item.inventoryCount === null || item.inventoryCount === undefined ? (
                         <span className="text-zinc-500 text-xs font-sans">-- (無限制)</span>
-                      ) : (item.inventoryCount ?? 0) < 0 ? (
+                      ) : item.inventoryCount < 0 ? (
                         <span className="text-rose-400 bg-rose-500/15 px-2 py-0.5 rounded font-bold text-xs inline-block">
                           {item.inventoryCount} (低於庫存)
                         </span>
-                      ) : (item.inventoryCount ?? 0) === 0 ? (
+                      ) : item.inventoryCount === 0 ? (
                         <span className="text-amber-400 font-semibold text-xs inline-block">
                           0 份 (已售罄)
                         </span>

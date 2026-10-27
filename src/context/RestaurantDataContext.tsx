@@ -244,8 +244,9 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
     }
 
     // 🛡️ 防抖與併發防護：避免短時間連續 mutation 觸發重複 API 風暴
+    // (post-mutation refetches — bypassReorderLock — are never dropped, to guarantee read-your-writes)
     const now = Date.now();
-    if (isFetchingRef.current && (now - lastFetchTimeRef.current < 250)) {
+    if (!bypassReorderLock && isFetchingRef.current && (now - lastFetchTimeRef.current < 250)) {
       return;
     }
     isFetchingRef.current = true;
@@ -302,7 +303,8 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
 
       if (isFullCycle) {
         const fetchPromises: Promise<Response>[] = [
-          safeFetch('/api/bootstrap', null),
+          // bypassReorderLock === post-mutation refetch → request a fresh (non-cached) staff snapshot
+          safeFetch(bypassReorderLock && activeTab !== 'customer' ? '/api/bootstrap?fresh=1' : '/api/bootstrap', null),
           safeFetch('/api/store-status', null),
         ];
 
@@ -609,29 +611,31 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
 
   const handleAddMenuItem = async (itemData: any) => {
     lastMenuReorderTimeRef.current = Date.now();
-    try {
-      const res = await apiFetch('/api/menu', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(itemData),
-      });
-      if (res.ok) {
-        await fetchData(true, true);
-      }
-    } catch (err) {
-      console.error('[Sabay Menu Add error]', err);
+    const res = await apiFetch('/api/menu', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(itemData),
+    });
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      console.error('[Sabay Menu Add error]', errorData);
+      // 🛡️ Propagate so the modal surfaces the failure instead of closing as if saved
+      throw new Error(errorData.error || `Menu add failed with status ${res.status}`);
     }
+    await fetchData(true, true);
   };
 
   const handleEditMenuItem = async (id: string, itemData: any) => {
     lastMenuReorderTimeRef.current = Date.now();
     try {
       await saveMenuItem(id, itemData);
-      // Let the snapshot handle real-time sync, but if there's no snapshot, we can fetch
-      await fetchData(true, true);
     } catch (err) {
       console.error('[Sabay Menu Edit error]', err);
+      // 🛡️ Propagate so the modal surfaces the failure instead of closing and "rolling back"
+      throw err;
     }
+    // Read-your-writes refetch (fresh=1 bypasses per-instance staff cache)
+    await fetchData(true, true);
   };
 
   const handleDeleteMenuItem = async (id: string) => {

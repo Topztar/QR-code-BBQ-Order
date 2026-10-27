@@ -46,7 +46,8 @@ export interface MenuItem {
   soldOutType?: SoldOutType;
   soldOutDate?: string; // YYYY-MM-DD
   trackInventory?: boolean; // Enables inventory management (if unchecked, unrestricted)
-  inventoryCount?: number; // Current inventory count (allows negative values; defaults to 0)
+  inventoryCount?: number | null; // Current inventory count (allows negative values); null = unlimited (tracking off)
+  stockStatus?: 'AVAILABLE' | 'SOLD_OUT'; // Derived by backend inventory ↔ sold-out linkage
   updatedAt?: any;
   showOnCustomerPage?: boolean;
 }

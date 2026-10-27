@@ -2,10 +2,11 @@
 import { apiFetch } from './api';
 
 export const saveMenuItem = async (itemId: string, payload: any) => {
+  const priceNum = typeof payload.price === 'number' ? payload.price : Number(payload.price);
   const sanitizedPayload: Record<string, any> = {
     ...payload,
     name: payload.name,
-    price: Number(payload.price) || 0,
+    price: Number.isFinite(priceNum) ? priceNum : 0,
     category: payload.category,
     updatedAt: new Date().toISOString(),
   };
@@ -18,9 +19,22 @@ export const saveMenuItem = async (itemId: string, payload: any) => {
   }
   if (payload.trackInventory !== undefined) {
     sanitizedPayload.trackInventory = Boolean(payload.trackInventory);
+    if (!sanitizedPayload.trackInventory) {
+      sanitizedPayload.inventoryCount = null;
+    }
   }
   if (payload.inventoryCount !== undefined) {
-    sanitizedPayload.inventoryCount = Number(payload.inventoryCount);
+    sanitizedPayload.inventoryCount = payload.inventoryCount === null
+      ? null
+      : (Number.isFinite(Number(payload.inventoryCount)) ? Number(payload.inventoryCount) : 0);
+  }
+
+  // Auto-Sold-Out Linkage: when inventory tracking is enabled and stock <= 0, automatically lock as sold out
+  if (sanitizedPayload.trackInventory && typeof sanitizedPayload.inventoryCount === 'number' && sanitizedPayload.inventoryCount <= 0) {
+    sanitizedPayload.available = false;
+    sanitizedPayload.soldOutType = sanitizedPayload.soldOutType === 'daily' ? 'daily' : 'permanent';
+    sanitizedPayload.soldOutAt = sanitizedPayload.soldOutAt || new Date().toISOString();
+    sanitizedPayload.stockStatus = 'SOLD_OUT';
   }
 
   try {

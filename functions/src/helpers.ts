@@ -237,6 +237,18 @@ export function createHandleSavePrinterSettings(db: Firestore): express.RequestH
 // 🧹 processMenuItemSoldOut — 消除重複的 soldOutAt 邏輯 (P2 改善 6)
 // ============================================================
 export function processMenuItemSoldOut(item: any, now: Date): any {
+  // If inventory tracking is enabled and quantity <= 0, automatically lock as sold out
+  if (item.trackInventory && typeof item.inventoryCount === 'number' && item.inventoryCount <= 0) {
+    item.available = false;
+    if (!item.soldOutType || item.soldOutType === 'none') {
+      item.soldOutType = 'permanent';
+    }
+    if (!item.soldOutAt) {
+      item.soldOutAt = now.toISOString();
+    }
+    return item;
+  }
+
   if (item.available === false) {
     if (!item.soldOutAt) {
       item.soldOutAt = now.toISOString();
@@ -258,8 +270,9 @@ export function processMenuItemSoldOut(item: any, now: Date): any {
           day: '2-digit',
         }).format(now);
         
-        // If current Taiwan date is greater than the date it was sold out, it should be restored.
-        if (nowDateTwStr > soldDateTwStr) {
+        // If current Taiwan date is greater than the date it was sold out, it should be restored
+        // (unless inventory tracking is enabled and inventory is still <= 0)
+        if (nowDateTwStr > soldDateTwStr && (!item.trackInventory || (item.inventoryCount ?? 0) > 0)) {
           item.available = true;
           item.soldOutAt = null;
           item.soldOutType = 'none';

@@ -23,13 +23,12 @@ service cloud.firestore {
     // ==========================================
     match /menu/{id} {
       allow read: if true;
-      // 🚀 Allow staff to update inventory via the frontend without server rejections
-      allow write: if isAuthenticated();
+      allow write: if false;
     }
 
     match /dishes/{id} {
       allow read: if true;
-      allow write: if isAuthenticated() && (request.auth.token.role == 'manager' || isStaffOrAdmin());
+      allow write: if false;
     }
 
     match /categories/{id} {

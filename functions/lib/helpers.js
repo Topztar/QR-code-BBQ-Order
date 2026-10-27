@@ -233,6 +233,16 @@ function createHandleSavePrinterSettings(db) {
     };
 }
 function processMenuItemSoldOut(item, now) {
+    if (item.trackInventory && typeof item.inventoryCount === 'number' && item.inventoryCount <= 0) {
+        item.available = false;
+        if (!item.soldOutType || item.soldOutType === 'none') {
+            item.soldOutType = 'permanent';
+        }
+        if (!item.soldOutAt) {
+            item.soldOutAt = now.toISOString();
+        }
+        return item;
+    }
     if (item.available === false) {
         if (!item.soldOutAt) {
             item.soldOutAt = now.toISOString();
@@ -252,7 +262,7 @@ function processMenuItemSoldOut(item, now) {
                     month: '2-digit',
                     day: '2-digit',
                 }).format(now);
-                if (nowDateTwStr > soldDateTwStr) {
+                if (nowDateTwStr > soldDateTwStr && (!item.trackInventory || (item.inventoryCount ?? 0) > 0)) {
                     item.available = true;
                     item.soldOutAt = null;
                     item.soldOutType = 'none';

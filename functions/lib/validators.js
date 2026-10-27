@@ -7,6 +7,8 @@ exports.validateReservationPayload = validateReservationPayload;
 exports.validateImageUploadPayload = validateImageUploadPayload;
 exports.validateRatingPayload = validateRatingPayload;
 exports.validateCheckoutPayload = validateCheckoutPayload;
+exports.validateMenuItemPayload = validateMenuItemPayload;
+exports.applyInventoryLinkage = applyInventoryLinkage;
 var shared_1 = require("@sabay/shared");
 Object.defineProperty(exports, "getTableCapacity", { enumerable: true, get: function () { return shared_1.getTableCapacity; } });
 Object.defineProperty(exports, "findOptimalTableCombination", { enumerable: true, get: function () { return shared_1.findOptimalTableCombination; } });
@@ -69,15 +71,22 @@ function validateOrderPayload(body) {
         };
     }
     const sanitizedOrder = {
-        ...body,
         tableNumber,
         items: sanitizedItems,
         customerName: sanitizeString(body.customerName || '', 50),
         customerPhone: sanitizeString(body.customerPhone || body.phone || '', 30),
+        customerAvatar: sanitizeString(body.customerAvatar || '', 255) || undefined,
+        paymentMethod: ['cash', 'credit', 'member', 'twqr'].includes(body.paymentMethod) ? body.paymentMethod : 'cash',
+        guestCount: (typeof body.guestCount === 'number' && Number.isFinite(body.guestCount) && body.guestCount > 0) ? Math.min(Math.floor(body.guestCount), 100) : undefined,
         notes: sanitizeString(body.notes || '', 500),
         source: sanitizeString(body.source || 'direct', 50),
-        utm_medium: sanitizeString(body.utm_medium || '', 50),
+        utm_medium: sanitizeString(body.utm_medium || '', 50) || undefined,
         takeoutInfo: sanitizedTakeoutInfo,
+        clientOrderId: sanitizeString(body.clientOrderId || '', 100) || undefined,
+        reservationNo: sanitizeString(body.reservationNo || '', 50) || undefined,
+        reservationDate: sanitizeString(body.reservationDate || '', 20) || undefined,
+        reservationTime: sanitizeString(body.reservationTime || '', 20) || undefined,
+        isMember: Boolean(body.isMember),
         notificationSent: false
     };
     return { isValid: true, sanitizedData: sanitizedOrder };
@@ -238,5 +247,115 @@ function validateCheckoutPayload(body) {
             checkoutRecord
         }
     };
+}
+const MENU_BOOLEAN_FLAGS = [
+    'isSetMeal', 'requiredSaucesOption', 'hasNoodlesOption', 'hasCoconutsMilkOption',
+    'containsBeef', 'containsPork', 'containsSeafood', 'isNotSpicy'
+];
+const MENU_IMAGE_FIELDS = ['image', 'thumbnailUrl', 'avifUrl', 'avifThumbnailUrl'];
+const VALID_SOLD_OUT_TYPES = ['none', 'daily', 'permanent'];
+function sanitizeLocalizedText(value, maxLen) {
+    if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+        const out = {};
+        for (const [k, v] of Object.entries(value)) {
+            out[k] = sanitizeString(v, maxLen);
+        }
+        return out;
+    }
+    if (typeof value === 'string') {
+        return { zh: sanitizeString(value, maxLen) };
+    }
+    return { zh: '' };
+}
+function validateMenuItemPayload(body, options = {}) {
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+        return { isValid: false, error: '無效的菜單資料格式 (Invalid JSON payload)' };
+    }
+    const isUpdate = options.mode === 'update';
+    const has = (key) => body[key] !== undefined;
+    const out = {};
+    if (!isUpdate || has('name'))
+        out.name = sanitizeLocalizedText(body.name, 100);
+    if (!isUpdate || has('description'))
+        out.description = sanitizeLocalizedText(body.description, 500);
+    if (!isUpdate || has('price')) {
+        const priceNum = Number(body.price);
+        if (body.price === null || !Number.isFinite(priceNum) || priceNum < -1000000 || priceNum > 1000000) {
+            return { isValid: false, error: `無效的餐點定價 (Invalid price: ${body.price})` };
+        }
+        out.price = priceNum;
+    }
+    if (!isUpdate || has('category'))
+        out.category = sanitizeString(body.category || 'skewers', 50);
+    for (const field of MENU_IMAGE_FIELDS) {
+        if (!isUpdate || has(field)) {
+            out[field] = typeof body[field] === 'string' ? sanitizeString(body[field], 2048) : '';
+        }
+    }
+    if (!isUpdate || has('trackInventory'))
+        out.trackInventory = Boolean(body.trackInventory);
+    if (out.trackInventory === false) {
+        out.inventoryCount = null;
+    }
+    else if (has('inventoryCount') && body.inventoryCount !== null) {
+        const parsed = Number(body.inventoryCount);
+        out.inventoryCount = Number.isFinite(parsed) ? Math.round(parsed) : 0;
+    }
+    else if (!isUpdate) {
+        out.inventoryCount = out.trackInventory ? 0 : null;
+    }
+    if (!isUpdate || has('available'))
+        out.available = has('available') ? Boolean(body.available) : true;
+    if (!isUpdate || has('soldOutType')) {
+        out.soldOutType = VALID_SOLD_OUT_TYPES.includes(body.soldOutType)
+            ? body.soldOutType
+            : (out.available === false ? 'permanent' : 'none');
+    }
+    if (!isUpdate || has('soldOutDate'))
+        out.soldOutDate = body.soldOutDate ? sanitizeString(body.soldOutDate, 20) : null;
+    if (!isUpdate || has('soldOutAt'))
+        out.soldOutAt = body.soldOutAt ? sanitizeString(body.soldOutAt, 50) : null;
+    if (has('stockStatus'))
+        out.stockStatus = body.stockStatus === 'SOLD_OUT' ? 'SOLD_OUT' : 'AVAILABLE';
+    for (const flag of MENU_BOOLEAN_FLAGS) {
+        if (!isUpdate || has(flag))
+            out[flag] = Boolean(body[flag]);
+    }
+    if (!isUpdate || has('isTakeoutAvailable'))
+        out.isTakeoutAvailable = body.isTakeoutAvailable !== false;
+    if (!isUpdate || has('customAddOns'))
+        out.customAddOns = Array.isArray(body.customAddOns) ? body.customAddOns : [];
+    if (!isUpdate || has('recipe'))
+        out.recipe = Array.isArray(body.recipe) ? body.recipe : [];
+    if (!isUpdate || has('orderIndex')) {
+        out.orderIndex = Number.isFinite(Number(body.orderIndex)) ? Number(body.orderIndex) : 999;
+    }
+    if (!isUpdate) {
+        Object.assign(out, applyInventoryLinkage({}, out));
+        if (!out.stockStatus)
+            out.stockStatus = out.available ? 'AVAILABLE' : 'SOLD_OUT';
+    }
+    out.updatedAt = new Date().toISOString();
+    if (body.id)
+        out.id = sanitizeString(body.id, 100);
+    return { isValid: true, sanitizedData: out };
+}
+function applyInventoryLinkage(existing, patch) {
+    const prev = existing || {};
+    const track = patch.trackInventory !== undefined ? !!patch.trackInventory : !!prev.trackInventory;
+    const count = patch.inventoryCount !== undefined ? patch.inventoryCount : prev.inventoryCount;
+    if (track && typeof count === 'number' && count <= 0) {
+        return {
+            available: false,
+            soldOutType: 'permanent',
+            soldOutAt: patch.soldOutAt || prev.soldOutAt || new Date().toISOString(),
+            stockStatus: 'SOLD_OUT'
+        };
+    }
+    const wasInventoryLocked = !!prev.trackInventory && typeof prev.inventoryCount === 'number' && prev.inventoryCount <= 0;
+    if (track && typeof count === 'number' && count > 0 && wasInventoryLocked && patch.available === undefined) {
+        return { available: true, soldOutType: 'none', soldOutAt: null, soldOutDate: null, stockStatus: 'AVAILABLE' };
+    }
+    return {};
 }
 //# sourceMappingURL=validators.js.map

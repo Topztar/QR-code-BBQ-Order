@@ -5,6 +5,7 @@ import { validateOrderPayload, validateRatingPayload, validateCheckoutPayload } 
 import { isStoreOpenFromData, createGetCachedSettings } from '../helpers';
 import { orderCalculationService, checkItemCompleteConcurrency, checkRefundLogsGate } from '@sabay/shared';
 import { hashPin } from '../auth';
+import { invalidatePublicBootstrapCache } from './bootstrap';
 
 // ============================================================
 // ORDERS 路由模組（含 print-logs）
@@ -19,6 +20,35 @@ export interface RouteContext {
   requireAppCheck: express.RequestHandler;
   createRateLimiter: (max: number, windowMs: number, name: string) => express.RequestHandler;
   sendErrorResponse: (res: express.Response, error: any, ctx?: string) => void;
+}
+
+/**
+ * 📦 computeDishDeductions — 唯一的餐點庫存扣除計算 (Single Source of Truth)
+ * Used by BOTH confirmOrderTransaction and PUT /orders/:id/status to prevent logic drift.
+ * Untracked dishes are skipped; negative balances are allowed; <= 0 locks as permanent SOLD_OUT.
+ */
+export function computeDishDeductions(
+  dishDocs: Array<{ exists: boolean; id: string; ref: any; data: () => any }>,
+  qtyMap: Record<string, number>
+): Array<{ ref: any; updates: Record<string, any> }> {
+  const result: Array<{ ref: any; updates: Record<string, any> }> = [];
+  for (const doc of dishDocs) {
+    if (!doc.exists) continue;
+    const dish = doc.data() as any;
+    if (!dish?.trackInventory) continue; // Unchecked Dish Isolation
+
+    const currentStock = typeof dish.inventoryCount === 'number' ? dish.inventoryCount : 0;
+    const updatedStock = currentStock - (qtyMap[doc.id] || 0); // Negative balances allowed
+    const updates: Record<string, any> = { inventoryCount: updatedStock };
+    if (updatedStock <= 0) {
+      updates.available = false;
+      updates.soldOutType = 'permanent';
+      updates.soldOutAt = new Date().toISOString();
+      updates.stockStatus = 'SOLD_OUT';
+    }
+    result.push({ ref: doc.ref, updates });
+  }
+  return result;
 }
 
 /**
@@ -55,30 +85,9 @@ export async function confirmOrderTransaction(
     const dishRefs = uniqueDishIds.map((id) => db.collection('menu').doc(id));
     const dishDocs = dishRefs.length > 0 ? await Promise.all(dishRefs.map((ref) => transaction.get(ref))) : [];
 
-    // 2. Compute deductions
-    for (const doc of dishDocs) {
-      if (!doc.exists) continue;
-      const dish = doc.data() as any;
-
-      // Skip items without inventory tracking (Unchecked Dish Isolation)
-      if (!dish?.trackInventory) continue;
-
-      const currentStock = dish.inventoryCount ?? 0;
-      const updatedStock = currentStock - (qtyMap[doc.id] || 0); // Negative balances allowed
-
-      const updates: any = {
-        inventoryCount: updatedStock
-      };
-
-      // Automatically switch to SOLD_OUT when balance is <= 0
-      if (updatedStock <= 0) {
-        updates.available = false;
-        updates.soldOutType = 'permanent';
-        updates.soldOutAt = new Date().toISOString();
-        updates.stockStatus = 'SOLD_OUT';
-      }
-
-      transaction.update(doc.ref, updates);
+    // 2. Compute deductions (shared single source of truth)
+    for (const { ref, updates } of computeDishDeductions(dishDocs as any, qtyMap)) {
+      transaction.update(ref, updates);
     }
 
     // 3. Mark the order as confirmed
@@ -577,7 +586,9 @@ put('/orders/:id/status', requireStaffAuth, async (req, res) => {
   }
 
   try {
+    let inventoryTouched = false;
     await db.runTransaction(async (t) => {
+      inventoryTouched = false; // reset on transaction retry
       const orderRef = db.collection('orders').doc(id);
       const doc = await t.get(orderRef);
       if (!doc.exists) throw new Error('Order not found');
@@ -606,29 +617,10 @@ put('/orders/:id/status', requireStaffAuth, async (req, res) => {
         }
       }
 
-      // Writes must occur after all reads in Firestore transaction
-      if (dishDocs.length > 0) {
-        for (const dishDoc of dishDocs) {
-          if (!dishDoc.exists) continue;
-          const dish = dishDoc.data();
-          if (!dish?.trackInventory) continue; // Unchecked Dish Isolation
-
-          const currentStock = dish.inventoryCount ?? 0;
-          const updatedStock = currentStock - (itemQuantities[dishDoc.id] || 0);
-
-          const updates: any = {
-            inventoryCount: updatedStock
-          };
-
-          if (updatedStock <= 0) {
-            updates.available = false;
-            updates.soldOutType = 'permanent';
-            updates.soldOutAt = new Date().toISOString();
-            updates.stockStatus = 'SOLD_OUT';
-          }
-
-          t.update(dishDoc.ref, updates);
-        }
+      // Writes must occur after all reads in Firestore transaction (shared deduction logic)
+      for (const { ref, updates } of computeDishDeductions(dishDocs as any, itemQuantities)) {
+        t.update(ref, updates);
+        inventoryTouched = true;
       }
       
       const orderUpdates: any = { status };
@@ -638,6 +630,8 @@ put('/orders/:id/status', requireStaffAuth, async (req, res) => {
       }
       t.update(orderRef, orderUpdates);
     });
+    // ⚡ Inventory changed → bust menu/bootstrap caches so counts & sold-out state are not served stale
+    if (inventoryTouched) invalidatePublicBootstrapCache();
     res.json({ id, status });
   } catch (error: any) {
     if (error?.message?.startsWith('TRANSITION_REJECTED:')) {

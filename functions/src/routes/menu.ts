@@ -3,7 +3,7 @@ import sharp from 'sharp';
 import busboy from 'busboy';
 import { Firestore } from 'firebase-admin/firestore';
 import { Bucket } from '@google-cloud/storage';
-import { validateImageUploadPayload, sanitizeString } from '../validators';
+import { validateImageUploadPayload, validateMenuItemPayload, applyInventoryLinkage, sanitizeString } from '../validators';
 import { cachedMenu, cachedCategories, setCachedMenu, setCachedCategories, CACHE_TTL_MS, processMenuItemSoldOut, cleanupStorageImage } from '../helpers';
 import { invalidatePublicBootstrapCache } from './bootstrap';
 import { processAndSaveImage } from '../services/imageProcessing';
@@ -231,7 +231,13 @@ export function registerMenuRoutes(app: express.Application, ctx: RouteContext) 
       }
 
       const now = new Date();
-      const snapshot = await db.collection('menu').select('id', 'category', 'name', 'price', 'image', 'thumbnailUrl', 'avifUrl', 'avifThumbnailUrl', 'description', 'available', 'isSetMeal', 'requiredSaucesOption', 'hasNoodlesOption', 'hasCoconutsMilkOption', 'containsBeef', 'containsPork', 'containsSeafood', 'isNotSpicy', 'customAddOns', 'recipe', 'orderIndex', 'isTakeoutAvailable', 'soldOutAt', 'soldOutType', 'soldOutDate').orderBy('orderIndex').get();
+      const snapshot = await db.collection('menu').select(
+        'id', 'category', 'name', 'price', 'image', 'thumbnailUrl', 'avifUrl', 'avifThumbnailUrl',
+        'description', 'available', 'isSetMeal', 'requiredSaucesOption', 'hasNoodlesOption',
+        'hasCoconutsMilkOption', 'containsBeef', 'containsPork', 'containsSeafood', 'isNotSpicy',
+        'customAddOns', 'recipe', 'orderIndex', 'isTakeoutAvailable', 'soldOutAt', 'soldOutType',
+        'soldOutDate', 'trackInventory', 'inventoryCount', 'stockStatus'
+      ).orderBy('orderIndex').get();
       const items = snapshot.docs.map(doc => {
         const d = doc.data() as any;
         return {
@@ -260,6 +266,9 @@ export function registerMenuRoutes(app: express.Application, ctx: RouteContext) 
           orderIndex: typeof d.orderIndex === 'number' ? d.orderIndex : 0,
           isTakeoutAvailable: d.isTakeoutAvailable !== false,
           soldOutAt: d.soldOutAt ?? null,
+          trackInventory: !!d.trackInventory,
+          inventoryCount: d.trackInventory ? (typeof d.inventoryCount === 'number' ? d.inventoryCount : 0) : null,
+          stockStatus: d.stockStatus || (d.available ? 'AVAILABLE' : 'SOLD_OUT'),
           _docId: doc.id
         };
       });
@@ -281,13 +290,14 @@ export function registerMenuRoutes(app: express.Application, ctx: RouteContext) 
   // 4. Create Menu Item
   post('/menu', requireStaffAuth, async (req, res) => {
     try {
-      const data = req.body;
-      const isAvail = data.available !== undefined ? !!data.available : true;
+      const validation = validateMenuItemPayload(req.body);
+      if (!validation.isValid || !validation.sanitizedData) {
+        return res.status(400).json({ error: validation.error || '無效的餐點資料' });
+      }
+      const data = validation.sanitizedData;
       const newItem = {
-        id: `dish-${Date.now()}`,
+        id: data.id || `dish-${Date.now()}`,
         ...data,
-        available: isAvail,
-        soldOutAt: !isAvail ? new Date().toISOString() : null,
         orderIndex: data.orderIndex !== undefined ? data.orderIndex : 999
       };
       await db.collection('menu').doc(newItem.id).set(newItem);
@@ -321,21 +331,26 @@ export function registerMenuRoutes(app: express.Application, ctx: RouteContext) 
   const updateMenuItemHandler: express.RequestHandler = async (req, res) => {
     try {
       const id = req.params.id as string;
-      const data = req.body;
-      if (data.available !== undefined) {
-        if (data.available === false && !data.soldOutAt) {
-          data.soldOutAt = new Date().toISOString();
-        } else if (data.available === true) {
-          data.soldOutAt = null;
-        }
+      // 🛡️ Sparse update: only fields present in the payload are written (merge:true safe)
+      const validation = validateMenuItemPayload({ ...req.body, id }, { mode: 'update' });
+      if (!validation.isValid || !validation.sanitizedData) {
+        return res.status(400).json({ error: validation.error || '無效的餐點資料' });
       }
+      const data = validation.sanitizedData;
+
+      const docRef = db.collection('menu').doc(id);
+      const docSnap = await docRef.get();
+      if (!docSnap.exists) {
+        return res.status(404).json({ error: '找不到該餐點 (Item not found)' });
+      }
+      const oldData = docSnap.data() || {};
+
+      // 📦 Inventory ↔ sold-out linkage evaluated on effective state (existing doc + patch)
+      Object.assign(data, applyInventoryLinkage(oldData, data));
 
       // 若有更換圖片、縮圖或 AVIF 版本，非同步清理舊圖片檔案
       if (data.image !== undefined || data.thumbnailUrl !== undefined || data.avifUrl !== undefined || data.avifThumbnailUrl !== undefined) {
-        const docRef = db.collection('menu').doc(id);
-        const docSnap = await docRef.get();
-        if (docSnap.exists) {
-          const oldData = docSnap.data();
+        {
           const oldImage = oldData?.image;
           const oldThumb = oldData?.thumbnailUrl;
           const oldAvif = oldData?.avifUrl;
@@ -364,9 +379,9 @@ export function registerMenuRoutes(app: express.Application, ctx: RouteContext) 
         }
       }
 
-      await db.collection('menu').doc(id).set(data, { merge: true });
+      await docRef.set(data, { merge: true });
       invalidatePublicBootstrapCache();
-      res.json({ success: true });
+      res.json({ success: true, item: { ...oldData, ...data, id } });
     } catch (error) {
       console.error('Error updating menu:', error);
       sendErrorResponse(res, error);

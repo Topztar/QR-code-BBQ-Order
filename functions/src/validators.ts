@@ -325,3 +325,142 @@ export function validateCheckoutPayload(body: any): ValidationResult<{
     }
   };
 }
+
+const MENU_BOOLEAN_FLAGS = [
+  'isSetMeal', 'requiredSaucesOption', 'hasNoodlesOption', 'hasCoconutsMilkOption',
+  'containsBeef', 'containsPork', 'containsSeafood', 'isNotSpicy'
+] as const;
+const MENU_IMAGE_FIELDS = ['image', 'thumbnailUrl', 'avifUrl', 'avifThumbnailUrl'] as const;
+const VALID_SOLD_OUT_TYPES = ['none', 'daily', 'permanent'];
+
+function sanitizeLocalizedText(value: any, maxLen: number): Record<string, string> {
+  if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+    const out: Record<string, string> = {};
+    for (const [k, v] of Object.entries(value)) {
+      out[k] = sanitizeString(v, maxLen);
+    }
+    return out;
+  }
+  if (typeof value === 'string') {
+    return { zh: sanitizeString(value, maxLen) };
+  }
+  return { zh: '' };
+}
+
+export interface MenuItemValidationOptions {
+  /**
+   * 'create' (default): fill every field with defaults — used by POST /menu.
+   * 'update': sparse — emit ONLY the fields present in the payload, so that a
+   * Firestore `set(..., { merge: true })` never overwrites unsent fields
+   * (available / soldOutType / allergen flags / orderIndex ...) with defaults.
+   */
+  mode?: 'create' | 'update';
+}
+
+/**
+ * Validates and sanitizes Menu Item payload (for admin menu mutations)
+ * Enforces Phase 1 Zero-Trust, allows negative prices (discounts) and negative inventory (shortage),
+ * supports inventory tracking toggling. The sold-out linkage is computed separately by
+ * `applyInventoryLinkage` against the persisted document (see routes/menu.ts).
+ */
+export function validateMenuItemPayload(body: any, options: MenuItemValidationOptions = {}): ValidationResult<any> {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return { isValid: false, error: '無效的菜單資料格式 (Invalid JSON payload)' };
+  }
+  const isUpdate = options.mode === 'update';
+  const has = (key: string) => body[key] !== undefined;
+  const out: Record<string, any> = {};
+
+  if (!isUpdate || has('name')) out.name = sanitizeLocalizedText(body.name, 100);
+  if (!isUpdate || has('description')) out.description = sanitizeLocalizedText(body.description, 500);
+
+  // Price supports negative numbers (discounts, e.g. Hakka Coin Card Payment -1000), 0, and positive numbers
+  if (!isUpdate || has('price')) {
+    const priceNum = Number(body.price);
+    if (body.price === null || !Number.isFinite(priceNum) || priceNum < -1000000 || priceNum > 1000000) {
+      return { isValid: false, error: `無效的餐點定價 (Invalid price: ${body.price})` };
+    }
+    out.price = priceNum;
+  }
+
+  if (!isUpdate || has('category')) out.category = sanitizeString(body.category || 'skewers', 50);
+
+  for (const field of MENU_IMAGE_FIELDS) {
+    if (!isUpdate || has(field)) {
+      out[field] = typeof body[field] === 'string' ? sanitizeString(body[field], 2048) : '';
+    }
+  }
+
+  // Inventory tracking alignment (0 and negative counts are legal)
+  if (!isUpdate || has('trackInventory')) out.trackInventory = Boolean(body.trackInventory);
+  if (out.trackInventory === false) {
+    // Explicit null wipes legacy numeric values when unchecked (merge:true ignores omitted keys)
+    out.inventoryCount = null;
+  } else if (has('inventoryCount') && body.inventoryCount !== null) {
+    const parsed = Number(body.inventoryCount);
+    out.inventoryCount = Number.isFinite(parsed) ? Math.round(parsed) : 0;
+  } else if (!isUpdate) {
+    out.inventoryCount = out.trackInventory ? 0 : null;
+  }
+
+  // Sold out / available states — only written when explicitly provided (or on create)
+  if (!isUpdate || has('available')) out.available = has('available') ? Boolean(body.available) : true;
+  if (!isUpdate || has('soldOutType')) {
+    out.soldOutType = VALID_SOLD_OUT_TYPES.includes(body.soldOutType)
+      ? body.soldOutType
+      : (out.available === false ? 'permanent' : 'none');
+  }
+  if (!isUpdate || has('soldOutDate')) out.soldOutDate = body.soldOutDate ? sanitizeString(body.soldOutDate, 20) : null;
+  if (!isUpdate || has('soldOutAt')) out.soldOutAt = body.soldOutAt ? sanitizeString(body.soldOutAt, 50) : null;
+  if (has('stockStatus')) out.stockStatus = body.stockStatus === 'SOLD_OUT' ? 'SOLD_OUT' : 'AVAILABLE';
+
+  for (const flag of MENU_BOOLEAN_FLAGS) {
+    if (!isUpdate || has(flag)) out[flag] = Boolean(body[flag]);
+  }
+  if (!isUpdate || has('isTakeoutAvailable')) out.isTakeoutAvailable = body.isTakeoutAvailable !== false;
+  if (!isUpdate || has('customAddOns')) out.customAddOns = Array.isArray(body.customAddOns) ? body.customAddOns : [];
+  if (!isUpdate || has('recipe')) out.recipe = Array.isArray(body.recipe) ? body.recipe : [];
+  if (!isUpdate || has('orderIndex')) {
+    out.orderIndex = Number.isFinite(Number(body.orderIndex)) ? Number(body.orderIndex) : 999;
+  }
+
+  if (!isUpdate) {
+    // Create: derive linkage from the payload alone
+    Object.assign(out, applyInventoryLinkage({}, out));
+    if (!out.stockStatus) out.stockStatus = out.available ? 'AVAILABLE' : 'SOLD_OUT';
+  }
+
+  out.updatedAt = new Date().toISOString();
+  if (body.id) out.id = sanitizeString(body.id, 100);
+
+  return { isValid: true, sanitizedData: out };
+}
+
+/**
+ * Pure inventory ↔ sold-out linkage, evaluated on the EFFECTIVE state (existing doc + patch).
+ * Returns the extra fields to merge into the patch.
+ *  - tracked && count <= 0                     → permanent SOLD_OUT lock
+ *  - restock (count > 0) of an item that was locked by inventory (tracked && count <= 0),
+ *    and the admin did not explicitly send `available` → auto-recover to AVAILABLE.
+ *    Manually sold-out items (untracked or count > 0) are never auto-recovered.
+ */
+export function applyInventoryLinkage(existing: Record<string, any> | null | undefined, patch: Record<string, any>): Record<string, any> {
+  const prev = existing || {};
+  const track = patch.trackInventory !== undefined ? !!patch.trackInventory : !!prev.trackInventory;
+  const count = patch.inventoryCount !== undefined ? patch.inventoryCount : prev.inventoryCount;
+
+  if (track && typeof count === 'number' && count <= 0) {
+    return {
+      available: false,
+      soldOutType: 'permanent',
+      soldOutAt: patch.soldOutAt || prev.soldOutAt || new Date().toISOString(),
+      stockStatus: 'SOLD_OUT'
+    };
+  }
+
+  const wasInventoryLocked = !!prev.trackInventory && typeof prev.inventoryCount === 'number' && prev.inventoryCount <= 0;
+  if (track && typeof count === 'number' && count > 0 && wasInventoryLocked && patch.available === undefined) {
+    return { available: true, soldOutType: 'none', soldOutAt: null, soldOutDate: null, stockStatus: 'AVAILABLE' };
+  }
+  return {};
+}

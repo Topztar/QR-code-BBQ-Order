@@ -212,7 +212,7 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
   const [isNotSpicy, setIsNotSpicy] = useState(false);
   const [isTakeoutAvailable, setIsTakeoutAvailable] = useState(false);
   const [trackInventory, setTrackInventory] = useState(false);
-  const [inventoryCount, setInventoryCount] = useState<number>(0);
+  const [inventoryCount, setInventoryCount] = useState<number | string>(0);
   const [customAddOns, setCustomAddOns] = useState<any[]>([]);
   const [itemRecipe, setItemRecipe] = useState<{ ingredientId: string; amount: number }[]>([]);
   const [newRecipeIngId, setNewRecipeIngId] = useState('');
@@ -226,7 +226,7 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
         setItemNames(normalizeLanguageMap(editingItem.names, editingItem.name));
         setItemDescs(normalizeLanguageMap(editingItem.descriptions, editingItem.description));
         setItemCategory(editingItem.category || 'skewers');
-        setItemPrice(editingItem.price || 100);
+        setItemPrice(editingItem.price !== undefined ? editingItem.price : 100);
         setItemImage(editingItem.image || '');
         setItemThumbnailUrl(editingItem.thumbnailUrl || '');
         setItemAvifUrl(editingItem.avifUrl || '');
@@ -265,12 +265,16 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
     const initialNames = editingItem ? normalizeLanguageMap(editingItem.names, editingItem.name) : { zh: '', en: '', th: '', ja: '', ko: '', vi: '', ru: '', es: '' };
     const initialDescs = editingItem ? normalizeLanguageMap(editingItem.descriptions, editingItem.description) : { zh: '', en: '', th: '', ja: '', ko: '', vi: '', ru: '', es: '' };
     const initialCategory = editingItem?.category || 'skewers';
-    const initialPrice = editingItem?.price || 100;
+    const initialPrice = editingItem?.price !== undefined ? editingItem.price : 100;
     const initialImage = editingItem?.image || '';
     const initialIsNotSpicy = editingItem?.isNotSpicy || false;
     const initialIsTakeoutAvailable = editingItem?.isTakeoutAvailable || false;
+    const initialTrackInventory = editingItem?.trackInventory || false;
+    const initialInventoryCount = editingItem?.inventoryCount ?? 0;
     const initialCustomAddOns = editingItem?.customAddOns || [];
     const initialRecipe = editingItem?.recipe || [];
+
+    const parsedCurrentCount = typeof inventoryCount === 'string' ? (parseInt(inventoryCount, 10) || 0) : (inventoryCount ?? 0);
 
     const dirty = JSON.stringify(itemNames) !== JSON.stringify(initialNames) ||
       JSON.stringify(itemDescs) !== JSON.stringify(initialDescs) ||
@@ -279,11 +283,13 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
       itemImage !== initialImage ||
       isNotSpicy !== initialIsNotSpicy ||
       isTakeoutAvailable !== initialIsTakeoutAvailable ||
+      trackInventory !== initialTrackInventory ||
+      (trackInventory && parsedCurrentCount !== initialInventoryCount) ||
       JSON.stringify(customAddOns) !== JSON.stringify(initialCustomAddOns) ||
       JSON.stringify(itemRecipe) !== JSON.stringify(initialRecipe);
     
     setIsDirty(dirty);
-  }, [itemNames, itemDescs, itemCategory, itemPrice, itemImage, isNotSpicy, isTakeoutAvailable, customAddOns, itemRecipe, isOpen, editingItem]);
+  }, [itemNames, itemDescs, itemCategory, itemPrice, itemImage, isNotSpicy, isTakeoutAvailable, trackInventory, inventoryCount, customAddOns, itemRecipe, isOpen, editingItem]);
 
   const handleSafeClose = () => {
     if (isDirty) {
@@ -311,6 +317,10 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
     }
     setIsSaving(true);
     try {
+      const parsedCount = typeof inventoryCount === 'string' ? (parseInt(inventoryCount, 10) || 0) : (inventoryCount ?? 0);
+      const finalInventoryCount = trackInventory ? (Number.isFinite(parsedCount) ? parsedCount : 0) : null;
+      const autoSoldOut = trackInventory && typeof finalInventoryCount === 'number' && finalInventoryCount <= 0;
+
       await onSave({
         name: itemNames,
         description: itemDescs,
@@ -323,7 +333,8 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
         isNotSpicy,
         isTakeoutAvailable,
         trackInventory,
-        inventoryCount: trackInventory ? Number(inventoryCount || 0) : undefined,
+        inventoryCount: finalInventoryCount,
+        ...(autoSoldOut ? { available: false, soldOutType: 'permanent', stockStatus: 'SOLD_OUT' } : {}),
         customAddOns,
         recipe: itemRecipe
       });
@@ -914,15 +925,23 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
                         type="number"
                         step="1"
                         id="input-inventory-count"
-                        value={inventoryCount ?? 0}
-                        onChange={(e) => setInventoryCount(parseInt(e.target.value, 10) || 0)}
+                        value={inventoryCount}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val === '' || val === '-') {
+                            setInventoryCount(val);
+                          } else {
+                            const parsed = parseInt(val, 10);
+                            setInventoryCount(Number.isFinite(parsed) ? parsed : 0);
+                          }
+                        }}
                         className={`w-24 px-2 py-1 rounded bg-[#1a1a1a] text-xs font-mono border outline-none ${
-                          (inventoryCount ?? 0) < 0
+                          (typeof inventoryCount === 'number' ? inventoryCount : (parseInt(inventoryCount, 10) || 0)) < 0
                             ? 'border-rose-500 text-rose-400 font-bold'
                             : 'border-zinc-700 text-white'
                         }`}
                       />
-                      {(inventoryCount ?? 0) < 0 && (
+                      {(typeof inventoryCount === 'number' ? inventoryCount : (parseInt(inventoryCount, 10) || 0)) < 0 && (
                         <span className="text-rose-400 text-xs font-medium">⚠️ 目前低於庫存</span>
                       )}
                     </div>

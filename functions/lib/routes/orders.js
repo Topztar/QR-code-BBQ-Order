@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.computeDishDeductions = computeDishDeductions;
 exports.confirmOrderTransaction = confirmOrderTransaction;
 exports.registerOrdersRoutes = registerOrdersRoutes;
 const firestore_1 = require("firebase-admin/firestore");
@@ -7,6 +8,28 @@ const validators_1 = require("../validators");
 const helpers_1 = require("../helpers");
 const shared_1 = require("@sabay/shared");
 const auth_1 = require("../auth");
+const bootstrap_1 = require("./bootstrap");
+function computeDishDeductions(dishDocs, qtyMap) {
+    const result = [];
+    for (const doc of dishDocs) {
+        if (!doc.exists)
+            continue;
+        const dish = doc.data();
+        if (!dish?.trackInventory)
+            continue;
+        const currentStock = typeof dish.inventoryCount === 'number' ? dish.inventoryCount : 0;
+        const updatedStock = currentStock - (qtyMap[doc.id] || 0);
+        const updates = { inventoryCount: updatedStock };
+        if (updatedStock <= 0) {
+            updates.available = false;
+            updates.soldOutType = 'permanent';
+            updates.soldOutAt = new Date().toISOString();
+            updates.stockStatus = 'SOLD_OUT';
+        }
+        result.push({ ref: doc.ref, updates });
+    }
+    return result;
+}
 async function confirmOrderTransaction(db, orderId, items) {
     const orderRef = db.collection('orders').doc(orderId);
     return db.runTransaction(async (transaction) => {
@@ -29,24 +52,8 @@ async function confirmOrderTransaction(db, orderId, items) {
         const uniqueDishIds = Object.keys(qtyMap);
         const dishRefs = uniqueDishIds.map((id) => db.collection('menu').doc(id));
         const dishDocs = dishRefs.length > 0 ? await Promise.all(dishRefs.map((ref) => transaction.get(ref))) : [];
-        for (const doc of dishDocs) {
-            if (!doc.exists)
-                continue;
-            const dish = doc.data();
-            if (!dish?.trackInventory)
-                continue;
-            const currentStock = dish.inventoryCount ?? 0;
-            const updatedStock = currentStock - (qtyMap[doc.id] || 0);
-            const updates = {
-                inventoryCount: updatedStock
-            };
-            if (updatedStock <= 0) {
-                updates.available = false;
-                updates.soldOutType = 'permanent';
-                updates.soldOutAt = new Date().toISOString();
-                updates.stockStatus = 'SOLD_OUT';
-            }
-            transaction.update(doc.ref, updates);
+        for (const { ref, updates } of computeDishDeductions(dishDocs, qtyMap)) {
+            transaction.update(ref, updates);
         }
         transaction.update(orderRef, {
             status: 'confirmed',
@@ -271,11 +278,14 @@ function registerOrdersRoutes(app, ctx) {
         }
         const orderData = validation.sanitizedData;
         const clientOrderId = orderData.clientOrderId ? String(orderData.clientOrderId).trim() : null;
-        const orderId = orderData.id || `ORD-${Date.now().toString(36).toUpperCase()}`;
+        const orderId = `ORD-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
         try {
             const sysData = await getCachedSettings();
             const isTakeoutOrder = !!(orderData.takeoutInfo || String(orderData.tableNumber || '').includes('外帶') || String(orderData.tableNumber || '').toLowerCase() === 'takeout');
             const isReservationOrder = !!(orderData.reservationNo || orderData.reservationDate);
+            if (sysData?.liveServicePaused && !isReservationOrder) {
+                return res.status(503).json({ error: 'PAUSED:廚房目前暫停接單中，請稍候再試或洽現場服務人員。' });
+            }
             if (!isReservationOrder && !isTakeoutOrder && !(0, helpers_1.isStoreOpenFromData)(sysData)) {
                 return res.status(400).json({ error: 'CLOSED:目前非廚房接單供餐時間（廚房接單時段依排程設定，門市實體營業時間請參閱公告），系統暫不開放下單點餐！' });
             }
@@ -382,8 +392,9 @@ function registerOrdersRoutes(app, ctx) {
                     discount: verifiedPricing.discount,
                     serviceCharge: verifiedPricing.serviceCharge,
                     total: verifiedPricing.total,
-                    status: orderData.status || 'pending',
-                    createdAt: orderData.createdAt || new Date().toISOString(),
+                    status: orderData.source === 'pos' ? 'pending_kitchen_verification' : 'pending',
+                    isPaid: false,
+                    createdAt: new Date().toISOString(),
                 };
                 if (idempotencyRef) {
                     t.set(idempotencyRef, {
@@ -392,7 +403,7 @@ function registerOrdersRoutes(app, ctx) {
                         expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000)
                     });
                 }
-                t.set(db.collection('orders').doc(orderId), orderToSave);
+                t.create(db.collection('orders').doc(orderId), orderToSave);
                 if (tableRef && tableSnap && tableSnap.exists) {
                     t.update(tableRef, { status: 'in_use', cleaningStartedAt: null });
                 }
@@ -443,7 +454,8 @@ function registerOrdersRoutes(app, ctx) {
             if (error instanceof Error && error.message.startsWith('SOLDOUT:')) {
                 return res.status(409).json({ error: error.message.replace('SOLDOUT:', '') });
             }
-            res.status(500).send(error);
+            const msg = error instanceof Error ? error.message : String(error);
+            return res.status(500).json({ error: msg || '伺服器處理訂單發生異常，請重試' });
         }
     });
     put('/orders/:id/status', requireStaffAuth, async (req, res) => {
@@ -454,7 +466,9 @@ function registerOrdersRoutes(app, ctx) {
             return res.status(400).json({ error: '無效的訂單狀態' });
         }
         try {
+            let inventoryTouched = false;
             await db.runTransaction(async (t) => {
+                inventoryTouched = false;
                 const orderRef = db.collection('orders').doc(id);
                 const doc = await t.get(orderRef);
                 if (!doc.exists)
@@ -480,26 +494,9 @@ function registerOrdersRoutes(app, ctx) {
                         dishDocs = await Promise.all(dishRefs.map((ref) => t.get(ref)));
                     }
                 }
-                if (dishDocs.length > 0) {
-                    for (const dishDoc of dishDocs) {
-                        if (!dishDoc.exists)
-                            continue;
-                        const dish = dishDoc.data();
-                        if (!dish?.trackInventory)
-                            continue;
-                        const currentStock = dish.inventoryCount ?? 0;
-                        const updatedStock = currentStock - (itemQuantities[dishDoc.id] || 0);
-                        const updates = {
-                            inventoryCount: updatedStock
-                        };
-                        if (updatedStock <= 0) {
-                            updates.available = false;
-                            updates.soldOutType = 'permanent';
-                            updates.soldOutAt = new Date().toISOString();
-                            updates.stockStatus = 'SOLD_OUT';
-                        }
-                        t.update(dishDoc.ref, updates);
-                    }
+                for (const { ref, updates } of computeDishDeductions(dishDocs, itemQuantities)) {
+                    t.update(ref, updates);
+                    inventoryTouched = true;
                 }
                 const orderUpdates = { status };
                 if (shouldDeductInventory) {
@@ -508,6 +505,8 @@ function registerOrdersRoutes(app, ctx) {
                 }
                 t.update(orderRef, orderUpdates);
             });
+            if (inventoryTouched)
+                (0, bootstrap_1.invalidatePublicBootstrapCache)();
             res.json({ id, status });
         }
         catch (error) {

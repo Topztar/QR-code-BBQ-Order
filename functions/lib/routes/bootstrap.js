@@ -80,7 +80,8 @@ function registerBootstrapRoutes(app, ctx) {
                 }
                 return res.json(cachedPublicBootstrap.payload);
             }
-            if (isStaffRequest && cachedStaffBootstrap && (nowMs - cachedStaffBootstrap.timestamp < STAFF_BOOTSTRAP_CACHE_TTL_MS)) {
+            const wantsFresh = isStaffRequest && req.query.fresh === '1';
+            if (isStaffRequest && !wantsFresh && cachedStaffBootstrap && (nowMs - cachedStaffBootstrap.timestamp < STAFF_BOOTSTRAP_CACHE_TTL_MS)) {
                 res.setHeader('ETag', cachedStaffBootstrap.etag);
                 res.setHeader('Vary', 'Authorization');
                 res.setHeader('Cache-Control', 'private, max-age=0, no-cache');
@@ -91,7 +92,7 @@ function registerBootstrapRoutes(app, ctx) {
             }
             const [categoriesSnap, menuSnap, tablesSnap, systemDoc, ingredientsSnap, reservationsSnap] = await Promise.all([
                 db.collection('categories').select('id', 'name', 'showOnCustomerPage', 'orderIndex').orderBy('orderIndex').get(),
-                db.collection('menu').select('id', 'category', 'name', 'price', 'image', 'thumbnailUrl', 'avifUrl', 'avifThumbnailUrl', 'description', 'available', 'isSetMeal', 'requiredSaucesOption', 'hasNoodlesOption', 'hasCoconutsMilkOption', 'containsBeef', 'containsPork', 'containsSeafood', 'isNotSpicy', 'customAddOns', 'recipe', 'orderIndex', 'isTakeoutAvailable', 'soldOutAt', 'soldOutType', 'soldOutDate').orderBy('orderIndex').get(),
+                db.collection('menu').select('id', 'category', 'name', 'price', 'image', 'thumbnailUrl', 'avifUrl', 'avifThumbnailUrl', 'description', 'available', 'isSetMeal', 'requiredSaucesOption', 'hasNoodlesOption', 'hasCoconutsMilkOption', 'containsBeef', 'containsPork', 'containsSeafood', 'isNotSpicy', 'customAddOns', 'recipe', 'orderIndex', 'isTakeoutAvailable', 'soldOutAt', 'soldOutType', 'soldOutDate', 'trackInventory', 'inventoryCount', 'stockStatus').orderBy('orderIndex').get(),
                 db.collection('tables').select('id', 'qrCodeUrl', 'status', 'cleaningStartedAt', 'maxCapacity', 'positionX', 'positionY', 'preservedFor', 'mergedWith').get(),
                 db.collection('settings').doc('system').get(),
                 isStaffRequest
@@ -131,6 +132,9 @@ function registerBootstrapRoutes(app, ctx) {
                     orderIndex: typeof d.orderIndex === 'number' ? d.orderIndex : 0,
                     isTakeoutAvailable: d.isTakeoutAvailable !== false,
                     soldOutAt: d.soldOutAt ?? null,
+                    trackInventory: !!d.trackInventory,
+                    inventoryCount: d.trackInventory ? (typeof d.inventoryCount === 'number' ? d.inventoryCount : 0) : null,
+                    stockStatus: d.stockStatus || (d.available ? 'AVAILABLE' : 'SOLD_OUT'),
                     _docId: doc.id
                 };
             });

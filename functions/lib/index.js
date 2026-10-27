@@ -1063,6 +1063,16 @@ var require_helpers = __commonJS({
       };
     }
     function processMenuItemSoldOut(item, now) {
+      if (item.trackInventory && typeof item.inventoryCount === "number" && item.inventoryCount <= 0) {
+        item.available = false;
+        if (!item.soldOutType || item.soldOutType === "none") {
+          item.soldOutType = "permanent";
+        }
+        if (!item.soldOutAt) {
+          item.soldOutAt = now.toISOString();
+        }
+        return item;
+      }
       if (item.available === false) {
         if (!item.soldOutAt) {
           item.soldOutAt = now.toISOString();
@@ -1081,7 +1091,7 @@ var require_helpers = __commonJS({
               month: "2-digit",
               day: "2-digit"
             }).format(now);
-            if (nowDateTwStr > soldDateTwStr) {
+            if (nowDateTwStr > soldDateTwStr && (!item.trackInventory || (item.inventoryCount ?? 0) > 0)) {
               item.available = true;
               item.soldOutAt = null;
               item.soldOutType = "none";
@@ -54104,6 +54114,8 @@ var require_validators = __commonJS({
     exports2.validateImageUploadPayload = validateImageUploadPayload;
     exports2.validateRatingPayload = validateRatingPayload;
     exports2.validateCheckoutPayload = validateCheckoutPayload;
+    exports2.validateMenuItemPayload = validateMenuItemPayload;
+    exports2.applyInventoryLinkage = applyInventoryLinkage;
     var shared_1 = require_dist();
     Object.defineProperty(exports2, "getTableCapacity", { enumerable: true, get: function() {
       return shared_1.getTableCapacity;
@@ -54170,15 +54182,22 @@ var require_validators = __commonJS({
         };
       }
       const sanitizedOrder = {
-        ...body,
         tableNumber,
         items: sanitizedItems,
         customerName: sanitizeString(body.customerName || "", 50),
         customerPhone: sanitizeString(body.customerPhone || body.phone || "", 30),
+        customerAvatar: sanitizeString(body.customerAvatar || "", 255) || void 0,
+        paymentMethod: ["cash", "credit", "member", "twqr"].includes(body.paymentMethod) ? body.paymentMethod : "cash",
+        guestCount: typeof body.guestCount === "number" && Number.isFinite(body.guestCount) && body.guestCount > 0 ? Math.min(Math.floor(body.guestCount), 100) : void 0,
         notes: sanitizeString(body.notes || "", 500),
         source: sanitizeString(body.source || "direct", 50),
-        utm_medium: sanitizeString(body.utm_medium || "", 50),
+        utm_medium: sanitizeString(body.utm_medium || "", 50) || void 0,
         takeoutInfo: sanitizedTakeoutInfo,
+        clientOrderId: sanitizeString(body.clientOrderId || "", 100) || void 0,
+        reservationNo: sanitizeString(body.reservationNo || "", 50) || void 0,
+        reservationDate: sanitizeString(body.reservationDate || "", 20) || void 0,
+        reservationTime: sanitizeString(body.reservationTime || "", 20) || void 0,
+        isMember: Boolean(body.isMember),
         notificationSent: false
       };
       return { isValid: true, sanitizedData: sanitizedOrder };
@@ -54335,6 +54354,118 @@ var require_validators = __commonJS({
         }
       };
     }
+    var MENU_BOOLEAN_FLAGS = [
+      "isSetMeal",
+      "requiredSaucesOption",
+      "hasNoodlesOption",
+      "hasCoconutsMilkOption",
+      "containsBeef",
+      "containsPork",
+      "containsSeafood",
+      "isNotSpicy"
+    ];
+    var MENU_IMAGE_FIELDS = ["image", "thumbnailUrl", "avifUrl", "avifThumbnailUrl"];
+    var VALID_SOLD_OUT_TYPES = ["none", "daily", "permanent"];
+    function sanitizeLocalizedText(value, maxLen) {
+      if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+        const out = {};
+        for (const [k, v] of Object.entries(value)) {
+          out[k] = sanitizeString(v, maxLen);
+        }
+        return out;
+      }
+      if (typeof value === "string") {
+        return { zh: sanitizeString(value, maxLen) };
+      }
+      return { zh: "" };
+    }
+    function validateMenuItemPayload(body, options = {}) {
+      if (!body || typeof body !== "object" || Array.isArray(body)) {
+        return { isValid: false, error: "\u7121\u6548\u7684\u83DC\u55AE\u8CC7\u6599\u683C\u5F0F (Invalid JSON payload)" };
+      }
+      const isUpdate = options.mode === "update";
+      const has = (key) => body[key] !== void 0;
+      const out = {};
+      if (!isUpdate || has("name"))
+        out.name = sanitizeLocalizedText(body.name, 100);
+      if (!isUpdate || has("description"))
+        out.description = sanitizeLocalizedText(body.description, 500);
+      if (!isUpdate || has("price")) {
+        const priceNum = Number(body.price);
+        if (body.price === null || !Number.isFinite(priceNum) || priceNum < -1e6 || priceNum > 1e6) {
+          return { isValid: false, error: `\u7121\u6548\u7684\u9910\u9EDE\u5B9A\u50F9 (Invalid price: ${body.price})` };
+        }
+        out.price = priceNum;
+      }
+      if (!isUpdate || has("category"))
+        out.category = sanitizeString(body.category || "skewers", 50);
+      for (const field of MENU_IMAGE_FIELDS) {
+        if (!isUpdate || has(field)) {
+          out[field] = typeof body[field] === "string" ? sanitizeString(body[field], 2048) : "";
+        }
+      }
+      if (!isUpdate || has("trackInventory"))
+        out.trackInventory = Boolean(body.trackInventory);
+      if (out.trackInventory === false) {
+        out.inventoryCount = null;
+      } else if (has("inventoryCount") && body.inventoryCount !== null) {
+        const parsed = Number(body.inventoryCount);
+        out.inventoryCount = Number.isFinite(parsed) ? Math.round(parsed) : 0;
+      } else if (!isUpdate) {
+        out.inventoryCount = out.trackInventory ? 0 : null;
+      }
+      if (!isUpdate || has("available"))
+        out.available = has("available") ? Boolean(body.available) : true;
+      if (!isUpdate || has("soldOutType")) {
+        out.soldOutType = VALID_SOLD_OUT_TYPES.includes(body.soldOutType) ? body.soldOutType : out.available === false ? "permanent" : "none";
+      }
+      if (!isUpdate || has("soldOutDate"))
+        out.soldOutDate = body.soldOutDate ? sanitizeString(body.soldOutDate, 20) : null;
+      if (!isUpdate || has("soldOutAt"))
+        out.soldOutAt = body.soldOutAt ? sanitizeString(body.soldOutAt, 50) : null;
+      if (has("stockStatus"))
+        out.stockStatus = body.stockStatus === "SOLD_OUT" ? "SOLD_OUT" : "AVAILABLE";
+      for (const flag of MENU_BOOLEAN_FLAGS) {
+        if (!isUpdate || has(flag))
+          out[flag] = Boolean(body[flag]);
+      }
+      if (!isUpdate || has("isTakeoutAvailable"))
+        out.isTakeoutAvailable = body.isTakeoutAvailable !== false;
+      if (!isUpdate || has("customAddOns"))
+        out.customAddOns = Array.isArray(body.customAddOns) ? body.customAddOns : [];
+      if (!isUpdate || has("recipe"))
+        out.recipe = Array.isArray(body.recipe) ? body.recipe : [];
+      if (!isUpdate || has("orderIndex")) {
+        out.orderIndex = Number.isFinite(Number(body.orderIndex)) ? Number(body.orderIndex) : 999;
+      }
+      if (!isUpdate) {
+        Object.assign(out, applyInventoryLinkage({}, out));
+        if (!out.stockStatus)
+          out.stockStatus = out.available ? "AVAILABLE" : "SOLD_OUT";
+      }
+      out.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+      if (body.id)
+        out.id = sanitizeString(body.id, 100);
+      return { isValid: true, sanitizedData: out };
+    }
+    function applyInventoryLinkage(existing, patch) {
+      const prev = existing || {};
+      const track = patch.trackInventory !== void 0 ? !!patch.trackInventory : !!prev.trackInventory;
+      const count = patch.inventoryCount !== void 0 ? patch.inventoryCount : prev.inventoryCount;
+      if (track && typeof count === "number" && count <= 0) {
+        return {
+          available: false,
+          soldOutType: "permanent",
+          soldOutAt: patch.soldOutAt || prev.soldOutAt || (/* @__PURE__ */ new Date()).toISOString(),
+          stockStatus: "SOLD_OUT"
+        };
+      }
+      const wasInventoryLocked = !!prev.trackInventory && typeof prev.inventoryCount === "number" && prev.inventoryCount <= 0;
+      if (track && typeof count === "number" && count > 0 && wasInventoryLocked && patch.available === void 0) {
+        return { available: true, soldOutType: "none", soldOutAt: null, soldOutDate: null, stockStatus: "AVAILABLE" };
+      }
+      return {};
+    }
   }
 });
 
@@ -54427,7 +54558,8 @@ var require_bootstrap = __commonJS({
             }
             return res.json(cachedPublicBootstrap.payload);
           }
-          if (isStaffRequest && cachedStaffBootstrap && nowMs - cachedStaffBootstrap.timestamp < STAFF_BOOTSTRAP_CACHE_TTL_MS) {
+          const wantsFresh = isStaffRequest && req.query.fresh === "1";
+          if (isStaffRequest && !wantsFresh && cachedStaffBootstrap && nowMs - cachedStaffBootstrap.timestamp < STAFF_BOOTSTRAP_CACHE_TTL_MS) {
             res.setHeader("ETag", cachedStaffBootstrap.etag);
             res.setHeader("Vary", "Authorization");
             res.setHeader("Cache-Control", "private, max-age=0, no-cache");
@@ -54438,7 +54570,7 @@ var require_bootstrap = __commonJS({
           }
           const [categoriesSnap, menuSnap, tablesSnap, systemDoc, ingredientsSnap, reservationsSnap] = await Promise.all([
             db2.collection("categories").select("id", "name", "showOnCustomerPage", "orderIndex").orderBy("orderIndex").get(),
-            db2.collection("menu").select("id", "category", "name", "price", "image", "thumbnailUrl", "avifUrl", "avifThumbnailUrl", "description", "available", "isSetMeal", "requiredSaucesOption", "hasNoodlesOption", "hasCoconutsMilkOption", "containsBeef", "containsPork", "containsSeafood", "isNotSpicy", "customAddOns", "recipe", "orderIndex", "isTakeoutAvailable", "soldOutAt", "soldOutType", "soldOutDate").orderBy("orderIndex").get(),
+            db2.collection("menu").select("id", "category", "name", "price", "image", "thumbnailUrl", "avifUrl", "avifThumbnailUrl", "description", "available", "isSetMeal", "requiredSaucesOption", "hasNoodlesOption", "hasCoconutsMilkOption", "containsBeef", "containsPork", "containsSeafood", "isNotSpicy", "customAddOns", "recipe", "orderIndex", "isTakeoutAvailable", "soldOutAt", "soldOutType", "soldOutDate", "trackInventory", "inventoryCount", "stockStatus").orderBy("orderIndex").get(),
             db2.collection("tables").select("id", "qrCodeUrl", "status", "cleaningStartedAt", "maxCapacity", "positionX", "positionY", "preservedFor", "mergedWith").get(),
             db2.collection("settings").doc("system").get(),
             isStaffRequest ? db2.collection("ingredients").select("id", "name", "stock", "minThreshold", "unit").get() : Promise.resolve({ docs: [] }),
@@ -54474,6 +54606,9 @@ var require_bootstrap = __commonJS({
               orderIndex: typeof d.orderIndex === "number" ? d.orderIndex : 0,
               isTakeoutAvailable: d.isTakeoutAvailable !== false,
               soldOutAt: d.soldOutAt ?? null,
+              trackInventory: !!d.trackInventory,
+              inventoryCount: d.trackInventory ? typeof d.inventoryCount === "number" ? d.inventoryCount : 0 : null,
+              stockStatus: d.stockStatus || (d.available ? "AVAILABLE" : "SOLD_OUT"),
               _docId: doc.id
             };
           });
@@ -54883,7 +55018,7 @@ var require_menu = __commonJS({
             return res.json(helpers_12.cachedMenu.data);
           }
           const now = /* @__PURE__ */ new Date();
-          const snapshot = await db2.collection("menu").select("id", "category", "name", "price", "image", "thumbnailUrl", "avifUrl", "avifThumbnailUrl", "description", "available", "isSetMeal", "requiredSaucesOption", "hasNoodlesOption", "hasCoconutsMilkOption", "containsBeef", "containsPork", "containsSeafood", "isNotSpicy", "customAddOns", "recipe", "orderIndex", "isTakeoutAvailable", "soldOutAt", "soldOutType", "soldOutDate").orderBy("orderIndex").get();
+          const snapshot = await db2.collection("menu").select("id", "category", "name", "price", "image", "thumbnailUrl", "avifUrl", "avifThumbnailUrl", "description", "available", "isSetMeal", "requiredSaucesOption", "hasNoodlesOption", "hasCoconutsMilkOption", "containsBeef", "containsPork", "containsSeafood", "isNotSpicy", "customAddOns", "recipe", "orderIndex", "isTakeoutAvailable", "soldOutAt", "soldOutType", "soldOutDate", "trackInventory", "inventoryCount", "stockStatus").orderBy("orderIndex").get();
           const items = snapshot.docs.map((doc) => {
             const d = doc.data();
             return {
@@ -54912,6 +55047,9 @@ var require_menu = __commonJS({
               orderIndex: typeof d.orderIndex === "number" ? d.orderIndex : 0,
               isTakeoutAvailable: d.isTakeoutAvailable !== false,
               soldOutAt: d.soldOutAt ?? null,
+              trackInventory: !!d.trackInventory,
+              inventoryCount: d.trackInventory ? typeof d.inventoryCount === "number" ? d.inventoryCount : 0 : null,
+              stockStatus: d.stockStatus || (d.available ? "AVAILABLE" : "SOLD_OUT"),
               _docId: doc.id
             };
           });
@@ -54929,13 +55067,14 @@ var require_menu = __commonJS({
       });
       post("/menu", requireStaffAuth, async (req, res) => {
         try {
-          const data = req.body;
-          const isAvail = data.available !== void 0 ? !!data.available : true;
+          const validation = (0, validators_1.validateMenuItemPayload)(req.body);
+          if (!validation.isValid || !validation.sanitizedData) {
+            return res.status(400).json({ error: validation.error || "\u7121\u6548\u7684\u9910\u9EDE\u8CC7\u6599" });
+          }
+          const data = validation.sanitizedData;
           const newItem = {
-            id: `dish-${Date.now()}`,
+            id: data.id || `dish-${Date.now()}`,
             ...data,
-            available: isAvail,
-            soldOutAt: !isAvail ? (/* @__PURE__ */ new Date()).toISOString() : null,
             orderIndex: data.orderIndex !== void 0 ? data.orderIndex : 999
           };
           await db2.collection("menu").doc(newItem.id).set(newItem);
@@ -54966,19 +55105,20 @@ var require_menu = __commonJS({
       const updateMenuItemHandler = async (req, res) => {
         try {
           const id = req.params.id;
-          const data = req.body;
-          if (data.available !== void 0) {
-            if (data.available === false && !data.soldOutAt) {
-              data.soldOutAt = (/* @__PURE__ */ new Date()).toISOString();
-            } else if (data.available === true) {
-              data.soldOutAt = null;
-            }
+          const validation = (0, validators_1.validateMenuItemPayload)({ ...req.body, id }, { mode: "update" });
+          if (!validation.isValid || !validation.sanitizedData) {
+            return res.status(400).json({ error: validation.error || "\u7121\u6548\u7684\u9910\u9EDE\u8CC7\u6599" });
           }
+          const data = validation.sanitizedData;
+          const docRef = db2.collection("menu").doc(id);
+          const docSnap = await docRef.get();
+          if (!docSnap.exists) {
+            return res.status(404).json({ error: "\u627E\u4E0D\u5230\u8A72\u9910\u9EDE (Item not found)" });
+          }
+          const oldData = docSnap.data() || {};
+          Object.assign(data, (0, validators_1.applyInventoryLinkage)(oldData, data));
           if (data.image !== void 0 || data.thumbnailUrl !== void 0 || data.avifUrl !== void 0 || data.avifThumbnailUrl !== void 0) {
-            const docRef = db2.collection("menu").doc(id);
-            const docSnap = await docRef.get();
-            if (docSnap.exists) {
-              const oldData = docSnap.data();
+            {
               const oldImage = oldData?.image;
               const oldThumb = oldData?.thumbnailUrl;
               const oldAvif = oldData?.avifUrl;
@@ -55005,9 +55145,9 @@ var require_menu = __commonJS({
               }
             }
           }
-          await db2.collection("menu").doc(id).set(data, { merge: true });
+          await docRef.set(data, { merge: true });
           (0, bootstrap_12.invalidatePublicBootstrapCache)();
-          res.json({ success: true });
+          res.json({ success: true, item: { ...oldData, ...data, id } });
         } catch (error) {
           console.error("Error updating menu:", error);
           sendErrorResponse2(res, error);
@@ -55651,6 +55791,7 @@ var require_orders = __commonJS({
   "lib/routes/orders.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.computeDishDeductions = computeDishDeductions;
     exports2.confirmOrderTransaction = confirmOrderTransaction;
     exports2.registerOrdersRoutes = registerOrdersRoutes;
     var firestore_12 = require("firebase-admin/firestore");
@@ -55658,6 +55799,28 @@ var require_orders = __commonJS({
     var helpers_12 = require_helpers();
     var shared_1 = require_dist();
     var auth_12 = require_auth();
+    var bootstrap_12 = require_bootstrap();
+    function computeDishDeductions(dishDocs, qtyMap) {
+      const result = [];
+      for (const doc of dishDocs) {
+        if (!doc.exists)
+          continue;
+        const dish = doc.data();
+        if (!dish?.trackInventory)
+          continue;
+        const currentStock = typeof dish.inventoryCount === "number" ? dish.inventoryCount : 0;
+        const updatedStock = currentStock - (qtyMap[doc.id] || 0);
+        const updates = { inventoryCount: updatedStock };
+        if (updatedStock <= 0) {
+          updates.available = false;
+          updates.soldOutType = "permanent";
+          updates.soldOutAt = (/* @__PURE__ */ new Date()).toISOString();
+          updates.stockStatus = "SOLD_OUT";
+        }
+        result.push({ ref: doc.ref, updates });
+      }
+      return result;
+    }
     async function confirmOrderTransaction(db2, orderId, items) {
       const orderRef = db2.collection("orders").doc(orderId);
       return db2.runTransaction(async (transaction) => {
@@ -55678,24 +55841,8 @@ var require_orders = __commonJS({
         const uniqueDishIds = Object.keys(qtyMap);
         const dishRefs = uniqueDishIds.map((id) => db2.collection("menu").doc(id));
         const dishDocs = dishRefs.length > 0 ? await Promise.all(dishRefs.map((ref) => transaction.get(ref))) : [];
-        for (const doc of dishDocs) {
-          if (!doc.exists)
-            continue;
-          const dish = doc.data();
-          if (!dish?.trackInventory)
-            continue;
-          const currentStock = dish.inventoryCount ?? 0;
-          const updatedStock = currentStock - (qtyMap[doc.id] || 0);
-          const updates = {
-            inventoryCount: updatedStock
-          };
-          if (updatedStock <= 0) {
-            updates.available = false;
-            updates.soldOutType = "permanent";
-            updates.soldOutAt = (/* @__PURE__ */ new Date()).toISOString();
-            updates.stockStatus = "SOLD_OUT";
-          }
-          transaction.update(doc.ref, updates);
+        for (const { ref, updates } of computeDishDeductions(dishDocs, qtyMap)) {
+          transaction.update(ref, updates);
         }
         transaction.update(orderRef, {
           status: "confirmed",
@@ -55885,11 +56032,14 @@ var require_orders = __commonJS({
         }
         const orderData = validation.sanitizedData;
         const clientOrderId = orderData.clientOrderId ? String(orderData.clientOrderId).trim() : null;
-        const orderId = orderData.id || `ORD-${Date.now().toString(36).toUpperCase()}`;
+        const orderId = `ORD-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
         try {
           const sysData = await getCachedSettings();
           const isTakeoutOrder = !!(orderData.takeoutInfo || String(orderData.tableNumber || "").includes("\u5916\u5E36") || String(orderData.tableNumber || "").toLowerCase() === "takeout");
           const isReservationOrder = !!(orderData.reservationNo || orderData.reservationDate);
+          if (sysData?.liveServicePaused && !isReservationOrder) {
+            return res.status(503).json({ error: "PAUSED:\u5EDA\u623F\u76EE\u524D\u66AB\u505C\u63A5\u55AE\u4E2D\uFF0C\u8ACB\u7A0D\u5019\u518D\u8A66\u6216\u6D3D\u73FE\u5834\u670D\u52D9\u4EBA\u54E1\u3002" });
+          }
           if (!isReservationOrder && !isTakeoutOrder && !(0, helpers_12.isStoreOpenFromData)(sysData)) {
             return res.status(400).json({ error: "CLOSED:\u76EE\u524D\u975E\u5EDA\u623F\u63A5\u55AE\u4F9B\u9910\u6642\u9593\uFF08\u5EDA\u623F\u63A5\u55AE\u6642\u6BB5\u4F9D\u6392\u7A0B\u8A2D\u5B9A\uFF0C\u9580\u5E02\u5BE6\u9AD4\u71DF\u696D\u6642\u9593\u8ACB\u53C3\u95B1\u516C\u544A\uFF09\uFF0C\u7CFB\u7D71\u66AB\u4E0D\u958B\u653E\u4E0B\u55AE\u9EDE\u9910\uFF01" });
           }
@@ -55994,8 +56144,9 @@ var require_orders = __commonJS({
               discount: verifiedPricing.discount,
               serviceCharge: verifiedPricing.serviceCharge,
               total: verifiedPricing.total,
-              status: orderData.status || "pending",
-              createdAt: orderData.createdAt || (/* @__PURE__ */ new Date()).toISOString()
+              status: orderData.source === "pos" ? "pending_kitchen_verification" : "pending",
+              isPaid: false,
+              createdAt: (/* @__PURE__ */ new Date()).toISOString()
             };
             if (idempotencyRef) {
               t.set(idempotencyRef, {
@@ -56004,7 +56155,7 @@ var require_orders = __commonJS({
                 expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1e3)
               });
             }
-            t.set(db2.collection("orders").doc(orderId), orderToSave);
+            t.create(db2.collection("orders").doc(orderId), orderToSave);
             if (tableRef && tableSnap && tableSnap.exists) {
               t.update(tableRef, { status: "in_use", cleaningStartedAt: null });
             }
@@ -56054,7 +56205,8 @@ var require_orders = __commonJS({
           if (error instanceof Error && error.message.startsWith("SOLDOUT:")) {
             return res.status(409).json({ error: error.message.replace("SOLDOUT:", "") });
           }
-          res.status(500).send(error);
+          const msg = error instanceof Error ? error.message : String(error);
+          return res.status(500).json({ error: msg || "\u4F3A\u670D\u5668\u8655\u7406\u8A02\u55AE\u767C\u751F\u7570\u5E38\uFF0C\u8ACB\u91CD\u8A66" });
         }
       });
       put("/orders/:id/status", requireStaffAuth, async (req, res) => {
@@ -56065,7 +56217,9 @@ var require_orders = __commonJS({
           return res.status(400).json({ error: "\u7121\u6548\u7684\u8A02\u55AE\u72C0\u614B" });
         }
         try {
+          let inventoryTouched = false;
           await db2.runTransaction(async (t) => {
+            inventoryTouched = false;
             const orderRef = db2.collection("orders").doc(id);
             const doc = await t.get(orderRef);
             if (!doc.exists)
@@ -56091,26 +56245,9 @@ var require_orders = __commonJS({
                 dishDocs = await Promise.all(dishRefs.map((ref) => t.get(ref)));
               }
             }
-            if (dishDocs.length > 0) {
-              for (const dishDoc of dishDocs) {
-                if (!dishDoc.exists)
-                  continue;
-                const dish = dishDoc.data();
-                if (!dish?.trackInventory)
-                  continue;
-                const currentStock = dish.inventoryCount ?? 0;
-                const updatedStock = currentStock - (itemQuantities[dishDoc.id] || 0);
-                const updates = {
-                  inventoryCount: updatedStock
-                };
-                if (updatedStock <= 0) {
-                  updates.available = false;
-                  updates.soldOutType = "permanent";
-                  updates.soldOutAt = (/* @__PURE__ */ new Date()).toISOString();
-                  updates.stockStatus = "SOLD_OUT";
-                }
-                t.update(dishDoc.ref, updates);
-              }
+            for (const { ref, updates } of computeDishDeductions(dishDocs, itemQuantities)) {
+              t.update(ref, updates);
+              inventoryTouched = true;
             }
             const orderUpdates = { status };
             if (shouldDeductInventory) {
@@ -56119,6 +56256,8 @@ var require_orders = __commonJS({
             }
             t.update(orderRef, orderUpdates);
           });
+          if (inventoryTouched)
+            (0, bootstrap_12.invalidatePublicBootstrapCache)();
           res.json({ id, status });
         } catch (error) {
           if (error?.message?.startsWith("TRANSITION_REJECTED:")) {
