@@ -97,11 +97,21 @@ export const isReservationUpcoming = (res: { status: string; date?: string; time
 
 const RestaurantDataContext = createContext<RestaurantDataContextType | undefined>(undefined);
 
-// Helper to enrich menu items with missing translations
+// Deterministic orderIndex comparator (nulls/undefined pushed to bottom, tie-break by id)
+export const sortByOrderIndex = <T extends { id?: string; orderIndex?: number }>(items: T[]): T[] => {
+  return [...items].sort((a, b) => {
+    const idxA = typeof a.orderIndex === 'number' && Number.isFinite(a.orderIndex) ? a.orderIndex : 999999;
+    const idxB = typeof b.orderIndex === 'number' && Number.isFinite(b.orderIndex) ? b.orderIndex : 999999;
+    if (idxA !== idxB) return idxA - idxB;
+    return String(a.id ?? '').localeCompare(String(b.id ?? ''));
+  });
+};
+
+// Helper to enrich menu items with missing translations and enforce deterministic orderIndex sorting
 const enrichMenuItems = (items: MenuItem[]): MenuItem[] => {
   if (!Array.isArray(items)) return [];
   const defaults = INITIAL_MENU || [];
-  return items.map(item => {
+  const enriched = items.map(item => {
     const todayStr = getTaiwanDateString();
     let processedItem = item;
     const defaultItem = defaults.find(x => x.id === item.id);
@@ -125,13 +135,14 @@ const enrichMenuItems = (items: MenuItem[]): MenuItem[] => {
       soldOutType: effectiveSoldOutType,
     };
   });
+  return sortByOrderIndex(enriched);
 };
 
-// Helper to enrich categories with missing translations
+// Helper to enrich categories with missing translations and enforce deterministic orderIndex sorting
 const enrichCategories = (cats: Category[]): Category[] => {
   if (!Array.isArray(cats)) return [];
   const defaults = INITIAL_CATEGORIES || [];
-  return cats.map(cat => {
+  const enriched = cats.map(cat => {
     const defaultCat = defaults.find(c => c.id === cat.id);
     if (defaultCat) {
       const name = { ...defaultCat.name, ...cat.name };
@@ -139,6 +150,7 @@ const enrichCategories = (cats: Category[]): Category[] => {
     }
     return cat;
   });
+  return sortByOrderIndex(enriched);
 };
 
 interface ProviderProps {
@@ -460,14 +472,24 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
 
         // Menu listener
         unsubscribeMenu = onSnapshot(query(collection(db, "menu"), limit(300)), (snapshot) => {
-          const items = snapshot.docs.map(doc => doc.data() as MenuItem);
+          // Guard against in-flight reorder mutation race condition (Flaw 3)
+          if (Date.now() < lastMenuReorderTimeRef.current) return;
+          const items = snapshot.docs.map(doc => {
+            const d = doc.data() as MenuItem;
+            return { ...d, id: d.id ?? doc.id };
+          });
           setMenuItems(enrichMenuItems(items));
         }, (error) => {
           console.warn('[Firebase Sync] Menu listener paused/disabled:', error);
         });
         // Categories listener
         unsubscribeCategories = onSnapshot(query(collection(db, "categories"), limit(50)), (snapshot) => {
-          const cats = snapshot.docs.map(doc => doc.data() as Category);
+          // Guard against in-flight category reorder mutation race condition (Flaw 3)
+          if (Date.now() < lastCategoryReorderTimeRef.current) return;
+          const cats = snapshot.docs.map(doc => {
+            const d = doc.data() as Category;
+            return { ...d, id: d.id ?? doc.id };
+          });
           setCategories(enrichCategories(cats));
         }, (error) => {
           console.warn('[Firebase Sync] Categories listener paused/disabled:', error);
@@ -582,11 +604,15 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
         }
       } else {
         // Rollback on failure
+        lastMenuReorderTimeRef.current = 0;
         await fetchData(true, false);
       }
     } catch (err) {
       console.error('[Sabay Menu lock toggle error]', err);
+      lastMenuReorderTimeRef.current = 0;
       await fetchData(true, false);
+    } finally {
+      lastMenuReorderTimeRef.current = 0;
     }
   };
 
@@ -714,9 +740,13 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
   };
 
   const handleReorderCategories = async (order: string[]) => {
+    const previousCategories = categories;
     lastCategoryReorderTimeRef.current = Date.now() + 15000;
     const mappedCategories = order
-      .map(id => categories.find(c => c.id === id))
+      .map((id, index): Category | undefined => {
+        const found = categories.find(c => c.id === id);
+        return found ? { ...found, orderIndex: index } : undefined;
+      })
       .filter((c): c is Category => !!c);
     setCategories(mappedCategories);
 
@@ -726,22 +756,31 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ order }),
       });
+      lastCategoryReorderTimeRef.current = 0;
       if (res.ok) {
         const data = await res.json();
         if (data.success && Array.isArray(data.categories)) {
           setCategories(data.categories);
         }
-        await fetchData(true, false);
+        await fetchData(true, true);
+      } else {
+        setCategories(previousCategories);
       }
     } catch (err) {
+      lastCategoryReorderTimeRef.current = 0;
+      setCategories(previousCategories);
       console.error('[Sabay Categories Reorder error]', err);
     }
   };
 
   const handleReorderMenuItems = async (order: string[]) => {
+    const previousMenuItems = menuItems;
     lastMenuReorderTimeRef.current = Date.now() + 15000;
     const mappedItems = order
-      .map(id => menuItems.find(m => m.id === id))
+      .map((id, index): MenuItem | undefined => {
+        const found = menuItems.find(m => m.id === id);
+        return found ? { ...found, orderIndex: index } : undefined;
+      })
       .filter((m): m is MenuItem => !!m);
     setMenuItems(mappedItems);
 
@@ -751,14 +790,19 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ order }),
       });
+      lastMenuReorderTimeRef.current = 0;
       if (res.ok) {
         const data = await res.json();
         if (data.success && Array.isArray(data.menu)) {
           setMenuItems(data.menu);
         }
-        await fetchData(true, false);
+        await fetchData(true, true);
+      } else {
+        setMenuItems(previousMenuItems);
       }
     } catch (err) {
+      lastMenuReorderTimeRef.current = 0;
+      setMenuItems(previousMenuItems);
       console.error('[Sabay Menu Reorder error]', err);
     }
   };

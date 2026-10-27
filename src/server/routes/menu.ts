@@ -337,6 +337,9 @@ export function registerMenuRoutes(app: express.Express, ctx: MenuRouteContext) 
         reordered.push(cat);
       }
     });
+    reordered.forEach((cat, index) => {
+      cat.orderIndex = index;
+    });
     setLiveCategories(reordered);
     saveStateToDisk();
     res.json({ success: true, categories: reordered });

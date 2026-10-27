@@ -7,6 +7,7 @@
 import { describe, it, expect } from 'vitest';
 import { validateMenuItemPayload, applyInventoryLinkage } from '../functions/src/validators';
 import { computeDishDeductions } from '../functions/src/routes/orders';
+import { sortByOrderIndex } from '../src/context/RestaurantDataContext';
 
 // Exact payload shape emitted by DishFormModal.handleFormSubmit (no available / flags / orderIndex)
 const modalPayload = (overrides: Record<string, any> = {}) => ({
@@ -117,5 +118,33 @@ describe('R3: shared order deduction (single source of truth)', () => {
     expect(result).toHaveLength(2);
     expect(result[0].updates).toEqual({ inventoryCount: 1 });
     expect(result[1].updates).toMatchObject({ inventoryCount: -2, available: false, soldOutType: 'permanent', stockStatus: 'SOLD_OUT' });
+  });
+});
+
+describe('R4: deterministic orderIndex sorting prevents Firestore __name__ ID rollback', () => {
+  it('reorders snapshot items returned in ascending dish-ID order into custom orderIndex sequence', () => {
+    // Simulates Firestore onSnapshot returning docs sorted by __name__ (dish-1789... -> dish-2696...)
+    const firestoreIdOrderedDocs = [
+      { id: 'dish-1789043311498', name: { zh: '泰式烤豬肉串-5串' }, orderIndex: 2 },
+      { id: 'dish-1791210438747', name: { zh: '桂花起司' }, orderIndex: 0 },
+      { id: 'dish-2696007842576', name: { zh: 'Vitamilk豆奶' }, orderIndex: 1 },
+    ];
+
+    const sorted = sortByOrderIndex(firestoreIdOrderedDocs);
+    expect(sorted.map(d => d.id)).toEqual([
+      'dish-1791210438747',
+      'dish-2696007842576',
+      'dish-1789043311498',
+    ]);
+  });
+
+  it('pushes missing/undefined orderIndex to the bottom and tie-breaks deterministically by id', () => {
+    const mixed = [
+      { id: 'dish-300', orderIndex: undefined },
+      { id: 'dish-100', orderIndex: undefined },
+      { id: 'dish-200', orderIndex: 0 },
+    ];
+    const sorted = sortByOrderIndex(mixed);
+    expect(sorted.map(d => d.id)).toEqual(['dish-200', 'dish-100', 'dish-300']);
   });
 });

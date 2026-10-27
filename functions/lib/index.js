@@ -54616,6 +54616,10 @@ var require_bootstrap = __commonJS({
             const processed = (0, helpers_12.processMenuItemSoldOut)(item, now);
             delete processed._docId;
             return processed;
+          }).sort((a, b) => {
+            const idxA = typeof a.orderIndex === "number" && Number.isFinite(a.orderIndex) ? a.orderIndex : 999999;
+            const idxB = typeof b.orderIndex === "number" && Number.isFinite(b.orderIndex) ? b.orderIndex : 999999;
+            return idxA !== idxB ? idxA - idxB : String(a.id ?? "").localeCompare(String(b.id ?? ""));
           });
           const tables = tablesSnap.docs.map((doc) => {
             const tb = doc.data();
@@ -54634,7 +54638,12 @@ var require_bootstrap = __commonJS({
           const sysData = systemDoc.data() || {};
           const isOpen = (0, helpers_12.isStoreOpenFromData)(sysData);
           const processedCategories = categoriesSnap.docs.map((doc) => {
-            return doc.data();
+            const d = doc.data();
+            return { ...d, id: d.id ?? doc.id };
+          }).sort((a, b) => {
+            const idxA = typeof a.orderIndex === "number" && Number.isFinite(a.orderIndex) ? a.orderIndex : 999999;
+            const idxB = typeof b.orderIndex === "number" && Number.isFinite(b.orderIndex) ? b.orderIndex : 999999;
+            return idxA !== idxB ? idxA - idxB : String(a.id ?? "").localeCompare(String(b.id ?? ""));
           });
           const responsePayload = {
             menu: processedItems,
@@ -55002,7 +55011,14 @@ var require_menu = __commonJS({
             return res.json(helpers_12.cachedCategories.data);
           }
           const snapshot = await db2.collection("categories").select("id", "name", "showOnCustomerPage", "orderIndex").orderBy("orderIndex").get();
-          const categories = snapshot.docs.map((doc) => doc.data());
+          const categories = snapshot.docs.map((doc) => {
+            const d = doc.data();
+            return { ...d, id: d.id ?? doc.id };
+          }).sort((a, b) => {
+            const idxA = typeof a.orderIndex === "number" && Number.isFinite(a.orderIndex) ? a.orderIndex : 999999;
+            const idxB = typeof b.orderIndex === "number" && Number.isFinite(b.orderIndex) ? b.orderIndex : 999999;
+            return idxA !== idxB ? idxA - idxB : String(a.id ?? "").localeCompare(String(b.id ?? ""));
+          });
           (0, helpers_12.setCachedCategories)({ data: categories, timestamp: nowMs });
           res.json(categories);
         } catch (error) {
@@ -55057,6 +55073,10 @@ var require_menu = __commonJS({
             const processed = (0, helpers_12.processMenuItemSoldOut)(item, now);
             delete processed._docId;
             return processed;
+          }).sort((a, b) => {
+            const idxA = typeof a.orderIndex === "number" && Number.isFinite(a.orderIndex) ? a.orderIndex : 999999;
+            const idxB = typeof b.orderIndex === "number" && Number.isFinite(b.orderIndex) ? b.orderIndex : 999999;
+            return idxA !== idxB ? idxA - idxB : String(a.id ?? "").localeCompare(String(b.id ?? ""));
           });
           (0, helpers_12.setCachedMenu)({ data: processedItems, timestamp: nowMs });
           res.json(processedItems);
@@ -55090,14 +55110,30 @@ var require_menu = __commonJS({
         if (!Array.isArray(order))
           return res.status(400).json({ error: "Invalid order parameter" });
         try {
-          const batch = db2.batch();
-          order.forEach((id, index) => {
-            const ref = db2.collection("menu").doc(id);
-            batch.update(ref, { orderIndex: index });
+          const existingSnap = await db2.collection("menu").select("id").get();
+          const refById = /* @__PURE__ */ new Map();
+          existingSnap.docs.forEach((docSnap) => {
+            refById.set(docSnap.id, docSnap.ref);
+            const dataId = docSnap.data()?.id;
+            if (typeof dataId === "string" && dataId) {
+              refById.set(dataId, docSnap.ref);
+            }
           });
-          await batch.commit();
+          const batch = db2.batch();
+          const now = (/* @__PURE__ */ new Date()).toISOString();
+          let updatedCount = 0;
+          order.forEach((id, index) => {
+            const targetRef = refById.get(id);
+            if (targetRef) {
+              batch.update(targetRef, { orderIndex: index, updatedAt: now });
+              updatedCount++;
+            }
+          });
+          if (updatedCount > 0) {
+            await batch.commit();
+          }
           (0, bootstrap_12.invalidatePublicBootstrapCache)();
-          res.json({ success: true });
+          res.json({ success: true, count: updatedCount });
         } catch (error) {
           sendErrorResponse2(res, error);
         }
@@ -55284,14 +55320,30 @@ var require_menu = __commonJS({
         if (!Array.isArray(order))
           return res.status(400).json({ error: "Invalid order parameter" });
         try {
-          const batch = db2.batch();
-          order.forEach((id, index) => {
-            const ref = db2.collection("categories").doc(id);
-            batch.update(ref, { orderIndex: index });
+          const existingSnap = await db2.collection("categories").select("id").get();
+          const refById = /* @__PURE__ */ new Map();
+          existingSnap.docs.forEach((docSnap) => {
+            refById.set(docSnap.id, docSnap.ref);
+            const dataId = docSnap.data()?.id;
+            if (typeof dataId === "string" && dataId) {
+              refById.set(dataId, docSnap.ref);
+            }
           });
-          await batch.commit();
+          const batch = db2.batch();
+          const now = (/* @__PURE__ */ new Date()).toISOString();
+          let updatedCount = 0;
+          order.forEach((id, index) => {
+            const targetRef = refById.get(id);
+            if (targetRef) {
+              batch.update(targetRef, { orderIndex: index, updatedAt: now });
+              updatedCount++;
+            }
+          });
+          if (updatedCount > 0) {
+            await batch.commit();
+          }
           (0, bootstrap_12.invalidatePublicBootstrapCache)();
-          res.json({ success: true });
+          res.json({ success: true, count: updatedCount });
         } catch (error) {
           sendErrorResponse2(res, error);
         }

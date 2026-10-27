@@ -165,7 +165,16 @@ function registerMenuRoutes(app, ctx) {
                 return res.json(helpers_1.cachedCategories.data);
             }
             const snapshot = await db.collection('categories').select('id', 'name', 'showOnCustomerPage', 'orderIndex').orderBy('orderIndex').get();
-            const categories = snapshot.docs.map(doc => doc.data());
+            const categories = snapshot.docs
+                .map(doc => {
+                const d = doc.data();
+                return { ...d, id: d.id ?? doc.id };
+            })
+                .sort((a, b) => {
+                const idxA = typeof a.orderIndex === 'number' && Number.isFinite(a.orderIndex) ? a.orderIndex : 999999;
+                const idxB = typeof b.orderIndex === 'number' && Number.isFinite(b.orderIndex) ? b.orderIndex : 999999;
+                return idxA !== idxB ? idxA - idxB : String(a.id ?? '').localeCompare(String(b.id ?? ''));
+            });
             (0, helpers_1.setCachedCategories)({ data: categories, timestamp: nowMs });
             res.json(categories);
         }
@@ -217,10 +226,16 @@ function registerMenuRoutes(app, ctx) {
                     _docId: doc.id
                 };
             });
-            const processedItems = items.map((item) => {
+            const processedItems = items
+                .map((item) => {
                 const processed = (0, helpers_1.processMenuItemSoldOut)(item, now);
                 delete processed._docId;
                 return processed;
+            })
+                .sort((a, b) => {
+                const idxA = typeof a.orderIndex === 'number' && Number.isFinite(a.orderIndex) ? a.orderIndex : 999999;
+                const idxB = typeof b.orderIndex === 'number' && Number.isFinite(b.orderIndex) ? b.orderIndex : 999999;
+                return idxA !== idxB ? idxA - idxB : String(a.id ?? '').localeCompare(String(b.id ?? ''));
             });
             (0, helpers_1.setCachedMenu)({ data: processedItems, timestamp: nowMs });
             res.json(processedItems);
@@ -256,14 +271,30 @@ function registerMenuRoutes(app, ctx) {
         if (!Array.isArray(order))
             return res.status(400).json({ error: 'Invalid order parameter' });
         try {
-            const batch = db.batch();
-            order.forEach((id, index) => {
-                const ref = db.collection('menu').doc(id);
-                batch.update(ref, { orderIndex: index });
+            const existingSnap = await db.collection('menu').select('id').get();
+            const refById = new Map();
+            existingSnap.docs.forEach((docSnap) => {
+                refById.set(docSnap.id, docSnap.ref);
+                const dataId = docSnap.data()?.id;
+                if (typeof dataId === 'string' && dataId) {
+                    refById.set(dataId, docSnap.ref);
+                }
             });
-            await batch.commit();
+            const batch = db.batch();
+            const now = new Date().toISOString();
+            let updatedCount = 0;
+            order.forEach((id, index) => {
+                const targetRef = refById.get(id);
+                if (targetRef) {
+                    batch.update(targetRef, { orderIndex: index, updatedAt: now });
+                    updatedCount++;
+                }
+            });
+            if (updatedCount > 0) {
+                await batch.commit();
+            }
             (0, bootstrap_1.invalidatePublicBootstrapCache)();
-            res.json({ success: true });
+            res.json({ success: true, count: updatedCount });
         }
         catch (error) {
             sendErrorResponse(res, error);
@@ -458,14 +489,30 @@ function registerMenuRoutes(app, ctx) {
         if (!Array.isArray(order))
             return res.status(400).json({ error: 'Invalid order parameter' });
         try {
-            const batch = db.batch();
-            order.forEach((id, index) => {
-                const ref = db.collection('categories').doc(id);
-                batch.update(ref, { orderIndex: index });
+            const existingSnap = await db.collection('categories').select('id').get();
+            const refById = new Map();
+            existingSnap.docs.forEach((docSnap) => {
+                refById.set(docSnap.id, docSnap.ref);
+                const dataId = docSnap.data()?.id;
+                if (typeof dataId === 'string' && dataId) {
+                    refById.set(dataId, docSnap.ref);
+                }
             });
-            await batch.commit();
+            const batch = db.batch();
+            const now = new Date().toISOString();
+            let updatedCount = 0;
+            order.forEach((id, index) => {
+                const targetRef = refById.get(id);
+                if (targetRef) {
+                    batch.update(targetRef, { orderIndex: index, updatedAt: now });
+                    updatedCount++;
+                }
+            });
+            if (updatedCount > 0) {
+                await batch.commit();
+            }
             (0, bootstrap_1.invalidatePublicBootstrapCache)();
-            res.json({ success: true });
+            res.json({ success: true, count: updatedCount });
         }
         catch (error) {
             sendErrorResponse(res, error);

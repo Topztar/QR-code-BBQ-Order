@@ -145,11 +145,17 @@ export function registerBootstrapRoutes(app: express.Application, ctx: RouteCont
         };
       });
 
-      const processedItems = items.map((item: any) => {
-        const processed = processMenuItemSoldOut(item, now);
-        delete processed._docId;
-        return processed;
-      });
+      const processedItems = items
+        .map((item: any) => {
+          const processed = processMenuItemSoldOut(item, now);
+          delete processed._docId;
+          return processed;
+        })
+        .sort((a: any, b: any) => {
+          const idxA = typeof a.orderIndex === 'number' && Number.isFinite(a.orderIndex) ? a.orderIndex : 999999;
+          const idxB = typeof b.orderIndex === 'number' && Number.isFinite(b.orderIndex) ? b.orderIndex : 999999;
+          return idxA !== idxB ? idxA - idxB : String(a.id ?? '').localeCompare(String(b.id ?? ''));
+        });
 
       const tables = tablesSnap.docs.map(doc => {
         const tb = doc.data() as any;
@@ -169,9 +175,16 @@ export function registerBootstrapRoutes(app: express.Application, ctx: RouteCont
       const sysData = systemDoc.data() || {};
       const isOpen = isStoreOpenFromData(sysData);
 
-      const processedCategories = categoriesSnap.docs.map(doc => {
-        return doc.data();
-      });
+      const processedCategories = categoriesSnap.docs
+        .map(doc => {
+          const d = doc.data() as any;
+          return { ...d, id: d.id ?? doc.id };
+        })
+        .sort((a, b) => {
+          const idxA = typeof a.orderIndex === 'number' && Number.isFinite(a.orderIndex) ? a.orderIndex : 999999;
+          const idxB = typeof b.orderIndex === 'number' && Number.isFinite(b.orderIndex) ? b.orderIndex : 999999;
+          return idxA !== idxB ? idxA - idxB : String(a.id ?? '').localeCompare(String(b.id ?? ''));
+        });
 
       const responsePayload = {
         menu: processedItems,
