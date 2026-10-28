@@ -353,7 +353,7 @@ function applyInventoryLinkage(existing, patch) {
         };
     }
     const wasInventoryLocked = !!prev.trackInventory && typeof prev.inventoryCount === 'number' && prev.inventoryCount <= 0;
-    if (track && typeof count === 'number' && count > 0 && wasInventoryLocked && patch.available === undefined) {
+    if ((!track || (typeof count === 'number' && count > 0)) && wasInventoryLocked && patch.available === undefined) {
         return { available: true, soldOutType: 'none', soldOutAt: null, soldOutDate: null, stockStatus: 'AVAILABLE' };
     }
     return {};

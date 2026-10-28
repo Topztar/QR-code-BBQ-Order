@@ -928,7 +928,7 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({
                         value={inventoryCount}
                         onChange={(e) => {
                           const val = e.target.value;
-                          if (val === '' || val === '-') {
+                          if (val === '' || val === '-' || /^-0+$/.test(val)) {
                             setInventoryCount(val);
                           } else {
                             const parsed = parseInt(val, 10);

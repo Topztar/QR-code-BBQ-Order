@@ -82,6 +82,21 @@ describe('Admin Auth Infinite Loop Prevention Test Suite', () => {
       const headers = fetchSpy.mock.calls[0][1]?.headers as Record<string, string>;
       expect(headers['Authorization']).toBeUndefined();
     });
+
+    it('attaches Authorization header on /api/bootstrap?fresh=1 and when forceAuth is true', async () => {
+      sessionAuth.setToken('staff-fresh-token');
+      const fetchSpy = vi.spyOn(global, 'fetch')
+        .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+        .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+
+      await apiFetch('/api/bootstrap?fresh=1');
+      const freshHeaders = fetchSpy.mock.calls[0][1]?.headers as Record<string, string>;
+      expect(freshHeaders['Authorization']).toBe('Bearer staff-fresh-token');
+
+      await apiFetch('/api/bootstrap', { forceAuth: true });
+      const forcedHeaders = fetchSpy.mock.calls[1][1]?.headers as Record<string, string>;
+      expect(forcedHeaders['Authorization']).toBe('Bearer staff-fresh-token');
+    });
   });
 
   describe('sessionAuth Storage Synchronization & Purging', () => {

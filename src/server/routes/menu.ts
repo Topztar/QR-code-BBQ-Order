@@ -205,7 +205,19 @@ export function registerMenuRoutes(app: express.Express, ctx: MenuRouteContext) 
       let finalSoldOutAt = targetSoldOutAt;
       let finalStockStatus = liveMenu[itemIndex].stockStatus || (targetAvailable ? 'AVAILABLE' : 'SOLD_OUT');
 
+      const wasInventoryLocked = !!liveMenu[itemIndex].trackInventory && typeof liveMenu[itemIndex].inventoryCount === 'number' && liveMenu[itemIndex].inventoryCount <= 0;
       if (targetTrackInventory && typeof targetInventoryCount === 'number' && targetInventoryCount <= 0) {
+        finalAvailable = false;
+        finalSoldOutType = 'permanent';
+        finalSoldOutAt = finalSoldOutAt || new Date().toISOString();
+        finalStockStatus = 'SOLD_OUT';
+      } else if (wasInventoryLocked && available === undefined && (!targetTrackInventory || (typeof targetInventoryCount === 'number' && targetInventoryCount > 0))) {
+        finalAvailable = true;
+        finalSoldOutType = 'none';
+        finalSoldOutAt = null;
+        finalStockStatus = 'AVAILABLE';
+      }
+      if (false) {
         finalAvailable = false;
         finalSoldOutType = 'permanent';
         finalSoldOutAt = finalSoldOutAt || new Date().toISOString();

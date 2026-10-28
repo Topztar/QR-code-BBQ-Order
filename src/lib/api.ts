@@ -7,7 +7,7 @@ let _appCheckTokenExpiry: number = 0;
 export const getAuthHeader = async (opts: { skipAuth?: boolean; skipAppCheck?: boolean } = {}) => {
   const headers: Record<string, string> = {};
   if (!opts.skipAuth) {
-    const token = typeof localStorage !== 'undefined' ? localStorage.getItem('sabay_jwt_token') : null;
+    const token = (typeof localStorage !== 'undefined' ? localStorage.getItem('sabay_jwt_token') : null) || (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('staff_token') : null);
     if (token) headers['Authorization'] = `Bearer ${token}`;
   }
 
@@ -40,7 +40,7 @@ export const getAuthHeader = async (opts: { skipAuth?: boolean; skipAppCheck?: b
 export const apiFetch = async (url: string, options: any = {}) => {
   const method = (options.method || 'GET').toUpperCase();
   const isPublicGet = method === 'GET' && /^\/api\/(bootstrap|store-status|menu|categories|settings\/version)/.test(url);
-  const skipAuth = options.skipAuth ?? (isPublicGet && !options.forceAuth);
+  const skipAuth = options.skipAuth ?? (isPublicGet && !options.forceAuth && !/[?&]fresh=/.test(url));
 
   // 🛡️ Global timeout controller starts BEFORE getAuthHeader to guarantee bounded execution on iOS WebKit
   const controller = new AbortController();

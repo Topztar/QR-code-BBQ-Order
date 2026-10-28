@@ -91,6 +91,20 @@ describe('R2: inventory linkage on effective state', () => {
     expect(applyInventoryLinkage(existing, sanitizedData)).toMatchObject({ available: true, soldOutType: 'none', stockStatus: 'AVAILABLE' });
   });
 
+  it('unchecking trackInventory on an inventory-locked dish auto-recovers to AVAILABLE', () => {
+    const existing = { trackInventory: true, inventoryCount: -5, available: false, soldOutType: 'permanent', stockStatus: 'SOLD_OUT' };
+    const { sanitizedData } = validateMenuItemPayload(modalPayload({ trackInventory: false, inventoryCount: null }), { mode: 'update' });
+    expect(sanitizedData.trackInventory).toBe(false);
+    expect(sanitizedData.inventoryCount).toBeNull();
+    expect(applyInventoryLinkage(existing, sanitizedData)).toMatchObject({
+      available: true,
+      soldOutType: 'none',
+      soldOutAt: null,
+      soldOutDate: null,
+      stockStatus: 'AVAILABLE',
+    });
+  });
+
   it('enabling tracking with a positive count does NOT resurrect a manually sold-out dish', () => {
     const existing = { trackInventory: false, inventoryCount: null, available: false, soldOutType: 'permanent' };
     const { sanitizedData } = validateMenuItemPayload(modalPayload({ trackInventory: true, inventoryCount: 5 }), { mode: 'update' });

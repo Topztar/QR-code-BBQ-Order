@@ -54461,7 +54461,7 @@ var require_validators = __commonJS({
         };
       }
       const wasInventoryLocked = !!prev.trackInventory && typeof prev.inventoryCount === "number" && prev.inventoryCount <= 0;
-      if (track && typeof count === "number" && count > 0 && wasInventoryLocked && patch.available === void 0) {
+      if ((!track || typeof count === "number" && count > 0) && wasInventoryLocked && patch.available === void 0) {
         return { available: true, soldOutType: "none", soldOutAt: null, soldOutDate: null, stockStatus: "AVAILABLE" };
       }
       return {};
@@ -54537,7 +54537,9 @@ var require_bootstrap = __commonJS({
       const del = (routePath, ...handlers) => app2.delete([`/api${routePath}`, routePath], ...handlers);
       get("/bootstrap", async (req, res) => {
         try {
-          res.setHeader("Cache-Control", "public, max-age=60, s-maxage=180, stale-while-revalidate=600");
+          const wantsFresh = Boolean(req.query.fresh);
+          res.setHeader("Vary", "Authorization");
+          res.setHeader("Cache-Control", wantsFresh ? "private, no-cache, no-store, must-revalidate" : "public, max-age=60, s-maxage=180, stale-while-revalidate=600");
           const todayStr = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
           let isStaffRequest = false;
           const authHeader = req.headers.authorization;
@@ -54551,14 +54553,13 @@ var require_bootstrap = __commonJS({
             }
           }
           const nowMs = Date.now();
-          if (!isStaffRequest && cachedPublicBootstrap && nowMs - cachedPublicBootstrap.timestamp < BOOTSTRAP_CACHE_TTL_MS) {
+          if (!isStaffRequest && !wantsFresh && cachedPublicBootstrap && nowMs - cachedPublicBootstrap.timestamp < BOOTSTRAP_CACHE_TTL_MS) {
             res.setHeader("ETag", cachedPublicBootstrap.etag);
             if (req.headers["if-none-match"] === cachedPublicBootstrap.etag) {
               return res.status(304).end();
             }
             return res.json(cachedPublicBootstrap.payload);
           }
-          const wantsFresh = isStaffRequest && req.query.fresh === "1";
           if (isStaffRequest && !wantsFresh && cachedStaffBootstrap && nowMs - cachedStaffBootstrap.timestamp < STAFF_BOOTSTRAP_CACHE_TTL_MS) {
             res.setHeader("ETag", cachedStaffBootstrap.etag);
             res.setHeader("Vary", "Authorization");
@@ -54569,8 +54570,8 @@ var require_bootstrap = __commonJS({
             return res.json(cachedStaffBootstrap.payload);
           }
           const [categoriesSnap, menuSnap, tablesSnap, systemDoc, ingredientsSnap, reservationsSnap] = await Promise.all([
-            db2.collection("categories").select("id", "name", "showOnCustomerPage", "orderIndex").orderBy("orderIndex").get(),
-            db2.collection("menu").select("id", "category", "name", "price", "image", "thumbnailUrl", "avifUrl", "avifThumbnailUrl", "description", "available", "isSetMeal", "requiredSaucesOption", "hasNoodlesOption", "hasCoconutsMilkOption", "containsBeef", "containsPork", "containsSeafood", "isNotSpicy", "customAddOns", "recipe", "orderIndex", "isTakeoutAvailable", "soldOutAt", "soldOutType", "soldOutDate", "trackInventory", "inventoryCount", "stockStatus").orderBy("orderIndex").get(),
+            db2.collection("categories").select("id", "name", "showOnCustomerPage", "orderIndex").get(),
+            db2.collection("menu").select("id", "category", "name", "price", "image", "thumbnailUrl", "avifUrl", "avifThumbnailUrl", "description", "available", "isSetMeal", "requiredSaucesOption", "hasNoodlesOption", "hasCoconutsMilkOption", "containsBeef", "containsPork", "containsSeafood", "isNotSpicy", "customAddOns", "recipe", "orderIndex", "isTakeoutAvailable", "soldOutAt", "soldOutType", "soldOutDate", "trackInventory", "inventoryCount", "stockStatus").get(),
             db2.collection("tables").select("id", "qrCodeUrl", "status", "cleaningStartedAt", "maxCapacity", "positionX", "positionY", "preservedFor", "mergedWith").get(),
             db2.collection("settings").doc("system").get(),
             isStaffRequest ? db2.collection("ingredients").select("id", "name", "stock", "minThreshold", "unit").get() : Promise.resolve({ docs: [] }),
@@ -54693,7 +54694,9 @@ var require_bootstrap = __commonJS({
           if (isStaffRequest) {
             res.setHeader("Cache-Control", "private, max-age=0, no-cache");
           } else {
-            res.setHeader("Cache-Control", "public, max-age=60, s-maxage=180, stale-while-revalidate=600");
+            const wantsFresh2 = Boolean(req.query.fresh);
+            res.setHeader("Vary", "Authorization");
+            res.setHeader("Cache-Control", wantsFresh2 ? "private, no-cache, no-store, must-revalidate" : "public, max-age=60, s-maxage=180, stale-while-revalidate=600");
           }
           if (req.headers["if-none-match"] === etag) {
             return res.status(304).end();
@@ -54718,7 +54721,7 @@ var require_bootstrap = __commonJS({
           }).format(now);
           const [systemDoc, soldOutMenuSnap] = await Promise.all([
             db2.collection("settings").doc("system").get(),
-            db2.collection("menu").select("available", "soldOutType", "soldOutDate").get()
+            db2.collection("menu").select("id", "available", "soldOutType", "soldOutDate", "trackInventory", "inventoryCount").get()
           ]);
           const sysData = systemDoc.data() || {};
           const isOpen = (0, helpers_12.isStoreOpenFromData)(sysData);
@@ -54736,7 +54739,11 @@ var require_bootstrap = __commonJS({
                 available = true;
               }
             }
-            if (!available) {
+            if (d.trackInventory && typeof d.inventoryCount === "number" && d.inventoryCount <= 0)
+              available = false;
+            if (!available)
+              soldOutItemIds.push(d.id ?? doc.id);
+            if (false) {
               soldOutItemIds.push(doc.id);
             }
           }
@@ -55010,7 +55017,7 @@ var require_menu = __commonJS({
           if (helpers_12.cachedCategories && nowMs - helpers_12.cachedCategories.timestamp < helpers_12.CACHE_TTL_MS) {
             return res.json(helpers_12.cachedCategories.data);
           }
-          const snapshot = await db2.collection("categories").select("id", "name", "showOnCustomerPage", "orderIndex").orderBy("orderIndex").get();
+          const snapshot = await db2.collection("categories").select("id", "name", "showOnCustomerPage", "orderIndex").get();
           const categories = snapshot.docs.map((doc) => {
             const d = doc.data();
             return { ...d, id: d.id ?? doc.id };
@@ -55034,7 +55041,7 @@ var require_menu = __commonJS({
             return res.json(helpers_12.cachedMenu.data);
           }
           const now = /* @__PURE__ */ new Date();
-          const snapshot = await db2.collection("menu").select("id", "category", "name", "price", "image", "thumbnailUrl", "avifUrl", "avifThumbnailUrl", "description", "available", "isSetMeal", "requiredSaucesOption", "hasNoodlesOption", "hasCoconutsMilkOption", "containsBeef", "containsPork", "containsSeafood", "isNotSpicy", "customAddOns", "recipe", "orderIndex", "isTakeoutAvailable", "soldOutAt", "soldOutType", "soldOutDate", "trackInventory", "inventoryCount", "stockStatus").orderBy("orderIndex").get();
+          const snapshot = await db2.collection("menu").select("id", "category", "name", "price", "image", "thumbnailUrl", "avifUrl", "avifThumbnailUrl", "description", "available", "isSetMeal", "requiredSaucesOption", "hasNoodlesOption", "hasCoconutsMilkOption", "containsBeef", "containsPork", "containsSeafood", "isNotSpicy", "customAddOns", "recipe", "orderIndex", "isTakeoutAvailable", "soldOutAt", "soldOutType", "soldOutDate", "trackInventory", "inventoryCount", "stockStatus").get();
           const items = snapshot.docs.map((doc) => {
             const d = doc.data();
             return {
@@ -55146,8 +55153,15 @@ var require_menu = __commonJS({
             return res.status(400).json({ error: validation.error || "\u7121\u6548\u7684\u9910\u9EDE\u8CC7\u6599" });
           }
           const data = validation.sanitizedData;
-          const docRef = db2.collection("menu").doc(id);
-          const docSnap = await docRef.get();
+          let docRef = db2.collection("menu").doc(id);
+          let docSnap = await docRef.get();
+          if (!docSnap.exists) {
+            const querySnap = await db2.collection("menu").where("id", "==", id).limit(1).get();
+            if (!querySnap.empty) {
+              docRef = querySnap.docs[0].ref;
+              docSnap = querySnap.docs[0];
+            }
+          }
           if (!docSnap.exists) {
             return res.status(404).json({ error: "\u627E\u4E0D\u5230\u8A72\u9910\u9EDE (Item not found)" });
           }
@@ -55198,8 +55212,15 @@ var require_menu = __commonJS({
       del("/menu/:id", requireStaffAuth, async (req, res) => {
         try {
           const id = req.params.id;
-          const docRef = db2.collection("menu").doc(id);
-          const docSnap = await docRef.get();
+          let docRef = db2.collection("menu").doc(id);
+          let docSnap = await docRef.get();
+          if (!docSnap.exists) {
+            const querySnap = await db2.collection("menu").where("id", "==", id).limit(1).get();
+            if (!querySnap.empty) {
+              docRef = querySnap.docs[0].ref;
+              docSnap = querySnap.docs[0];
+            }
+          }
           if (docSnap.exists) {
             const itemData = docSnap.data();
             const oldImage = itemData?.image;

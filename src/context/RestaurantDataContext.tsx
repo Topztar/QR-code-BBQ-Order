@@ -159,12 +159,26 @@ interface ProviderProps {
 }
 
 export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
+  const recentMenuMutationsRef = useRef<Map<string, { item: Partial<MenuItem>; expiresAt: number }>>(new Map());
+  const applyRecentMenuMutations = (items: MenuItem[]): MenuItem[] => {
+    if (recentMenuMutationsRef.current.size === 0) return items;
+    const nowMs = Date.now();
+    return items.map(item => {
+      const pending = recentMenuMutationsRef.current.get(item.id);
+      if (!pending) return item;
+      if (nowMs > pending.expiresAt) {
+        recentMenuMutationsRef.current.delete(item.id);
+        return item;
+      }
+      return { ...item, ...pending.item, id: item.id };
+    });
+  };
   const [menuItems, setMenuItemsRaw] = useState<MenuItem[]>(() => enrichMenuItems(INITIAL_MENU || []));
   const setMenuItems = (val: MenuItem[] | ((prev: MenuItem[]) => MenuItem[])) => {
     if (typeof val === 'function') {
-      setMenuItemsRaw(prev => enrichMenuItems(val(prev)));
+      setMenuItemsRaw(prev => enrichMenuItems(applyRecentMenuMutations(val(prev))));
     } else {
-      setMenuItemsRaw(enrichMenuItems(val));
+      setMenuItemsRaw(enrichMenuItems(applyRecentMenuMutations(val)));
     }
   };
 
@@ -284,7 +298,7 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
 
       const safeFetch = async (url: string, fallbackVal: any) => {
         try {
-          const res = await apiFetch(url);
+          const res = await apiFetch(url, { forceAuth: activeTab !== 'customer' });
           return res;
         } catch (err) {
           console.warn(`[Sabay Sync] Failed network fetch for ${url}:`, err);
@@ -563,6 +577,7 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
   };
 
   const handleToggleMenuItemAvailability = async (id: string, targetType?: SoldOutType) => {
+    recentMenuMutationsRef.current.delete(id);
     lastMenuReorderTimeRef.current = Date.now() + 15000;
     
     // Optimistic Update
@@ -652,6 +667,30 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
   };
 
   const handleEditMenuItem = async (id: string, itemData: any) => {
+    lastMenuReorderTimeRef.current = Date.now() + 15000;
+    const optimisticPatch: Partial<MenuItem> = { ...itemData, id };
+    recentMenuMutationsRef.current.set(id, { item: optimisticPatch, expiresAt: Date.now() + 15000 });
+    setMenuItems(prev => prev.map(m => m.id === id ? { ...m, ...optimisticPatch } : m));
+    try {
+      const saved = await saveMenuItem(id, itemData);
+      const confirmedItem = (saved && typeof saved === 'object' && saved.item)
+        ? saved.item
+        : (saved && typeof saved === 'object' && saved.id ? saved : optimisticPatch);
+      const mergedPatch: Partial<MenuItem> = { ...optimisticPatch, ...confirmedItem, id };
+      recentMenuMutationsRef.current.set(id, { item: mergedPatch, expiresAt: Date.now() + 15000 });
+      setMenuItems(prev => prev.map(m => m.id === id ? { ...m, ...mergedPatch } : m));
+    } catch (err) {
+      recentMenuMutationsRef.current.delete(id);
+      lastMenuReorderTimeRef.current = 0;
+      console.error('[Sabay Menu Edit error]', err);
+      await fetchData(true, true);
+      throw err;
+    } finally {
+      lastMenuReorderTimeRef.current = 0;
+    }
+    await fetchData(true, true);
+  };
+  const _legacyHandleEditMenuItemUnused = async (id: string, itemData: any) => {
     lastMenuReorderTimeRef.current = Date.now();
     try {
       await saveMenuItem(id, itemData);
@@ -665,6 +704,7 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
   };
 
   const handleDeleteMenuItem = async (id: string) => {
+    recentMenuMutationsRef.current.delete(id);
     lastMenuReorderTimeRef.current = Date.now();
     try {
       const res = await apiFetch(`/api/menu/${id}`, {

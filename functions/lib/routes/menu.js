@@ -164,7 +164,7 @@ function registerMenuRoutes(app, ctx) {
             if (helpers_1.cachedCategories && (nowMs - helpers_1.cachedCategories.timestamp < helpers_1.CACHE_TTL_MS)) {
                 return res.json(helpers_1.cachedCategories.data);
             }
-            const snapshot = await db.collection('categories').select('id', 'name', 'showOnCustomerPage', 'orderIndex').orderBy('orderIndex').get();
+            const snapshot = await db.collection('categories').select('id', 'name', 'showOnCustomerPage', 'orderIndex').get();
             const categories = snapshot.docs
                 .map(doc => {
                 const d = doc.data();
@@ -191,7 +191,7 @@ function registerMenuRoutes(app, ctx) {
                 return res.json(helpers_1.cachedMenu.data);
             }
             const now = new Date();
-            const snapshot = await db.collection('menu').select('id', 'category', 'name', 'price', 'image', 'thumbnailUrl', 'avifUrl', 'avifThumbnailUrl', 'description', 'available', 'isSetMeal', 'requiredSaucesOption', 'hasNoodlesOption', 'hasCoconutsMilkOption', 'containsBeef', 'containsPork', 'containsSeafood', 'isNotSpicy', 'customAddOns', 'recipe', 'orderIndex', 'isTakeoutAvailable', 'soldOutAt', 'soldOutType', 'soldOutDate', 'trackInventory', 'inventoryCount', 'stockStatus').orderBy('orderIndex').get();
+            const snapshot = await db.collection('menu').select('id', 'category', 'name', 'price', 'image', 'thumbnailUrl', 'avifUrl', 'avifThumbnailUrl', 'description', 'available', 'isSetMeal', 'requiredSaucesOption', 'hasNoodlesOption', 'hasCoconutsMilkOption', 'containsBeef', 'containsPork', 'containsSeafood', 'isNotSpicy', 'customAddOns', 'recipe', 'orderIndex', 'isTakeoutAvailable', 'soldOutAt', 'soldOutType', 'soldOutDate', 'trackInventory', 'inventoryCount', 'stockStatus').get();
             const items = snapshot.docs.map(doc => {
                 const d = doc.data();
                 return {
@@ -308,8 +308,15 @@ function registerMenuRoutes(app, ctx) {
                 return res.status(400).json({ error: validation.error || '無效的餐點資料' });
             }
             const data = validation.sanitizedData;
-            const docRef = db.collection('menu').doc(id);
-            const docSnap = await docRef.get();
+            let docRef = db.collection('menu').doc(id);
+            let docSnap = await docRef.get();
+            if (!docSnap.exists) {
+                const querySnap = await db.collection('menu').where('id', '==', id).limit(1).get();
+                if (!querySnap.empty) {
+                    docRef = querySnap.docs[0].ref;
+                    docSnap = querySnap.docs[0];
+                }
+            }
             if (!docSnap.exists) {
                 return res.status(404).json({ error: '找不到該餐點 (Item not found)' });
             }
@@ -361,8 +368,15 @@ function registerMenuRoutes(app, ctx) {
     del('/menu/:id', requireStaffAuth, async (req, res) => {
         try {
             const id = req.params.id;
-            const docRef = db.collection('menu').doc(id);
-            const docSnap = await docRef.get();
+            let docRef = db.collection('menu').doc(id);
+            let docSnap = await docRef.get();
+            if (!docSnap.exists) {
+                const querySnap = await db.collection('menu').where('id', '==', id).limit(1).get();
+                if (!querySnap.empty) {
+                    docRef = querySnap.docs[0].ref;
+                    docSnap = querySnap.docs[0];
+                }
+            }
             if (docSnap.exists) {
                 const itemData = docSnap.data();
                 const oldImage = itemData?.image;

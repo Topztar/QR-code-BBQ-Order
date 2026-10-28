@@ -99,7 +99,7 @@ export function registerMenuRoutes(app: express.Application, ctx: RouteContext) 
 
           const hex = fileBuffer.toString('hex', 0, 12).toUpperCase();
           const isValidMagic = hex.startsWith('FFD8') || hex.startsWith('89504E47') || hex.startsWith('47494638') ||
-                          hex.includes('57454250') || hex.includes('66747970') || hex.includes('61766966');
+            hex.includes('57454250') || hex.includes('66747970') || hex.includes('61766966');
           if (!isValidMagic) {
             return res.status(400).json({ error: 'INVALID_MAGIC_BYTES: 檔案內容不符圖片格式特徵' });
           }
@@ -203,13 +203,13 @@ export function registerMenuRoutes(app: express.Application, ctx: RouteContext) 
   get('/categories', async (_req, res) => {
     try {
       res.setHeader('Cache-Control', 'public, max-age=30, s-maxage=300, stale-while-revalidate=600');
-      
+
       const nowMs = Date.now();
       if (cachedCategories && (nowMs - cachedCategories.timestamp < CACHE_TTL_MS)) {
         return res.json(cachedCategories.data);
       }
 
-      const snapshot = await db.collection('categories').select('id', 'name', 'showOnCustomerPage', 'orderIndex').orderBy('orderIndex').get();
+      const snapshot = await db.collection('categories').select('id', 'name', 'showOnCustomerPage', 'orderIndex').get();
       const categories = snapshot.docs
         .map(doc => {
           const d = doc.data() as any;
@@ -220,7 +220,7 @@ export function registerMenuRoutes(app: express.Application, ctx: RouteContext) 
           const idxB = typeof b.orderIndex === 'number' && Number.isFinite(b.orderIndex) ? b.orderIndex : 999999;
           return idxA !== idxB ? idxA - idxB : String(a.id ?? '').localeCompare(String(b.id ?? ''));
         });
-      
+
       setCachedCategories({ data: categories, timestamp: nowMs });
       res.json(categories);
     } catch (error) {
@@ -233,7 +233,7 @@ export function registerMenuRoutes(app: express.Application, ctx: RouteContext) 
   get('/menu', async (_req, res) => {
     try {
       res.setHeader('Cache-Control', 'public, max-age=15, s-maxage=120, stale-while-revalidate=300');
-      
+
       const nowMs = Date.now();
       if (cachedMenu && (nowMs - cachedMenu.timestamp < CACHE_TTL_MS)) {
         return res.json(cachedMenu.data);
@@ -246,7 +246,7 @@ export function registerMenuRoutes(app: express.Application, ctx: RouteContext) 
         'hasCoconutsMilkOption', 'containsBeef', 'containsPork', 'containsSeafood', 'isNotSpicy',
         'customAddOns', 'recipe', 'orderIndex', 'isTakeoutAvailable', 'soldOutAt', 'soldOutType',
         'soldOutDate', 'trackInventory', 'inventoryCount', 'stockStatus'
-      ).orderBy('orderIndex').get();
+      ).get();
       const items = snapshot.docs.map(doc => {
         const d = doc.data() as any;
         return {
@@ -370,8 +370,16 @@ export function registerMenuRoutes(app: express.Application, ctx: RouteContext) 
       }
       const data = validation.sanitizedData;
 
-      const docRef = db.collection('menu').doc(id);
-      const docSnap = await docRef.get();
+      let docRef = db.collection('menu').doc(id);
+      let docSnap = await docRef.get();
+      if (!docSnap.exists) {
+        const querySnap = await db.collection('menu').where('id', '==', id).limit(1).get();
+        if (!querySnap.empty) {
+          docRef = querySnap.docs[0].ref;
+          docSnap = querySnap.docs[0];
+        }
+      }
+      // docSnap already resolved above (with fallback query by id field)
       if (!docSnap.exists) {
         return res.status(404).json({ error: '找不到該餐點 (Item not found)' });
       }
@@ -431,8 +439,16 @@ export function registerMenuRoutes(app: express.Application, ctx: RouteContext) 
   del('/menu/:id', requireStaffAuth, async (req, res) => {
     try {
       const id = req.params.id as string;
-      const docRef = db.collection('menu').doc(id);
-      const docSnap = await docRef.get();
+      let docRef = db.collection('menu').doc(id);
+      let docSnap = await docRef.get();
+      if (!docSnap.exists) {
+        const querySnap = await db.collection('menu').where('id', '==', id).limit(1).get();
+        if (!querySnap.empty) {
+          docRef = querySnap.docs[0].ref;
+          docSnap = querySnap.docs[0];
+        }
+      }
+      // docSnap already resolved above (with fallback query by id field)
 
       if (docSnap.exists) {
         const itemData = docSnap.data();
@@ -498,23 +514,23 @@ export function registerMenuRoutes(app: express.Application, ctx: RouteContext) 
         let newAvailable = !(currentData?.available ?? true);
         let newSoldOutType = undefined;
         let newSoldOutDate = undefined;
-        
+
         // Handle explicit dual-mode overrides
         if (soldOutType) {
-           newAvailable = soldOutType === 'none';
-           newSoldOutType = soldOutType;
-           newSoldOutDate = soldOutDate || undefined;
+          newAvailable = soldOutType === 'none';
+          newSoldOutType = soldOutType;
+          newSoldOutDate = soldOutDate || undefined;
         }
 
         const newSoldOutAt = !newAvailable ? new Date().toISOString() : null;
-        const updateData: any = { 
-          available: newAvailable, 
+        const updateData: any = {
+          available: newAvailable,
           soldOutAt: newSoldOutAt,
           soldOutType: newSoldOutType || null,
           soldOutDate: newSoldOutDate || null,
           updatedAt: new Date().toISOString()
         };
-        
+
         await docRef.set(updateData, { merge: true });
         invalidatePublicBootstrapCache();
         const updatedItem = { ...currentData, ...updateData };

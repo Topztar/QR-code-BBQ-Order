@@ -49,7 +49,9 @@ export function registerBootstrapRoutes(app: express.Application, ctx: RouteCont
 
   get('/bootstrap', async (req, res) => {
     try {
-      res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=180, stale-while-revalidate=600');
+      const wantsFresh = Boolean(req.query.fresh);
+      res.setHeader('Vary', 'Authorization');
+      res.setHeader('Cache-Control', wantsFresh ? 'private, no-cache, no-store, must-revalidate' : 'public, max-age=60, s-maxage=180, stale-while-revalidate=600');
       const todayStr = new Date().toISOString().split('T')[0];
       
       let isStaffRequest = false;
@@ -65,7 +67,7 @@ export function registerBootstrapRoutes(app: express.Application, ctx: RouteCont
       }
 
       const nowMs = Date.now();
-      if (!isStaffRequest && cachedPublicBootstrap && (nowMs - cachedPublicBootstrap.timestamp < BOOTSTRAP_CACHE_TTL_MS)) {
+      if (!isStaffRequest && !wantsFresh && cachedPublicBootstrap && (nowMs - cachedPublicBootstrap.timestamp < BOOTSTRAP_CACHE_TTL_MS)) {
         res.setHeader('ETag', cachedPublicBootstrap.etag);
         if (req.headers['if-none-match'] === cachedPublicBootstrap.etag) {
           return res.status(304).end();
@@ -75,7 +77,7 @@ export function registerBootstrapRoutes(app: express.Application, ctx: RouteCont
 
       // 🔄 Post-mutation read-your-writes: staff `?fresh=1` bypasses the per-instance memory cache
       // (invalidation only clears the instance that handled the write; other instances may hold stale data)
-      const wantsFresh = isStaffRequest && req.query.fresh === '1';
+      // wantsFresh is computed at start of handler above
       if (isStaffRequest && !wantsFresh && cachedStaffBootstrap && (nowMs - cachedStaffBootstrap.timestamp < STAFF_BOOTSTRAP_CACHE_TTL_MS)) {
         res.setHeader('ETag', cachedStaffBootstrap.etag);
         res.setHeader('Vary', 'Authorization');
@@ -94,8 +96,8 @@ export function registerBootstrapRoutes(app: express.Application, ctx: RouteCont
         ingredientsSnap,
         reservationsSnap
       ] = await Promise.all([
-        db.collection('categories').select('id', 'name', 'showOnCustomerPage', 'orderIndex').orderBy('orderIndex').get(),
-        db.collection('menu').select('id', 'category', 'name', 'price', 'image', 'thumbnailUrl', 'avifUrl', 'avifThumbnailUrl', 'description', 'available', 'isSetMeal', 'requiredSaucesOption', 'hasNoodlesOption', 'hasCoconutsMilkOption', 'containsBeef', 'containsPork', 'containsSeafood', 'isNotSpicy', 'customAddOns', 'recipe', 'orderIndex', 'isTakeoutAvailable', 'soldOutAt', 'soldOutType', 'soldOutDate', 'trackInventory', 'inventoryCount', 'stockStatus').orderBy('orderIndex').get(),
+        db.collection('categories').select('id', 'name', 'showOnCustomerPage', 'orderIndex').get(),
+        db.collection('menu').select('id', 'category', 'name', 'price', 'image', 'thumbnailUrl', 'avifUrl', 'avifThumbnailUrl', 'description', 'available', 'isSetMeal', 'requiredSaucesOption', 'hasNoodlesOption', 'hasCoconutsMilkOption', 'containsBeef', 'containsPork', 'containsSeafood', 'isNotSpicy', 'customAddOns', 'recipe', 'orderIndex', 'isTakeoutAvailable', 'soldOutAt', 'soldOutType', 'soldOutDate', 'trackInventory', 'inventoryCount', 'stockStatus').get(),
         db.collection('tables').select('id', 'qrCodeUrl', 'status', 'cleaningStartedAt', 'maxCapacity', 'positionX', 'positionY', 'preservedFor', 'mergedWith').get(),
         db.collection('settings').doc('system').get(),
         isStaffRequest 
@@ -239,7 +241,9 @@ export function registerBootstrapRoutes(app: express.Application, ctx: RouteCont
       if (isStaffRequest) {
         res.setHeader('Cache-Control', 'private, max-age=0, no-cache');
       } else {
-        res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=180, stale-while-revalidate=600');
+        const wantsFresh = Boolean(req.query.fresh);
+      res.setHeader('Vary', 'Authorization');
+      res.setHeader('Cache-Control', wantsFresh ? 'private, no-cache, no-store, must-revalidate' : 'public, max-age=60, s-maxage=180, stale-while-revalidate=600');
       }
 
       if (req.headers['if-none-match'] === etag) {
@@ -275,7 +279,7 @@ export function registerBootstrapRoutes(app: express.Application, ctx: RouteCont
       const [systemDoc, soldOutMenuSnap] = await Promise.all([
         db.collection('settings').doc('system').get(),
         db.collection('menu')
-          .select('available', 'soldOutType', 'soldOutDate')
+          .select('id', 'available', 'soldOutType', 'soldOutDate', 'trackInventory', 'inventoryCount')
           .get()
       ]);
 
@@ -297,7 +301,9 @@ export function registerBootstrapRoutes(app: express.Application, ctx: RouteCont
             available = true;
           }
         }
-        if (!available) {
+        if (d.trackInventory && typeof d.inventoryCount === 'number' && d.inventoryCount <= 0) available = false;
+        if (!available) soldOutItemIds.push(d.id ?? doc.id);
+        if (false) {
           soldOutItemIds.push(doc.id);
         }
       }

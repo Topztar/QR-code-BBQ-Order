@@ -56,10 +56,10 @@ export interface SettingsRouteContext {
 
 export function registerSettingsRoutes(app: express.Express, ctx: SettingsRouteContext) {
   // 0. Consolidated Bootstrap endpoint for fast initial load
-  app.get('/api/bootstrap', (_req, res) => {
+  app.get('/api/bootstrap', (req, res) => {
     ctx.checkAndRestoreSoldOutMenuItems();
     ctx.syncTableStatusesWithTodayReservations();
-    res.setHeader('Cache-Control', 'public, max-age=15, s-maxage=60, stale-while-revalidate=300');
+    res.setHeader('Cache-Control', req.query.fresh ? 'private, no-cache, no-store, must-revalidate' : 'public, max-age=15, s-maxage=60, stale-while-revalidate=300');
     
     const memberCfg = ctx.getLiveMemberConfig();
     res.json({
@@ -441,6 +441,7 @@ export function registerSettingsRoutes(app: express.Express, ctx: SettingsRouteC
     const liveMenu = ctx.getLiveMenu();
     const soldOutItemIds = liveMenu
       .filter(dish => {
+        if (dish.trackInventory && typeof dish.inventoryCount === 'number' && dish.inventoryCount <= 0) return true;
         if (dish.available === false) return true;
         if (dish.soldOutType === 'permanent') return true;
         if (dish.soldOutType === 'daily' && dish.soldOutDate === todayStr) return true;

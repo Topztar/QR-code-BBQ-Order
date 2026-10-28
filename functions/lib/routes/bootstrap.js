@@ -59,7 +59,9 @@ function registerBootstrapRoutes(app, ctx) {
     const del = (routePath, ...handlers) => app.delete([`/api${routePath}`, routePath], ...handlers);
     get('/bootstrap', async (req, res) => {
         try {
-            res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=180, stale-while-revalidate=600');
+            const wantsFresh = Boolean(req.query.fresh);
+            res.setHeader('Vary', 'Authorization');
+            res.setHeader('Cache-Control', wantsFresh ? 'private, no-cache, no-store, must-revalidate' : 'public, max-age=60, s-maxage=180, stale-while-revalidate=600');
             const todayStr = new Date().toISOString().split('T')[0];
             let isStaffRequest = false;
             const authHeader = req.headers.authorization;
@@ -73,14 +75,13 @@ function registerBootstrapRoutes(app, ctx) {
                 }
             }
             const nowMs = Date.now();
-            if (!isStaffRequest && cachedPublicBootstrap && (nowMs - cachedPublicBootstrap.timestamp < BOOTSTRAP_CACHE_TTL_MS)) {
+            if (!isStaffRequest && !wantsFresh && cachedPublicBootstrap && (nowMs - cachedPublicBootstrap.timestamp < BOOTSTRAP_CACHE_TTL_MS)) {
                 res.setHeader('ETag', cachedPublicBootstrap.etag);
                 if (req.headers['if-none-match'] === cachedPublicBootstrap.etag) {
                     return res.status(304).end();
                 }
                 return res.json(cachedPublicBootstrap.payload);
             }
-            const wantsFresh = isStaffRequest && req.query.fresh === '1';
             if (isStaffRequest && !wantsFresh && cachedStaffBootstrap && (nowMs - cachedStaffBootstrap.timestamp < STAFF_BOOTSTRAP_CACHE_TTL_MS)) {
                 res.setHeader('ETag', cachedStaffBootstrap.etag);
                 res.setHeader('Vary', 'Authorization');
@@ -91,8 +92,8 @@ function registerBootstrapRoutes(app, ctx) {
                 return res.json(cachedStaffBootstrap.payload);
             }
             const [categoriesSnap, menuSnap, tablesSnap, systemDoc, ingredientsSnap, reservationsSnap] = await Promise.all([
-                db.collection('categories').select('id', 'name', 'showOnCustomerPage', 'orderIndex').orderBy('orderIndex').get(),
-                db.collection('menu').select('id', 'category', 'name', 'price', 'image', 'thumbnailUrl', 'avifUrl', 'avifThumbnailUrl', 'description', 'available', 'isSetMeal', 'requiredSaucesOption', 'hasNoodlesOption', 'hasCoconutsMilkOption', 'containsBeef', 'containsPork', 'containsSeafood', 'isNotSpicy', 'customAddOns', 'recipe', 'orderIndex', 'isTakeoutAvailable', 'soldOutAt', 'soldOutType', 'soldOutDate', 'trackInventory', 'inventoryCount', 'stockStatus').orderBy('orderIndex').get(),
+                db.collection('categories').select('id', 'name', 'showOnCustomerPage', 'orderIndex').get(),
+                db.collection('menu').select('id', 'category', 'name', 'price', 'image', 'thumbnailUrl', 'avifUrl', 'avifThumbnailUrl', 'description', 'available', 'isSetMeal', 'requiredSaucesOption', 'hasNoodlesOption', 'hasCoconutsMilkOption', 'containsBeef', 'containsPork', 'containsSeafood', 'isNotSpicy', 'customAddOns', 'recipe', 'orderIndex', 'isTakeoutAvailable', 'soldOutAt', 'soldOutType', 'soldOutDate', 'trackInventory', 'inventoryCount', 'stockStatus').get(),
                 db.collection('tables').select('id', 'qrCodeUrl', 'status', 'cleaningStartedAt', 'maxCapacity', 'positionX', 'positionY', 'preservedFor', 'mergedWith').get(),
                 db.collection('settings').doc('system').get(),
                 isStaffRequest
@@ -225,7 +226,9 @@ function registerBootstrapRoutes(app, ctx) {
                 res.setHeader('Cache-Control', 'private, max-age=0, no-cache');
             }
             else {
-                res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=180, stale-while-revalidate=600');
+                const wantsFresh = Boolean(req.query.fresh);
+                res.setHeader('Vary', 'Authorization');
+                res.setHeader('Cache-Control', wantsFresh ? 'private, no-cache, no-store, must-revalidate' : 'public, max-age=60, s-maxage=180, stale-while-revalidate=600');
             }
             if (req.headers['if-none-match'] === etag) {
                 return res.status(304).end();
@@ -252,7 +255,7 @@ function registerBootstrapRoutes(app, ctx) {
             const [systemDoc, soldOutMenuSnap] = await Promise.all([
                 db.collection('settings').doc('system').get(),
                 db.collection('menu')
-                    .select('available', 'soldOutType', 'soldOutDate')
+                    .select('id', 'available', 'soldOutType', 'soldOutDate', 'trackInventory', 'inventoryCount')
                     .get()
             ]);
             const sysData = systemDoc.data() || {};
@@ -273,7 +276,11 @@ function registerBootstrapRoutes(app, ctx) {
                         available = true;
                     }
                 }
-                if (!available) {
+                if (d.trackInventory && typeof d.inventoryCount === 'number' && d.inventoryCount <= 0)
+                    available = false;
+                if (!available)
+                    soldOutItemIds.push(d.id ?? doc.id);
+                if (false) {
                     soldOutItemIds.push(doc.id);
                 }
             }
