@@ -280,9 +280,6 @@ function registerBootstrapRoutes(app, ctx) {
                     available = false;
                 if (!available)
                     soldOutItemIds.push(d.id ?? doc.id);
-                if (false) {
-                    soldOutItemIds.push(doc.id);
-                }
             }
             res.json({
                 isOpen,

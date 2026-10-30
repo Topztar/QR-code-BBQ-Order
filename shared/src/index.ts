@@ -34,6 +34,11 @@ const orderCalculationService = {
       return baseP;
     }
 
+    if (dish && typeof dish.price === 'number' && dish.price <= 0) {
+      const expectedWithAddons = dish.price + soupBaseAdd + spicyAdd + addOnsTotal;
+      return baseP < expectedWithAddons ? expectedWithAddons : baseP;
+    }
+
     if (addOnsTotal > 0 || soupBaseAdd > 0 || spicyAdd > 0) {
       if (it.originalPrice && baseP <= it.originalPrice) {
         return it.originalPrice + soupBaseAdd + spicyAdd + addOnsTotal;

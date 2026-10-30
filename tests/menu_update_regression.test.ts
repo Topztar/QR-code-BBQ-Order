@@ -5,9 +5,10 @@
  *  R3  Single source of truth for order inventory deduction
  */
 import { describe, it, expect } from 'vitest';
-import { validateMenuItemPayload, applyInventoryLinkage } from '../functions/src/validators';
+import { validateMenuItemPayload, applyInventoryLinkage, validateOrderPayload } from '../functions/src/validators';
 import { computeDishDeductions } from '../functions/src/routes/orders';
 import { sortByOrderIndex } from '../src/context/RestaurantDataContext';
+import { orderCalculationService } from '@sabay/shared';
 
 // Exact payload shape emitted by DishFormModal.handleFormSubmit (no available / flags / orderIndex)
 const modalPayload = (overrides: Record<string, any> = {}) => ({
@@ -115,6 +116,71 @@ describe('R2: inventory linkage on effective state', () => {
     expect(applyInventoryLinkage({ trackInventory: true, inventoryCount: 3 }, { inventoryCount: 0 }))
       .toMatchObject({ available: false, stockStatus: 'SOLD_OUT' });
     expect(applyInventoryLinkage({ trackInventory: false }, { inventoryCount: 0 })).toEqual({});
+  });
+
+  it('enabling trackInventory with null/empty/omitted inventoryCount normalizes to 0 and locks SOLD_OUT', () => {
+    const existing = { trackInventory: false, inventoryCount: null, available: true };
+    const { sanitizedData: patchWithNull } = validateMenuItemPayload(
+      modalPayload({ trackInventory: true, inventoryCount: null }),
+      { mode: 'update' }
+    );
+    expect(patchWithNull.trackInventory).toBe(true);
+    expect(patchWithNull.inventoryCount).toBe(0);
+    expect(applyInventoryLinkage(existing, patchWithNull)).toMatchObject({
+      available: false,
+      soldOutType: 'permanent',
+      stockStatus: 'SOLD_OUT',
+    });
+
+    // Minimal patch { trackInventory: true } omitting inventoryCount when existing doc has inventoryCount: null
+    const { sanitizedData: patchOmitted } = validateMenuItemPayload({ trackInventory: true }, { mode: 'update' });
+    expect(applyInventoryLinkage(existing, patchOmitted)).toMatchObject({
+      inventoryCount: 0,
+      available: false,
+      soldOutType: 'permanent',
+      stockStatus: 'SOLD_OUT',
+    });
+  });
+
+  it('auto-recovers inventory-locked dish even when full-object payload carries prior available: false', () => {
+    const existing = { trackInventory: true, inventoryCount: -5, available: false, soldOutType: 'permanent', stockStatus: 'SOLD_OUT' };
+    const { sanitizedData } = validateMenuItemPayload(
+      modalPayload({ trackInventory: true, inventoryCount: 10, available: false, soldOutType: 'permanent' }),
+      { mode: 'update' }
+    );
+    expect(applyInventoryLinkage(existing, sanitizedData)).toMatchObject({
+      available: true,
+      soldOutType: 'none',
+      soldOutAt: null,
+      soldOutDate: null,
+      stockStatus: 'AVAILABLE',
+    });
+  });
+});
+
+describe('R5: negative-price discount items in orders (Defect 3)', () => {
+  it('allows negative-price discount items (e.g. #1 Hakka Coin Card Payment -1000) in validateOrderPayload and clamps against tampering', () => {
+    const orderRes = validateOrderPayload({
+      tableNumber: '1',
+      items: [
+        { menuItemId: 'dish-skewers', name: '泰式烤豬肉串', price: 200, qty: 6 },
+        { menuItemId: 'dish-2507182004409', name: '客家幣卡折抵', price: -1000, qty: 1 },
+      ],
+    });
+    expect(orderRes.isValid).toBe(true);
+
+    const menuList = [
+      { id: 'dish-skewers', price: 200 },
+      { id: 'dish-2507182004409', price: -1000 },
+    ];
+    expect(orderCalculationService.computeOrderItemUnitPrice(orderRes.sanitizedData.items[1], menuList)).toBe(-1000);
+    // Tampering attempt (-999999 instead of -1000) is clamped back to menu price -1000
+    expect(
+      orderCalculationService.computeOrderItemUnitPrice(
+        { menuItemId: 'dish-2507182004409', price: -999999, qty: 1 },
+        menuList
+      )
+    ).toBe(-1000);
   });
 });
 

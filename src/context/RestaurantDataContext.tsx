@@ -690,18 +690,6 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
     }
     await fetchData(true, true);
   };
-  const _legacyHandleEditMenuItemUnused = async (id: string, itemData: any) => {
-    lastMenuReorderTimeRef.current = Date.now();
-    try {
-      await saveMenuItem(id, itemData);
-    } catch (err) {
-      console.error('[Sabay Menu Edit error]', err);
-      // 🛡️ Propagate so the modal surfaces the failure instead of closing and "rolling back"
-      throw err;
-    }
-    // Read-your-writes refetch (fresh=1 bypasses per-instance staff cache)
-    await fetchData(true, true);
-  };
 
   const handleDeleteMenuItem = async (id: string) => {
     recentMenuMutationsRef.current.delete(id);

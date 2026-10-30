@@ -54159,7 +54159,7 @@ var require_validators = __commonJS({
           return { isValid: false, error: `\u9910\u9EDE\u6578\u91CF\u7570\u5E38 (Invalid quantity: ${qty})` };
         }
         const price = Number(item.price);
-        if (!Number.isFinite(price) || price < 0 || price > 1e6) {
+        if (!Number.isFinite(price) || price < -1e6 || price > 1e6) {
           return { isValid: false, error: `\u9910\u9EDE\u91D1\u984D\u7570\u5E38 (Invalid price: ${price})` };
         }
         sanitizedItems.push({
@@ -54408,11 +54408,13 @@ var require_validators = __commonJS({
         out.trackInventory = Boolean(body.trackInventory);
       if (out.trackInventory === false) {
         out.inventoryCount = null;
-      } else if (has("inventoryCount") && body.inventoryCount !== null) {
+      } else if (has("inventoryCount") && body.inventoryCount !== null && body.inventoryCount !== "") {
         const parsed = Number(body.inventoryCount);
         out.inventoryCount = Number.isFinite(parsed) ? Math.round(parsed) : 0;
+      } else if (out.trackInventory === true && (!isUpdate || body.inventoryCount === null || body.inventoryCount === "")) {
+        out.inventoryCount = 0;
       } else if (!isUpdate) {
-        out.inventoryCount = out.trackInventory ? 0 : null;
+        out.inventoryCount = null;
       }
       if (!isUpdate || has("available"))
         out.available = has("available") ? Boolean(body.available) : true;
@@ -54451,9 +54453,12 @@ var require_validators = __commonJS({
     function applyInventoryLinkage(existing, patch) {
       const prev = existing || {};
       const track = patch.trackInventory !== void 0 ? !!patch.trackInventory : !!prev.trackInventory;
-      const count = patch.inventoryCount !== void 0 ? patch.inventoryCount : prev.inventoryCount;
+      const rawCount = patch.inventoryCount !== void 0 ? patch.inventoryCount : prev.inventoryCount;
+      const needsDefaultZero = track && (typeof rawCount !== "number" || !Number.isFinite(rawCount));
+      const count = needsDefaultZero ? 0 : rawCount;
       if (track && typeof count === "number" && count <= 0) {
         return {
+          ...needsDefaultZero ? { inventoryCount: 0 } : {},
           available: false,
           soldOutType: "permanent",
           soldOutAt: patch.soldOutAt || prev.soldOutAt || (/* @__PURE__ */ new Date()).toISOString(),
@@ -54461,7 +54466,8 @@ var require_validators = __commonJS({
         };
       }
       const wasInventoryLocked = !!prev.trackInventory && typeof prev.inventoryCount === "number" && prev.inventoryCount <= 0;
-      if ((!track || typeof count === "number" && count > 0) && wasInventoryLocked && patch.available === void 0) {
+      const canAutoRecover = patch.available === void 0 || patch.available === false && prev.available === false;
+      if ((!track || typeof count === "number" && count > 0) && wasInventoryLocked && canAutoRecover) {
         return { available: true, soldOutType: "none", soldOutAt: null, soldOutDate: null, stockStatus: "AVAILABLE" };
       }
       return {};
@@ -54743,9 +54749,6 @@ var require_bootstrap = __commonJS({
               available = false;
             if (!available)
               soldOutItemIds.push(d.id ?? doc.id);
-            if (false) {
-              soldOutItemIds.push(doc.id);
-            }
           }
           res.json({
             isOpen,

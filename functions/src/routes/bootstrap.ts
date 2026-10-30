@@ -303,9 +303,6 @@ export function registerBootstrapRoutes(app: express.Application, ctx: RouteCont
         }
         if (d.trackInventory && typeof d.inventoryCount === 'number' && d.inventoryCount <= 0) available = false;
         if (!available) soldOutItemIds.push(d.id ?? doc.id);
-        if (false) {
-          soldOutItemIds.push(doc.id);
-        }
       }
 
       res.json({

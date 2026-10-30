@@ -67,7 +67,9 @@ export function validateOrderPayload(body: any): ValidationResult<any> {
     }
 
     const price = Number(item.price);
-    if (!Number.isFinite(price) || price < 0 || price > 1000000) {
+    // Supports negative-price discount items (e.g. #1 Hakka Coin Card Payment -1000, #2 Empty Thai Tea Bucket -30)
+    // Authoritative unit prices are reconciled against Firestore menu in POST /orders
+    if (!Number.isFinite(price) || price < -1000000 || price > 1000000) {
       return { isValid: false, error: `餐點金額異常 (Invalid price: ${price})` };
     }
 
@@ -396,11 +398,13 @@ export function validateMenuItemPayload(body: any, options: MenuItemValidationOp
   if (out.trackInventory === false) {
     // Explicit null wipes legacy numeric values when unchecked (merge:true ignores omitted keys)
     out.inventoryCount = null;
-  } else if (has('inventoryCount') && body.inventoryCount !== null) {
+  } else if (has('inventoryCount') && body.inventoryCount !== null && body.inventoryCount !== '') {
     const parsed = Number(body.inventoryCount);
     out.inventoryCount = Number.isFinite(parsed) ? Math.round(parsed) : 0;
+  } else if (out.trackInventory === true && (!isUpdate || body.inventoryCount === null || body.inventoryCount === '')) {
+    out.inventoryCount = 0;
   } else if (!isUpdate) {
-    out.inventoryCount = out.trackInventory ? 0 : null;
+    out.inventoryCount = null;
   }
 
   // Sold out / available states — only written when explicitly provided (or on create)
@@ -447,10 +451,13 @@ export function validateMenuItemPayload(body: any, options: MenuItemValidationOp
 export function applyInventoryLinkage(existing: Record<string, any> | null | undefined, patch: Record<string, any>): Record<string, any> {
   const prev = existing || {};
   const track = patch.trackInventory !== undefined ? !!patch.trackInventory : !!prev.trackInventory;
-  const count = patch.inventoryCount !== undefined ? patch.inventoryCount : prev.inventoryCount;
+  const rawCount = patch.inventoryCount !== undefined ? patch.inventoryCount : prev.inventoryCount;
+  const needsDefaultZero = track && (typeof rawCount !== 'number' || !Number.isFinite(rawCount));
+  const count = needsDefaultZero ? 0 : rawCount;
 
   if (track && typeof count === 'number' && count <= 0) {
     return {
+      ...(needsDefaultZero ? { inventoryCount: 0 } : {}),
       available: false,
       soldOutType: 'permanent',
       soldOutAt: patch.soldOutAt || prev.soldOutAt || new Date().toISOString(),
@@ -459,7 +466,8 @@ export function applyInventoryLinkage(existing: Record<string, any> | null | und
   }
 
   const wasInventoryLocked = !!prev.trackInventory && typeof prev.inventoryCount === 'number' && prev.inventoryCount <= 0;
-  if (( !track || (typeof count === 'number' && count > 0) ) && wasInventoryLocked && patch.available === undefined) {
+  const canAutoRecover = patch.available === undefined || (patch.available === false && prev.available === false);
+  if ((!track || (typeof count === 'number' && count > 0)) && wasInventoryLocked && canAutoRecover) {
     return { available: true, soldOutType: 'none', soldOutAt: null, soldOutDate: null, stockStatus: 'AVAILABLE' };
   }
   return {};
