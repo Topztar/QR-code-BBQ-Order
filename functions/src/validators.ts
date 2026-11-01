@@ -472,3 +472,249 @@ export function applyInventoryLinkage(existing: Record<string, any> | null | und
   }
   return {};
 }
+
+
+export interface CategoryPresetEntry {
+  idSuggestion: string;
+  en: string;
+  th: string;
+  ja: string;
+  ko: string;
+  vi: string;
+  ru: string;
+  es: string;
+}
+
+export const CATEGORY_I18N_PRESETS: Record<string, CategoryPresetEntry> = {
+  '下酒必點小食': {
+    idSuggestion: 'snacks',
+    en: 'Must-Order Bar Snacks',
+    th: 'กับแกล้มต้องสั่ง',
+    ja: 'お酒のおつまみ',
+    ko: '필수 안주 스낵',
+    vi: 'Món nhắm bắt buộc',
+    ru: 'Закуски к напиткам',
+    es: 'Aperitivos para acompañar',
+  },
+  '小費及折扣': {
+    idSuggestion: 'tips',
+    en: 'Tips & Discounts',
+    th: 'ทิปและส่วนลด',
+    ja: 'チップ・割引',
+    ko: '팁 및 할인',
+    vi: 'Tiền tip & Giảm giá',
+    ru: 'Чаевые и скидки',
+    es: 'Propinas y Descuentos',
+  },
+  '冰櫃酒水 🧊': {
+    idSuggestion: 'chilled-drinks',
+    en: 'Refrigerated Drinks & Alcohol 🍺',
+    th: 'เครื่องดื่มและสุราแช่เย็น 🍺',
+    ja: '冷蔵ドリンク・お酒 🍺',
+    ko: '냉장 음료 및 주류 🍺',
+    vi: 'Đồ uống & Rượu lạnh 🍺',
+    ru: 'Холодные напитки и алкоголь 🍺',
+    es: 'Bebidas Frías y Alcohol 🍺',
+  },
+  '冬蔭功系列 🍜': {
+    idSuggestion: 'tomyum',
+    en: 'Tom Yum Series 🍜',
+    th: 'ชุดต้มยำสุดแซ่บ 🍜',
+    ja: 'トムヤムシリーズ 🍜',
+    ko: '똠얌 수프 시리즈 🍜',
+    vi: 'Dòng súp Tom Yum 🍜',
+    ru: 'Супы Том Ям',
+    es: 'Sopas Tom Yum',
+  },
+  '熱湯 🥢越南牛肉河粉': {
+    idSuggestion: 'noodles',
+    en: 'Hot Soups & Beef Pho 🥢',
+    th: 'ซุปร้อนและเฝอเนื้อเวียดนาม 🥢',
+    ja: '温かいスープ・ベトナム牛肉フォー 🥢',
+    ko: '따뜻한 수프 및 베트남 소고기 쌀국수 🥢',
+    vi: 'Súp nóng & Phở bò Việt Nam 🥢',
+    ru: 'Горячие супы и суп Фо 🥢',
+    es: 'Sopas Calientes y Fideos Pho 🥢',
+  },
+  '精選套餐 🍱優惠': {
+    idSuggestion: 'combos',
+    en: "Chef's Special Combos 🍱",
+    th: 'เซตเมนูสุดคุ้ม 🍱',
+    ja: '主理人厳選お得セット 🍱',
+    ko: '셰프 추천 특선 세트 🍱',
+    vi: 'Combo đặc biệt 🍱',
+    ru: 'Фирменные комбо-сеты 🍱',
+    es: 'Combos y Sets Especiales 🍱',
+  },
+  '招牌泰式海鮮 🦐': {
+    idSuggestion: 'seafood',
+    en: 'Signature Thai Seafood 🦐',
+    th: 'อาหารทะเลเผาสูตรเด็ด 🦐',
+    ja: '本格タイ風炭火焼きシーフード 🦐',
+    ko: '시그니처 태국식 해산물 🦐',
+    vi: 'Hải sản nướng Thái Lan 🦐',
+    ru: 'Тайские морепродукты 🦐',
+    es: 'Mariscos Tailandeses 🦐',
+  },
+  '小農鮮蔬菜 🥬': {
+    idSuggestion: 'veggies',
+    en: 'Farm Fresh Vegetables 🥬',
+    th: 'ผักสดฟาร์มย่าง 🥬',
+    ja: '地元新鮮野菜焼き 🥬',
+    ko: '신선한 채소 구이 🥬',
+    vi: 'Rau củ tươi sạch 🥬',
+    ru: 'Свежие овощи на гриле 🥬',
+    es: 'Vegetales Frescos de Granja 🥬',
+  },
+  '碳烤肉類 🍢其他': {
+    idSuggestion: 'skewers',
+    en: 'Charcoal BBQ Skewers & Others 🍢',
+    th: 'บาร์บีคิวเสียบไม้ย่างและอื่นๆ 🍢',
+    ja: 'タイ風肉串炭火焼き・その他 🍢',
+    ko: '오리지널 숯불 고기 꼬치 및 기타 🍢',
+    vi: 'Thịt nướng xiên & Khác 🍢',
+    ru: 'Шашлычки на углях',
+    es: 'Brochetas a las Brasas',
+  },
+  '泰式特色甜品 🍰': {
+    idSuggestion: 'sweets',
+    en: 'Thai Desserts & Sweets 🍰',
+    th: 'ขนมหวานและพุดดิ้งสูตรพิเศษ 🍰',
+    ja: 'タイ風特製デザート 🍰',
+    ko: '태국식 달콤 디저트 🍰',
+    vi: 'Tráng miệng kiểu Thái 🍰',
+    ru: 'Тайские десерты и сладости 🍰',
+    es: 'Postres y Dulces Tailandeses 🍰',
+  },
+  '泰特色沁涼飲品 🍹': {
+    idSuggestion: 'drinks',
+    en: 'Refreshing Thai Cold Drinks 🍹',
+    th: 'เครื่องดื่มดับร้อนรสสดชื่น 🍹',
+    ja: 'タイ風さわやかドリンク 🍹',
+    ko: '태국식 청량 음료 🍹',
+    vi: 'Đồ uống lạnh kiểu Thái 🍹',
+    ru: 'Напитки',
+    es: 'Bebidas',
+  },
+  '獨家醬料 🥫': {
+    idSuggestion: 'sauces',
+    en: 'Exclusive Secret Sauces 🥫',
+    th: 'ซอสสูตรลับพิเศษ 🥫',
+    ja: '秘伝の特製タレ・ソース 🥫',
+    ko: '단독 수제 특제 소스 🥫',
+    vi: 'Nước sốt độc quyền 🥫',
+    ru: 'Фирменные соусы 🥫',
+    es: 'Salsas Secretas Exclusivas 🥫',
+  },
+  '成人酒品專區 🔞': {
+    idSuggestion: 'alcohol',
+    en: 'Adult Alcoholic Beverages (18+) 🔞',
+    th: 'โซนเครื่องดื่มแอลกอฮอล์สำหรับผู้ใหญ่ (18+) 🔞',
+    ja: '成人向けお酒エリア (18+) 🔞',
+    ko: '성인 주류 전용 구역 (18+) 🔞',
+    vi: 'Khu vực đồ uống có cồn cho người lớn (18+) 🔞',
+    ru: 'Алкоголь для взрослых (18+) 🔞',
+    es: 'Bebidas Alcohólicas (18+) 🔞',
+  },
+};
+
+export function normalizeCategoryId(rawId?: string | null): string {
+  return String(rawId || '').trim().toLowerCase().replace(/[^a-z0-9-_]/g, '');
+}
+
+export function generateRandomCategoryId(): string {
+  let suffix = Math.random().toString(36).substring(2, 8);
+  while (suffix.length < 6) {
+    suffix += Math.random().toString(36).substring(2, 8);
+  }
+  return `cat-${suffix.slice(0, 6)}`;
+}
+
+export function resolveCategoryId(rawId?: string | null): string {
+  const normalizedId = normalizeCategoryId(rawId);
+  return normalizedId || generateRandomCategoryId();
+}
+
+export function resolveCategoryMultilingualNames(
+  input: any,
+  options?: { overwriteExisting?: boolean; fallbackToSource?: boolean }
+): Record<'zh' | 'en' | 'th' | 'ja' | 'ko' | 'vi' | 'ru' | 'es', string> {
+  const overwrite = Boolean(options?.overwriteExisting);
+  const fallbackToSource = Boolean(options?.fallbackToSource);
+
+  const rawObj = typeof input === 'string' ? { zh: input } : (input && typeof input === 'object' ? input : {});
+  const out = {
+    zh: sanitizeString(rawObj.zh, 200),
+    en: sanitizeString(rawObj.en, 200),
+    th: sanitizeString(rawObj.th, 200),
+    ja: sanitizeString(rawObj.ja, 200),
+    ko: sanitizeString(rawObj.ko, 200),
+    vi: sanitizeString(rawObj.vi, 200),
+    ru: sanitizeString(rawObj.ru, 200),
+    es: sanitizeString(rawObj.es, 200),
+  };
+
+  const preset = out.zh ? CATEGORY_I18N_PRESETS[out.zh] : undefined;
+  const targetLangs: Array<'en' | 'th' | 'ja' | 'ko' | 'vi' | 'ru' | 'es'> = ['en', 'th', 'ja', 'ko', 'vi', 'ru', 'es'];
+
+  if (preset) {
+    for (const lang of targetLangs) {
+      if ((overwrite || !out[lang]) && preset[lang]) {
+        out[lang] = preset[lang];
+      }
+    }
+  }
+
+  if (fallbackToSource && out.zh) {
+    const fallbackText = out.en || out.zh;
+    for (const lang of targetLangs) {
+      if (!out[lang]) {
+        out[lang] = fallbackText;
+      }
+    }
+  }
+
+  return out;
+}
+
+export function validateCategoryPayload(body: any, paramId?: string): ValidationResult<any> & { previousId?: string } {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return { isValid: false, error: '無效的分類資料格式 (Invalid category payload)' };
+  }
+
+  const rawBodyId = typeof body.id === 'string' ? body.id : '';
+  const rawParamId = typeof paramId === 'string' && paramId !== '__empty__' ? paramId : '';
+  const finalCategoryId = resolveCategoryId(rawBodyId || rawParamId);
+
+  const resolvedName = resolveCategoryMultilingualNames(body.name, {
+    overwriteExisting: false,
+    fallbackToSource: true,
+  });
+
+  if (!resolvedName.zh) {
+    return { isValid: false, error: '請填寫中文分類名稱 (Missing Category Name Zh)' };
+  }
+
+  const showOnCustomerPage = body.showOnCustomerPage !== undefined
+    ? Boolean(body.showOnCustomerPage)
+    : (body.showOnCustomer !== undefined ? Boolean(body.showOnCustomer) : true);
+
+  const sanitizedData: Record<string, any> = {
+    id: finalCategoryId,
+    name: resolvedName,
+    showOnCustomerPage,
+    updatedAt: new Date().toISOString(),
+  };
+
+  if (body.orderIndex !== undefined && Number.isFinite(Number(body.orderIndex))) {
+    sanitizedData.orderIndex = Number(body.orderIndex);
+  }
+
+  const previousId = typeof body.previousId === 'string' ? body.previousId.trim() : undefined;
+
+  return {
+    isValid: true,
+    sanitizedData,
+    previousId,
+  };
+}

@@ -10,6 +10,7 @@ import { saveMenuItem } from '../lib/menuService';
 import { addRequestToQueue } from '../lib/offlineQueue';
 import { validateTableMonopoly } from '../utils/reservationValidator';
 import { getMsUntilTaiwanMidnight, getTaiwanDateString } from '../utils/dateUtils';
+import { resolveCategoryId, resolveCategoryMultilingualNames } from '../utils/i18n';
 
 export interface AnalyticsData {
   totalRevenue: number;
@@ -55,7 +56,7 @@ export interface RestaurantDataContextType {
   handleToggleMenuItemAvailability: (id: string, targetType?: SoldOutType) => Promise<void>;
   handleReorderMenuItems: (order: string[]) => Promise<void>;
   handleAddCategory: (id: string, name: any, showOnCustomerPage?: boolean) => Promise<{ success: boolean; error?: string }>;
-  handleEditCategory: (id: string, name: any, showOnCustomerPage?: boolean) => Promise<{ success: boolean; error?: string }>;
+  handleEditCategory: (id: string, name: any, showOnCustomerPage?: boolean, previousId?: string) => Promise<{ success: boolean; error?: string }>;
   handleDeleteCategory: (id: string) => Promise<{ success: boolean; error?: string }>;
   handleReorderCategories: (order: string[]) => Promise<void>;
   handleAddTable: (id: string, qrCodeUrl?: string, maxCapacity?: number) => Promise<{ success: boolean; error?: string }>;
@@ -712,7 +713,7 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
       const res = await apiFetch('/api/categories', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, name, showOnCustomerPage }),
+        body: JSON.stringify({ id: resolveCategoryId(id), name: resolveCategoryMultilingualNames(name, { overwriteExisting: false, fallbackToSource: true }), showOnCustomerPage }),
       });
       if (res.ok) {
         await fetchData(true, true);
@@ -727,13 +728,14 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
     }
   };
 
-  const handleEditCategory = async (id: string, name: any, showOnCustomerPage?: boolean) => {
+  const handleEditCategory = async (id: string, name: any, showOnCustomerPage?: boolean, previousId?: string) => {
     lastCategoryReorderTimeRef.current = Date.now();
     try {
-      const res = await apiFetch(`/api/categories/${id}`, {
+      const finalId = name !== undefined ? resolveCategoryId(id) : ((id && id.trim()) ? id.trim() : '__empty__');
+      const res = await apiFetch(`/api/categories/${encodeURIComponent(finalId)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, showOnCustomerPage }),
+        body: JSON.stringify({ id: finalId, previousId, name: resolveCategoryMultilingualNames(name, { overwriteExisting: false, fallbackToSource: true }), showOnCustomerPage }),
       });
       if (res.ok) {
         await fetchData(true, true);
@@ -748,10 +750,11 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
     }
   };
 
-  const handleDeleteCategory = async (id: string) => {
+  const handleDeleteCategory = async (id: string, name?: any) => {
     lastCategoryReorderTimeRef.current = Date.now();
     try {
-      const res = await apiFetch(`/api/categories/${id}`, {
+      const finalId = name !== undefined ? resolveCategoryId(id) : ((id && id.trim()) ? id.trim() : '__empty__');
+      const res = await apiFetch(`/api/categories/${encodeURIComponent(finalId)}`, {
         method: 'DELETE',
       });
       if (res.ok) {

@@ -1,5 +1,6 @@
 import express from 'express';
 import { MenuItem, Category, SoldOutType } from '../../types';
+import { resolveCategoryId, resolveCategoryMultilingualNames } from '../../utils/i18n';
 
 export interface MenuRouteContext {
   getLiveMenu: () => MenuItem[];
@@ -308,19 +309,26 @@ export function registerMenuRoutes(app: express.Express, ctx: MenuRouteContext) 
   });
 
   app.post('/api/categories', (req, res) => {
-    const { id, name, showOnCustomerPage } = req.body;
-    if (!id || !name) {
+    const { id: rawId, name: rawName, showOnCustomerPage } = req.body || {};
+    const resolvedName = resolveCategoryMultilingualNames(rawName, {
+      overwriteExisting: false,
+      fallbackToSource: true,
+    });
+    const id = resolveCategoryId(rawId);
+    if (!resolvedName.zh) {
       return res.status(400).json({ error: 'Missing required category fields' });
     }
-    const liveCategories = getLiveCategories();
-    const existing = liveCategories.find(c => c.id === id);
+    const liveCategories = getLiveCategories().filter(
+      (c) => !((!c.id || !c.id.trim()) && c.name?.zh === resolvedName.zh)
+    );
+    const existing = liveCategories.find((c) => c.id === id);
     if (existing) {
       return res.status(400).json({ error: 'Category ID already exists' });
     }
     const newCategory: Category = {
       id,
-      name: typeof name === 'object' ? name : { zh: name, en: name },
-      showOnCustomerPage: showOnCustomerPage !== undefined ? !!showOnCustomerPage : true
+      name: resolvedName,
+      showOnCustomerPage: showOnCustomerPage !== undefined ? !!showOnCustomerPage : true,
     };
     liveCategories.push(newCategory);
     setLiveCategories(liveCategories);
@@ -354,18 +362,49 @@ export function registerMenuRoutes(app: express.Express, ctx: MenuRouteContext) 
 
   app.put('/api/categories/:id', (req, res) => {
     const { id } = req.params;
-    const { name, showOnCustomerPage } = req.body;
+    const { id: bodyId, previousId, name, showOnCustomerPage } = req.body || {};
+    const finalId = resolveCategoryId(bodyId || (id !== '__empty__' ? id : ''));
+    const resolvedName =
+      name !== undefined
+        ? resolveCategoryMultilingualNames(name, { overwriteExisting: false, fallbackToSource: true })
+        : undefined;
     const liveCategories = getLiveCategories();
-    const cat = liveCategories.find(c => c.id === id);
+    const cat = liveCategories.find(
+      (c) =>
+        c.id === finalId ||
+        (previousId !== undefined && c.id === previousId) ||
+        ((!c.id || !c.id.trim()) &&
+          (previousId === '' ||
+            id === '__empty__' ||
+            !id.trim() ||
+            Boolean(resolvedName?.zh && c.name?.zh === resolvedName.zh)))
+    );
     if (cat) {
-      if (name !== undefined) {
-        cat.name = typeof name === 'object' ? name : { zh: name, en: name };
+      cat.id = finalId;
+      if (resolvedName !== undefined) {
+        cat.name = resolvedName;
       }
       if (showOnCustomerPage !== undefined) {
         cat.showOnCustomerPage = !!showOnCustomerPage;
       }
+      const deduplicated = liveCategories.filter((c) => {
+        if (c === cat) return true;
+        if (!c.id || !c.id.trim()) {
+          if (
+            previousId === '' ||
+            id === '__empty__' ||
+            !id.trim() ||
+            Boolean(resolvedName?.zh && c.name?.zh === resolvedName.zh)
+          ) {
+            return false;
+          }
+        }
+        if (c.id === finalId) return false;
+        return true;
+      });
+      setLiveCategories(deduplicated);
       saveStateToDisk();
-      return res.json({ success: true, category: cat });
+      return res.json({ success: true, id: finalId, category: cat });
     }
     res.status(404).json({ error: 'Category not found' });
   });
@@ -374,7 +413,10 @@ export function registerMenuRoutes(app: express.Express, ctx: MenuRouteContext) 
     const { id } = req.params;
     let liveCategories = getLiveCategories();
     const initialLen = liveCategories.length;
-    liveCategories = liveCategories.filter(c => c.id !== id);
+    const isDeletingEmpty = id === '__empty__' || !id.trim();
+    liveCategories = liveCategories.filter((c) =>
+      isDeletingEmpty ? Boolean(c.id && c.id.trim()) : c.id !== id
+    );
     if (liveCategories.length !== initialLen) {
       setLiveCategories(liveCategories);
       saveStateToDisk();

@@ -25,6 +25,10 @@ describe('EOD Checkout Security, Logout & Inventory Idempotency Suite', () => {
     { id: 'dish-2602121834434', name: { zh: '板腱牛排', en: 'Steak' }, price: 300, category: 'meat', available: true }
   ];
   const mockBillPrinter = {
+    connectionType: 'IP' as const,
+    fontSizeFactor: 1,
+    headerPrefix: '',
+    footerSuffix: '',
     ip: '192.168.123.100',
     port: 9100,
     usbPort: 'LPT1',
@@ -338,4 +342,3 @@ describe('EOD Checkout Security, Logout & Inventory Idempotency Suite', () => {
     expect(rulesContent).not.toContain("allow delete: if isAuthenticated() || resource.data.status == 'cancelled';");
   });
 });
-

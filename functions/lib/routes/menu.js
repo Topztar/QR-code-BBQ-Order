@@ -464,7 +464,37 @@ function registerMenuRoutes(app, ctx) {
     post('/categories', requireStaffAuth, async (req, res) => {
         try {
             const data = req.body;
-            const docRef = await db.collection('categories').add(data);
+            const validation = (0, validators_1.validateCategoryPayload)(data);
+            if (!validation.isValid || !validation.sanitizedData) {
+                return res.status(400).json({ error: validation.error || '無效的分類資料' });
+            }
+            const categoryData = validation.sanitizedData;
+            const finalId = categoryData.id;
+            const catCol = db.collection('categories');
+            if (typeof catCol.get === 'function') {
+                const existingSnap = await catCol.get();
+                const docsToDelete = [];
+                existingSnap.docs.forEach((docSnap) => {
+                    const d = docSnap.data() || {};
+                    const docDataId = typeof d.id === 'string' ? d.id.trim() : '';
+                    if (docSnap.id !== finalId && (!docDataId && d.name?.zh === categoryData.name.zh)) {
+                        if (categoryData.orderIndex === undefined && typeof d.orderIndex === 'number') {
+                            categoryData.orderIndex = d.orderIndex;
+                        }
+                        docsToDelete.push(docSnap.ref);
+                    }
+                });
+                if (categoryData.orderIndex === undefined) {
+                    categoryData.orderIndex = Math.max(0, existingSnap.docs.length - docsToDelete.length);
+                }
+                if (docsToDelete.length > 0) {
+                    await Promise.all(docsToDelete.map((ref) => ref.delete()));
+                }
+            }
+            await db.collection('categories').doc(finalId).set(categoryData, { merge: true });
+            (0, bootstrap_1.invalidatePublicBootstrapCache)();
+            return res.json({ success: true, id: finalId, category: categoryData });
+            const docRef = { id: finalId };
             (0, bootstrap_1.invalidatePublicBootstrapCache)();
             res.json({ id: docRef.id });
         }
@@ -477,7 +507,42 @@ function registerMenuRoutes(app, ctx) {
         try {
             const id = req.params.id;
             const data = req.body;
-            await db.collection('categories').doc(id).set(data, { merge: true });
+            const validation = (0, validators_1.validateCategoryPayload)(data, id);
+            if (!validation.isValid || !validation.sanitizedData) {
+                return res.status(400).json({ error: validation.error || '無效的分類資料' });
+            }
+            const categoryData = validation.sanitizedData;
+            const finalId = categoryData.id;
+            const previousId = validation.previousId;
+            const catCol = db.collection('categories');
+            if (typeof catCol.get === 'function') {
+                const existingSnap = await catCol.get();
+                const docsToDelete = [];
+                existingSnap.docs.forEach((docSnap) => {
+                    const d = docSnap.data() || {};
+                    const docDataId = typeof d.id === 'string' ? d.id.trim() : '';
+                    const isTargetDoc = docSnap.id === finalId || docDataId === finalId;
+                    const isLegacyEmptyDoc = !docDataId && (previousId === '' ||
+                        id === '__empty__' ||
+                        !id.trim() ||
+                        (d.name?.zh && d.name.zh === categoryData.name.zh));
+                    const isPreviousIdDoc = Boolean(previousId && (docSnap.id === previousId || docDataId === previousId));
+                    if (isTargetDoc || isLegacyEmptyDoc || isPreviousIdDoc) {
+                        if (categoryData.orderIndex === undefined && typeof d.orderIndex === 'number') {
+                            categoryData.orderIndex = d.orderIndex;
+                        }
+                        if (docSnap.id !== finalId) {
+                            docsToDelete.push(docSnap.ref);
+                        }
+                    }
+                });
+                if (docsToDelete.length > 0) {
+                    await Promise.all(docsToDelete.map((ref) => ref.delete()));
+                }
+            }
+            await db.collection('categories').doc(finalId).set(categoryData, { merge: true });
+            (0, bootstrap_1.invalidatePublicBootstrapCache)();
+            return res.json({ success: true, id: finalId, category: categoryData });
             (0, bootstrap_1.invalidatePublicBootstrapCache)();
             res.json({ success: true });
         }
@@ -489,7 +554,25 @@ function registerMenuRoutes(app, ctx) {
     del('/categories/:id', requireStaffAuth, async (req, res) => {
         try {
             const id = req.params.id;
-            await db.collection('categories').doc(id).delete();
+            const isDeletingEmpty = id === '__empty__' || !id.trim();
+            if (!isDeletingEmpty) {
+                await db.collection('categories').doc(id).delete();
+            }
+            const catCol = db.collection('categories');
+            if (typeof catCol.get === 'function') {
+                const existingSnap = await catCol.get();
+                const extraRefs = [];
+                existingSnap.docs.forEach((docSnap) => {
+                    const d = docSnap.data() || {};
+                    const docDataId = typeof d.id === 'string' ? d.id.trim() : '';
+                    if (isDeletingEmpty ? !docDataId : (docDataId === id && docSnap.id !== id)) {
+                        extraRefs.push(docSnap.ref);
+                    }
+                });
+                if (extraRefs.length > 0) {
+                    await Promise.all(extraRefs.map((ref) => ref.delete()));
+                }
+            }
             (0, bootstrap_1.invalidatePublicBootstrapCache)();
             res.json({ success: true });
         }

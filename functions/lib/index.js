@@ -54111,7 +54111,7 @@ var require_validators = __commonJS({
   "lib/validators.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
-    exports2.validateReservationCapacityAndHoarding = exports2.findOptimalTableCombination = exports2.getTableCapacity = void 0;
+    exports2.CATEGORY_I18N_PRESETS = exports2.validateReservationCapacityAndHoarding = exports2.findOptimalTableCombination = exports2.getTableCapacity = void 0;
     exports2.sanitizeString = sanitizeString;
     exports2.validateOrderPayload = validateOrderPayload;
     exports2.validateReservationPayload = validateReservationPayload;
@@ -54120,6 +54120,11 @@ var require_validators = __commonJS({
     exports2.validateCheckoutPayload = validateCheckoutPayload;
     exports2.validateMenuItemPayload = validateMenuItemPayload;
     exports2.applyInventoryLinkage = applyInventoryLinkage;
+    exports2.normalizeCategoryId = normalizeCategoryId;
+    exports2.generateRandomCategoryId = generateRandomCategoryId;
+    exports2.resolveCategoryId = resolveCategoryId;
+    exports2.resolveCategoryMultilingualNames = resolveCategoryMultilingualNames;
+    exports2.validateCategoryPayload = validateCategoryPayload;
     var shared_1 = require_dist();
     Object.defineProperty(exports2, "getTableCapacity", { enumerable: true, get: function() {
       return shared_1.getTableCapacity;
@@ -54475,6 +54480,216 @@ var require_validators = __commonJS({
         return { available: true, soldOutType: "none", soldOutAt: null, soldOutDate: null, stockStatus: "AVAILABLE" };
       }
       return {};
+    }
+    exports2.CATEGORY_I18N_PRESETS = {
+      "\u4E0B\u9152\u5FC5\u9EDE\u5C0F\u98DF": {
+        idSuggestion: "snacks",
+        en: "Must-Order Bar Snacks",
+        th: "\u0E01\u0E31\u0E1A\u0E41\u0E01\u0E25\u0E49\u0E21\u0E15\u0E49\u0E2D\u0E07\u0E2A\u0E31\u0E48\u0E07",
+        ja: "\u304A\u9152\u306E\u304A\u3064\u307E\u307F",
+        ko: "\uD544\uC218 \uC548\uC8FC \uC2A4\uB0B5",
+        vi: "M\xF3n nh\u1EAFm b\u1EAFt bu\u1ED9c",
+        ru: "\u0417\u0430\u043A\u0443\u0441\u043A\u0438 \u043A \u043D\u0430\u043F\u0438\u0442\u043A\u0430\u043C",
+        es: "Aperitivos para acompa\xF1ar"
+      },
+      "\u5C0F\u8CBB\u53CA\u6298\u6263": {
+        idSuggestion: "tips",
+        en: "Tips & Discounts",
+        th: "\u0E17\u0E34\u0E1B\u0E41\u0E25\u0E30\u0E2A\u0E48\u0E27\u0E19\u0E25\u0E14",
+        ja: "\u30C1\u30C3\u30D7\u30FB\u5272\u5F15",
+        ko: "\uD301 \uBC0F \uD560\uC778",
+        vi: "Ti\u1EC1n tip & Gi\u1EA3m gi\xE1",
+        ru: "\u0427\u0430\u0435\u0432\u044B\u0435 \u0438 \u0441\u043A\u0438\u0434\u043A\u0438",
+        es: "Propinas y Descuentos"
+      },
+      "\u51B0\u6AC3\u9152\u6C34 \u{1F9CA}": {
+        idSuggestion: "chilled-drinks",
+        en: "Refrigerated Drinks & Alcohol \u{1F37A}",
+        th: "\u0E40\u0E04\u0E23\u0E37\u0E48\u0E2D\u0E07\u0E14\u0E37\u0E48\u0E21\u0E41\u0E25\u0E30\u0E2A\u0E38\u0E23\u0E32\u0E41\u0E0A\u0E48\u0E40\u0E22\u0E47\u0E19 \u{1F37A}",
+        ja: "\u51B7\u8535\u30C9\u30EA\u30F3\u30AF\u30FB\u304A\u9152 \u{1F37A}",
+        ko: "\uB0C9\uC7A5 \uC74C\uB8CC \uBC0F \uC8FC\uB958 \u{1F37A}",
+        vi: "\u0110\u1ED3 u\u1ED1ng & R\u01B0\u1EE3u l\u1EA1nh \u{1F37A}",
+        ru: "\u0425\u043E\u043B\u043E\u0434\u043D\u044B\u0435 \u043D\u0430\u043F\u0438\u0442\u043A\u0438 \u0438 \u0430\u043B\u043A\u043E\u0433\u043E\u043B\u044C \u{1F37A}",
+        es: "Bebidas Fr\xEDas y Alcohol \u{1F37A}"
+      },
+      "\u51AC\u852D\u529F\u7CFB\u5217 \u{1F35C}": {
+        idSuggestion: "tomyum",
+        en: "Tom Yum Series \u{1F35C}",
+        th: "\u0E0A\u0E38\u0E14\u0E15\u0E49\u0E21\u0E22\u0E33\u0E2A\u0E38\u0E14\u0E41\u0E0B\u0E48\u0E1A \u{1F35C}",
+        ja: "\u30C8\u30E0\u30E4\u30E0\u30B7\u30EA\u30FC\u30BA \u{1F35C}",
+        ko: "\uB620\uC58C \uC218\uD504 \uC2DC\uB9AC\uC988 \u{1F35C}",
+        vi: "D\xF2ng s\xFAp Tom Yum \u{1F35C}",
+        ru: "\u0421\u0443\u043F\u044B \u0422\u043E\u043C \u042F\u043C",
+        es: "Sopas Tom Yum"
+      },
+      "\u71B1\u6E6F \u{1F962}\u8D8A\u5357\u725B\u8089\u6CB3\u7C89": {
+        idSuggestion: "noodles",
+        en: "Hot Soups & Beef Pho \u{1F962}",
+        th: "\u0E0B\u0E38\u0E1B\u0E23\u0E49\u0E2D\u0E19\u0E41\u0E25\u0E30\u0E40\u0E1D\u0E2D\u0E40\u0E19\u0E37\u0E49\u0E2D\u0E40\u0E27\u0E35\u0E22\u0E14\u0E19\u0E32\u0E21 \u{1F962}",
+        ja: "\u6E29\u304B\u3044\u30B9\u30FC\u30D7\u30FB\u30D9\u30C8\u30CA\u30E0\u725B\u8089\u30D5\u30A9\u30FC \u{1F962}",
+        ko: "\uB530\uB73B\uD55C \uC218\uD504 \uBC0F \uBCA0\uD2B8\uB0A8 \uC18C\uACE0\uAE30 \uC300\uAD6D\uC218 \u{1F962}",
+        vi: "S\xFAp n\xF3ng & Ph\u1EDF b\xF2 Vi\u1EC7t Nam \u{1F962}",
+        ru: "\u0413\u043E\u0440\u044F\u0447\u0438\u0435 \u0441\u0443\u043F\u044B \u0438 \u0441\u0443\u043F \u0424\u043E \u{1F962}",
+        es: "Sopas Calientes y Fideos Pho \u{1F962}"
+      },
+      "\u7CBE\u9078\u5957\u9910 \u{1F371}\u512A\u60E0": {
+        idSuggestion: "combos",
+        en: "Chef's Special Combos \u{1F371}",
+        th: "\u0E40\u0E0B\u0E15\u0E40\u0E21\u0E19\u0E39\u0E2A\u0E38\u0E14\u0E04\u0E38\u0E49\u0E21 \u{1F371}",
+        ja: "\u4E3B\u7406\u4EBA\u53B3\u9078\u304A\u5F97\u30BB\u30C3\u30C8 \u{1F371}",
+        ko: "\uC170\uD504 \uCD94\uCC9C \uD2B9\uC120 \uC138\uD2B8 \u{1F371}",
+        vi: "Combo \u0111\u1EB7c bi\u1EC7t \u{1F371}",
+        ru: "\u0424\u0438\u0440\u043C\u0435\u043D\u043D\u044B\u0435 \u043A\u043E\u043C\u0431\u043E-\u0441\u0435\u0442\u044B \u{1F371}",
+        es: "Combos y Sets Especiales \u{1F371}"
+      },
+      "\u62DB\u724C\u6CF0\u5F0F\u6D77\u9BAE \u{1F990}": {
+        idSuggestion: "seafood",
+        en: "Signature Thai Seafood \u{1F990}",
+        th: "\u0E2D\u0E32\u0E2B\u0E32\u0E23\u0E17\u0E30\u0E40\u0E25\u0E40\u0E1C\u0E32\u0E2A\u0E39\u0E15\u0E23\u0E40\u0E14\u0E47\u0E14 \u{1F990}",
+        ja: "\u672C\u683C\u30BF\u30A4\u98A8\u70AD\u706B\u713C\u304D\u30B7\u30FC\u30D5\u30FC\u30C9 \u{1F990}",
+        ko: "\uC2DC\uADF8\uB2C8\uCC98 \uD0DC\uAD6D\uC2DD \uD574\uC0B0\uBB3C \u{1F990}",
+        vi: "H\u1EA3i s\u1EA3n n\u01B0\u1EDBng Th\xE1i Lan \u{1F990}",
+        ru: "\u0422\u0430\u0439\u0441\u043A\u0438\u0435 \u043C\u043E\u0440\u0435\u043F\u0440\u043E\u0434\u0443\u043A\u0442\u044B \u{1F990}",
+        es: "Mariscos Tailandeses \u{1F990}"
+      },
+      "\u5C0F\u8FB2\u9BAE\u852C\u83DC \u{1F96C}": {
+        idSuggestion: "veggies",
+        en: "Farm Fresh Vegetables \u{1F96C}",
+        th: "\u0E1C\u0E31\u0E01\u0E2A\u0E14\u0E1F\u0E32\u0E23\u0E4C\u0E21\u0E22\u0E48\u0E32\u0E07 \u{1F96C}",
+        ja: "\u5730\u5143\u65B0\u9BAE\u91CE\u83DC\u713C\u304D \u{1F96C}",
+        ko: "\uC2E0\uC120\uD55C \uCC44\uC18C \uAD6C\uC774 \u{1F96C}",
+        vi: "Rau c\u1EE7 t\u01B0\u01A1i s\u1EA1ch \u{1F96C}",
+        ru: "\u0421\u0432\u0435\u0436\u0438\u0435 \u043E\u0432\u043E\u0449\u0438 \u043D\u0430 \u0433\u0440\u0438\u043B\u0435 \u{1F96C}",
+        es: "Vegetales Frescos de Granja \u{1F96C}"
+      },
+      "\u78B3\u70E4\u8089\u985E \u{1F362}\u5176\u4ED6": {
+        idSuggestion: "skewers",
+        en: "Charcoal BBQ Skewers & Others \u{1F362}",
+        th: "\u0E1A\u0E32\u0E23\u0E4C\u0E1A\u0E35\u0E04\u0E34\u0E27\u0E40\u0E2A\u0E35\u0E22\u0E1A\u0E44\u0E21\u0E49\u0E22\u0E48\u0E32\u0E07\u0E41\u0E25\u0E30\u0E2D\u0E37\u0E48\u0E19\u0E46 \u{1F362}",
+        ja: "\u30BF\u30A4\u98A8\u8089\u4E32\u70AD\u706B\u713C\u304D\u30FB\u305D\u306E\u4ED6 \u{1F362}",
+        ko: "\uC624\uB9AC\uC9C0\uB110 \uC22F\uBD88 \uACE0\uAE30 \uAF2C\uCE58 \uBC0F \uAE30\uD0C0 \u{1F362}",
+        vi: "Th\u1ECBt n\u01B0\u1EDBng xi\xEAn & Kh\xE1c \u{1F362}",
+        ru: "\u0428\u0430\u0448\u043B\u044B\u0447\u043A\u0438 \u043D\u0430 \u0443\u0433\u043B\u044F\u0445",
+        es: "Brochetas a las Brasas"
+      },
+      "\u6CF0\u5F0F\u7279\u8272\u751C\u54C1 \u{1F370}": {
+        idSuggestion: "sweets",
+        en: "Thai Desserts & Sweets \u{1F370}",
+        th: "\u0E02\u0E19\u0E21\u0E2B\u0E27\u0E32\u0E19\u0E41\u0E25\u0E30\u0E1E\u0E38\u0E14\u0E14\u0E34\u0E49\u0E07\u0E2A\u0E39\u0E15\u0E23\u0E1E\u0E34\u0E40\u0E28\u0E29 \u{1F370}",
+        ja: "\u30BF\u30A4\u98A8\u7279\u88FD\u30C7\u30B6\u30FC\u30C8 \u{1F370}",
+        ko: "\uD0DC\uAD6D\uC2DD \uB2EC\uCF64 \uB514\uC800\uD2B8 \u{1F370}",
+        vi: "Tr\xE1ng mi\u1EC7ng ki\u1EC3u Th\xE1i \u{1F370}",
+        ru: "\u0422\u0430\u0439\u0441\u043A\u0438\u0435 \u0434\u0435\u0441\u0435\u0440\u0442\u044B \u0438 \u0441\u043B\u0430\u0434\u043E\u0441\u0442\u0438 \u{1F370}",
+        es: "Postres y Dulces Tailandeses \u{1F370}"
+      },
+      "\u6CF0\u7279\u8272\u6C81\u6DBC\u98F2\u54C1 \u{1F379}": {
+        idSuggestion: "drinks",
+        en: "Refreshing Thai Cold Drinks \u{1F379}",
+        th: "\u0E40\u0E04\u0E23\u0E37\u0E48\u0E2D\u0E07\u0E14\u0E37\u0E48\u0E21\u0E14\u0E31\u0E1A\u0E23\u0E49\u0E2D\u0E19\u0E23\u0E2A\u0E2A\u0E14\u0E0A\u0E37\u0E48\u0E19 \u{1F379}",
+        ja: "\u30BF\u30A4\u98A8\u3055\u308F\u3084\u304B\u30C9\u30EA\u30F3\u30AF \u{1F379}",
+        ko: "\uD0DC\uAD6D\uC2DD \uCCAD\uB7C9 \uC74C\uB8CC \u{1F379}",
+        vi: "\u0110\u1ED3 u\u1ED1ng l\u1EA1nh ki\u1EC3u Th\xE1i \u{1F379}",
+        ru: "\u041D\u0430\u043F\u0438\u0442\u043A\u0438",
+        es: "Bebidas"
+      },
+      "\u7368\u5BB6\u91AC\u6599 \u{1F96B}": {
+        idSuggestion: "sauces",
+        en: "Exclusive Secret Sauces \u{1F96B}",
+        th: "\u0E0B\u0E2D\u0E2A\u0E2A\u0E39\u0E15\u0E23\u0E25\u0E31\u0E1A\u0E1E\u0E34\u0E40\u0E28\u0E29 \u{1F96B}",
+        ja: "\u79D8\u4F1D\u306E\u7279\u88FD\u30BF\u30EC\u30FB\u30BD\u30FC\u30B9 \u{1F96B}",
+        ko: "\uB2E8\uB3C5 \uC218\uC81C \uD2B9\uC81C \uC18C\uC2A4 \u{1F96B}",
+        vi: "N\u01B0\u1EDBc s\u1ED1t \u0111\u1ED9c quy\u1EC1n \u{1F96B}",
+        ru: "\u0424\u0438\u0440\u043C\u0435\u043D\u043D\u044B\u0435 \u0441\u043E\u0443\u0441\u044B \u{1F96B}",
+        es: "Salsas Secretas Exclusivas \u{1F96B}"
+      },
+      "\u6210\u4EBA\u9152\u54C1\u5C08\u5340 \u{1F51E}": {
+        idSuggestion: "alcohol",
+        en: "Adult Alcoholic Beverages (18+) \u{1F51E}",
+        th: "\u0E42\u0E0B\u0E19\u0E40\u0E04\u0E23\u0E37\u0E48\u0E2D\u0E07\u0E14\u0E37\u0E48\u0E21\u0E41\u0E2D\u0E25\u0E01\u0E2D\u0E2E\u0E2D\u0E25\u0E4C\u0E2A\u0E33\u0E2B\u0E23\u0E31\u0E1A\u0E1C\u0E39\u0E49\u0E43\u0E2B\u0E0D\u0E48 (18+) \u{1F51E}",
+        ja: "\u6210\u4EBA\u5411\u3051\u304A\u9152\u30A8\u30EA\u30A2 (18+) \u{1F51E}",
+        ko: "\uC131\uC778 \uC8FC\uB958 \uC804\uC6A9 \uAD6C\uC5ED (18+) \u{1F51E}",
+        vi: "Khu v\u1EF1c \u0111\u1ED3 u\u1ED1ng c\xF3 c\u1ED3n cho ng\u01B0\u1EDDi l\u1EDBn (18+) \u{1F51E}",
+        ru: "\u0410\u043B\u043A\u043E\u0433\u043E\u043B\u044C \u0434\u043B\u044F \u0432\u0437\u0440\u043E\u0441\u043B\u044B\u0445 (18+) \u{1F51E}",
+        es: "Bebidas Alcoh\xF3licas (18+) \u{1F51E}"
+      }
+    };
+    function normalizeCategoryId(rawId) {
+      return String(rawId || "").trim().toLowerCase().replace(/[^a-z0-9-_]/g, "");
+    }
+    function generateRandomCategoryId() {
+      let suffix = Math.random().toString(36).substring(2, 8);
+      while (suffix.length < 6) {
+        suffix += Math.random().toString(36).substring(2, 8);
+      }
+      return `cat-${suffix.slice(0, 6)}`;
+    }
+    function resolveCategoryId(rawId) {
+      const normalizedId = normalizeCategoryId(rawId);
+      return normalizedId || generateRandomCategoryId();
+    }
+    function resolveCategoryMultilingualNames(input, options) {
+      const overwrite = Boolean(options?.overwriteExisting);
+      const fallbackToSource = Boolean(options?.fallbackToSource);
+      const rawObj = typeof input === "string" ? { zh: input } : input && typeof input === "object" ? input : {};
+      const out = {
+        zh: sanitizeString(rawObj.zh, 200),
+        en: sanitizeString(rawObj.en, 200),
+        th: sanitizeString(rawObj.th, 200),
+        ja: sanitizeString(rawObj.ja, 200),
+        ko: sanitizeString(rawObj.ko, 200),
+        vi: sanitizeString(rawObj.vi, 200),
+        ru: sanitizeString(rawObj.ru, 200),
+        es: sanitizeString(rawObj.es, 200)
+      };
+      const preset = out.zh ? exports2.CATEGORY_I18N_PRESETS[out.zh] : void 0;
+      const targetLangs = ["en", "th", "ja", "ko", "vi", "ru", "es"];
+      if (preset) {
+        for (const lang of targetLangs) {
+          if ((overwrite || !out[lang]) && preset[lang]) {
+            out[lang] = preset[lang];
+          }
+        }
+      }
+      if (fallbackToSource && out.zh) {
+        const fallbackText = out.en || out.zh;
+        for (const lang of targetLangs) {
+          if (!out[lang]) {
+            out[lang] = fallbackText;
+          }
+        }
+      }
+      return out;
+    }
+    function validateCategoryPayload(body, paramId) {
+      if (!body || typeof body !== "object" || Array.isArray(body)) {
+        return { isValid: false, error: "\u7121\u6548\u7684\u5206\u985E\u8CC7\u6599\u683C\u5F0F (Invalid category payload)" };
+      }
+      const rawBodyId = typeof body.id === "string" ? body.id : "";
+      const rawParamId = typeof paramId === "string" && paramId !== "__empty__" ? paramId : "";
+      const finalCategoryId = resolveCategoryId(rawBodyId || rawParamId);
+      const resolvedName = resolveCategoryMultilingualNames(body.name, {
+        overwriteExisting: false,
+        fallbackToSource: true
+      });
+      if (!resolvedName.zh) {
+        return { isValid: false, error: "\u8ACB\u586B\u5BEB\u4E2D\u6587\u5206\u985E\u540D\u7A31 (Missing Category Name Zh)" };
+      }
+      const showOnCustomerPage = body.showOnCustomerPage !== void 0 ? Boolean(body.showOnCustomerPage) : body.showOnCustomer !== void 0 ? Boolean(body.showOnCustomer) : true;
+      const sanitizedData = {
+        id: finalCategoryId,
+        name: resolvedName,
+        showOnCustomerPage,
+        updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+      };
+      if (body.orderIndex !== void 0 && Number.isFinite(Number(body.orderIndex))) {
+        sanitizedData.orderIndex = Number(body.orderIndex);
+      }
+      const previousId = typeof body.previousId === "string" ? body.previousId.trim() : void 0;
+      return {
+        isValid: true,
+        sanitizedData,
+        previousId
+      };
     }
   }
 });
@@ -55312,7 +55527,37 @@ var require_menu = __commonJS({
       post("/categories", requireStaffAuth, async (req, res) => {
         try {
           const data = req.body;
-          const docRef = await db2.collection("categories").add(data);
+          const validation = (0, validators_1.validateCategoryPayload)(data);
+          if (!validation.isValid || !validation.sanitizedData) {
+            return res.status(400).json({ error: validation.error || "\u7121\u6548\u7684\u5206\u985E\u8CC7\u6599" });
+          }
+          const categoryData = validation.sanitizedData;
+          const finalId = categoryData.id;
+          const catCol = db2.collection("categories");
+          if (typeof catCol.get === "function") {
+            const existingSnap = await catCol.get();
+            const docsToDelete = [];
+            existingSnap.docs.forEach((docSnap) => {
+              const d = docSnap.data() || {};
+              const docDataId = typeof d.id === "string" ? d.id.trim() : "";
+              if (docSnap.id !== finalId && (!docDataId && d.name?.zh === categoryData.name.zh)) {
+                if (categoryData.orderIndex === void 0 && typeof d.orderIndex === "number") {
+                  categoryData.orderIndex = d.orderIndex;
+                }
+                docsToDelete.push(docSnap.ref);
+              }
+            });
+            if (categoryData.orderIndex === void 0) {
+              categoryData.orderIndex = Math.max(0, existingSnap.docs.length - docsToDelete.length);
+            }
+            if (docsToDelete.length > 0) {
+              await Promise.all(docsToDelete.map((ref) => ref.delete()));
+            }
+          }
+          await db2.collection("categories").doc(finalId).set(categoryData, { merge: true });
+          (0, bootstrap_12.invalidatePublicBootstrapCache)();
+          return res.json({ success: true, id: finalId, category: categoryData });
+          const docRef = { id: finalId };
           (0, bootstrap_12.invalidatePublicBootstrapCache)();
           res.json({ id: docRef.id });
         } catch (error) {
@@ -55324,7 +55569,39 @@ var require_menu = __commonJS({
         try {
           const id = req.params.id;
           const data = req.body;
-          await db2.collection("categories").doc(id).set(data, { merge: true });
+          const validation = (0, validators_1.validateCategoryPayload)(data, id);
+          if (!validation.isValid || !validation.sanitizedData) {
+            return res.status(400).json({ error: validation.error || "\u7121\u6548\u7684\u5206\u985E\u8CC7\u6599" });
+          }
+          const categoryData = validation.sanitizedData;
+          const finalId = categoryData.id;
+          const previousId = validation.previousId;
+          const catCol = db2.collection("categories");
+          if (typeof catCol.get === "function") {
+            const existingSnap = await catCol.get();
+            const docsToDelete = [];
+            existingSnap.docs.forEach((docSnap) => {
+              const d = docSnap.data() || {};
+              const docDataId = typeof d.id === "string" ? d.id.trim() : "";
+              const isTargetDoc = docSnap.id === finalId || docDataId === finalId;
+              const isLegacyEmptyDoc = !docDataId && (previousId === "" || id === "__empty__" || !id.trim() || d.name?.zh && d.name.zh === categoryData.name.zh);
+              const isPreviousIdDoc = Boolean(previousId && (docSnap.id === previousId || docDataId === previousId));
+              if (isTargetDoc || isLegacyEmptyDoc || isPreviousIdDoc) {
+                if (categoryData.orderIndex === void 0 && typeof d.orderIndex === "number") {
+                  categoryData.orderIndex = d.orderIndex;
+                }
+                if (docSnap.id !== finalId) {
+                  docsToDelete.push(docSnap.ref);
+                }
+              }
+            });
+            if (docsToDelete.length > 0) {
+              await Promise.all(docsToDelete.map((ref) => ref.delete()));
+            }
+          }
+          await db2.collection("categories").doc(finalId).set(categoryData, { merge: true });
+          (0, bootstrap_12.invalidatePublicBootstrapCache)();
+          return res.json({ success: true, id: finalId, category: categoryData });
           (0, bootstrap_12.invalidatePublicBootstrapCache)();
           res.json({ success: true });
         } catch (error) {
@@ -55335,7 +55612,25 @@ var require_menu = __commonJS({
       del("/categories/:id", requireStaffAuth, async (req, res) => {
         try {
           const id = req.params.id;
-          await db2.collection("categories").doc(id).delete();
+          const isDeletingEmpty = id === "__empty__" || !id.trim();
+          if (!isDeletingEmpty) {
+            await db2.collection("categories").doc(id).delete();
+          }
+          const catCol = db2.collection("categories");
+          if (typeof catCol.get === "function") {
+            const existingSnap = await catCol.get();
+            const extraRefs = [];
+            existingSnap.docs.forEach((docSnap) => {
+              const d = docSnap.data() || {};
+              const docDataId = typeof d.id === "string" ? d.id.trim() : "";
+              if (isDeletingEmpty ? !docDataId : docDataId === id && docSnap.id !== id) {
+                extraRefs.push(docSnap.ref);
+              }
+            });
+            if (extraRefs.length > 0) {
+              await Promise.all(extraRefs.map((ref) => ref.delete()));
+            }
+          }
           (0, bootstrap_12.invalidatePublicBootstrapCache)();
           res.json({ success: true });
         } catch (error) {

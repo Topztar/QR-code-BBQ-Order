@@ -2386,3 +2386,14 @@ export const INITIAL_CAT_NAMES: { [key: string]: { [lang in Language]?: string }
     "es": "Bebidas"
   }
 };
+
+INITIAL_CAT_NAMES["snacks"] = {
+  "zh": "下酒必點小食",
+  "en": "Must-Order Bar Snacks",
+  "th": "กับแกล้มต้องสั่ง",
+  "ja": "お酒のおつまみ",
+  "ko": "필수 안주 스낵",
+  "vi": "Món nhắm bắt buộc",
+  "ru": "Закуски к напиткам",
+  "es": "Aperitivos para acompañar"
+};

@@ -10,6 +10,7 @@ import { AddMemberModal } from './modals/AddMemberModal';
 import { BulkDeleteOrdersModal } from './modals/BulkDeleteOrdersModal';
 import { useDashboardStore } from '../../stores/dashboard/useDashboardStore';
 import { Category, Ingredient, TableConfig, Reservation } from '../../types';
+import { resolveCategoryId, resolveCategoryMultilingualNames } from '../../utils/i18n';
 
 export interface ManagerModalContainerProps {
   globalRules: any[];
@@ -17,16 +18,16 @@ export interface ManagerModalContainerProps {
   ingredients: Ingredient[];
   tables: TableConfig[];
   reservations: Reservation[];
-  
+
   onAddMenuItem?: (item: any) => Promise<void>;
   onEditMenuItem?: (id: string, item: any) => Promise<void>;
   onAddCategory?: (id: string, name: any, showOnCustomerPage?: boolean) => Promise<{ success: boolean; error?: string }>;
-  onEditCategory?: (id: string, name: any, showOnCustomerPage?: boolean) => Promise<{ success: boolean; error?: string }>;
+  onEditCategory?: (id: string, name: any, showOnCustomerPage?: boolean, previousId?: string) => Promise<{ success: boolean; error?: string }>;
   onAddTable: (id: string, qrCodeUrl?: string, maxCapacity?: number) => Promise<{ success: boolean; error?: string }>;
   onEditTable: (id: string, qrCodeUrl: string, maxCapacity?: number) => Promise<{ success: boolean; error?: string }>;
   onAddReservation?: (reservation: Omit<Reservation, 'id' | 'createdAt'>) => Promise<{ success: boolean; error?: string }>;
   onEditReservation?: (id: string, updates: Partial<Reservation>) => Promise<{ success: boolean; error?: string }>;
-  
+
   onRestock: (id: string, amount: number) => Promise<void>;
   checkoutSuccessData: any;
   handleSavePointsAdjustment: (amount: number) => { success: boolean; error?: string } | Promise<{ success: boolean; error?: string }>;
@@ -76,14 +77,23 @@ export const ManagerModalContainer: React.FC<ManagerModalContainerProps> = ({
   const handleSaveCatSubmit = async (formData: any) => {
     setCatError(null);
     try {
-      const catName = formData.name || formData.names;
+      const rawCatName = formData.name || formData.names;
+      const catName = resolveCategoryMultilingualNames(rawCatName, {
+        overwriteExisting: false,
+        fallbackToSource: true,
+      });
       const showOnCustomer = formData.showOnCustomer !== undefined ? formData.showOnCustomer : formData.showOnCustomerPage;
+      const existingHasValidId = Boolean(editingCategory?.id && editingCategory.id.trim().length > 0);
+      const finalCategoryId = resolveCategoryId(
+        existingHasValidId ? editingCategory!.id : (formData.id || editingCategory?.id)
+      );
+
       if (editingCategory && onEditCategory) {
-        const r = await onEditCategory(editingCategory.id, catName, showOnCustomer);
+        const r = await onEditCategory(finalCategoryId, catName, showOnCustomer, editingCategory.id);
         if (r.success) setIsCatFormOpen(false);
         else setCatError(r.error || 'Failed to update category');
       } else if (onAddCategory) {
-        const r = await onAddCategory(formData.id, catName, showOnCustomer);
+        const r = await onAddCategory(finalCategoryId, catName, showOnCustomer);
         if (r.success) setIsCatFormOpen(false);
         else setCatError(r.error || 'Failed to add category');
       }
@@ -97,7 +107,7 @@ export const ManagerModalContainer: React.FC<ManagerModalContainerProps> = ({
     setTableError(null);
     setTableSuccess(null);
     const maxCapacity = formData.maxCapacity ? parseInt(formData.maxCapacity) : undefined;
-    
+
     if (editingTableObj) {
       const r = await onEditTable(editingTableObj.id, formData.qrCodeUrl, maxCapacity);
       if (r.success) {
@@ -163,11 +173,11 @@ export const ManagerModalContainer: React.FC<ManagerModalContainerProps> = ({
         checkoutSuccessData={checkoutSuccessData}
       />
 
-      <ConfirmActionModal 
-        config={confirmActionModal} 
-        onClose={() => setConfirmActionModal(null)} 
+      <ConfirmActionModal
+        config={confirmActionModal}
+        onClose={() => setConfirmActionModal(null)}
       />
-      
+
       <AdjustPointsModal
         config={adjustPointsModal}
         onClose={() => setAdjustPointsModal(null)}
