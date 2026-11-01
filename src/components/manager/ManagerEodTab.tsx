@@ -1,8 +1,10 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { Calendar } from 'lucide-react';
 import { Ingredient, Order } from '../../types';
 import { getLocalizedText } from '../../utils/i18n';
 import { safeStorage } from '../../lib/safeStorage';
+import { sessionAuth } from '../../lib/sessionAuth';
+import { clearOfflineQueue } from '../../lib/offlineQueue';
 import { apiFetch } from '../../lib/api';
 import { printViaBridge } from '../../lib/posBridgeClient';
 import {
@@ -13,6 +15,8 @@ import { orderCalculationService } from '@sabay/shared';
 import { PrinterConfig } from '../../types';
 
 const localStorage = safeStorage;
+
+export const getEodDeductionLockKey = (dateStr: string) => `sabay-eod-inventory-deducted-${dateStr}`;
 
 interface ManagerEodTabProps {
   orders: Order[];
@@ -38,6 +42,7 @@ interface ManagerEodTabProps {
     }
   ) => Promise<void>;
   setPrintConfirmData: (data: any) => void;
+  onStaffLogout?: () => void;
 }
 
 export const ManagerEodTab: React.FC<ManagerEodTabProps> = ({
@@ -54,9 +59,19 @@ export const ManagerEodTab: React.FC<ManagerEodTabProps> = ({
   fetchInventoryLogs,
   onPayOrder,
   setPrintConfirmData,
+  onStaffLogout,
 }) => {
   const todayStr = getLocalDateString();
   const isToday = eodSelectedDate === todayStr;
+  const eodDeductionLockKey = getEodDeductionLockKey(eodSelectedDate);
+  const [isDeducting, setIsDeducting] = useState(false);
+  const [isEodDeductedForDate, setIsEodDeductedForDate] = useState<boolean>(() => {
+    return localStorage.getItem(eodDeductionLockKey) === 'true';
+  });
+
+  useEffect(() => {
+    setIsEodDeductedForDate(localStorage.getItem(getEodDeductionLockKey(eodSelectedDate)) === 'true');
+  }, [eodSelectedDate]);
 
   // Filter orders strictly for the selected settlement date (defaulting to today)
   const dailyOrders = orders.filter(o => isOrderOnLocalDate(o.createdAt, eodSelectedDate));
@@ -111,8 +126,20 @@ export const ManagerEodTab: React.FC<ManagerEodTabProps> = ({
     });
   });
 
-  const handlePerformInventoryEodDeduction = async () => {
+  const hasPositiveDeductions = Object.values(calculatedDeductions).some(v => v > 0);
+
+  const handlePerformInventoryEodDeduction = async (options?: { silent?: boolean }) => {
+    if (isDeducting) return false;
+    if (localStorage.getItem(eodDeductionLockKey) === 'true' || isEodDeductedForDate) {
+      if (!options?.silent) {
+        alert(`⚠️ ${eodSelectedDate} 當日配餐食材庫存已執行過關帳連動扣減，系統已自動攔截重複扣帳！`);
+      }
+      return true;
+    }
+
+    setIsDeducting(true);
     let successCount = 0;
+    let skippedDuplicateCount = 0;
     try {
       for (const ig of ingredients) {
         const consumption = calculatedDeductions[ig.id] || 0;
@@ -123,22 +150,42 @@ export const ManagerEodTab: React.FC<ManagerEodTabProps> = ({
             body: JSON.stringify({
               ingredientId: ig.id,
               quantityChanged: -consumption,
+              idempotencyKey: `eod_deduct_${eodSelectedDate}_${ig.id}`,
               note: `EOD 每日關帳自動扣減 (${eodSelectedDate})：已售餐品配方消耗核銷`
             })
           });
           if (res.ok) {
-            successCount++;
+            const payload = await res.json().catch(() => ({}));
+            if (payload?.alreadyDeducted) {
+              skippedDuplicateCount++;
+            } else {
+              successCount++;
+            }
           }
         }
       }
-      alert(`🎉 庫存連動扣除成功！已為您同步自動化核銷對應 ${successCount} 項餐品配方食材物料流向 (${eodSelectedDate})。`);
+      localStorage.setItem(eodDeductionLockKey, 'true');
+      setIsEodDeductedForDate(true);
+      if (!options?.silent) {
+        if (skippedDuplicateCount > 0 && successCount === 0) {
+          alert(`⚠️ ${eodSelectedDate} 當日配餐食材庫存已由伺服器冪等鎖核銷完畢，未重複扣減。`);
+        } else {
+          alert(`🎉 庫存連動扣除成功！已為您同步自動化核銷對應 ${successCount} 項餐品配方食材物料流向 (${eodSelectedDate})。`);
+        }
+      }
       if (ingredients.length > 0) {
         await onRestock(ingredients[0].id, 0); // Sync parent state
       }
       await fetchInventoryLogs();
+      return true;
     } catch (err) {
       console.error(err);
-      alert('❌ 自動配方庫存扣減時發生預期外錯誤');
+      if (!options?.silent) {
+        alert('❌ 自動配方庫存扣減時發生預期外錯誤');
+      }
+      return false;
+    } finally {
+      setIsDeducting(false);
     }
   };
 
@@ -230,11 +277,40 @@ ${ingredientLines || '  (尚無庫存異動記錄)'}
     }
   };
 
-  const handleCompleteEodAndLogout = () => {
+  const handleCompleteEodAndLogout = async () => {
+    if (unpaidOrders.length > 0) {
+      const proceed = window.confirm(
+        `⚠️ 檢測到 ${eodSelectedDate} 尚有 ${unpaidOrders.length} 筆未結帳點單！確定要強制執行每日總結帳並登出嗎？`
+      );
+      if (!proceed) return;
+    }
+
+    if (hasPositiveDeductions && !isEodDeductedForDate && localStorage.getItem(eodDeductionLockKey) !== 'true') {
+      await handlePerformInventoryEodDeduction({ silent: true });
+    }
+
     alert('🏁 每日關帳作業與庫存對帳已核銷完畢，即將登出工作人員並鎖定客用介面！');
+
+    // 1. Clear offline ordering queue & daily active channel state
+    clearOfflineQueue();
+
+    // 2. Purge all staff authentication credentials & customer loyalty sessions across localStorage and sessionStorage
+    sessionAuth.clear();
+    localStorage.removeItem('staff_token');
+    localStorage.removeItem('sabay_jwt_token');
+    localStorage.removeItem('sabay-staff-auth');
+    localStorage.removeItem('sabay-staff-active-tab');
+    localStorage.removeItem('sabay-staff-subtab');
     localStorage.removeItem('google-current-member');
     localStorage.removeItem('line-profile');
-    window.location.href = '/';
+
+    // 3. Execute route guard & SPA state lock to return cleanly to guest ordering page without back-button re-entry
+    if (onStaffLogout) {
+      onStaffLogout();
+    } else {
+      window.history.replaceState({}, '', '/');
+      window.location.href = '/';
+    }
   };
 
   return (
@@ -398,10 +474,19 @@ ${ingredientLines || '  (尚無庫存異動記錄)'}
 
               <button
                 type="button"
-                onClick={handlePerformInventoryEodDeduction}
-                className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-black font-black rounded-lg text-xs tracking-wider transition active:scale-95 cursor-pointer uppercase text-center shadow-lg"
+                disabled={isDeducting || isEodDeductedForDate}
+                onClick={() => handlePerformInventoryEodDeduction()}
+                className={`w-full py-2.5 font-black rounded-lg text-xs tracking-wider transition uppercase text-center shadow-lg ${
+                  isEodDeductedForDate
+                    ? 'bg-emerald-900/40 border border-emerald-500/30 text-emerald-300 cursor-not-allowed'
+                    : 'bg-amber-500 hover:bg-amber-400 text-black active:scale-95 cursor-pointer'
+                }`}
               >
-                📊 連動扣減：一鍵對應「數據庫存」扣位
+                {isEodDeductedForDate
+                  ? `✅ 當日配銷庫存已核銷完畢 (${eodSelectedDate})`
+                  : isDeducting
+                    ? '⏳ 正在同步核銷配方庫存...'
+                    : '📊 連動扣減：一鍵對應「數據庫存」扣位'}
               </button>
             </div>
           </div>

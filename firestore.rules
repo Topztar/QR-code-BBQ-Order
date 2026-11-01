@@ -50,8 +50,8 @@ service cloud.firestore {
       allow read: if isStaffOrAdmin();
       // 🚀 Allow frontend soft-deletes and status updates for cashier terminal
       allow create: if isStaffOrAdmin();
-      allow update: if request.resource.data.status in ['pending', 'preparing', 'served', 'unpaid', 'paid', 'cancelled'];
-      allow delete: if isAuthenticated() || resource.data.status == 'cancelled';
+      allow update: if isStaffOrAdmin() && request.resource.data.status in ['pending', 'confirmed', 'pending_kitchen_verification', 'preparing', 'delivering', 'served', 'completed', 'unpaid', 'paid', 'cancelled'];
+      allow delete: if isStaffOrAdmin();
     }
 
     match /archived_orders/{id} {

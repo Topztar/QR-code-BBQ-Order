@@ -130,9 +130,15 @@ export function registerInventoryRoutes(app: express.Express, ctx: InventoryRout
     res.json({ item_sales: {}, total_orders: 0 });
   });
 
+  const processedIdempotencyKeys = new Set<string>();
+
   // Adjust Inventory manually
   app.post('/api/inventory/adjust', (req, res) => {
-    const { ingredientId, quantityChanged, note } = req.body;
+    const { ingredientId, quantityChanged, note, idempotencyKey } = req.body;
+    const cleanIdemKey = typeof idempotencyKey === 'string' && idempotencyKey.trim() ? idempotencyKey.trim() : null;
+    if (cleanIdemKey && processedIdempotencyKeys.has(cleanIdemKey)) {
+      return res.json({ success: true, alreadyDeducted: true });
+    }
     const liveIngredients = getLiveIngredients();
     const ingredient = liveIngredients.find(ig => ig.id === ingredientId);
     if (!ingredient) {
@@ -141,6 +147,9 @@ export function registerInventoryRoutes(app: express.Express, ctx: InventoryRout
     const change = Number(quantityChanged);
     if (isNaN(change)) {
       return res.status(400).json({ error: '無效的異動數量 / Invalid amount' });
+    }
+    if (cleanIdemKey) {
+      processedIdempotencyKeys.add(cleanIdemKey);
     }
     ingredient.stock = Math.round((ingredient.stock + change) * 100) / 100;
     
@@ -157,6 +166,6 @@ export function registerInventoryRoutes(app: express.Express, ctx: InventoryRout
     };
     inventoryLogs.push(newLog);
     saveStateToDisk();
-    res.json({ success: true, ingredient, log: newLog });
+    res.json({ success: true, alreadyDeducted: false, ingredient, log: newLog });
   });
 }

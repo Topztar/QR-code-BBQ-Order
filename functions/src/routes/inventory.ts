@@ -138,14 +138,25 @@ del('/ingredients/:id', requireStaffAuth, async (req, res) => {
 
 // 4. Get Tables
 post('/inventory/adjust', requireStaffAuth, async (req, res) => {
-  const { ingredientId, quantityChanged } = req.body;
+  const { ingredientId, quantityChanged, idempotencyKey } = req.body;
   const change = Number(quantityChanged);
   if (isNaN(change)) {
     return res.status(400).json({ error: 'Invalid quantityChanged' });
   }
+  const cleanIdemKey = typeof idempotencyKey === 'string' && idempotencyKey.trim() ? idempotencyKey.trim() : null;
   const ingRef = db.collection('ingredients').doc(ingredientId);
   try {
+    let alreadyProcessed = false;
     await db.runTransaction(async (t) => {
+      const idemRef = cleanIdemKey ? db.collection('_idempotency_keys').doc(cleanIdemKey) : null;
+      if (idemRef) {
+        const idemSnap = await t.get(idemRef);
+        if (idemSnap.exists) {
+          alreadyProcessed = true;
+          return;
+        }
+      }
+
       const docSnap = await t.get(ingRef);
       const data = docSnap.data();
       const newStock = Math.round(((data?.stock || 0) + change) * 100) / 100;
@@ -162,8 +173,18 @@ post('/inventory/adjust', requireStaffAuth, async (req, res) => {
         remainingStock: newStock,
         note: req.body.note || ''
       });
+
+      if (idemRef) {
+        t.set(idemRef, {
+          type: 'inventory_adjust',
+          ingredientId,
+          quantityChanged: change,
+          createdAt: new Date().toISOString(),
+          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+        });
+      }
     });
-    res.json({ success: true });
+    res.json({ success: true, alreadyDeducted: alreadyProcessed });
   } catch (error) {
     console.error('Error adjusting inventory:', error);
     sendErrorResponse(res, error);

@@ -24,9 +24,10 @@ interface StaffPortalContainerProps {
   adminSubTab: any;
   setAdminSubTab: (tab: any) => void;
   staffPin: string;
+  onStaffLogout?: () => void;
 }
 
-function StaffPortalInner({ activeTab, lang, adminSubTab, setAdminSubTab, staffPin }: StaffPortalContainerProps) {
+function StaffPortalInner({ activeTab, lang, adminSubTab, setAdminSubTab, staffPin, onStaffLogout }: StaffPortalContainerProps) {
   const handleSendPromoPush = async (notif: { title: string; message: string; badge?: string }) => {
     // NOTE: Implemented in future marketing module
     console.info('[Marketing Module Backlog] Promo push broadcast deferred to Phase 6+', notif);
@@ -198,6 +199,7 @@ function StaffPortalInner({ activeTab, lang, adminSubTab, setAdminSubTab, staffP
           memberPointsRedeemRate={memberPointsRedeemRate}
           memberRewards={memberRewards}
           onUpdateMemberConfig={fetchData}
+          onStaffLogout={onStaffLogout}
         />
       )}
     </Suspense>

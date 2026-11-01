@@ -116,6 +116,9 @@ function AppContent({
       } else {
         safeStorage.removeItem('sabay-staff-subtab');
       }
+    } else {
+      safeStorage.removeItem('sabay-staff-active-tab');
+      safeStorage.removeItem('sabay-staff-subtab');
     }
   }, [navigateTo]);
 
@@ -682,6 +685,7 @@ function AppContent({
                     adminSubTab={adminSubTab}
                     setAdminSubTab={setAdminSubTab}
                     staffPin={staffPin}
+                    onStaffLogout={handleStaffLogout}
                   />
                 </Suspense>
               </ErrorBoundary>
@@ -749,6 +753,8 @@ function AppContent({
               type="button"
               id="footer-customer-portal-link"
               onClick={() => {
+                safeStorage.removeItem('sabay-staff-active-tab');
+                safeStorage.removeItem('sabay-staff-subtab');
                 setActiveTab('customer');
                 navigateTo('/', { replace: true });
               }}

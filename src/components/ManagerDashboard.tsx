@@ -154,6 +154,7 @@ interface ManagerDashboardProps {
   onPlaceOrder?: (orderData: any) => Promise<any>;
   memberRewards?: any[];
   onUpdateMemberConfig?: () => Promise<void>;
+  onStaffLogout?: () => void;
 }
 
 export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
@@ -216,6 +217,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   memberPointsRedeemRate = 1,
   memberRewards = [],
   onUpdateMemberConfig,
+  onStaffLogout,
 }) => {
   // Navigation Tabs
   const activeSubTab = defaultSubTab || 'stats';
@@ -1525,6 +1527,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
           fetchInventoryLogs={fetchInventoryLogs}
           onPayOrder={onPayOrder}
           setPrintConfirmData={setPrintConfirmData}
+          onStaffLogout={onStaffLogout}
         />
       )}
 
