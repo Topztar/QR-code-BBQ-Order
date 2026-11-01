@@ -1,6 +1,6 @@
 import express from 'express';
 import { MenuItem, Category, SoldOutType } from '../../types';
-import { resolveCategoryId, resolveCategoryMultilingualNames } from '../../utils/i18n';
+import { resolveCategoryId, resolveCategoryMultilingualNames } from '../../../functions/src/validators';
 
 export interface MenuRouteContext {
   getLiveMenu: () => MenuItem[];

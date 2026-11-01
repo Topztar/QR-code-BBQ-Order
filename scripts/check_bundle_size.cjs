@@ -3,8 +3,11 @@ const path = require('path');
 
 const MAX_RAW_KB = 200;
 const MAX_BROTLI_KB = 60;
+const MAX_SERVER_BYTES = 350000;
 
-const distAssetsDir = path.join(__dirname, '..', 'dist', 'assets');
+const distDir = path.join(__dirname, '..', 'dist');
+const distAssetsDir = path.join(distDir, 'assets');
+const serverBundlePath = path.join(distDir, 'server.cjs');
 
 if (!fs.existsSync(distAssetsDir)) {
   console.error('dist/assets not found. Did you run build?');
@@ -51,6 +54,15 @@ if (rawKB > MAX_RAW_KB) {
 if (brKB > MAX_BROTLI_KB) {
   console.error(`❌ Brotli bundle size exceeds budget!`);
   failed = true;
+}
+
+if (fs.existsSync(serverBundlePath)) {
+  const serverBytes = fs.statSync(serverBundlePath).size;
+  console.log(`- Server Bundle (dist/server.cjs): ${serverBytes} bytes (${(serverBytes / 1024).toFixed(2)} KB, Limit: ${MAX_SERVER_BYTES} bytes)`);
+  if (serverBytes > MAX_SERVER_BYTES) {
+    console.error(`❌ Server bundle size (${serverBytes} bytes) exceeds ${MAX_SERVER_BYTES} bytes (350KB) limit!`);
+    failed = true;
+  }
 }
 
 if (failed) {
