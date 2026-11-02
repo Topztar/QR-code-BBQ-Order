@@ -88,7 +88,8 @@ export function registerSettingsRoutes(app: express.Express, ctx: SettingsRouteC
       servicePaused: { servicePaused: ctx.getLiveServicePaused() },
       printerConfig: { ip: ctx.getPrinterIp() },
       ingredients: ctx.getLiveIngredients(),
-      reservations: ctx.getLiveReservations()
+      reservations: ctx.getLiveReservations(),
+      version: ctx.getLiveSystemVersion()
     });
   });
 
