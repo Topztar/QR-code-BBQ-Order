@@ -401,6 +401,10 @@ post('/orders', requireAppCheck, orderRateLimiter, async (req, res) => {
             }
           }
 
+          if (data.trackInventory && typeof data.inventoryCount === 'number' && data.inventoryCount <= 0) {
+            isAvailable = false;
+          }
+
           if (!isAvailable) {
             const nameZh = data.name?.zh || data.name?.en || snap.id;
             soldOutItems.push(nameZh);

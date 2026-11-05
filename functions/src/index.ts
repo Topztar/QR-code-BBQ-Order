@@ -1,5 +1,5 @@
 import { onRequest } from 'firebase-functions/v2/https';
-import { onDocumentWritten, onDocumentCreated } from 'firebase-functions/v2/firestore';
+import { onDocumentUpdated, onDocumentCreated } from 'firebase-functions/v2/firestore';
 import { sendReservationNotifications, sendOrderNotification } from './services/notification';
 import { archiveSettledOrders } from './services/orderArchival';
 import { createGetCachedNotificationSettings } from './helpers';
@@ -476,8 +476,9 @@ export const onOrderCreated = onDocumentCreated(
 
 // ============================================================
 // ⚡ Firestore Event Trigger — 訂單結帳/完成時物化檢視與庫存扣減 (Compute-on-Write)
+// 窄化為 onDocumentUpdated，精準在狀態更新時觸發，避免訂單建立與夜間封存刪除時無效喚醒
 // ============================================================
-export const onOrderCompleted = onDocumentWritten(
+export const onOrderCompleted = onDocumentUpdated(
   {
     document: 'orders/{orderId}',
     database: 'ai-studio-sabaythaibbqtabl-84418196-9d0c-459c-bced-ddc424dfba07',

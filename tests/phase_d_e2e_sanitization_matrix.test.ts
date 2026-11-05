@@ -35,8 +35,10 @@ describe('Phase B/C/D End-to-End Sanitization & Validation Matrix (E2E-01 ~ E2E-
       const helpersCode = fs.readFileSync(path.join(__dirname, '../functions/src/helpers.ts'), 'utf-8');
 
       expect(indexCode).toContain("import compression from 'compression'");
+      expect(indexCode).toContain("export const onOrderCompleted = onDocumentUpdated");
       expect(bootstrapCode).toContain('BOOTSTRAP_CACHE_TTL_MS = 180 * 1000');
       expect(bootstrapCode).toContain('STAFF_BOOTSTRAP_CACHE_TTL_MS = 45 * 1000');
+      expect(bootstrapCode).toContain('STORE_STATUS_CACHE_TTL_MS = 15 * 1000');
       expect(helpersCode).toContain('CACHE_TTL_MS = 60 * 1000');
     });
 

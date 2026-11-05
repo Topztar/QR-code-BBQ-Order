@@ -30,7 +30,7 @@ const stages = [
     name: 'Phase 3: 雲端維運與成本防護審計 (Cost Guard Audit)',
     command: 'node scripts/run_cost_audit.cjs',
     badge: '💰 [Phase 3]',
-    expectedCount: '21 項檢查'
+    expectedCount: '23 項檢查'
   },
   {
     name: 'TypeScript 靜態型別與語法檢驗 (Strict Typecheck)',

@@ -3,7 +3,7 @@ import express from 'express';
 import { Firestore } from 'firebase-admin/firestore';
 import { Bucket } from '@google-cloud/storage';
 import * as crypto from 'crypto';
-import { processMenuItemSoldOut, isStoreOpenFromData, setCachedMenu, setCachedCategories, sanitizePublicImageUrl } from '../helpers';
+import { processMenuItemSoldOut, isStoreOpenFromData, setCachedMenu, setCachedCategories, sanitizePublicImageUrl, createGetCachedSettings, setCachedSettings, setCachedServicePause } from '../helpers';
 import { getStoredActiveToken } from '../auth';
 
 // ============================================================
@@ -22,8 +22,10 @@ export interface RouteContext {
 
 let cachedPublicBootstrap: { payload: any; etag: string; timestamp: number } | null = null;
 let cachedStaffBootstrap: { payload: any; etag: string; timestamp: number } | null = null;
+let cachedStoreStatusMenu: { docs: any[]; timestamp: number } | null = null;
 const BOOTSTRAP_CACHE_TTL_MS = 180 * 1000; // 3 minutes in-memory TTL to eliminate read storms
 const STAFF_BOOTSTRAP_CACHE_TTL_MS = 45 * 1000; // 45 seconds in-memory TTL for staff management portal
+export const STORE_STATUS_CACHE_TTL_MS = 15 * 1000; // 15 seconds in-memory TTL to eliminate /api/store-status read storms
 
 /**
  * ⚡ 主動清除公開與管理員 Bootstrap 快取
@@ -32,14 +34,18 @@ const STAFF_BOOTSTRAP_CACHE_TTL_MS = 45 * 1000; // 45 seconds in-memory TTL for 
 export function invalidatePublicBootstrapCache() {
   cachedPublicBootstrap = null;
   cachedStaffBootstrap = null;
+  cachedStoreStatusMenu = null;
   setCachedMenu(null);
   setCachedCategories(null);
+  setCachedSettings(null);
+  setCachedServicePause(null);
 }
 
 export function registerBootstrapRoutes(app: express.Application, ctx: RouteContext) {
   const { db, storageBucket, requireStaffAuth, createRateLimiter, sendErrorResponse } = ctx;
   const _storageBucket = storageBucket; // alias for unused var
   const _createRateLimiter = createRateLimiter; // alias for unused var
+  const getCachedSettings = createGetCachedSettings(db);
 
   // 雙路徑路由包裝器
   const get: RouteRegister = (routePath, ...handlers) => app.get([`/api${routePath}`, routePath], ...handlers);
@@ -261,14 +267,17 @@ export function registerBootstrapRoutes(app: express.Application, ctx: RouteCont
   // ⚡ 修正 3：即時動態營運狀態端點 (/api/store-status)
   // 解耦 CDN 靜態長效快取與動態高急迫性營運狀態 (售罄/暫停接單/營業開關)
   // Cache-Control: no-cache, no-store, must-revalidate (杜絕顧客因 CDN 快取延遲點到售罄餐點)
+  // 兼具 15 秒記憶體快取 (STORE_STATUS_CACHE_TTL_MS)，杜絕 300+ DAU 並行掃描 menu 集合造成的讀取暴增
   // ============================================================
-  get('/store-status', async (_req, res) => {
+  get('/store-status', async (req, res) => {
     try {
+      const wantsFresh = Boolean(req.query.fresh);
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
       res.setHeader('Pragma', 'no-cache');
       res.setHeader('Expires', '0');
 
       const now = new Date();
+      const nowMs = Date.now();
       const todayStr = new Intl.DateTimeFormat('en-CA', {
         timeZone: 'Asia/Taipei',
         year: 'numeric',
@@ -276,21 +285,35 @@ export function registerBootstrapRoutes(app: express.Application, ctx: RouteCont
         day: '2-digit',
       }).format(now);
 
-      const [systemDoc, soldOutMenuSnap] = await Promise.all([
-        db.collection('settings').doc('system').get(),
-        db.collection('menu')
+      const sysDataPromise = wantsFresh
+        ? db.collection('settings').doc('system').get().then(snap => snap.data() || {})
+        : getCachedSettings();
+
+      let menuItemsPromise: Promise<any[]>;
+      if (!wantsFresh && cachedStoreStatusMenu && (nowMs - cachedStoreStatusMenu.timestamp < STORE_STATUS_CACHE_TTL_MS)) {
+        menuItemsPromise = Promise.resolve(cachedStoreStatusMenu.docs);
+      } else {
+        menuItemsPromise = db.collection('menu')
           .select('id', 'available', 'soldOutType', 'soldOutDate', 'trackInventory', 'inventoryCount')
           .get()
+          .then(snap => {
+            const rawDocs = snap.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) }));
+            cachedStoreStatusMenu = { docs: rawDocs, timestamp: nowMs };
+            return rawDocs;
+          });
+      }
+
+      const [sysData, menuDocs] = await Promise.all([
+        sysDataPromise,
+        menuItemsPromise
       ]);
 
-      const sysData = systemDoc.data() || {};
       const isOpen = isStoreOpenFromData(sysData);
       const servicePaused = !!sysData.liveServicePaused;
 
       // 提取目前真實售罄的品項 ID 清單
       const soldOutItemIds: string[] = [];
-      for (const doc of soldOutMenuSnap.docs) {
-        const d = doc.data() as any;
+      for (const d of menuDocs) {
         let available = d.available ?? d.isAvailable ?? true;
         if (d.soldOutType === 'permanent') {
           available = false;
@@ -302,14 +325,14 @@ export function registerBootstrapRoutes(app: express.Application, ctx: RouteCont
           }
         }
         if (d.trackInventory && typeof d.inventoryCount === 'number' && d.inventoryCount <= 0) available = false;
-        if (!available) soldOutItemIds.push(d.id ?? doc.id);
+        if (!available) soldOutItemIds.push(d.id);
       }
 
       res.json({
         isOpen,
         servicePaused,
         soldOutItemIds,
-        timestamp: Date.now()
+        timestamp: nowMs
       });
     } catch (error) {
       console.error('Error fetching real-time store status:', error);

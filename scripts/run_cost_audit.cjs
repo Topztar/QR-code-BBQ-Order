@@ -37,6 +37,7 @@ try {
   assert(indexContent.includes('concurrency: 80'), "配置 concurrency: 80（單一實例高併發複用，大幅降低冷啟動次數）");
   assert(indexContent.includes('region: "asia-east1"'), "配置 region: asia-east1（台灣本地節點，極低延遲且免跨區傳輸費）");
   assert(indexContent.includes('timeoutSeconds: 30'), "配置 timeoutSeconds: 30（避免連線懸掛消耗計費時長）");
+  assert(indexContent.includes('onDocumentUpdated'), "配置 onDocumentUpdated 窄化觸發條件（避免訂單建立與刪除時無效喚醒）");
 } catch (err) {
   assert(false, `無法讀取 functions/src/index.ts: ${err.message}`);
 }
@@ -73,6 +74,7 @@ try {
   const bootstrapContent = fs.readFileSync(bootstrapPath, 'utf8');
   assert(bootstrapContent.includes('/bootstrap'), "實作 /bootstrap 聚合查詢端點（一次性並行加載菜單、分類、桌位、設定）");
   assert(bootstrapContent.includes('s-maxage='), "配置 s-maxage CDN 快取標頭降低 Functions 與 Firestore 請求");
+  assert(bootstrapContent.includes('STORE_STATUS_CACHE_TTL_MS'), "實作 /store-status 15秒記憶體快取 (STORE_STATUS_CACHE_TTL_MS) 杜絕 300+ DAU 高頻掃描 menu 讀取暴增");
 } catch (err) {
   assert(false, `無法讀取快取模組: ${err.message}`);
 }
