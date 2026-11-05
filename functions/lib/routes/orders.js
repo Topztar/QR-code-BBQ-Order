@@ -321,6 +321,9 @@ function registerOrdersRoutes(app, ctx) {
                                 isAvailable = true;
                             }
                         }
+                        if (data.trackInventory && typeof data.inventoryCount === 'number' && data.inventoryCount <= 0) {
+                            isAvailable = false;
+                        }
                         if (!isAvailable) {
                             const nameZh = data.name?.zh || data.name?.en || snap.id;
                             soldOutItems.push(nameZh);

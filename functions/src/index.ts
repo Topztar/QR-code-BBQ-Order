@@ -1,5 +1,5 @@
 import { onRequest } from 'firebase-functions/v2/https';
-import { onDocumentUpdated, onDocumentCreated } from 'firebase-functions/v2/firestore';
+import { onDocumentWritten, onDocumentUpdated, onDocumentCreated } from 'firebase-functions/v2/firestore';
 import { sendReservationNotifications, sendOrderNotification } from './services/notification';
 import { archiveSettledOrders } from './services/orderArchival';
 import { createGetCachedNotificationSettings } from './helpers';

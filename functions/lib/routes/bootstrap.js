@@ -33,6 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.STORE_STATUS_CACHE_TTL_MS = void 0;
 exports.invalidatePublicBootstrapCache = invalidatePublicBootstrapCache;
 exports.registerBootstrapRoutes = registerBootstrapRoutes;
 const shared_1 = require("@sabay/shared");
@@ -41,18 +42,24 @@ const helpers_1 = require("../helpers");
 const auth_1 = require("../auth");
 let cachedPublicBootstrap = null;
 let cachedStaffBootstrap = null;
+let cachedStoreStatusMenu = null;
 const BOOTSTRAP_CACHE_TTL_MS = 180 * 1000;
 const STAFF_BOOTSTRAP_CACHE_TTL_MS = 45 * 1000;
+exports.STORE_STATUS_CACHE_TTL_MS = 15 * 1000;
 function invalidatePublicBootstrapCache() {
     cachedPublicBootstrap = null;
     cachedStaffBootstrap = null;
+    cachedStoreStatusMenu = null;
     (0, helpers_1.setCachedMenu)(null);
     (0, helpers_1.setCachedCategories)(null);
+    (0, helpers_1.setCachedSettings)(null);
+    (0, helpers_1.setCachedServicePause)(null);
 }
 function registerBootstrapRoutes(app, ctx) {
     const { db, storageBucket, requireStaffAuth, createRateLimiter, sendErrorResponse } = ctx;
     const _storageBucket = storageBucket;
     const _createRateLimiter = createRateLimiter;
+    const getCachedSettings = (0, helpers_1.createGetCachedSettings)(db);
     const get = (routePath, ...handlers) => app.get([`/api${routePath}`, routePath], ...handlers);
     const post = (routePath, ...handlers) => app.post([`/api${routePath}`, routePath], ...handlers);
     const put = (routePath, ...handlers) => app.put([`/api${routePath}`, routePath], ...handlers);
@@ -240,30 +247,45 @@ function registerBootstrapRoutes(app, ctx) {
             sendErrorResponse(res, error);
         }
     });
-    get('/store-status', async (_req, res) => {
+    get('/store-status', async (req, res) => {
         try {
+            const wantsFresh = Boolean(req.query.fresh);
             res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
             res.setHeader('Pragma', 'no-cache');
             res.setHeader('Expires', '0');
             const now = new Date();
+            const nowMs = Date.now();
             const todayStr = new Intl.DateTimeFormat('en-CA', {
                 timeZone: 'Asia/Taipei',
                 year: 'numeric',
                 month: '2-digit',
                 day: '2-digit',
             }).format(now);
-            const [systemDoc, soldOutMenuSnap] = await Promise.all([
-                db.collection('settings').doc('system').get(),
-                db.collection('menu')
+            const sysDataPromise = wantsFresh
+                ? db.collection('settings').doc('system').get().then(snap => snap.data() || {})
+                : getCachedSettings();
+            let menuItemsPromise;
+            if (!wantsFresh && cachedStoreStatusMenu && (nowMs - cachedStoreStatusMenu.timestamp < exports.STORE_STATUS_CACHE_TTL_MS)) {
+                menuItemsPromise = Promise.resolve(cachedStoreStatusMenu.docs);
+            }
+            else {
+                menuItemsPromise = db.collection('menu')
                     .select('id', 'available', 'soldOutType', 'soldOutDate', 'trackInventory', 'inventoryCount')
                     .get()
+                    .then(snap => {
+                    const rawDocs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    cachedStoreStatusMenu = { docs: rawDocs, timestamp: nowMs };
+                    return rawDocs;
+                });
+            }
+            const [sysData, menuDocs] = await Promise.all([
+                sysDataPromise,
+                menuItemsPromise
             ]);
-            const sysData = systemDoc.data() || {};
             const isOpen = (0, helpers_1.isStoreOpenFromData)(sysData);
             const servicePaused = !!sysData.liveServicePaused;
             const soldOutItemIds = [];
-            for (const doc of soldOutMenuSnap.docs) {
-                const d = doc.data();
+            for (const d of menuDocs) {
                 let available = d.available ?? d.isAvailable ?? true;
                 if (d.soldOutType === 'permanent') {
                     available = false;
@@ -279,13 +301,13 @@ function registerBootstrapRoutes(app, ctx) {
                 if (d.trackInventory && typeof d.inventoryCount === 'number' && d.inventoryCount <= 0)
                     available = false;
                 if (!available)
-                    soldOutItemIds.push(d.id ?? doc.id);
+                    soldOutItemIds.push(d.id);
             }
             res.json({
                 isOpen,
                 servicePaused,
                 soldOutItemIds,
-                timestamp: Date.now()
+                timestamp: nowMs
             });
         }
         catch (error) {

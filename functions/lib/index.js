@@ -64751,6 +64751,7 @@ var require_bootstrap = __commonJS({
       };
     })();
     Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.STORE_STATUS_CACHE_TTL_MS = void 0;
     exports2.invalidatePublicBootstrapCache = invalidatePublicBootstrapCache;
     exports2.registerBootstrapRoutes = registerBootstrapRoutes;
     var shared_1 = require_dist();
@@ -64759,18 +64760,24 @@ var require_bootstrap = __commonJS({
     var auth_12 = require_auth();
     var cachedPublicBootstrap = null;
     var cachedStaffBootstrap = null;
+    var cachedStoreStatusMenu = null;
     var BOOTSTRAP_CACHE_TTL_MS = 180 * 1e3;
     var STAFF_BOOTSTRAP_CACHE_TTL_MS = 45 * 1e3;
+    exports2.STORE_STATUS_CACHE_TTL_MS = 15 * 1e3;
     function invalidatePublicBootstrapCache() {
       cachedPublicBootstrap = null;
       cachedStaffBootstrap = null;
+      cachedStoreStatusMenu = null;
       (0, helpers_12.setCachedMenu)(null);
       (0, helpers_12.setCachedCategories)(null);
+      (0, helpers_12.setCachedSettings)(null);
+      (0, helpers_12.setCachedServicePause)(null);
     }
     function registerBootstrapRoutes(app2, ctx) {
       const { db: db2, storageBucket: storageBucket2, requireStaffAuth, createRateLimiter: createRateLimiter2, sendErrorResponse: sendErrorResponse2 } = ctx;
       const _storageBucket = storageBucket2;
       const _createRateLimiter = createRateLimiter2;
+      const getCachedSettings = (0, helpers_12.createGetCachedSettings)(db2);
       const get = (routePath, ...handlers) => app2.get([`/api${routePath}`, routePath], ...handlers);
       const post = (routePath, ...handlers) => app2.post([`/api${routePath}`, routePath], ...handlers);
       const put = (routePath, ...handlers) => app2.put([`/api${routePath}`, routePath], ...handlers);
@@ -64947,28 +64954,39 @@ var require_bootstrap = __commonJS({
           sendErrorResponse2(res, error);
         }
       });
-      get("/store-status", async (_req, res) => {
+      get("/store-status", async (req, res) => {
         try {
+          const wantsFresh = Boolean(req.query.fresh);
           res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
           res.setHeader("Pragma", "no-cache");
           res.setHeader("Expires", "0");
           const now = /* @__PURE__ */ new Date();
+          const nowMs = Date.now();
           const todayStr = new Intl.DateTimeFormat("en-CA", {
             timeZone: "Asia/Taipei",
             year: "numeric",
             month: "2-digit",
             day: "2-digit"
           }).format(now);
-          const [systemDoc, soldOutMenuSnap] = await Promise.all([
-            db2.collection("settings").doc("system").get(),
-            db2.collection("menu").select("id", "available", "soldOutType", "soldOutDate", "trackInventory", "inventoryCount").get()
+          const sysDataPromise = wantsFresh ? db2.collection("settings").doc("system").get().then((snap) => snap.data() || {}) : getCachedSettings();
+          let menuItemsPromise;
+          if (!wantsFresh && cachedStoreStatusMenu && nowMs - cachedStoreStatusMenu.timestamp < exports2.STORE_STATUS_CACHE_TTL_MS) {
+            menuItemsPromise = Promise.resolve(cachedStoreStatusMenu.docs);
+          } else {
+            menuItemsPromise = db2.collection("menu").select("id", "available", "soldOutType", "soldOutDate", "trackInventory", "inventoryCount").get().then((snap) => {
+              const rawDocs = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+              cachedStoreStatusMenu = { docs: rawDocs, timestamp: nowMs };
+              return rawDocs;
+            });
+          }
+          const [sysData, menuDocs] = await Promise.all([
+            sysDataPromise,
+            menuItemsPromise
           ]);
-          const sysData = systemDoc.data() || {};
           const isOpen = (0, helpers_12.isStoreOpenFromData)(sysData);
           const servicePaused = !!sysData.liveServicePaused;
           const soldOutItemIds = [];
-          for (const doc of soldOutMenuSnap.docs) {
-            const d = doc.data();
+          for (const d of menuDocs) {
             let available = d.available ?? d.isAvailable ?? true;
             if (d.soldOutType === "permanent") {
               available = false;
@@ -64982,13 +65000,13 @@ var require_bootstrap = __commonJS({
             if (d.trackInventory && typeof d.inventoryCount === "number" && d.inventoryCount <= 0)
               available = false;
             if (!available)
-              soldOutItemIds.push(d.id ?? doc.id);
+              soldOutItemIds.push(d.id);
           }
           res.json({
             isOpen,
             servicePaused,
             soldOutItemIds,
-            timestamp: Date.now()
+            timestamp: nowMs
           });
         } catch (error) {
           console.error("Error fetching real-time store status:", error);
@@ -66483,6 +66501,9 @@ var require_orders = __commonJS({
                   } else {
                     isAvailable = true;
                   }
+                }
+                if (data.trackInventory && typeof data.inventoryCount === "number" && data.inventoryCount <= 0) {
+                  isAvailable = false;
                 }
                 if (!isAvailable) {
                   const nameZh = data.name?.zh || data.name?.en || snap.id;
@@ -68881,7 +68902,7 @@ exports.onOrderCreated = (0, firestore_1.onDocumentCreated)({
     console.error(`[onOrderCreated Error] Failed to process order notifications for ${event.params.orderId}:`, error);
   }
 });
-exports.onOrderCompleted = (0, firestore_1.onDocumentWritten)({
+exports.onOrderCompleted = (0, firestore_1.onDocumentUpdated)({
   document: "orders/{orderId}",
   database: "ai-studio-sabaythaibbqtabl-84418196-9d0c-459c-bced-ddc424dfba07",
   region: "asia-east1"
