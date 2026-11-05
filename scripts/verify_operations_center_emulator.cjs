@@ -80,14 +80,28 @@ async function main() {
   // STEP 1: Pre-flight Verification & Data Seeding
   // ---------------------------------------------------------------------------
   console.log('📦 [Step 1] Initializing Firestore Fixtures & Pre-warming Cache...');
-  try {
-    const seedScript = path.resolve(__dirname, 'seed-emulator.cjs');
-    if (fs.existsSync(seedScript)) {
-      require('./seed-emulator.cjs');
-      console.log('  ✓ Firestore database seeded with menu, categories, ingredients, tables, and settings.');
+  const isEmulatorActive = await new Promise(resolve => {
+    const net = require('net');
+    const socket = new net.Socket();
+    socket.setTimeout(600);
+    socket.on('connect', () => { socket.destroy(); resolve(true); });
+    socket.on('error', () => { socket.destroy(); resolve(false); });
+    socket.on('timeout', () => { socket.destroy(); resolve(false); });
+    socket.connect(8080, '127.0.0.1');
+  });
+
+  if (isEmulatorActive) {
+    try {
+      const seedScript = path.resolve(__dirname, 'seed-emulator.cjs');
+      if (fs.existsSync(seedScript)) {
+        require('./seed-emulator.cjs');
+        console.log('  ✓ Firestore database seeded with menu, categories, ingredients, tables, and settings.');
+      }
+    } catch (err) {
+      console.warn('  ⚠️ Direct seed call returned:', err.message);
     }
-  } catch (err) {
-    console.warn('  ⚠️ Direct seed call returned:', err.message);
+  } else {
+    console.log('  ℹ️  Firestore emulator (8080) is inactive, skipping local seed.');
   }
 
   // Pre-warm Functions runtime
