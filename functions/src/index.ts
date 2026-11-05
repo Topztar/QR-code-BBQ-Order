@@ -12,6 +12,7 @@ import express from 'express';
 
 setGlobalOptions({ maxInstances: 10, minInstances: 0, memory: "256MiB", region: "asia-east1", concurrency: 80, timeoutSeconds: 30, invoker: 'public' });
 import cors from 'cors';
+import compression from 'compression';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 
 process.on('unhandledRejection', (reason, promise) => {
@@ -55,6 +56,7 @@ app.use(cors({
   },
   credentials: true
 }));
+app.use(compression({ threshold: 1024 }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 

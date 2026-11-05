@@ -17,6 +17,7 @@
     "@sabay/shared": "file:../shared",
     "axios": "^1.20.0",
     "busboy": "^1.6.0",
+    "compression": "^1.8.2",
     "firebase-admin": "^14.2.0",
     "firebase-functions": "^7.4.0",
     "nodemailer": "^10.0.0",
@@ -24,6 +25,7 @@
   },
   "devDependencies": {
     "@types/busboy": "^1.5.4",
+    "@types/compression": "^1.8.1",
     "@types/cors": "^2.8.19",
     "@types/nodemailer": "^8.0.1",
     "typescript": "^5.0.0"
