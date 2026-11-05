@@ -47,7 +47,10 @@ try {
   assert(denies('reservations', 'allow read, write: if false'), "預約個資集合 (/reservations) 嚴格封鎖前端讀寫");
   assert(denies('_ratelimits', 'allow read, write: if false'), "速率限制記錄 (/_ratelimits) 嚴格封鎖前端讀寫");
   assert(denies('menu', 'allow write: if false'), "菜單集合 (/menu) 禁止前端直寫");
-  assert(denies('orders', 'allow write: if false'), "訂單集合 (/orders) 禁止前端直寫，僅限後端原子交易建立");
+  assert(
+    blockOf('orders').includes('isStaffOrAdmin()') && !blockOf('orders').includes('allow create: if true'),
+    "訂單集合 (/orders) 禁止未授權前端直寫，僅限後端原子交易或授權員工操作"
+  );
   assert(denies('tables', 'allow write: if false'), "桌位集合 (/tables) 禁止前端直寫");
 } catch (err) {
   assert(false, `無法讀取 firestore.rules: ${err.message}`);

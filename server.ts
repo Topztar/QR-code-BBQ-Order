@@ -733,8 +733,8 @@ let liveMembers: MemberRecord[] = [];
 // ─────────────────────────────────────────────────────────────────────────────
 
 // --- Firestore Cloud Persistence Integration ---
-// Never touch the real Firestore project from unit tests (vitest imports this module).
-const IS_TEST_ENV = process.env.NODE_ENV === 'test' || Boolean(process.env.VITEST);
+// Never touch the real production Firestore project from unit tests unless FIRESTORE_EMULATOR_HOST is configured.
+const IS_TEST_ENV = (process.env.NODE_ENV === 'test' || Boolean(process.env.VITEST)) && !process.env.FIRESTORE_EMULATOR_HOST;
 let DISABLE_FIREBASE_SYNC = process.env.DISABLE_FIREBASE_SYNC === 'true' || process.env.CI === 'true' || IS_TEST_ENV; // Default to enabled unless explicitly set to 'true', in CI, or under test
 let firestoreDb: any = null;
 

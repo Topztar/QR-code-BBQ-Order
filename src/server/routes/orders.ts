@@ -515,7 +515,7 @@ ${customerDetails}
     res.json({ success: true, message: 'All orders cleared successfully' });
   });
 
-  // 7. Delete Order by ID (Soft-delete parity with Cloud Functions + optional hardDelete removal)
+  // 7. Delete Order by ID (Stamps soft-delete audit fields and removes from active in-memory list)
   app.delete('/api/orders/:id', (req, res) => {
     const { id } = req.params;
     const liveOrders = getLiveOrders();
@@ -523,25 +523,22 @@ ${customerDetails}
     if (index === -1) {
       return res.status(404).json({ error: 'Order not found' });
     }
-    const targetOrder = liveOrders[index] as any;
+    const deletedOrder = liveOrders.splice(index, 1)[0] as any;
     const reason = req.body?.reason || 'Cashier manual deletion';
     const operatorId = (req as any).staffUser?.uid || req.body?.operatorId || 'cashier_terminal';
 
-    targetOrder.status = 'cancelled';
-    targetOrder.isDeleted = true;
-    targetOrder.deletedAt = new Date().toISOString();
-    targetOrder.deletionReason = reason;
-    targetOrder.cancelledBy = operatorId;
+    deletedOrder.status = 'cancelled';
+    deletedOrder.isDeleted = true;
+    deletedOrder.deletedAt = new Date().toISOString();
+    deletedOrder.deletionReason = reason;
+    deletedOrder.cancelledBy = operatorId;
 
-    if (req.body?.hardDelete === true) {
-      liveOrders.splice(index, 1);
-    }
     saveStateToDisk();
     res.json({
       success: true,
-      message: `Successfully cancelled/deleted order #${id}`,
+      message: `Successfully deleted order #${deletedOrder.id}`,
       orderId: id,
-      order: targetOrder,
+      order: deletedOrder,
     });
   });
 

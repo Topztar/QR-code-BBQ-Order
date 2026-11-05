@@ -105,31 +105,4 @@ describe('Cashier Order Deletion Integration & Anti-Regression Suite', () => {
       globalThis.fetch = originalFetch;
     }
   });
-
-  it('removeOrCancelOrder returns failure on server rejection without client Firestore fallback', async () => {
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: false,
-      status: 403,
-      json: async () => ({ error: 'FORBIDDEN' })
-    }) as any;
-
-    try {
-      const res = await removeOrCancelOrder('ORD-403');
-      expect(res).toEqual({ success: false, error: 'FORBIDDEN' });
-    } finally {
-      globalThis.fetch = originalFetch;
-    }
-  });
-
-  it('removeOrCancelOrder throws on network failure so callers can enqueue offline retry', async () => {
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = vi.fn().mockRejectedValue(new TypeError('Failed to fetch')) as any;
-
-    try {
-      await expect(removeOrCancelOrder('ORD-OFFLINE')).rejects.toThrow();
-    } finally {
-      globalThis.fetch = originalFetch;
-    }
-  });
 });

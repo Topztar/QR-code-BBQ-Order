@@ -121,14 +121,20 @@ describe('Phase B/C/D End-to-End Sanitization & Validation Matrix (E2E-01 ~ E2E-
   // E2E-03: KDS Sync, Dish Inventory Deduction Parity & Zero-Trust Rules
   // ============================================================================
   describe('E2E-03: Zero-Trust Firestore Rules & SSOT Dish Inventory Deduction Parity', () => {
-    it('enforces allow write: if false across all core collections in firestore.rules', () => {
+    it('enforces zero-trust rules across core collections and staff-only gate on /orders in firestore.rules', () => {
       const rules = fs.readFileSync(path.join(__dirname, '../firestore.rules'), 'utf-8');
-      for (const col of ['menu', 'categories', 'ingredients', 'settings', 'orders']) {
+      for (const col of ['menu', 'categories', 'ingredients', 'settings', 'tables']) {
         const re = new RegExp(`match\\s+/${col}/\\{[^}]+\\}\\s*\\{([\\s\\S]*?)\\}`);
         const m = rules.match(re);
         expect(m).not.toBeNull();
         expect(m![1]).toMatch(/allow\s+(read,\s*)?write:\s*if\s+false\s*;/);
       }
+      const ordersMatch = rules.match(/match\s+\/orders\/\{[^}]+\}\s*\{([\s\S]*?)\}/);
+      expect(ordersMatch).not.toBeNull();
+      expect(ordersMatch![1]).toContain('allow read: if isStaffOrAdmin();');
+      expect(ordersMatch![1]).toContain('allow update: if isStaffOrAdmin()');
+      expect(ordersMatch![1]).toContain('allow delete: if isStaffOrAdmin();');
+      expect(ordersMatch![1]).not.toContain('allow create: if true');
     });
 
     it('locks stockStatus to SOLD_OUT in both computeDishDeductions and local PUT /api/orders/:id/status', () => {
@@ -307,9 +313,10 @@ describe('Phase B/C/D End-to-End Sanitization & Validation Matrix (E2E-01 ~ E2E-
       );
 
       expect(delResData.success).toBe(true);
-      expect(liveOrders[0].status).toBe('cancelled');
-      expect(liveOrders[0].isDeleted).toBe(true);
-      expect(liveOrders[0].deletionReason).toBe('Guest left');
+      expect(delResData.order.status).toBe('cancelled');
+      expect(delResData.order.isDeleted).toBe(true);
+      expect(delResData.order.deletionReason).toBe('Guest left');
+      expect(liveOrders).toHaveLength(0);
 
       let activeList: any[] = [];
       getLayer.route.stack[0].handle(

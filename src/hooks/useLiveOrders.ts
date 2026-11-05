@@ -225,8 +225,10 @@ export function useLiveOrders(
     let isCancelled = false;
 
     // GUARD: Do not poll or listen to orders if not on staff view, or if unauthenticated
-    if (!isStaffView || !isStaffAuthenticated) {
+    if (!isStaffAuthenticated) {
       recentStatusTransitionsRef.current.clear();
+    }
+    if (!isStaffView || !isStaffAuthenticated) {
       return () => {
         unsubscribeOrders();
       };

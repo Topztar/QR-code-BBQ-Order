@@ -48,9 +48,10 @@ service cloud.firestore {
     // ==========================================
     match /orders/{id} {
       allow read: if isStaffOrAdmin();
-      // Zero-trust: create / update / soft-delete go through backend APIs
-      // (validators.ts + Admin SDK transactions). Client writes are denied.
-      allow write: if false;
+      // 🚀 Allow frontend soft-deletes and status updates for cashier terminal (staff custom token required; customer direct writes blocked)
+      allow create: if isStaffOrAdmin();
+      allow update: if isStaffOrAdmin() && request.resource.data.status in ['pending', 'confirmed', 'pending_kitchen_verification', 'preparing', 'delivering', 'served', 'completed', 'unpaid', 'paid', 'cancelled'];
+      allow delete: if isStaffOrAdmin();
     }
 
     match /archived_orders/{id} {
