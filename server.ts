@@ -733,7 +733,9 @@ let liveMembers: MemberRecord[] = [];
 // ─────────────────────────────────────────────────────────────────────────────
 
 // --- Firestore Cloud Persistence Integration ---
-let DISABLE_FIREBASE_SYNC = process.env.DISABLE_FIREBASE_SYNC === 'true' || process.env.CI === 'true'; // Default to enabled unless explicitly set to 'true' or in CI
+// Never touch the real Firestore project from unit tests (vitest imports this module).
+const IS_TEST_ENV = process.env.NODE_ENV === 'test' || Boolean(process.env.VITEST);
+let DISABLE_FIREBASE_SYNC = process.env.DISABLE_FIREBASE_SYNC === 'true' || process.env.CI === 'true' || IS_TEST_ENV; // Default to enabled unless explicitly set to 'true', in CI, or under test
 let firestoreDb: any = null;
 
 if (DISABLE_FIREBASE_SYNC) {
@@ -1212,7 +1214,7 @@ process.on("beforeExit", () => {
 function loadStateFromDisk() {
   try {
     if (fs.existsSync(PERSISTENCE_FILE_PATH)) {
-      const data = fs.readFileSync(PERSISTENCE_FILE_PATH, 'utf-8');
+      const data = fs.readFileSync(PERSISTENCE_FILE_PATH, 'utf-8').replace(/^\uFEFF/, ''); // strip UTF-8 BOM (e.g. files saved by Windows editors)
       if (!data || data.trim() === '') {
         console.warn('[Sabay Warning] Persistence file is empty. Setting loaded = true.');
 

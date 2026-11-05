@@ -516,9 +516,9 @@ async function main() {
     await browser.close();
   }
 
-  fs.writeFileSync('e2e_qa_audit_report.json', JSON.stringify(report, null, 2));
+  fs.writeFileSync(require('path').join((() => { const d = require('path').resolve(process.cwd(), 'artifacts'); require('fs').mkdirSync(d, { recursive: true }); return d; })(), 'e2e_qa_audit_report.json'), JSON.stringify(report, null, 2));
   console.log('\n================================================================');
-  console.log('✅ QA AUTOMATION SUITE FINISHED. Report saved to e2e_qa_audit_report.json');
+  console.log('✅ QA AUTOMATION SUITE FINISHED. Report saved to artifacts/e2e_qa_audit_report.json');
   console.log('================================================================\n');
 }
 

@@ -335,10 +335,12 @@ describe('EOD Checkout Security, Logout & Inventory Idempotency Suite', () => {
     expect(localIngredients[0].stock).toBe(450);
   });
 
-  it('hardens firestore.rules so /orders/{id} update and delete require isStaffOrAdmin()', () => {
+  it('hardens firestore.rules so /orders/{id} is staff-read-only and denies all client writes', () => {
     const rulesContent = fs.readFileSync(path.resolve(__dirname, '../firestore.rules'), 'utf8');
-    expect(rulesContent).toContain('allow update: if isStaffOrAdmin()');
-    expect(rulesContent).toContain('allow delete: if isStaffOrAdmin();');
+    const ordersBlock = rulesContent.match(/match \/orders\/\{id\} \{([\s\S]*?)\n    \}/)?.[1] ?? '';
+    expect(ordersBlock).toContain('allow read: if isStaffOrAdmin();');
+    expect(ordersBlock).toContain('allow write: if false;');
+    expect(ordersBlock).not.toMatch(/allow (create|update|delete)/);
     expect(rulesContent).not.toContain("allow delete: if isAuthenticated() || resource.data.status == 'cancelled';");
   });
 });

@@ -1,35 +1,15 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.computeDishDeductions = computeDishDeductions;
+exports.computeDishDeductions = void 0;
 exports.confirmOrderTransaction = confirmOrderTransaction;
 exports.registerOrdersRoutes = registerOrdersRoutes;
 const firestore_1 = require("firebase-admin/firestore");
 const validators_1 = require("../validators");
 const helpers_1 = require("../helpers");
 const shared_1 = require("@sabay/shared");
+Object.defineProperty(exports, "computeDishDeductions", { enumerable: true, get: function () { return shared_1.computeDishDeductions; } });
 const auth_1 = require("../auth");
 const bootstrap_1 = require("./bootstrap");
-function computeDishDeductions(dishDocs, qtyMap) {
-    const result = [];
-    for (const doc of dishDocs) {
-        if (!doc.exists)
-            continue;
-        const dish = doc.data();
-        if (!dish?.trackInventory)
-            continue;
-        const currentStock = typeof dish.inventoryCount === 'number' ? dish.inventoryCount : 0;
-        const updatedStock = currentStock - (qtyMap[doc.id] || 0);
-        const updates = { inventoryCount: updatedStock };
-        if (updatedStock <= 0) {
-            updates.available = false;
-            updates.soldOutType = 'permanent';
-            updates.soldOutAt = new Date().toISOString();
-            updates.stockStatus = 'SOLD_OUT';
-        }
-        result.push({ ref: doc.ref, updates });
-    }
-    return result;
-}
 async function confirmOrderTransaction(db, orderId, items) {
     const orderRef = db.collection('orders').doc(orderId);
     return db.runTransaction(async (transaction) => {
@@ -52,7 +32,7 @@ async function confirmOrderTransaction(db, orderId, items) {
         const uniqueDishIds = Object.keys(qtyMap);
         const dishRefs = uniqueDishIds.map((id) => db.collection('menu').doc(id));
         const dishDocs = dishRefs.length > 0 ? await Promise.all(dishRefs.map((ref) => transaction.get(ref))) : [];
-        for (const { ref, updates } of computeDishDeductions(dishDocs, qtyMap)) {
+        for (const { ref, updates } of (0, shared_1.computeDishDeductions)(dishDocs, qtyMap)) {
             transaction.update(ref, updates);
         }
         transaction.update(orderRef, {
@@ -494,7 +474,7 @@ function registerOrdersRoutes(app, ctx) {
                         dishDocs = await Promise.all(dishRefs.map((ref) => t.get(ref)));
                     }
                 }
-                for (const { ref, updates } of computeDishDeductions(dishDocs, itemQuantities)) {
+                for (const { ref, updates } of (0, shared_1.computeDishDeductions)(dishDocs, itemQuantities)) {
                     t.update(ref, updates);
                     inventoryTouched = true;
                 }

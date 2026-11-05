@@ -1,4 +1,5 @@
 import express from 'express';
+import { calculateEarnedPoints, POINTS_CONFIG } from '@sabay/shared';
 
 export interface MemberRouteContext {
   getLiveMembers: () => any[];
@@ -67,8 +68,8 @@ export function registerMembersRoutes(app: express.Express, ctx: MemberRouteCont
     }
     liveMembers[memberIdx].balance = currentBalance - amtNum;
     // Award loyalty points: ratio = NT$liveMemberPointsRatio per 1 point
-    const ratio = getLiveMemberPointsRatio();
-    const earnedPoints = Math.floor(amtNum / (ratio || 20));
+    const ratio = getLiveMemberPointsRatio() || POINTS_CONFIG.EARN_RATIO;
+    const earnedPoints = calculateEarnedPoints(amtNum, ratio);
     liveMembers[memberIdx].points = (liveMembers[memberIdx].points || 0) + earnedPoints;
     liveMembers[memberIdx].updatedAt = Date.now();
     saveStateToDisk();

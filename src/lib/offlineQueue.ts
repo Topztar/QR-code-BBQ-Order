@@ -97,9 +97,22 @@ export function addRequestToQueue(
   const queue = getOfflineQueue();
   const bodyString = typeof body === 'string' ? body : JSON.stringify(body);
 
-  // Phase 3: Logical Duplicate Checking (Settlement Defense Barrier)
-  // Prevent duplicate requests (e.g., rapid taps on "Pay" or "Complete") from piling up
+  let incomingClientOrderId: string | undefined;
+  if (method === 'POST' && url === '/api/orders' && body && typeof body === 'object' && body.clientOrderId) {
+    incomingClientOrderId = String(body.clientOrderId);
+  }
+
+  // Phase 3: Logical Duplicate Checking (Settlement Defense Barrier + clientOrderId Idempotency)
+  // Prevent duplicate requests (e.g., rapid taps on "Pay" or "Complete" or duplicate clientOrderId) from piling up
   const isDuplicate = queue.some(item => {
+    if (
+      incomingClientOrderId &&
+      item.url === '/api/orders' &&
+      item.method === 'POST' &&
+      item.body.includes(`"clientOrderId":"${incomingClientOrderId}"`)
+    ) {
+      return true;
+    }
     return item.url === url &&
            item.method === method &&
            item.body === bodyString &&

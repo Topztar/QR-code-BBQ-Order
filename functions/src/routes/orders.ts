@@ -3,9 +3,10 @@ import { Firestore, Query, FieldValue, DocumentReference } from 'firebase-admin/
 import { Bucket } from '@google-cloud/storage';
 import { validateOrderPayload, validateRatingPayload, validateCheckoutPayload } from '../validators';
 import { isStoreOpenFromData, createGetCachedSettings } from '../helpers';
-import { orderCalculationService, checkItemCompleteConcurrency, checkRefundLogsGate } from '@sabay/shared';
+import { orderCalculationService, checkItemCompleteConcurrency, checkRefundLogsGate, computeDishDeductions } from '@sabay/shared';
 import { hashPin } from '../auth';
 import { invalidatePublicBootstrapCache } from './bootstrap';
+export { computeDishDeductions };
 
 // ============================================================
 // ORDERS 路由模組（含 print-logs）
@@ -22,34 +23,6 @@ export interface RouteContext {
   sendErrorResponse: (res: express.Response, error: any, ctx?: string) => void;
 }
 
-/**
- * 📦 computeDishDeductions — 唯一的餐點庫存扣除計算 (Single Source of Truth)
- * Used by BOTH confirmOrderTransaction and PUT /orders/:id/status to prevent logic drift.
- * Untracked dishes are skipped; negative balances are allowed; <= 0 locks as permanent SOLD_OUT.
- */
-export function computeDishDeductions(
-  dishDocs: Array<{ exists: boolean; id: string; ref: any; data: () => any }>,
-  qtyMap: Record<string, number>
-): Array<{ ref: any; updates: Record<string, any> }> {
-  const result: Array<{ ref: any; updates: Record<string, any> }> = [];
-  for (const doc of dishDocs) {
-    if (!doc.exists) continue;
-    const dish = doc.data() as any;
-    if (!dish?.trackInventory) continue; // Unchecked Dish Isolation
-
-    const currentStock = typeof dish.inventoryCount === 'number' ? dish.inventoryCount : 0;
-    const updatedStock = currentStock - (qtyMap[doc.id] || 0); // Negative balances allowed
-    const updates: Record<string, any> = { inventoryCount: updatedStock };
-    if (updatedStock <= 0) {
-      updates.available = false;
-      updates.soldOutType = 'permanent';
-      updates.soldOutAt = new Date().toISOString();
-      updates.stockStatus = 'SOLD_OUT';
-    }
-    result.push({ ref: doc.ref, updates });
-  }
-  return result;
-}
 
 /**
  * 📦 confirmOrderTransaction — 原子扣除餐點庫存事務 (Atomic Dish Inventory Deduction)

@@ -63,3 +63,6 @@ __pycache__/
 
 salt.txt
 
+
+# Generated audit / verification reports (written by scripts/*.cjs)
+artifacts/

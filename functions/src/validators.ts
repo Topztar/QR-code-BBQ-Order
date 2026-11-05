@@ -23,8 +23,11 @@ export {
 export function sanitizeString(input: any, maxLength: number = 255): string {
   if (input === null || input === undefined) return '';
   const str = String(input).trim();
-  // Strip null bytes and control chars
-  const clean = str.replace(/[\u0000-\u0008\u000B-\u000C\u000E-\u001F\u007F]/g, '');
+  // Strip null bytes, control chars, and inline script tags
+  const clean = str
+    .replace(/[\u0000-\u0008\u000B-\u000C\u000E-\u001F\u007F]/g, '')
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<\/?script[^>]*>/gi, '');
   return clean.slice(0, maxLength);
 }
 

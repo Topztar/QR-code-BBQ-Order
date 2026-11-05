@@ -1,8 +1,8 @@
 import express from 'express';
 import { doc, deleteDoc } from 'firebase/firestore';
 import { Order, OrderItem, MenuItem, TableConfig, Reservation } from '../../types';
-import { orderCalculationService, checkItemCompleteConcurrency, checkRefundLogsGate } from '@sabay/shared';
-import { validateOrderPayload, validateCheckoutPayload } from '../../../functions/src/validators';
+import { orderCalculationService, checkItemCompleteConcurrency, checkRefundLogsGate, computeDishDeductions } from '@sabay/shared';
+import { validateOrderPayload, validateCheckoutPayload, validateRatingPayload } from '../../../functions/src/validators';
 
 export interface OrderRouteContext {
   getLiveOrders: () => Order[];
@@ -95,12 +95,14 @@ export function registerOrdersRoutes(app: express.Express, ctx: OrderRouteContex
   });
 
   // 2. Get All Orders
-  app.get('/api/orders', (_req, res) => {
+  app.get('/api/orders', (req, res) => {
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
     res.setHeader('Surrogate-Control', 'no-store');
-    res.json(getLiveOrders());
+    const includeDeleted = req.query?.includeDeleted === 'true';
+    const liveOrders = getLiveOrders();
+    res.json(includeDeleted ? liveOrders : liveOrders.filter((o: any) => !o?.isDeleted));
   });
 
   // 3. Place New Order
@@ -353,10 +355,9 @@ export function registerOrdersRoutes(app: express.Express, ctx: OrderRouteContex
   // 4. Rate Completed Order
   app.put('/api/orders/:id/rate', ratingLimiter, (req, res) => {
     const { id } = req.params;
-    const { rating, feedback } = req.body;
-
-    if (rating === undefined || typeof rating !== 'number' || rating < 1 || rating > 5) {
-      return res.status(400).json({ error: 'Rating must be a number between 1 and 5' });
+    const validation = validateRatingPayload(req.body);
+    if (!validation.isValid || !validation.sanitizedData) {
+      return res.status(400).json({ error: validation.error || 'Rating must be a number between 1 and 5' });
     }
 
     const liveOrders = getLiveOrders();
@@ -365,8 +366,8 @@ export function registerOrdersRoutes(app: express.Express, ctx: OrderRouteContex
       return res.status(404).json({ error: 'Order not found' });
     }
 
-    order.rating = rating;
-    order.feedback = feedback || '';
+    order.rating = validation.sanitizedData.rating;
+    order.feedback = validation.sanitizedData.feedback;
 
     saveStateToDisk();
     res.json({ success: true, order });
@@ -468,22 +469,27 @@ ${customerDetails}
       });
     }
 
-    // Inventory deduction for confirmed orders
+    // Inventory deduction for confirmed orders (via SSOT computeDishDeductions)
     if (status === 'confirmed' && order.status !== 'confirmed' && !(order as any).inventoryDeducted) {
       const liveMenu = getLiveMenu();
+      const qtyMap: Record<string, number> = {};
       (order.items || []).forEach(it => {
-        const menuItem = liveMenu.find(m => m.id === it.menuItemId);
-        if (menuItem && menuItem.trackInventory) {
-          const currentStock = menuItem.inventoryCount ?? 0;
-          const updatedStock = currentStock - (Number(it.qty) || 1);
-          menuItem.inventoryCount = updatedStock;
-          if (updatedStock <= 0) {
-            menuItem.available = false;
-            menuItem.soldOutType = 'permanent';
-            menuItem.soldOutAt = new Date().toISOString();
-          }
+        if (it?.menuItemId) {
+          qtyMap[it.menuItemId] = (qtyMap[it.menuItemId] || 0) + (Number(it.qty) || 1);
         }
       });
+      const dishDocs = Object.keys(qtyMap).map(dishId => {
+        const menuItem = liveMenu.find(m => m.id === dishId);
+        return {
+          exists: Boolean(menuItem),
+          id: dishId,
+          ref: menuItem,
+          data: () => menuItem,
+        };
+      });
+      for (const { ref, updates } of computeDishDeductions(dishDocs, qtyMap)) {
+        if (ref) Object.assign(ref, updates);
+      }
       (order as any).inventoryDeducted = true;
     }
 
@@ -509,7 +515,7 @@ ${customerDetails}
     res.json({ success: true, message: 'All orders cleared successfully' });
   });
 
-  // 7. Delete Order by ID
+  // 7. Delete Order by ID (Soft-delete parity with Cloud Functions + optional hardDelete removal)
   app.delete('/api/orders/:id', (req, res) => {
     const { id } = req.params;
     const liveOrders = getLiveOrders();
@@ -517,9 +523,26 @@ ${customerDetails}
     if (index === -1) {
       return res.status(404).json({ error: 'Order not found' });
     }
-    const deletedOrder = liveOrders.splice(index, 1)[0];
+    const targetOrder = liveOrders[index] as any;
+    const reason = req.body?.reason || 'Cashier manual deletion';
+    const operatorId = (req as any).staffUser?.uid || req.body?.operatorId || 'cashier_terminal';
+
+    targetOrder.status = 'cancelled';
+    targetOrder.isDeleted = true;
+    targetOrder.deletedAt = new Date().toISOString();
+    targetOrder.deletionReason = reason;
+    targetOrder.cancelledBy = operatorId;
+
+    if (req.body?.hardDelete === true) {
+      liveOrders.splice(index, 1);
+    }
     saveStateToDisk();
-    res.json({ success: true, message: `Successfully deleted order #${deletedOrder.id}`, order: deletedOrder });
+    res.json({
+      success: true,
+      message: `Successfully cancelled/deleted order #${id}`,
+      orderId: id,
+      order: targetOrder,
+    });
   });
 
   // 7.5 Bulk Delete Orders

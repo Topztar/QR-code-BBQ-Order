@@ -627,7 +627,7 @@ async function main() {
   };
 
   // Save report
-  const reportPath = path.resolve(process.cwd(), 'operations_center_verification_results.json');
+  const reportPath = path.join((() => { const d = require('path').resolve(process.cwd(), 'artifacts'); require('fs').mkdirSync(d, { recursive: true }); return d; })(), 'operations_center_verification_results.json');
   fs.writeFileSync(reportPath, JSON.stringify(report, null, 2), 'utf-8');
   console.log(`\n========================================================================`);
   console.log(`🎉 ALL VERIFICATION PROTOCOLS COMPLETED!`);

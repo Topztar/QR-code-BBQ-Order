@@ -226,6 +226,7 @@ export function useLiveOrders(
 
     // GUARD: Do not poll or listen to orders if not on staff view, or if unauthenticated
     if (!isStaffView || !isStaffAuthenticated) {
+      recentStatusTransitionsRef.current.clear();
       return () => {
         unsubscribeOrders();
       };
@@ -239,8 +240,9 @@ export function useLiveOrders(
         if (res.ok) {
           let data = await res.json();
           if (Array.isArray(data)) {
-            data.sort((a: Order, b: Order) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-            const normalizedData = data.map((o: Order) => ({
+            const activeData = data.filter((o: Order) => !o?.isDeleted);
+            activeData.sort((a: Order, b: Order) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+            const normalizedData = activeData.map((o: Order) => ({
               ...o,
               items: Array.isArray(o.items) ? o.items.map(it => ({
                 ...it,
@@ -292,6 +294,9 @@ export function useLiveOrders(
         );
 
         let isFirstSnapshotOfThisListener = true;
+        try {
+          unsubscribeOrders();
+        } catch (_) {}
 
         unsubscribeOrders = onSnapshot(ordersQuery, (snapshot) => {
           if (!isFirstSnapshotOfThisListener) {

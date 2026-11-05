@@ -286,7 +286,7 @@ async function runBenchmark() {
   };
 
   // Write results to JSON artifact
-  const outPath = path.resolve(process.cwd(), 'firebase_perf_measurement_results.json');
+  const outPath = path.join((() => { const d = require('path').resolve(process.cwd(), 'artifacts'); require('fs').mkdirSync(d, { recursive: true }); return d; })(), 'firebase_perf_measurement_results.json');
   fs.writeFileSync(outPath, JSON.stringify(report, null, 2), 'utf-8');
   console.log(`✅ Measurement results saved to: ${outPath}`);
   console.log('========================================================================\n');

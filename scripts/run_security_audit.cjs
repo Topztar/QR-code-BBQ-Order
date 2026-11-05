@@ -33,13 +33,22 @@ try {
   const rulesContent = fs.readFileSync(rulesPath, 'utf8');
 
   assert(rulesContent.includes("rules_version = '2'"), "規則版本為 rules_version = '2'");
-  assert(rulesContent.includes('match /secrets/{id}') && rulesContent.includes('allow read, write: if false'), "敏感金鑰集合 (/secrets) 嚴格封鎖前端讀寫");
-  assert(rulesContent.includes('match /checkouts/{id}') && rulesContent.includes('allow read, write: if false'), "結帳金流集合 (/checkouts) 嚴格封鎖前端讀寫");
-  assert(rulesContent.includes('match /reservations/{id}') && rulesContent.includes('allow read, write: if false'), "預約個資集合 (/reservations) 嚴格封鎖前端讀寫");
-  assert(rulesContent.includes('match /_ratelimits/{id}') && rulesContent.includes('allow read, write: if false'), "速率限制記錄 (/_ratelimits) 嚴格封鎖前端讀寫");
-  assert(rulesContent.includes('match /menu/{id}') && rulesContent.includes('allow write: if false'), "菜單集合 (/menu) 禁止前端直寫");
-  assert(rulesContent.includes('match /orders/{id}') && rulesContent.includes('allow write: if false'), "訂單集合 (/orders) 禁止前端直寫，僅限後端原子交易建立");
-  assert(rulesContent.includes('match /tables/{id}') && rulesContent.includes('allow write: if false'), "桌位集合 (/tables) 禁止前端直寫");
+  // Scope each assertion to its own match block (a global substring check passes vacuously)
+  const blockOf = (collection) => {
+    const m = rulesContent.match(new RegExp(`match /${collection}/\\{id\\} \\{([\\s\\S]*?)\\n    \\}`));
+    return m ? m[1] : '';
+  };
+  const denies = (collection, stmt) => {
+    const block = blockOf(collection);
+    return block.includes(stmt) && !/allow (create|update|delete)/.test(block);
+  };
+  assert(denies('secrets', 'allow read, write: if false'), "敏感金鑰集合 (/secrets) 嚴格封鎖前端讀寫");
+  assert(denies('checkouts', 'allow read, write: if false'), "結帳金流集合 (/checkouts) 嚴格封鎖前端讀寫");
+  assert(denies('reservations', 'allow read, write: if false'), "預約個資集合 (/reservations) 嚴格封鎖前端讀寫");
+  assert(denies('_ratelimits', 'allow read, write: if false'), "速率限制記錄 (/_ratelimits) 嚴格封鎖前端讀寫");
+  assert(denies('menu', 'allow write: if false'), "菜單集合 (/menu) 禁止前端直寫");
+  assert(denies('orders', 'allow write: if false'), "訂單集合 (/orders) 禁止前端直寫，僅限後端原子交易建立");
+  assert(denies('tables', 'allow write: if false'), "桌位集合 (/tables) 禁止前端直寫");
 } catch (err) {
   assert(false, `無法讀取 firestore.rules: ${err.message}`);
 }

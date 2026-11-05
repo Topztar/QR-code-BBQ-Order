@@ -69,8 +69,8 @@ async function main() {
     console.log('\n--- Cross-Reference Matrix Live Verification ---');
     console.table(checks);
 
-    fs.writeFileSync('live_kitchen_verification.json', JSON.stringify({ pageData, checks }, null, 2));
-    console.log('\nSaved verification to live_kitchen_verification.json');
+    fs.writeFileSync(require('path').join((() => { const d = require('path').resolve(process.cwd(), 'artifacts'); require('fs').mkdirSync(d, { recursive: true }); return d; })(), 'live_kitchen_verification.json'), JSON.stringify({ pageData, checks }, null, 2));
+    console.log('\nSaved verification to artifacts/live_kitchen_verification.json');
 
   } finally {
     await browser.close();

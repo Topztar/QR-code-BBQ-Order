@@ -188,6 +188,36 @@ export const PRINTER_CONSTANTS = {
   CONNECTION_TIMEOUT_MS: 3000
 };
 
+/**
+ * 📦 computeDishDeductions — 唯一的餐點庫存扣除計算 (Single Source of Truth)
+ * Used by BOTH confirmOrderTransaction (Cloud) and local server to prevent logic drift.
+ * Untracked dishes are skipped; negative balances are allowed; <= 0 locks as permanent SOLD_OUT.
+ */
+export function computeDishDeductions(
+  dishDocs: Array<{ exists: boolean; id: string; ref: any; data: () => any }>,
+  qtyMap: Record<string, number>
+): Array<{ ref: any; updates: Record<string, any> }> {
+  const result: Array<{ ref: any; updates: Record<string, any> }> = [];
+  for (const doc of dishDocs) {
+    if (!doc.exists) continue;
+    const dish = doc.data() as any;
+    if (!dish?.trackInventory) continue; // Unchecked Dish Isolation
+
+    const currentStock = typeof dish.inventoryCount === 'number' ? dish.inventoryCount : 0;
+    const updatedStock = currentStock - (qtyMap[doc.id] || 0); // Negative balances allowed
+    const updates: Record<string, any> = { inventoryCount: updatedStock };
+    if (updatedStock <= 0) {
+      updates.available = false;
+      updates.soldOutType = 'permanent';
+      updates.soldOutAt = new Date().toISOString();
+      updates.stockStatus = 'SOLD_OUT';
+    }
+    result.push({ ref: doc.ref, updates });
+  }
+  return result;
+}
+
+
 export function deriveTableStatuses(
   tables: any[],
   orders: any[],
@@ -289,4 +319,5 @@ export function deriveTableStatuses(
   return { tables: newTables, reservations: newReservations };
 }
 
+export * from './types';
 export * from './utils';

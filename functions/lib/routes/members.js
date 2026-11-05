@@ -1,9 +1,12 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerMembersRoutes = registerMembersRoutes;
+const shared_1 = require("@sabay/shared");
+const helpers_1 = require("../helpers");
 function registerMembersRoutes(app, ctx) {
     const { db, requireStaffAuth, sendErrorResponse } = ctx;
     const membersRef = db.collection('members');
+    const getCachedSettings = (0, helpers_1.createGetCachedSettings)(db);
     const get = (routePath, ...handlers) => app.get([`/api${routePath}`, routePath], ...handlers);
     const post = (routePath, ...handlers) => app.post([`/api${routePath}`, routePath], ...handlers);
     get('/members', requireStaffAuth, async (_req, res) => {
@@ -18,7 +21,7 @@ function registerMembersRoutes(app, ctx) {
     });
     get('/members/:email', requireStaffAuth, async (req, res) => {
         try {
-            const email = String(req.params.email).toLowerCase();
+            const email = decodeURIComponent(String(req.params.email)).trim().toLowerCase();
             const doc = await membersRef.doc(email).get();
             if (!doc.exists) {
                 return res.status(404).json({ error: '會員不存在' });
@@ -31,7 +34,7 @@ function registerMembersRoutes(app, ctx) {
     });
     post('/members/:email/topup', requireStaffAuth, async (req, res) => {
         try {
-            const email = String(req.params.email).toLowerCase();
+            const email = decodeURIComponent(String(req.params.email)).trim().toLowerCase();
             const { amount } = req.body;
             const amtNum = parseInt(amount, 10);
             if (isNaN(amtNum) || amtNum <= 0) {
@@ -60,14 +63,16 @@ function registerMembersRoutes(app, ctx) {
     });
     post('/members/:email/deduct', requireStaffAuth, async (req, res) => {
         try {
-            const email = String(req.params.email).toLowerCase();
+            const email = decodeURIComponent(String(req.params.email)).trim().toLowerCase();
             const { amount, orderId } = req.body;
             const amtNum = parseInt(amount, 10);
             if (isNaN(amtNum) || amtNum <= 0) {
                 return res.status(400).json({ error: '扣款金額必須為大於零的有效整數' });
             }
             const docRef = membersRef.doc(email);
-            const earnedPoints = Math.floor(amtNum / 100);
+            const settings = await getCachedSettings().catch(() => ({}));
+            const ratio = Number(settings?.liveMemberPointsRatio) || shared_1.POINTS_CONFIG.EARN_RATIO;
+            const earnedPoints = (0, shared_1.calculateEarnedPoints)(amtNum, ratio);
             await db.runTransaction(async (t) => {
                 const doc = await t.get(docRef);
                 if (!doc.exists) {

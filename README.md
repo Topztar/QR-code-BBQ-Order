@@ -58,7 +58,7 @@ npm run start
 專案內建全自動化審計測試套件，可在本地一鍵完成 4 階段品質把關：
 
 ```bash
-# 執行所有單元與安全邏輯測試 (Vitest 34/34 Tests)
+# 執行所有單元與安全邏輯測試 (Vitest：39 個測試檔 / 363 項測試)
 npm test
 
 # 執行 Phase 1 安全與資料防護審計
@@ -79,30 +79,43 @@ npm run audit:all
 ## 📁 專案架構目錄
 
 ```text
-├── functions/              # Firebase Cloud Functions Gen 2 (Node.js 20)
+├── functions/              # Firebase Cloud Functions Gen 2 (Node.js 20) — 正式環境 API
 │   ├── src/
 │   │   ├── auth.ts         # 員工 PIN 碼加鹽雜湊、Token 記憶體快取與安全 Middleware
 │   │   ├── validators.ts   # 訂單、預約、圖片 Payload 消毒與資料驗證
+│   │   ├── helpers.ts      # 共用後端輔助函式
+│   │   ├── routes/         # API 路由模組 (bootstrap, orders, menu, settings, tables, staff, inventory, members, printer)
+│   │   ├── services/       # 通知 (LINE)、圖片處理、訂單封存 (orderArchival)
+│   │   ├── middleware/     # 版本驗證等 Middleware
 │   │   └── index.ts        # Express API 主路由 (256MiB, asia-east1, Gen 2)
 │   └── package.json
+├── shared/                 # 前後端共用套件 @sabay/shared (型別與純計算函式)
+├── hardware/               # POS 橋接 (pos_bridge.js / .py)、ESC/POS 印表機驅動
+├── server.ts               # 本地開發 / 自架伺服器入口 (Express + Vite middleware)
 ├── src/                    # React 19 前端主程式
 │   ├── components/
 │   │   ├── customer/       # 顧客端高效能子元件 (Header, MenuGrid, Tabs, CartDrawer)
 │   │   ├── manager/        # 管理後台模組 (菜單、桌位、統計、營運排程)
 │   │   ├── kds/            # 廚房出單系統 (KDS) 模組
+│   │   ├── ManagerDashboard.tsx
 │   │   └── CustomerOrderView.tsx
 │   ├── context/            # 模組化 Context Providers (RestaurantData, OrderData, PrinterData)
+│   ├── hooks/              # 自訂 Hooks (useLiveOrders 等)
 │   ├── lib/
 │   │   ├── firebase.ts     # Firebase Client SDK 初始化 (包含 multi-tab persistentLocalCache)
 │   │   └── offlineQueue.ts # 離線佇列與網路斷線自動重試機制
+│   ├── server/             # server.ts 使用的本地 API 路由 (與 functions/src/routes 對應)
+│   ├── services/ stores/ utils/ types/ constants/ config/
 │   └── types.ts            # 全端 TypeScript 型別定義
-├── scripts/                # 自動化審計與效能檢驗工具
+├── scripts/                # 自動化審計與效能檢驗工具 (報告輸出至 artifacts/，不納入版控)
 │   ├── run_security_audit.cjs  # 安全審計腳本 (Phase 1)
 │   ├── run_perf_audit.cjs      # 效能審計腳本 (Phase 2)
 │   ├── run_cost_audit.cjs      # 成本審計腳本 (Phase 3)
 │   └── run_all_checks.cjs      # 全端一鍵總檢腳本 (Phase 4)
 ├── tests/                  # Vitest 自動化測試套件 (涵蓋安全、促銷、排程、離線佇列)
+├── ARCHITECTURE.md         # 系統架構說明
+├── ARCHIVAL_DESIGN.md      # 訂單封存設計 (ADR-001/002/003)
 ├── firebase.json           # Firebase Hosting 快取標頭、CSP 與 Functions 轉發
-├── firestore.rules         # 零信任 Firestore 安全規則
+├── firestore.rules         # 零信任 Firestore 安全規則 (訂單僅員工可讀，前端禁止寫入)
 └── storage.rules           # Storage 安全規則
 ```

@@ -195,8 +195,8 @@ async function runMatrix() {
     console.table(results.testCases);
     console.log('========================================================================\n');
 
-    fs.writeFileSync('tc_emu_verification_results.json', JSON.stringify(results, null, 2));
-    console.log('Saved results to tc_emu_verification_results.json');
+    fs.writeFileSync(require('path').join((() => { const d = require('path').resolve(process.cwd(), 'artifacts'); require('fs').mkdirSync(d, { recursive: true }); return d; })(), 'tc_emu_verification_results.json'), JSON.stringify(results, null, 2));
+    console.log('Saved results to artifacts/tc_emu_verification_results.json');
 
   } finally {
     await browser.close();

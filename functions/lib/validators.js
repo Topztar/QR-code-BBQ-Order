@@ -22,7 +22,10 @@ function sanitizeString(input, maxLength = 255) {
     if (input === null || input === undefined)
         return '';
     const str = String(input).trim();
-    const clean = str.replace(/[\u0000-\u0008\u000B-\u000C\u000E-\u001F\u007F]/g, '');
+    const clean = str
+        .replace(/[\u0000-\u0008\u000B-\u000C\u000E-\u001F\u007F]/g, '')
+        .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
+        .replace(/<\/?script[^>]*>/gi, '');
     return clean.slice(0, maxLength);
 }
 function validateOrderPayload(body) {

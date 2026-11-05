@@ -1,10 +1,11 @@
 import express from 'express';
-import { Firestore } from 'firebase-admin/firestore';
- // Use relative import to index or redefine RouteContext
+import { calculateEarnedPoints, POINTS_CONFIG } from '@sabay/shared';
+import { createGetCachedSettings } from '../helpers';
 
 export function registerMembersRoutes(app: express.Application, ctx: any) {
   const { db, requireStaffAuth, sendErrorResponse } = ctx;
   const membersRef = db.collection('members');
+  const getCachedSettings = createGetCachedSettings(db);
 
   // 雙路徑路由包裝器
   const get = (routePath: string, ...handlers: express.RequestHandler[]) => app.get([`/api${routePath}`, routePath], ...handlers);
@@ -24,7 +25,7 @@ export function registerMembersRoutes(app: express.Application, ctx: any) {
   // GET /members/:email — fetch a single member by email
   get('/members/:email', requireStaffAuth, async (req: express.Request, res: express.Response) => {
     try {
-      const email = String(req.params.email).toLowerCase();
+      const email = decodeURIComponent(String(req.params.email)).trim().toLowerCase();
       const doc = await membersRef.doc(email).get();
       if (!doc.exists) {
         return res.status(404).json({ error: '會員不存在' });
@@ -38,7 +39,7 @@ export function registerMembersRoutes(app: express.Application, ctx: any) {
   // POST /members/:email/topup — add stored-value balance (staff cashier top-up)
   post('/members/:email/topup', requireStaffAuth, async (req: express.Request, res: express.Response) => {
     try {
-      const email = String(req.params.email).toLowerCase();
+      const email = decodeURIComponent(String(req.params.email)).trim().toLowerCase();
       const { amount } = req.body;
       const amtNum = parseInt(amount, 10);
 
@@ -72,7 +73,7 @@ export function registerMembersRoutes(app: express.Application, ctx: any) {
   // POST /members/:email/deduct — deduct balance at checkout (server-side validation)
   post('/members/:email/deduct', requireStaffAuth, async (req: express.Request, res: express.Response) => {
     try {
-      const email = String(req.params.email).toLowerCase();
+      const email = decodeURIComponent(String(req.params.email)).trim().toLowerCase();
       const { amount, orderId } = req.body;
       const amtNum = parseInt(amount, 10);
 
@@ -81,7 +82,10 @@ export function registerMembersRoutes(app: express.Application, ctx: any) {
       }
 
       const docRef = membersRef.doc(email);
-      const earnedPoints = Math.floor(amtNum / 100);
+      const settings = await getCachedSettings().catch(() => ({} as any));
+      const ratio = Number(settings?.liveMemberPointsRatio) || POINTS_CONFIG.EARN_RATIO;
+      const earnedPoints = calculateEarnedPoints(amtNum, ratio);
+
 
       await db.runTransaction(async (t: any) => {
         const doc = await t.get(docRef);
