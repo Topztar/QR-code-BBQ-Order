@@ -694,6 +694,10 @@ var require_dist = __commonJS({
     exports2.checkRefundLogsGate = checkRefundLogsGate;
     exports2.computeDishDeductions = computeDishDeductions;
     exports2.deriveTableStatuses = deriveTableStatuses;
+    exports2.isActiveKdsOrder = isActiveKdsOrder;
+    exports2.isVirtualAccountingCategory = isVirtualAccountingCategory;
+    exports2.isVirtualAccountingMenuItem = isVirtualAccountingMenuItem;
+    exports2.isPrintLogFailure = isPrintLogFailure;
     var orderCalculationService = {
       computeOrderItemUnitPrice: (it, menuItemsList = []) => {
         if (!it)
@@ -913,6 +917,72 @@ var require_dist = __commonJS({
         }
       });
       return { tables: newTables, reservations: newReservations };
+    }
+    function isActiveKdsOrder(order, deletedIds) {
+      if (!order || order.isDeleted)
+        return false;
+      if (deletedIds && order.id && deletedIds.has(order.id))
+        return false;
+      if (order.status === "cancelled" || order.status === "completed" || order.kdsStatus === "cancelled" || order.kdsStatus === "completed" || order.kdsCompleted === true || Boolean(order.completedAt)) {
+        return false;
+      }
+      const items = Array.isArray(order.items) ? order.items : [];
+      const allItemsCompleted = items.length > 0 && items.every((it) => Boolean(it?.isCompleted));
+      const isPaidOrder = Boolean(order.isPaid || order.status === "paid" || order.paymentStatus === "paid" || order.paidAt);
+      if (allItemsCompleted && isPaidOrder) {
+        return false;
+      }
+      return order.status === "pending" || order.status === "confirmed" || order.status === "pending_kitchen_verification" || order.status === "preparing" || order.status === "delivering" || order.status === "paid";
+    }
+    var VIRTUAL_CATEGORY_IDS = /* @__PURE__ */ new Set(["cat-svadcb"]);
+    var VIRTUAL_CATEGORY_KEYWORDS = ["\u5C0F\u8CBB\u53CA\u6298\u6263", "tips & discounts", "tips and discounts"];
+    var VIRTUAL_ITEM_KEYWORDS = ["\u5BA2\u5BB6\u5E63", "\u597D\u53CB\u6298\u6263", "\u958B\u74F6\u8CBB", "corkage", "\u5C0F\u8CBB", "discount"];
+    function extractTextVariants(val) {
+      if (!val)
+        return [];
+      if (typeof val === "string")
+        return [val];
+      if (typeof val === "object") {
+        return Object.values(val).filter((v) => typeof v === "string" && v.trim().length > 0);
+      }
+      return [];
+    }
+    function isVirtualAccountingCategory(category) {
+      if (!category)
+        return false;
+      if (category.id && VIRTUAL_CATEGORY_IDS.has(category.id))
+        return true;
+      const names = extractTextVariants(category.name).map((n) => n.toLowerCase());
+      return names.some((n) => VIRTUAL_CATEGORY_KEYWORDS.some((kw) => n.includes(kw)));
+    }
+    function isVirtualAccountingMenuItem(item, categories) {
+      if (!item)
+        return false;
+      if (item.category && VIRTUAL_CATEGORY_IDS.has(item.category))
+        return true;
+      if (typeof item.price === "number" && item.price < 0)
+        return true;
+      if (categories && item.category) {
+        const matchedCat = categories.find((c) => c.id === item.category);
+        if (matchedCat && isVirtualAccountingCategory(matchedCat))
+          return true;
+      }
+      const names = extractTextVariants(item.name).map((n) => n.toLowerCase());
+      return names.some((n) => {
+        const trimmed = n.trim();
+        if (trimmed === "tip" || trimmed === "tips")
+          return true;
+        return VIRTUAL_ITEM_KEYWORDS.some((kw) => trimmed.includes(kw));
+      });
+    }
+    function isPrintLogFailure(log) {
+      if (!log)
+        return false;
+      if (log.success === false || log.status === "error" || log.status === "failed") {
+        return true;
+      }
+      const haystack = `${log.content || ""} ${log.error || ""}`.toLowerCase();
+      return haystack.includes("timeout") || haystack.includes("\u903E\u6642") || haystack.includes("\u65B7\u7DDA") || haystack.includes("\u96E2\u7DDA") || haystack.includes("\u5931\u6557") || haystack.includes("unreachable") || haystack.includes("econnrefused") || haystack.includes("offline") || haystack.includes("failed") || haystack.includes("error");
     }
     __exportStar(require_types(), exports2);
     __exportStar(require_utils(), exports2);
@@ -66230,6 +66300,39 @@ var require_orders = __commonJS({
     } });
     var auth_12 = require_auth();
     var bootstrap_12 = require_bootstrap();
+    async function resolveOrderDocInTransaction(t, db2, id) {
+      const directRef = db2.collection("orders").doc(id);
+      const directSnap = await t.get(directRef);
+      if (directSnap.exists) {
+        return { orderRef: directRef, doc: directSnap };
+      }
+      const ordersCol = db2.collection("orders");
+      if (typeof ordersCol.where === "function") {
+        for (const field of ["orderNumber", "id"]) {
+          const qSnap = await t.get(ordersCol.where(field, "==", id).limit(1));
+          if (!qSnap.empty) {
+            const matched = qSnap.docs[0];
+            return { orderRef: matched.ref, doc: matched };
+          }
+        }
+      }
+      return { orderRef: directRef, doc: directSnap };
+    }
+    async function resolveOrderDocRef(db2, id) {
+      const directRef = db2.collection("orders").doc(id);
+      const directSnap = await directRef.get();
+      if (directSnap.exists)
+        return directRef;
+      const ordersCol = db2.collection("orders");
+      if (typeof ordersCol.where === "function") {
+        for (const field of ["orderNumber", "id"]) {
+          const qSnap = await ordersCol.where(field, "==", id).limit(1).get();
+          if (!qSnap.empty)
+            return qSnap.docs[0].ref;
+        }
+      }
+      return directRef;
+    }
     async function confirmOrderTransaction(db2, orderId, items) {
       const orderRef = db2.collection("orders").doc(orderId);
       return db2.runTransaction(async (transaction) => {
@@ -66308,10 +66411,10 @@ var require_orders = __commonJS({
           let snapshot;
           let needsManualSort = false;
           try {
-            snapshot = await db2.collection("orders").select("id", "tableNumber", "items", "subtotal", "serviceCharge", "total", "status", "createdAt", "customerName", "customerPhone", "customerAvatar", "paymentMethod", "isMember", "isPaid", "guestCount", "discount", "quickNotes", "isFlagged", "flagReason", "takeoutInfo", "clientOrderId", "version", "updatedAt", "lastUpdatedBy", "refundLogs").orderBy("createdAt", "desc").limit(200).get();
+            snapshot = await db2.collection("orders").select("id", "tableNumber", "items", "subtotal", "serviceCharge", "total", "status", "kdsStatus", "kdsCompleted", "kdsCompletedAt", "completedAt", "paymentStatus", "paidAt", "orderNumber", "createdAt", "customerName", "customerPhone", "customerAvatar", "paymentMethod", "isMember", "isPaid", "guestCount", "discount", "quickNotes", "isFlagged", "flagReason", "takeoutInfo", "clientOrderId", "version", "updatedAt", "lastUpdatedBy", "refundLogs").orderBy("createdAt", "desc").limit(200).get();
           } catch (_idxErr) {
             needsManualSort = true;
-            snapshot = await db2.collection("orders").select("id", "tableNumber", "items", "subtotal", "serviceCharge", "total", "status", "createdAt", "customerName", "customerPhone", "customerAvatar", "paymentMethod", "isMember", "isPaid", "guestCount", "discount", "quickNotes", "isFlagged", "flagReason", "takeoutInfo", "clientOrderId", "version", "updatedAt", "lastUpdatedBy", "refundLogs").limit(200).get();
+            snapshot = await db2.collection("orders").select("id", "tableNumber", "items", "subtotal", "serviceCharge", "total", "status", "kdsStatus", "kdsCompleted", "kdsCompletedAt", "completedAt", "paymentStatus", "paidAt", "orderNumber", "createdAt", "customerName", "customerPhone", "customerAvatar", "paymentMethod", "isMember", "isPaid", "guestCount", "discount", "quickNotes", "isFlagged", "flagReason", "takeoutInfo", "clientOrderId", "version", "updatedAt", "lastUpdatedBy", "refundLogs").limit(200).get();
           }
           const orders = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
           if (needsManualSort) {
@@ -66557,6 +66660,9 @@ var require_orders = __commonJS({
               serviceCharge: verifiedPricing.serviceCharge,
               total: verifiedPricing.total,
               status: orderData.source === "pos" ? "pending_kitchen_verification" : "pending",
+              kdsStatus: "pending",
+              kdsCompleted: false,
+              paymentStatus: "unpaid",
               isPaid: false,
               createdAt: (/* @__PURE__ */ new Date()).toISOString()
             };
@@ -66630,15 +66736,18 @@ var require_orders = __commonJS({
         }
         try {
           let inventoryTouched = false;
+          let resolvedId = id;
           await db2.runTransaction(async (t) => {
             inventoryTouched = false;
-            const orderRef = db2.collection("orders").doc(id);
-            const doc = await t.get(orderRef);
+            const { orderRef, doc } = await resolveOrderDocInTransaction(t, db2, id);
             if (!doc.exists)
               throw new Error("Order not found");
+            resolvedId = doc.id;
             const data = doc.data();
-            if ((data?.status === "paid" || data?.status === "cancelled") && status !== "cancelled" && status !== "paid") {
-              console.warn(`[Backend] Rejected status update to ${status} for order ${id} because it's already ${data?.status}`);
+            const isAlreadyCancelled = data?.status === "cancelled";
+            const isPaidRevertingToIntake = (data?.status === "paid" || data?.isPaid === true) && (status === "pending" || status === "confirmed" || status === "pending_kitchen_verification");
+            if (isAlreadyCancelled && status !== "cancelled" || isPaidRevertingToIntake) {
+              console.warn(`[Backend] Rejected status update to ${status} for order ${resolvedId} because it's already ${data?.status}`);
               throw new Error(`TRANSITION_REJECTED:\u8A02\u55AE\u5DF2\u7D50\u5E33\u6216\u5DF2\u53D6\u6D88 (${data?.status})\uFF0C\u4E0D\u53EF\u8B8A\u66F4\u70BA ${status}`);
             }
             const shouldDeductInventory = status === "confirmed" && data?.status !== "confirmed" && !data?.inventoryDeducted;
@@ -66661,7 +66770,32 @@ var require_orders = __commonJS({
               t.update(ref, updates);
               inventoryTouched = true;
             }
-            const orderUpdates = { status };
+            const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+            const wasPaid = Boolean(data?.isPaid || data?.status === "paid" || data?.paymentStatus === "paid" || data?.paidAt);
+            const orderUpdates = { status, updatedAt: nowIso };
+            if (status === "completed") {
+              orderUpdates.kdsStatus = "completed";
+              orderUpdates.kdsCompleted = true;
+              orderUpdates.kdsCompletedAt = data?.kdsCompletedAt || nowIso;
+              orderUpdates.completedAt = data?.completedAt || nowIso;
+            } else if (status === "cancelled") {
+              orderUpdates.kdsStatus = "cancelled";
+              orderUpdates.kdsCompleted = false;
+            } else if (status === "preparing" || status === "delivering") {
+              orderUpdates.kdsStatus = "preparing";
+              orderUpdates.kdsCompleted = false;
+              orderUpdates.kdsCompletedAt = null;
+              orderUpdates.completedAt = null;
+            } else if (status === "pending" || status === "confirmed" || status === "pending_kitchen_verification") {
+              orderUpdates.kdsStatus = "pending";
+              orderUpdates.kdsCompleted = false;
+            }
+            if (wasPaid) {
+              orderUpdates.isPaid = true;
+              orderUpdates.paymentStatus = "paid";
+              if (data?.paidAt)
+                orderUpdates.paidAt = data.paidAt;
+            }
             if (shouldDeductInventory) {
               orderUpdates.inventoryDeducted = true;
               orderUpdates.confirmedAt = firestore_12.FieldValue.serverTimestamp();
@@ -66670,7 +66804,7 @@ var require_orders = __commonJS({
           });
           if (inventoryTouched)
             (0, bootstrap_12.invalidatePublicBootstrapCache)();
-          res.json({ id, status });
+          res.json({ id: resolvedId, status });
         } catch (error) {
           if (error?.message?.startsWith("TRANSITION_REJECTED:")) {
             return res.status(409).json({ error: error.message.replace("TRANSITION_REJECTED:", "") });
@@ -66685,8 +66819,9 @@ var require_orders = __commonJS({
         const id = req.params.id;
         const { tableNumber } = req.body;
         try {
-          await db2.collection("orders").doc(id).update({ tableNumber });
-          res.json({ id, tableNumber });
+          const orderRef = await resolveOrderDocRef(db2, id);
+          await orderRef.update({ tableNumber });
+          res.json({ id: orderRef.id, tableNumber });
         } catch (error) {
           res.status(500).send(error);
         }
@@ -66695,8 +66830,9 @@ var require_orders = __commonJS({
         const id = req.params.id;
         const { quickNotes } = req.body;
         try {
-          await db2.collection("orders").doc(id).update({ quickNotes });
-          res.json({ id, quickNotes });
+          const orderRef = await resolveOrderDocRef(db2, id);
+          await orderRef.update({ quickNotes });
+          res.json({ id: orderRef.id, quickNotes });
         } catch (error) {
           res.status(500).send(error);
         }
@@ -66705,8 +66841,9 @@ var require_orders = __commonJS({
         const id = req.params.id;
         const { isFlagged, flagReason } = req.body;
         try {
-          await db2.collection("orders").doc(id).update({ isFlagged, flagReason });
-          res.json({ id, isFlagged, flagReason });
+          const orderRef = await resolveOrderDocRef(db2, id);
+          await orderRef.update({ isFlagged, flagReason });
+          res.json({ id: orderRef.id, isFlagged, flagReason });
         } catch (error) {
           res.status(500).send(error);
         }
@@ -66784,8 +66921,12 @@ var require_orders = __commonJS({
               throw new Error("Order not found");
             const orderData = orderDoc.data();
             const currentStatus = orderData?.status;
-            resolvedStatus = currentStatus === "completed" || currentStatus === "cancelled" ? currentStatus : "paid";
-            if (orderData?.isPaid || currentStatus === "paid") {
+            const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+            const items = Array.isArray(orderData?.items) ? orderData.items : [];
+            const allItemsDone = items.length > 0 && items.every((it) => Boolean(it?.isCompleted));
+            const isKdsDone = currentStatus === "completed" || orderData?.kdsStatus === "completed" || orderData?.kdsCompleted === true || Boolean(orderData?.completedAt) || allItemsDone;
+            resolvedStatus = currentStatus === "cancelled" ? "cancelled" : isKdsDone ? "completed" : "paid";
+            if (orderData?.isPaid || currentStatus === "paid" || orderData?.paymentStatus === "paid") {
               return;
             }
             let tableRef = null;
@@ -66800,8 +66941,16 @@ var require_orders = __commonJS({
               cashTendered: cashTendered || 0,
               changeAmount: changeAmount || 0,
               isPaid: true,
+              paymentStatus: "paid",
+              paidAt: orderData?.paidAt || nowIso,
               status: resolvedStatus,
-              updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+              kdsStatus: resolvedStatus === "completed" ? "completed" : orderData?.kdsStatus || "preparing",
+              kdsCompleted: resolvedStatus === "completed",
+              ...resolvedStatus === "completed" ? {
+                kdsCompletedAt: orderData?.kdsCompletedAt || nowIso,
+                completedAt: orderData?.completedAt || nowIso
+              } : {},
+              updatedAt: nowIso
             });
             if (tableRef && tableSnap && tableSnap.exists) {
               let shouldReleaseTable = true;
@@ -66904,9 +67053,13 @@ var require_orders = __commonJS({
               const orderRef = orderDoc.ref;
               const orderData = orderDoc.data();
               const currentStatus = orderData?.status;
-              const resolvedStatus = currentStatus === "completed" || currentStatus === "cancelled" ? currentStatus : "paid";
+              const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+              const items = Array.isArray(orderData?.items) ? orderData.items : [];
+              const allItemsDone = items.length > 0 && items.every((it) => Boolean(it?.isCompleted));
+              const isKdsDone = currentStatus === "completed" || orderData?.kdsStatus === "completed" || orderData?.kdsCompleted === true || Boolean(orderData?.completedAt) || allItemsDone;
+              const resolvedStatus = currentStatus === "cancelled" ? "cancelled" : isKdsDone ? "completed" : "paid";
               resolvedOrderStatuses[id] = resolvedStatus;
-              if (orderData?.isPaid || currentStatus === "paid") {
+              if (orderData?.isPaid || currentStatus === "paid" || orderData?.paymentStatus === "paid") {
                 continue;
               }
               transaction.update(orderRef, {
@@ -66914,8 +67067,16 @@ var require_orders = __commonJS({
                 cashTendered: cashTendered || 0,
                 changeAmount: changeAmount || 0,
                 isPaid: true,
+                paymentStatus: "paid",
+                paidAt: orderData?.paidAt || nowIso,
                 status: resolvedStatus,
-                updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+                kdsStatus: resolvedStatus === "completed" ? "completed" : orderData?.kdsStatus || "preparing",
+                kdsCompleted: resolvedStatus === "completed",
+                ...resolvedStatus === "completed" ? {
+                  kdsCompletedAt: orderData?.kdsCompletedAt || nowIso,
+                  completedAt: orderData?.completedAt || nowIso
+                } : {},
+                updatedAt: nowIso
               });
             }
             for (const resRef of reservationDocsToDelete) {
@@ -66956,18 +67117,36 @@ var require_orders = __commonJS({
       put("/orders/:id/complete", requireStaffAuth, async (req, res) => {
         const id = req.params.id;
         try {
+          let resolvedId = id;
+          let resolvedPayload = { id, status: "completed" };
           await db2.runTransaction(async (t) => {
-            const orderRef = db2.collection("orders").doc(id);
-            const doc = await t.get(orderRef);
+            const { orderRef, doc } = await resolveOrderDocInTransaction(t, db2, id);
             if (!doc.exists)
               throw new Error("Order not found");
+            resolvedId = doc.id;
             const data = doc.data();
-            if (data?.status === "paid" || data?.status === "cancelled") {
-              throw new Error(`TRANSITION_REJECTED:\u8A02\u55AE\u5DF2\u7D50\u5E33\u6216\u5DF2\u53D6\u6D88 (${data?.status})\uFF0C\u4E0D\u53EF\u8B8A\u66F4\u70BA completed`);
+            if (data?.status === "cancelled") {
+              throw new Error(`TRANSITION_REJECTED:\u8A02\u55AE\u5DF2\u53D6\u6D88 (${data?.status})\uFF0C\u4E0D\u53EF\u8B8A\u66F4\u70BA completed`);
             }
-            t.update(orderRef, { status: "completed" });
+            const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+            const wasPaid = Boolean(data?.isPaid || data?.status === "paid" || data?.paymentStatus === "paid" || data?.paidAt);
+            const updatePayload = {
+              status: "completed",
+              kdsStatus: "completed",
+              kdsCompleted: true,
+              kdsCompletedAt: data?.kdsCompletedAt || nowIso,
+              completedAt: data?.completedAt || nowIso,
+              updatedAt: nowIso
+            };
+            if (wasPaid) {
+              updatePayload.isPaid = true;
+              updatePayload.paymentStatus = "paid";
+              updatePayload.paidAt = data?.paidAt || nowIso;
+            }
+            t.update(orderRef, updatePayload);
+            resolvedPayload = { id: resolvedId, ...updatePayload };
           });
-          res.json({ id, status: "completed" });
+          res.json(resolvedPayload);
         } catch (error) {
           if (error?.message?.startsWith("TRANSITION_REJECTED:")) {
             return res.status(409).json({ error: error.message.replace("TRANSITION_REJECTED:", "") });
@@ -66983,9 +67162,8 @@ var require_orders = __commonJS({
         const itemId = req.params.itemId;
         const { isCompleted, isPrepared, expectedVersion, modifier } = req.body;
         try {
-          const docRef = db2.collection("orders").doc(id);
           const updatedOrder = await db2.runTransaction(async (t) => {
-            const docSnap = await t.get(docRef);
+            const { orderRef: docRef, doc: docSnap } = await resolveOrderDocInTransaction(t, db2, id);
             if (!docSnap.exists) {
               throw new Error("Order not found");
             }
@@ -67011,20 +67189,38 @@ var require_orders = __commonJS({
             if (typeof isPrepared !== "undefined") {
               item.isPrepared = !!isPrepared;
             }
-            const allCompleted = order.items.every((it) => it.isCompleted);
-            if (allCompleted && order.status !== "paid" && order.status !== "cancelled") {
-              order.status = "completed";
-            } else if (!allCompleted && order.status === "completed") {
-              order.status = "preparing";
-            }
             const newVersion = currentVersion + 1;
             const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+            const wasPaid = Boolean(order.isPaid || order.status === "paid" || order.paymentStatus === "paid" || order.paidAt);
+            const allCompleted = order.items.every((it) => it.isCompleted);
+            if (allCompleted && order.status !== "cancelled") {
+              order.status = "completed";
+              order.kdsStatus = "completed";
+              order.kdsCompleted = true;
+              order.kdsCompletedAt = order.kdsCompletedAt || nowIso;
+              order.completedAt = order.completedAt || nowIso;
+            } else if (!allCompleted && (order.status === "completed" || order.kdsCompleted)) {
+              order.status = wasPaid ? "paid" : "preparing";
+              order.kdsStatus = "preparing";
+              order.kdsCompleted = false;
+              order.kdsCompletedAt = null;
+              order.completedAt = null;
+            }
             const updateData = {
               items: order.items,
               status: order.status,
+              kdsStatus: order.kdsStatus || (allCompleted ? "completed" : "preparing"),
+              kdsCompleted: Boolean(order.kdsCompleted),
+              kdsCompletedAt: order.kdsCompletedAt ?? null,
+              completedAt: order.completedAt ?? null,
               updatedAt: nowIso,
               version: newVersion
             };
+            if (wasPaid) {
+              updateData.isPaid = true;
+              updateData.paymentStatus = "paid";
+              updateData.paidAt = order.paidAt || nowIso;
+            }
             if (modifier && typeof modifier === "object") {
               updateData.lastUpdatedBy = {
                 role: modifier.role || "staff",
@@ -67033,7 +67229,7 @@ var require_orders = __commonJS({
               };
             }
             t.update(docRef, updateData);
-            return { ...order, ...updateData };
+            return { id: docSnap.id, ...order, ...updateData };
           });
           return res.json(updatedOrder);
         } catch (error) {
@@ -68911,8 +69107,8 @@ exports.onOrderCompleted = (0, firestore_1.onDocumentUpdated)({
   const afterData = event.data?.after.exists ? event.data.after.data() : null;
   if (!afterData)
     return;
-  const wasPaidOrServed = beforeData ? beforeData.status === "paid" || beforeData.status === "served" : false;
-  const isPaidOrServed = afterData.status === "paid" || afterData.status === "served";
+  const wasPaidOrServed = beforeData ? Boolean(beforeData.isPaid || beforeData.paymentStatus === "paid" || beforeData.status === "paid" || beforeData.status === "served" || beforeData.status === "completed") : false;
+  const isPaidOrServed = Boolean(afterData.isPaid || afterData.paymentStatus === "paid" || afterData.status === "paid" || afterData.status === "served" || afterData.status === "completed");
   if (isPaidOrServed && !wasPaidOrServed) {
     const batch = db.batch();
     const NUM_SHARDS = 10;

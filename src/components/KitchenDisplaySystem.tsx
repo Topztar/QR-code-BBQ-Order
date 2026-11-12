@@ -11,6 +11,7 @@ import {
   Reservation,
 } from '../types';
 import { getLocalizedText } from '../utils/i18n';
+import { isActiveKdsOrder } from '@sabay/shared';
 import { TRANSLATIONS } from '../data';
 import { safeStorage } from '../lib/safeStorage';
 import { useKdsAudio } from '../hooks/useKdsAudio';
@@ -635,7 +636,7 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
     return deferredOrders
       .filter((o) => {
         if (filterStatus === 'active') {
-          return o.status === 'pending' || o.status === 'confirmed' || o.status === 'pending_kitchen_verification' || o.status === 'preparing' || o.status === 'delivering' || o.status === 'paid';
+          return isActiveKdsOrder(o);
         }
         if (hideOlderCompleted && (o.status === 'completed' || o.status === 'cancelled')) {
           const diffMins = (Date.now() - new Date(o.createdAt).getTime()) / 60000;
@@ -685,37 +686,49 @@ export const KitchenDisplaySystem: React.FC<KitchenDisplaySystemProps> = ({
     return Array.from(dishMap.values());
   }, [filteredOrders]);
 
-  // Hourly chart data
+  // Hourly chart data (wired to KdsHourlyChart label + count contract)
   const hourlyData = useMemo(() => {
     const hourlyMap: Record<number, number> = {};
     for (let i = 11; i <= 22; i++) {
       hourlyMap[i] = 0;
     }
     deferredOrders.forEach((o) => {
-      const h = new Date(o.createdAt).getHours();
+      if (o.status === 'cancelled' || o.isDeleted) return;
+      const d = new Date(o.createdAt);
+      if (isNaN(d.getTime())) return;
+      const h = d.getHours();
       if (hourlyMap[h] !== undefined) {
         hourlyMap[h] += 1;
       }
     });
     return Object.entries(hourlyMap).map(([hour, count]) => ({
+      label: `${hour}:00`,
+      count,
       hour: `${hour}:00`,
       orders: count,
     }));
   }, [deferredOrders]);
 
   const maxCount = useMemo(() => {
-    return Math.max(...hourlyData.map((d) => d.orders), 5);
+    return Math.max(...hourlyData.map((d) => d.count), 5);
   }, [hourlyData]);
 
   const predictionData = useMemo(() => {
-    return [
-      { hour: '17:00', predicted: 8, confidence: '高' },
-      { hour: '18:00', predicted: 18, confidence: '極高' },
-      { hour: '19:00', predicted: 24, confidence: '極高 (巔峰)' },
-      { hour: '20:00', predicted: 15, confidence: '高' },
-      { hour: '21:00', predicted: 7, confidence: '中' },
+    const basePattern = [
+      { hourNum: 17, label: '17:00', expectedVolume: 8, historicalAvg: 7, upperBound: 11, confidence: '高' },
+      { hourNum: 18, label: '18:00', expectedVolume: 18, historicalAvg: 16, upperBound: 22, confidence: '極高' },
+      { hourNum: 19, label: '19:00', expectedVolume: 24, historicalAvg: 21, upperBound: 28, confidence: '極高 (巔峰)' },
+      { hourNum: 20, label: '20:00', expectedVolume: 15, historicalAvg: 14, upperBound: 19, confidence: '高' },
+      { hourNum: 21, label: '21:00', expectedVolume: 7, historicalAvg: 6, upperBound: 10, confidence: '中' },
     ];
-  }, []);
+    return basePattern.map((slot) => {
+      const matchedHour = hourlyData.find((h) => h.label === slot.label);
+      return {
+        ...slot,
+        actualToday: matchedHour ? matchedHour.count : 0,
+      };
+    });
+  }, [hourlyData]);
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {

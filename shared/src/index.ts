@@ -1,3 +1,5 @@
+import type { Order } from './types';
+
 export interface OrderPricingInput {
   items?: any[];
   subtotal?: number;
@@ -317,6 +319,127 @@ export function deriveTableStatuses(
   });
 
   return { tables: newTables, reservations: newReservations };
+}
+
+/**
+ * Canonical SSOT predicate for whether an order belongs in KDS "[未完成 (備餐中)]".
+ * Preserves pay-first/serve-later orders (paid + incomplete items) while ensuring
+ * completed, cancelled, or paid+all-items-done orders exit the active prep queue.
+ */
+export function isActiveKdsOrder(
+  order: Partial<Order> | null | undefined,
+  deletedIds?: { has(id: string): boolean }
+): boolean {
+  if (!order || order.isDeleted) return false;
+  if (deletedIds && order.id && deletedIds.has(order.id)) return false;
+
+  if (
+    order.status === 'cancelled' ||
+    order.status === 'completed' ||
+    order.kdsStatus === 'cancelled' ||
+    order.kdsStatus === 'completed' ||
+    order.kdsCompleted === true ||
+    Boolean(order.completedAt)
+  ) {
+    return false;
+  }
+
+  const items = Array.isArray(order.items) ? order.items : [];
+  const allItemsCompleted = items.length > 0 && items.every((it) => Boolean(it?.isCompleted));
+  const isPaidOrder = Boolean(
+    order.isPaid ||
+      order.status === 'paid' ||
+      order.paymentStatus === 'paid' ||
+      order.paidAt
+  );
+
+  if (allItemsCompleted && isPaidOrder) {
+    return false;
+  }
+
+  return (
+    order.status === 'pending' ||
+    order.status === 'confirmed' ||
+    order.status === 'pending_kitchen_verification' ||
+    order.status === 'preparing' ||
+    order.status === 'delivering' ||
+    order.status === 'paid'
+  );
+}
+
+const VIRTUAL_CATEGORY_IDS = new Set(['cat-svadcb']);
+const VIRTUAL_CATEGORY_KEYWORDS = ['小費及折扣', 'tips & discounts', 'tips and discounts'];
+const VIRTUAL_ITEM_KEYWORDS = ['客家幣', '好友折扣', '開瓶費', 'corkage', '小費', 'discount'];
+
+function extractTextVariants(val: unknown): string[] {
+  if (!val) return [];
+  if (typeof val === 'string') return [val];
+  if (typeof val === 'object') {
+    return Object.values(val as Record<string, unknown>).filter(
+      (v): v is string => typeof v === 'string' && v.trim().length > 0
+    );
+  }
+  return [];
+}
+
+/**
+ * Returns true if a menu category is purely for POS accounting/discounts/tips
+ * rather than physical kitchen inventory.
+ */
+export function isVirtualAccountingCategory(category: { id?: string; name?: unknown } | null | undefined): boolean {
+  if (!category) return false;
+  if (category.id && VIRTUAL_CATEGORY_IDS.has(category.id)) return true;
+  const names = extractTextVariants(category.name).map((n) => n.toLowerCase());
+  return names.some((n) => VIRTUAL_CATEGORY_KEYWORDS.some((kw) => n.includes(kw)));
+}
+
+/**
+ * Returns true if a menu item is a virtual accounting/discount/fee entry that
+ * should not appear in KDS sold-out kitchen inventory controls.
+ */
+export function isVirtualAccountingMenuItem(
+  item: { category?: string; name?: unknown; price?: number } | null | undefined,
+  categories?: Array<{ id?: string; name?: unknown }>
+): boolean {
+  if (!item) return false;
+  if (item.category && VIRTUAL_CATEGORY_IDS.has(item.category)) return true;
+  if (typeof item.price === 'number' && item.price < 0) return true;
+  if (categories && item.category) {
+    const matchedCat = categories.find((c) => c.id === item.category);
+    if (matchedCat && isVirtualAccountingCategory(matchedCat)) return true;
+  }
+  const names = extractTextVariants(item.name).map((n) => n.toLowerCase());
+  return names.some((n) => {
+    const trimmed = n.trim();
+    if (trimmed === 'tip' || trimmed === 'tips') return true;
+    return VIRTUAL_ITEM_KEYWORDS.some((kw) => trimmed.includes(kw));
+  });
+}
+
+/**
+ * Detects whether a printer/cash-drawer print log entry actually represents a failed
+ * or timed-out hardware transmission rather than a healthy transmission.
+ */
+export function isPrintLogFailure(
+  log: { content?: string; status?: string; success?: boolean; error?: string } | null | undefined
+): boolean {
+  if (!log) return false;
+  if (log.success === false || log.status === 'error' || log.status === 'failed') {
+    return true;
+  }
+  const haystack = `${log.content || ''} ${log.error || ''}`.toLowerCase();
+  return (
+    haystack.includes('timeout') ||
+    haystack.includes('逾時') ||
+    haystack.includes('斷線') ||
+    haystack.includes('離線') ||
+    haystack.includes('失敗') ||
+    haystack.includes('unreachable') ||
+    haystack.includes('econnrefused') ||
+    haystack.includes('offline') ||
+    haystack.includes('failed') ||
+    haystack.includes('error')
+  );
 }
 
 export * from './types';

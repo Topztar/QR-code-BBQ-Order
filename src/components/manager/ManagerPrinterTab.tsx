@@ -208,7 +208,7 @@ export const ManagerPrinterTab: React.FC<ManagerPrinterTabProps> = ({
                     value={kitchenPrinter.ip}
                     onChange={(e) => setKitchenPrinter({ ...kitchenPrinter, ip: e.target.value })}
                     className="w-full bg-zinc-900 border border-white/10 rounded-lg p-2 text-white font-mono"
-                    placeholder="例如: 192.168.1.101"
+                    placeholder="例如: 192.168.123.100"
                   />
                 </div>
               ) : kitchenPrinter.connectionType === 'LPT' ? (
@@ -370,7 +370,7 @@ export const ManagerPrinterTab: React.FC<ManagerPrinterTabProps> = ({
                     value={billPrinter.ip}
                     onChange={(e) => setBillPrinter({ ...billPrinter, ip: e.target.value })}
                     className="w-full bg-zinc-900 border border-white/10 rounded-lg p-2 text-white font-mono"
-                    placeholder="例如: 192.168.1.102"
+                    placeholder="例如: 192.168.123.102"
                   />
                 </div>
               ) : billPrinter.connectionType === 'LPT' ? (
@@ -575,7 +575,7 @@ export const ManagerPrinterTab: React.FC<ManagerPrinterTabProps> = ({
                   onClick={() => {
                     setPrintConfirmData({
                       title: `🧾 前台收銀印表機測試列印 (${billPrinter.restaurantName})`,
-                      ip: billPrinter.connectionType === 'IP' ? (billPrinter.ip || '192.168.1.102') : (billPrinter.usbPort || 'LPT1:'),
+                      ip: billPrinter.connectionType === 'IP' ? (billPrinter.ip || '192.168.123.102') : (billPrinter.usbPort || 'LPT1:'),
                       onConfirm: async () => {
                         if (onPrintTestPage) {
                           try {

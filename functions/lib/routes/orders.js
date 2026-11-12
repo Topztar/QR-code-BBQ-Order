@@ -10,6 +10,39 @@ const shared_1 = require("@sabay/shared");
 Object.defineProperty(exports, "computeDishDeductions", { enumerable: true, get: function () { return shared_1.computeDishDeductions; } });
 const auth_1 = require("../auth");
 const bootstrap_1 = require("./bootstrap");
+async function resolveOrderDocInTransaction(t, db, id) {
+    const directRef = db.collection('orders').doc(id);
+    const directSnap = await t.get(directRef);
+    if (directSnap.exists) {
+        return { orderRef: directRef, doc: directSnap };
+    }
+    const ordersCol = db.collection('orders');
+    if (typeof ordersCol.where === 'function') {
+        for (const field of ['orderNumber', 'id']) {
+            const qSnap = await t.get(ordersCol.where(field, '==', id).limit(1));
+            if (!qSnap.empty) {
+                const matched = qSnap.docs[0];
+                return { orderRef: matched.ref, doc: matched };
+            }
+        }
+    }
+    return { orderRef: directRef, doc: directSnap };
+}
+async function resolveOrderDocRef(db, id) {
+    const directRef = db.collection('orders').doc(id);
+    const directSnap = await directRef.get();
+    if (directSnap.exists)
+        return directRef;
+    const ordersCol = db.collection('orders');
+    if (typeof ordersCol.where === 'function') {
+        for (const field of ['orderNumber', 'id']) {
+            const qSnap = await ordersCol.where(field, '==', id).limit(1).get();
+            if (!qSnap.empty)
+                return qSnap.docs[0].ref;
+        }
+    }
+    return directRef;
+}
 async function confirmOrderTransaction(db, orderId, items) {
     const orderRef = db.collection('orders').doc(orderId);
     return db.runTransaction(async (transaction) => {
@@ -100,13 +133,13 @@ function registerOrdersRoutes(app, ctx) {
             let needsManualSort = false;
             try {
                 snapshot = await db.collection('orders')
-                    .select('id', 'tableNumber', 'items', 'subtotal', 'serviceCharge', 'total', 'status', 'createdAt', 'customerName', 'customerPhone', 'customerAvatar', 'paymentMethod', 'isMember', 'isPaid', 'guestCount', 'discount', 'quickNotes', 'isFlagged', 'flagReason', 'takeoutInfo', 'clientOrderId', 'version', 'updatedAt', 'lastUpdatedBy', 'refundLogs')
+                    .select('id', 'tableNumber', 'items', 'subtotal', 'serviceCharge', 'total', 'status', 'kdsStatus', 'kdsCompleted', 'kdsCompletedAt', 'completedAt', 'paymentStatus', 'paidAt', 'orderNumber', 'createdAt', 'customerName', 'customerPhone', 'customerAvatar', 'paymentMethod', 'isMember', 'isPaid', 'guestCount', 'discount', 'quickNotes', 'isFlagged', 'flagReason', 'takeoutInfo', 'clientOrderId', 'version', 'updatedAt', 'lastUpdatedBy', 'refundLogs')
                     .orderBy('createdAt', 'desc').limit(200).get();
             }
             catch (_idxErr) {
                 needsManualSort = true;
                 snapshot = await db.collection('orders')
-                    .select('id', 'tableNumber', 'items', 'subtotal', 'serviceCharge', 'total', 'status', 'createdAt', 'customerName', 'customerPhone', 'customerAvatar', 'paymentMethod', 'isMember', 'isPaid', 'guestCount', 'discount', 'quickNotes', 'isFlagged', 'flagReason', 'takeoutInfo', 'clientOrderId', 'version', 'updatedAt', 'lastUpdatedBy', 'refundLogs')
+                    .select('id', 'tableNumber', 'items', 'subtotal', 'serviceCharge', 'total', 'status', 'kdsStatus', 'kdsCompleted', 'kdsCompletedAt', 'completedAt', 'paymentStatus', 'paidAt', 'orderNumber', 'createdAt', 'customerName', 'customerPhone', 'customerAvatar', 'paymentMethod', 'isMember', 'isPaid', 'guestCount', 'discount', 'quickNotes', 'isFlagged', 'flagReason', 'takeoutInfo', 'clientOrderId', 'version', 'updatedAt', 'lastUpdatedBy', 'refundLogs')
                     .limit(200).get();
             }
             const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -376,6 +409,9 @@ function registerOrdersRoutes(app, ctx) {
                     serviceCharge: verifiedPricing.serviceCharge,
                     total: verifiedPricing.total,
                     status: orderData.source === 'pos' ? 'pending_kitchen_verification' : 'pending',
+                    kdsStatus: 'pending',
+                    kdsCompleted: false,
+                    paymentStatus: 'unpaid',
                     isPaid: false,
                     createdAt: new Date().toISOString(),
                 };
@@ -450,15 +486,19 @@ function registerOrdersRoutes(app, ctx) {
         }
         try {
             let inventoryTouched = false;
+            let resolvedId = id;
             await db.runTransaction(async (t) => {
                 inventoryTouched = false;
-                const orderRef = db.collection('orders').doc(id);
-                const doc = await t.get(orderRef);
+                const { orderRef, doc } = await resolveOrderDocInTransaction(t, db, id);
                 if (!doc.exists)
                     throw new Error('Order not found');
+                resolvedId = doc.id;
                 const data = doc.data();
-                if ((data?.status === 'paid' || data?.status === 'cancelled') && status !== 'cancelled' && status !== 'paid') {
-                    console.warn(`[Backend] Rejected status update to ${status} for order ${id} because it's already ${data?.status}`);
+                const isAlreadyCancelled = data?.status === 'cancelled';
+                const isPaidRevertingToIntake = (data?.status === 'paid' || data?.isPaid === true) &&
+                    (status === 'pending' || status === 'confirmed' || status === 'pending_kitchen_verification');
+                if ((isAlreadyCancelled && status !== 'cancelled') || isPaidRevertingToIntake) {
+                    console.warn(`[Backend] Rejected status update to ${status} for order ${resolvedId} because it's already ${data?.status}`);
                     throw new Error(`TRANSITION_REJECTED:訂單已結帳或已取消 (${data?.status})，不可變更為 ${status}`);
                 }
                 const shouldDeductInventory = status === 'confirmed' && data?.status !== 'confirmed' && !data?.inventoryDeducted;
@@ -481,7 +521,35 @@ function registerOrdersRoutes(app, ctx) {
                     t.update(ref, updates);
                     inventoryTouched = true;
                 }
-                const orderUpdates = { status };
+                const nowIso = new Date().toISOString();
+                const wasPaid = Boolean(data?.isPaid || data?.status === 'paid' || data?.paymentStatus === 'paid' || data?.paidAt);
+                const orderUpdates = { status, updatedAt: nowIso };
+                if (status === 'completed') {
+                    orderUpdates.kdsStatus = 'completed';
+                    orderUpdates.kdsCompleted = true;
+                    orderUpdates.kdsCompletedAt = data?.kdsCompletedAt || nowIso;
+                    orderUpdates.completedAt = data?.completedAt || nowIso;
+                }
+                else if (status === 'cancelled') {
+                    orderUpdates.kdsStatus = 'cancelled';
+                    orderUpdates.kdsCompleted = false;
+                }
+                else if (status === 'preparing' || status === 'delivering') {
+                    orderUpdates.kdsStatus = 'preparing';
+                    orderUpdates.kdsCompleted = false;
+                    orderUpdates.kdsCompletedAt = null;
+                    orderUpdates.completedAt = null;
+                }
+                else if (status === 'pending' || status === 'confirmed' || status === 'pending_kitchen_verification') {
+                    orderUpdates.kdsStatus = 'pending';
+                    orderUpdates.kdsCompleted = false;
+                }
+                if (wasPaid) {
+                    orderUpdates.isPaid = true;
+                    orderUpdates.paymentStatus = 'paid';
+                    if (data?.paidAt)
+                        orderUpdates.paidAt = data.paidAt;
+                }
                 if (shouldDeductInventory) {
                     orderUpdates.inventoryDeducted = true;
                     orderUpdates.confirmedAt = firestore_1.FieldValue.serverTimestamp();
@@ -490,7 +558,7 @@ function registerOrdersRoutes(app, ctx) {
             });
             if (inventoryTouched)
                 (0, bootstrap_1.invalidatePublicBootstrapCache)();
-            res.json({ id, status });
+            res.json({ id: resolvedId, status });
         }
         catch (error) {
             if (error?.message?.startsWith('TRANSITION_REJECTED:')) {
@@ -506,8 +574,9 @@ function registerOrdersRoutes(app, ctx) {
         const id = req.params.id;
         const { tableNumber } = req.body;
         try {
-            await db.collection('orders').doc(id).update({ tableNumber });
-            res.json({ id, tableNumber });
+            const orderRef = await resolveOrderDocRef(db, id);
+            await orderRef.update({ tableNumber });
+            res.json({ id: orderRef.id, tableNumber });
         }
         catch (error) {
             res.status(500).send(error);
@@ -517,8 +586,9 @@ function registerOrdersRoutes(app, ctx) {
         const id = req.params.id;
         const { quickNotes } = req.body;
         try {
-            await db.collection('orders').doc(id).update({ quickNotes });
-            res.json({ id, quickNotes });
+            const orderRef = await resolveOrderDocRef(db, id);
+            await orderRef.update({ quickNotes });
+            res.json({ id: orderRef.id, quickNotes });
         }
         catch (error) {
             res.status(500).send(error);
@@ -528,8 +598,9 @@ function registerOrdersRoutes(app, ctx) {
         const id = req.params.id;
         const { isFlagged, flagReason } = req.body;
         try {
-            await db.collection('orders').doc(id).update({ isFlagged, flagReason });
-            res.json({ id, isFlagged, flagReason });
+            const orderRef = await resolveOrderDocRef(db, id);
+            await orderRef.update({ isFlagged, flagReason });
+            res.json({ id: orderRef.id, isFlagged, flagReason });
         }
         catch (error) {
             res.status(500).send(error);
@@ -609,8 +680,20 @@ function registerOrdersRoutes(app, ctx) {
                     throw new Error('Order not found');
                 const orderData = orderDoc.data();
                 const currentStatus = orderData?.status;
-                resolvedStatus = (currentStatus === 'completed' || currentStatus === 'cancelled') ? currentStatus : 'paid';
-                if (orderData?.isPaid || currentStatus === 'paid') {
+                const nowIso = new Date().toISOString();
+                const items = Array.isArray(orderData?.items) ? orderData.items : [];
+                const allItemsDone = items.length > 0 && items.every((it) => Boolean(it?.isCompleted));
+                const isKdsDone = currentStatus === 'completed' ||
+                    orderData?.kdsStatus === 'completed' ||
+                    orderData?.kdsCompleted === true ||
+                    Boolean(orderData?.completedAt) ||
+                    allItemsDone;
+                resolvedStatus = currentStatus === 'cancelled'
+                    ? 'cancelled'
+                    : isKdsDone
+                        ? 'completed'
+                        : 'paid';
+                if (orderData?.isPaid || currentStatus === 'paid' || orderData?.paymentStatus === 'paid') {
                     return;
                 }
                 let tableRef = null;
@@ -625,8 +708,16 @@ function registerOrdersRoutes(app, ctx) {
                     cashTendered: cashTendered || 0,
                     changeAmount: changeAmount || 0,
                     isPaid: true,
+                    paymentStatus: 'paid',
+                    paidAt: orderData?.paidAt || nowIso,
                     status: resolvedStatus,
-                    updatedAt: new Date().toISOString()
+                    kdsStatus: resolvedStatus === 'completed' ? 'completed' : (orderData?.kdsStatus || 'preparing'),
+                    kdsCompleted: resolvedStatus === 'completed',
+                    ...(resolvedStatus === 'completed' ? {
+                        kdsCompletedAt: orderData?.kdsCompletedAt || nowIso,
+                        completedAt: orderData?.completedAt || nowIso,
+                    } : {}),
+                    updatedAt: nowIso
                 });
                 if (tableRef && tableSnap && tableSnap.exists) {
                     let shouldReleaseTable = true;
@@ -733,9 +824,21 @@ function registerOrdersRoutes(app, ctx) {
                     const orderRef = orderDoc.ref;
                     const orderData = orderDoc.data();
                     const currentStatus = orderData?.status;
-                    const resolvedStatus = (currentStatus === 'completed' || currentStatus === 'cancelled') ? currentStatus : 'paid';
+                    const nowIso = new Date().toISOString();
+                    const items = Array.isArray(orderData?.items) ? orderData.items : [];
+                    const allItemsDone = items.length > 0 && items.every((it) => Boolean(it?.isCompleted));
+                    const isKdsDone = currentStatus === 'completed' ||
+                        orderData?.kdsStatus === 'completed' ||
+                        orderData?.kdsCompleted === true ||
+                        Boolean(orderData?.completedAt) ||
+                        allItemsDone;
+                    const resolvedStatus = currentStatus === 'cancelled'
+                        ? 'cancelled'
+                        : isKdsDone
+                            ? 'completed'
+                            : 'paid';
                     resolvedOrderStatuses[id] = resolvedStatus;
-                    if (orderData?.isPaid || currentStatus === 'paid') {
+                    if (orderData?.isPaid || currentStatus === 'paid' || orderData?.paymentStatus === 'paid') {
                         continue;
                     }
                     transaction.update(orderRef, {
@@ -743,8 +846,16 @@ function registerOrdersRoutes(app, ctx) {
                         cashTendered: cashTendered || 0,
                         changeAmount: changeAmount || 0,
                         isPaid: true,
+                        paymentStatus: 'paid',
+                        paidAt: orderData?.paidAt || nowIso,
                         status: resolvedStatus,
-                        updatedAt: new Date().toISOString()
+                        kdsStatus: resolvedStatus === 'completed' ? 'completed' : (orderData?.kdsStatus || 'preparing'),
+                        kdsCompleted: resolvedStatus === 'completed',
+                        ...(resolvedStatus === 'completed' ? {
+                            kdsCompletedAt: orderData?.kdsCompletedAt || nowIso,
+                            completedAt: orderData?.completedAt || nowIso,
+                        } : {}),
+                        updatedAt: nowIso
                     });
                 }
                 for (const resRef of reservationDocsToDelete) {
@@ -786,18 +897,36 @@ function registerOrdersRoutes(app, ctx) {
     put('/orders/:id/complete', requireStaffAuth, async (req, res) => {
         const id = req.params.id;
         try {
+            let resolvedId = id;
+            let resolvedPayload = { id, status: 'completed' };
             await db.runTransaction(async (t) => {
-                const orderRef = db.collection('orders').doc(id);
-                const doc = await t.get(orderRef);
+                const { orderRef, doc } = await resolveOrderDocInTransaction(t, db, id);
                 if (!doc.exists)
                     throw new Error('Order not found');
+                resolvedId = doc.id;
                 const data = doc.data();
-                if (data?.status === 'paid' || data?.status === 'cancelled') {
-                    throw new Error(`TRANSITION_REJECTED:訂單已結帳或已取消 (${data?.status})，不可變更為 completed`);
+                if (data?.status === 'cancelled') {
+                    throw new Error(`TRANSITION_REJECTED:訂單已取消 (${data?.status})，不可變更為 completed`);
                 }
-                t.update(orderRef, { status: 'completed' });
+                const nowIso = new Date().toISOString();
+                const wasPaid = Boolean(data?.isPaid || data?.status === 'paid' || data?.paymentStatus === 'paid' || data?.paidAt);
+                const updatePayload = {
+                    status: 'completed',
+                    kdsStatus: 'completed',
+                    kdsCompleted: true,
+                    kdsCompletedAt: data?.kdsCompletedAt || nowIso,
+                    completedAt: data?.completedAt || nowIso,
+                    updatedAt: nowIso,
+                };
+                if (wasPaid) {
+                    updatePayload.isPaid = true;
+                    updatePayload.paymentStatus = 'paid';
+                    updatePayload.paidAt = data?.paidAt || nowIso;
+                }
+                t.update(orderRef, updatePayload);
+                resolvedPayload = { id: resolvedId, ...updatePayload };
             });
-            res.json({ id, status: 'completed' });
+            res.json(resolvedPayload);
         }
         catch (error) {
             if (error?.message?.startsWith('TRANSITION_REJECTED:')) {
@@ -814,9 +943,8 @@ function registerOrdersRoutes(app, ctx) {
         const itemId = req.params.itemId;
         const { isCompleted, isPrepared, expectedVersion, modifier } = req.body;
         try {
-            const docRef = db.collection('orders').doc(id);
             const updatedOrder = await db.runTransaction(async (t) => {
-                const docSnap = await t.get(docRef);
+                const { orderRef: docRef, doc: docSnap } = await resolveOrderDocInTransaction(t, db, id);
                 if (!docSnap.exists) {
                     throw new Error('Order not found');
                 }
@@ -842,21 +970,39 @@ function registerOrdersRoutes(app, ctx) {
                 if (typeof isPrepared !== 'undefined') {
                     item.isPrepared = !!isPrepared;
                 }
-                const allCompleted = order.items.every((it) => it.isCompleted);
-                if (allCompleted && order.status !== 'paid' && order.status !== 'cancelled') {
-                    order.status = 'completed';
-                }
-                else if (!allCompleted && order.status === 'completed') {
-                    order.status = 'preparing';
-                }
                 const newVersion = currentVersion + 1;
                 const nowIso = new Date().toISOString();
+                const wasPaid = Boolean(order.isPaid || order.status === 'paid' || order.paymentStatus === 'paid' || order.paidAt);
+                const allCompleted = order.items.every((it) => it.isCompleted);
+                if (allCompleted && order.status !== 'cancelled') {
+                    order.status = 'completed';
+                    order.kdsStatus = 'completed';
+                    order.kdsCompleted = true;
+                    order.kdsCompletedAt = order.kdsCompletedAt || nowIso;
+                    order.completedAt = order.completedAt || nowIso;
+                }
+                else if (!allCompleted && (order.status === 'completed' || order.kdsCompleted)) {
+                    order.status = wasPaid ? 'paid' : 'preparing';
+                    order.kdsStatus = 'preparing';
+                    order.kdsCompleted = false;
+                    order.kdsCompletedAt = null;
+                    order.completedAt = null;
+                }
                 const updateData = {
                     items: order.items,
                     status: order.status,
+                    kdsStatus: order.kdsStatus || (allCompleted ? 'completed' : 'preparing'),
+                    kdsCompleted: Boolean(order.kdsCompleted),
+                    kdsCompletedAt: order.kdsCompletedAt ?? null,
+                    completedAt: order.completedAt ?? null,
                     updatedAt: nowIso,
                     version: newVersion
                 };
+                if (wasPaid) {
+                    updateData.isPaid = true;
+                    updateData.paymentStatus = 'paid';
+                    updateData.paidAt = order.paidAt || nowIso;
+                }
                 if (modifier && typeof modifier === 'object') {
                     updateData.lastUpdatedBy = {
                         role: modifier.role || 'staff',
@@ -865,7 +1011,7 @@ function registerOrdersRoutes(app, ctx) {
                     };
                 }
                 t.update(docRef, updateData);
-                return { ...order, ...updateData };
+                return { id: docSnap.id, ...order, ...updateData };
             });
             return res.json(updatedOrder);
         }

@@ -536,7 +536,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   // Printer Configuration States
   const [kitchenPrinter, setKitchenPrinter] = useState<PrinterConfig>({
     connectionType: 'IP',
-    ip: '192.168.1.101',
+    ip: '192.168.123.100',
     usbPort: 'USB001',
     width: '80mm',
     fontSizeFactor: 1.0,
@@ -549,7 +549,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   });
   const [billPrinter, setBillPrinter] = useState<PrinterConfig>({
     connectionType: 'LPT',
-    ip: '192.168.1.102',
+    ip: '192.168.123.102',
     usbPort: 'LPT1:',
     width: '58mm',
     fontSizeFactor: 0.8,

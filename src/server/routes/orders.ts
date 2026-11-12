@@ -267,6 +267,9 @@ export function registerOrdersRoutes(app: express.Express, ctx: OrderRouteContex
       serviceCharge,
       total,
       status: source === 'pos' ? 'pending_kitchen_verification' : 'pending',
+      kdsStatus: 'pending',
+      kdsCompleted: false,
+      paymentStatus: 'unpaid',
       isPaid: false,
       createdAt: new Date().toISOString(),
       customerName: customerName || '現場貴賓',
@@ -388,13 +391,17 @@ export function registerOrdersRoutes(app: express.Express, ctx: OrderRouteContex
       return res.status(400).json({ error: `無效的訂單狀態值: ${status}` });
     }
 
-    const order = liveOrders.find(o => o.id === id);
+    const order = liveOrders.find(o => o.id === id || o.orderNumber === id);
     if (!order) {
       return res.status(404).json({ error: 'Order not found' });
     }
 
-    // Block backward transition if already paid or cancelled (unless manual override to cancel/paid)
-    if ((order.status === 'paid' || order.status === 'cancelled') && status !== 'cancelled' && status !== 'paid') {
+    // Only block reviving cancelled orders or rolling paid orders backward to unconfirmed intake states.
+    const isAlreadyCancelled = order.status === 'cancelled';
+    const isPaidRevertingToIntake =
+      (order.status === 'paid' || order.isPaid === true) &&
+      (status === 'pending' || status === 'confirmed' || status === 'pending_kitchen_verification');
+    if ((isAlreadyCancelled && status !== 'cancelled') || isPaidRevertingToIntake) {
       return res.status(409).json({ error: `訂單已結帳或已取消 (${order.status})，不可變更為 ${status}` });
     }
 
@@ -493,7 +500,32 @@ ${customerDetails}
       (order as any).inventoryDeducted = true;
     }
 
+    const nowIso = new Date().toISOString();
+    const wasPaid = Boolean(order.isPaid || order.status === 'paid' || order.paymentStatus === 'paid' || order.paidAt);
     order.status = status;
+    order.updatedAt = nowIso;
+    if (status === 'completed') {
+      order.kdsStatus = 'completed';
+      order.kdsCompleted = true;
+      order.kdsCompletedAt = order.kdsCompletedAt || nowIso;
+      order.completedAt = order.completedAt || nowIso;
+    } else if (status === 'cancelled') {
+      order.kdsStatus = 'cancelled';
+      order.kdsCompleted = false;
+    } else if (status === 'preparing' || status === 'delivering') {
+      order.kdsStatus = 'preparing';
+      order.kdsCompleted = false;
+      order.kdsCompletedAt = null;
+      order.completedAt = null;
+    } else if (status === 'pending' || status === 'confirmed' || status === 'pending_kitchen_verification') {
+      order.kdsStatus = 'pending';
+      order.kdsCompleted = false;
+    }
+    if (wasPaid) {
+      order.isPaid = true;
+      order.paymentStatus = 'paid';
+      order.paidAt = order.paidAt || nowIso;
+    }
 
     // Interlock status: if order starts cooking (preparing), automatically set table status to in_use
     if (status === 'preparing' && order.tableNumber) {
@@ -575,7 +607,7 @@ ${customerDetails}
 
     const liveOrders = getLiveOrders();
     const liveTables = getLiveTables();
-    const order = liveOrders.find(o => o.id === id);
+    const order = liveOrders.find(o => o.id === id || o.orderNumber === id);
     if (!order) {
       return res.status(404).json({ error: 'Order not found / 找不到此訂單' });
     }
@@ -595,7 +627,7 @@ ${customerDetails}
     const { quickNotes } = req.body;
 
     const liveOrders = getLiveOrders();
-    const order = liveOrders.find(o => o.id === id);
+    const order = liveOrders.find(o => o.id === id || o.orderNumber === id);
     if (!order) {
       return res.status(404).json({ error: 'Order not found / 找不到此訂單' });
     }
@@ -611,7 +643,7 @@ ${customerDetails}
     const { isFlagged, flagReason } = req.body;
 
     const liveOrders = getLiveOrders();
-    const order = liveOrders.find(o => o.id === id);
+    const order = liveOrders.find(o => o.id === id || o.orderNumber === id);
     if (!order) {
       return res.status(404).json({ error: 'Order not found / 找不到此訂單' });
     }
@@ -640,7 +672,7 @@ ${customerDetails}
     const printLogs = getPrintLogs();
     const firestoreDb = getFirestoreDb();
 
-    const order = liveOrders.find(o => o.id === id);
+    const order = liveOrders.find(o => o.id === id || o.orderNumber === id);
     if (!order) {
       return res.status(404).json({ error: 'Order not found' });
     }
@@ -661,12 +693,37 @@ ${customerDetails}
     (order as any).discount = pricing.discount;
     order.total = pricing.total;
     
+    const nowIso = new Date().toISOString();
     order.isPaid = isPaid !== undefined ? !!isPaid : true;
-
-    // Transition status to 'paid' so KDS keeps showing the order until kitchen marks it as completed
-    if (order.isPaid && order.status !== 'completed' && order.status !== 'cancelled') {
-      order.status = 'paid';
+    order.paymentStatus = order.isPaid ? 'paid' : 'unpaid';
+    if (order.isPaid) {
+      order.paidAt = order.paidAt || nowIso;
     }
+
+    const items = Array.isArray(order.items) ? order.items : [];
+    const allItemsDone = items.length > 0 && items.every(it => Boolean(it?.isCompleted));
+    const isKdsDone =
+      order.status === 'completed' ||
+      order.kdsStatus === 'completed' ||
+      order.kdsCompleted === true ||
+      Boolean(order.completedAt) ||
+      allItemsDone;
+
+    // Preserve completed status if kitchen already finished, otherwise mark paid while keeping in KDS
+    if (order.isPaid && order.status !== 'cancelled') {
+      if (isKdsDone) {
+        order.status = 'completed';
+        order.kdsStatus = 'completed';
+        order.kdsCompleted = true;
+        order.kdsCompletedAt = order.kdsCompletedAt || nowIso;
+        order.completedAt = order.completedAt || nowIso;
+      } else {
+        order.status = 'paid';
+        order.kdsStatus = order.kdsStatus || 'preparing';
+        order.kdsCompleted = false;
+      }
+    }
+    order.updatedAt = nowIso;
 
     // Update table status and reservations automatically based on whether the order is checked out and paid
     if (order.tableNumber) {
@@ -772,7 +829,7 @@ ${customerDetails}
       // 0. Pre-validation for Atomicity (All-or-Nothing)
       const ordersToCheckout = [];
       for (const id of orderIds) {
-        const order = liveOrders.find(o => o.id === id);
+        const order = liveOrders.find(o => o.id === id || o.orderNumber === id);
         if (!order) {
           return res.status(404).json({ error: `找不到訂單 ${id}，請重新整理後重試。` });
         }
@@ -780,17 +837,41 @@ ${customerDetails}
       }
 
       // 1. Process all target orders in memory
+      const bulkNowIso = new Date().toISOString();
       for (const order of ordersToCheckout) {
         const id = order.id;
         const currentStatus = order.status;
-        const resolvedStatus = (currentStatus === 'completed' || currentStatus === 'cancelled') ? currentStatus : 'paid';
+        const items = Array.isArray(order.items) ? order.items : [];
+        const allItemsDone = items.length > 0 && items.every(it => Boolean(it?.isCompleted));
+        const isKdsDone =
+          currentStatus === 'completed' ||
+          order.kdsStatus === 'completed' ||
+          order.kdsCompleted === true ||
+          Boolean(order.completedAt) ||
+          allItemsDone;
+        const resolvedStatus = currentStatus === 'cancelled'
+          ? 'cancelled'
+          : isKdsDone
+            ? 'completed'
+            : 'paid';
         resolvedOrderStatuses[id] = resolvedStatus;
 
         order.paymentMethod = paymentMethod || order.paymentMethod || 'cash';
         (order as any).cashTendered = cashTendered || 0;
         (order as any).changeAmount = changeAmount || 0;
         order.isPaid = true;
+        order.paymentStatus = 'paid';
+        order.paidAt = order.paidAt || bulkNowIso;
         order.status = resolvedStatus;
+        if (resolvedStatus === 'completed') {
+          order.kdsStatus = 'completed';
+          order.kdsCompleted = true;
+          order.kdsCompletedAt = order.kdsCompletedAt || bulkNowIso;
+          order.completedAt = order.completedAt || bulkNowIso;
+        } else if (resolvedStatus !== 'cancelled') {
+          order.kdsStatus = order.kdsStatus || 'preparing';
+          order.kdsCompleted = false;
+        }
         
         const pricing = orderCalculationService.calculateOrderPricing(order as any, getLiveMenu());
         order.subtotal = pricing.subtotal;
@@ -798,7 +879,7 @@ ${customerDetails}
         (order as any).discount = pricing.discount;
         order.total = pricing.total;
         
-        (order as any).updatedAt = new Date().toISOString();
+        order.updatedAt = bulkNowIso;
 
         if (order.tableNumber && !isTakeoutTable(String(order.tableNumber))) {
           tableSet.add(String(order.tableNumber).trim());
@@ -885,12 +966,27 @@ ${customerDetails}
   app.put('/api/orders/:id/complete', (req, res) => {
     const { id } = req.params;
     const liveOrders = getLiveOrders();
-    const order = liveOrders.find(o => o.id === id);
+    const order = liveOrders.find(o => o.id === id || o.orderNumber === id);
     if (!order) {
       return res.status(404).json({ error: 'Order not found' });
     }
+    if (order.status === 'cancelled') {
+      return res.status(409).json({ error: `訂單已取消 (${order.status})，不可變更為 completed` });
+    }
 
+    const nowIso = new Date().toISOString();
+    const wasPaid = Boolean(order.isPaid || order.status === 'paid' || order.paymentStatus === 'paid' || order.paidAt);
     order.status = 'completed';
+    order.kdsStatus = 'completed';
+    order.kdsCompleted = true;
+    order.kdsCompletedAt = order.kdsCompletedAt || nowIso;
+    order.completedAt = order.completedAt || nowIso;
+    order.updatedAt = nowIso;
+    if (wasPaid) {
+      order.isPaid = true;
+      order.paymentStatus = 'paid';
+      order.paidAt = order.paidAt || nowIso;
+    }
     saveStateToDisk();
     res.json(order);
   });
@@ -901,7 +997,7 @@ ${customerDetails}
     const { isCompleted, isPrepared, expectedVersion, modifier } = req.body;
 
     const liveOrders = getLiveOrders();
-    const order = liveOrders.find(o => o.id === id);
+    const order = liveOrders.find(o => o.id === id || o.orderNumber === id);
     if (!order) {
       return res.status(404).json({ error: 'Order not found' });
     }
@@ -933,14 +1029,28 @@ ${customerDetails}
       item.isPrepared = !!isPrepared;
     }
 
+    const nowIso = new Date().toISOString();
+    const wasPaid = Boolean(order.isPaid || order.status === 'paid' || order.paymentStatus === 'paid' || order.paidAt);
     const allCompleted = order.items.every(it => it.isCompleted);
-    if (allCompleted && order.status !== 'paid') {
+    if (allCompleted && order.status !== 'cancelled') {
       order.status = 'completed';
-    } else if (order.status === 'completed') {
-      order.status = 'preparing';
+      order.kdsStatus = 'completed';
+      order.kdsCompleted = true;
+      order.kdsCompletedAt = order.kdsCompletedAt || nowIso;
+      order.completedAt = order.completedAt || nowIso;
+    } else if (!allCompleted && (order.status === 'completed' || order.kdsCompleted)) {
+      order.status = wasPaid ? 'paid' : 'preparing';
+      order.kdsStatus = 'preparing';
+      order.kdsCompleted = false;
+      order.kdsCompletedAt = null;
+      order.completedAt = null;
+    }
+    if (wasPaid) {
+      order.isPaid = true;
+      order.paymentStatus = 'paid';
+      order.paidAt = order.paidAt || nowIso;
     }
 
-    const nowIso = new Date().toISOString();
     order.updatedAt = nowIso;
     order.version = currentVersion + 1;
     if (modifier && typeof modifier === 'object') {

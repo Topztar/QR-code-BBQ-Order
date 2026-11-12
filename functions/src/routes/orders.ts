@@ -14,6 +14,43 @@ export { computeDishDeductions };
 
 type RouteRegister = (path: string, ...handlers: express.RequestHandler[]) => void;
 
+async function resolveOrderDocInTransaction(
+  t: FirebaseFirestore.Transaction,
+  db: Firestore,
+  id: string
+): Promise<{ orderRef: DocumentReference; doc: FirebaseFirestore.DocumentSnapshot }> {
+  const directRef = db.collection('orders').doc(id);
+  const directSnap = await t.get(directRef);
+  if (directSnap.exists) {
+    return { orderRef: directRef, doc: directSnap };
+  }
+  const ordersCol = db.collection('orders') as any;
+  if (typeof ordersCol.where === 'function') {
+    for (const field of ['orderNumber', 'id'] as const) {
+      const qSnap = await t.get(ordersCol.where(field, '==', id).limit(1));
+      if (!qSnap.empty) {
+        const matched = qSnap.docs[0];
+        return { orderRef: matched.ref, doc: matched };
+      }
+    }
+  }
+  return { orderRef: directRef, doc: directSnap };
+}
+
+async function resolveOrderDocRef(db: Firestore, id: string): Promise<DocumentReference> {
+  const directRef = db.collection('orders').doc(id);
+  const directSnap = await directRef.get();
+  if (directSnap.exists) return directRef;
+  const ordersCol = db.collection('orders') as any;
+  if (typeof ordersCol.where === 'function') {
+    for (const field of ['orderNumber', 'id'] as const) {
+      const qSnap = await ordersCol.where(field, '==', id).limit(1).get();
+      if (!qSnap.empty) return qSnap.docs[0].ref;
+    }
+  }
+  return directRef;
+}
+
 export interface RouteContext {
   db: Firestore;
   storageBucket: Bucket;
@@ -137,12 +174,12 @@ get('/orders', requireStaffAuth, async (_req, res) => {
     let needsManualSort = false;
     try {
       snapshot = await db.collection('orders')
-        .select('id', 'tableNumber', 'items', 'subtotal', 'serviceCharge', 'total', 'status', 'createdAt', 'customerName', 'customerPhone', 'customerAvatar', 'paymentMethod', 'isMember', 'isPaid', 'guestCount', 'discount', 'quickNotes', 'isFlagged', 'flagReason', 'takeoutInfo', 'clientOrderId', 'version', 'updatedAt', 'lastUpdatedBy', 'refundLogs')
+        .select('id', 'tableNumber', 'items', 'subtotal', 'serviceCharge', 'total', 'status', 'kdsStatus', 'kdsCompleted', 'kdsCompletedAt', 'completedAt', 'paymentStatus', 'paidAt', 'orderNumber', 'createdAt', 'customerName', 'customerPhone', 'customerAvatar', 'paymentMethod', 'isMember', 'isPaid', 'guestCount', 'discount', 'quickNotes', 'isFlagged', 'flagReason', 'takeoutInfo', 'clientOrderId', 'version', 'updatedAt', 'lastUpdatedBy', 'refundLogs')
         .orderBy('createdAt', 'desc').limit(200).get();
     } catch (_idxErr) {
       needsManualSort = true;
       snapshot = await db.collection('orders')
-        .select('id', 'tableNumber', 'items', 'subtotal', 'serviceCharge', 'total', 'status', 'createdAt', 'customerName', 'customerPhone', 'customerAvatar', 'paymentMethod', 'isMember', 'isPaid', 'guestCount', 'discount', 'quickNotes', 'isFlagged', 'flagReason', 'takeoutInfo', 'clientOrderId', 'version', 'updatedAt', 'lastUpdatedBy', 'refundLogs')
+        .select('id', 'tableNumber', 'items', 'subtotal', 'serviceCharge', 'total', 'status', 'kdsStatus', 'kdsCompleted', 'kdsCompletedAt', 'completedAt', 'paymentStatus', 'paidAt', 'orderNumber', 'createdAt', 'customerName', 'customerPhone', 'customerAvatar', 'paymentMethod', 'isMember', 'isPaid', 'guestCount', 'discount', 'quickNotes', 'isFlagged', 'flagReason', 'takeoutInfo', 'clientOrderId', 'version', 'updatedAt', 'lastUpdatedBy', 'refundLogs')
         .limit(200).get();
     }
     const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -476,6 +513,9 @@ post('/orders', requireAppCheck, orderRateLimiter, async (req, res) => {
         serviceCharge: verifiedPricing.serviceCharge,
         total: verifiedPricing.total,
         status: orderData.source === 'pos' ? 'pending_kitchen_verification' : 'pending',
+        kdsStatus: 'pending',
+        kdsCompleted: false,
+        paymentStatus: 'unpaid',
         isPaid: false,
         createdAt: new Date().toISOString(),
       };
@@ -564,15 +604,21 @@ put('/orders/:id/status', requireStaffAuth, async (req, res) => {
 
   try {
     let inventoryTouched = false;
+    let resolvedId = id;
     await db.runTransaction(async (t) => {
       inventoryTouched = false; // reset on transaction retry
-      const orderRef = db.collection('orders').doc(id);
-      const doc = await t.get(orderRef);
+      const { orderRef, doc } = await resolveOrderDocInTransaction(t, db, id);
       if (!doc.exists) throw new Error('Order not found');
+      resolvedId = doc.id;
       const data = doc.data();
-      // Block backward transition if already paid or cancelled (unless manual override to cancel/paid)
-      if ((data?.status === 'paid' || data?.status === 'cancelled') && status !== 'cancelled' && status !== 'paid') {
-        console.warn(`[Backend] Rejected status update to ${status} for order ${id} because it's already ${data?.status}`);
+      // Only block reviving cancelled orders or rolling paid orders backward to unconfirmed intake states.
+      // Kitchen completion / preparation transitions ('preparing', 'delivering', 'completed') MUST succeed even when isPaid / status === 'paid'.
+      const isAlreadyCancelled = data?.status === 'cancelled';
+      const isPaidRevertingToIntake =
+        (data?.status === 'paid' || data?.isPaid === true) &&
+        (status === 'pending' || status === 'confirmed' || status === 'pending_kitchen_verification');
+      if ((isAlreadyCancelled && status !== 'cancelled') || isPaidRevertingToIntake) {
+        console.warn(`[Backend] Rejected status update to ${status} for order ${resolvedId} because it's already ${data?.status}`);
         throw new Error(`TRANSITION_REJECTED:訂單已結帳或已取消 (${data?.status})，不可變更為 ${status}`);
       }
 
@@ -600,7 +646,31 @@ put('/orders/:id/status', requireStaffAuth, async (req, res) => {
         inventoryTouched = true;
       }
       
-      const orderUpdates: any = { status };
+      const nowIso = new Date().toISOString();
+      const wasPaid = Boolean(data?.isPaid || data?.status === 'paid' || data?.paymentStatus === 'paid' || data?.paidAt);
+      const orderUpdates: any = { status, updatedAt: nowIso };
+      if (status === 'completed') {
+        orderUpdates.kdsStatus = 'completed';
+        orderUpdates.kdsCompleted = true;
+        orderUpdates.kdsCompletedAt = data?.kdsCompletedAt || nowIso;
+        orderUpdates.completedAt = data?.completedAt || nowIso;
+      } else if (status === 'cancelled') {
+        orderUpdates.kdsStatus = 'cancelled';
+        orderUpdates.kdsCompleted = false;
+      } else if (status === 'preparing' || status === 'delivering') {
+        orderUpdates.kdsStatus = 'preparing';
+        orderUpdates.kdsCompleted = false;
+        orderUpdates.kdsCompletedAt = null;
+        orderUpdates.completedAt = null;
+      } else if (status === 'pending' || status === 'confirmed' || status === 'pending_kitchen_verification') {
+        orderUpdates.kdsStatus = 'pending';
+        orderUpdates.kdsCompleted = false;
+      }
+      if (wasPaid) {
+        orderUpdates.isPaid = true;
+        orderUpdates.paymentStatus = 'paid';
+        if (data?.paidAt) orderUpdates.paidAt = data.paidAt;
+      }
       if (shouldDeductInventory) {
         orderUpdates.inventoryDeducted = true;
         orderUpdates.confirmedAt = FieldValue.serverTimestamp();
@@ -609,7 +679,7 @@ put('/orders/:id/status', requireStaffAuth, async (req, res) => {
     });
     // ⚡ Inventory changed → bust menu/bootstrap caches so counts & sold-out state are not served stale
     if (inventoryTouched) invalidatePublicBootstrapCache();
-    res.json({ id, status });
+    res.json({ id: resolvedId, status });
   } catch (error: any) {
     if (error?.message?.startsWith('TRANSITION_REJECTED:')) {
       return res.status(409).json({ error: error.message.replace('TRANSITION_REJECTED:', '') });
@@ -627,8 +697,9 @@ put('/orders/:id/table-number', requireStaffAuth, async (req, res) => {
   const id = req.params.id as string;
   const { tableNumber } = req.body;
   try {
-    await db.collection('orders').doc(id).update({ tableNumber });
-    res.json({ id, tableNumber });
+    const orderRef = await resolveOrderDocRef(db, id);
+    await orderRef.update({ tableNumber });
+    res.json({ id: orderRef.id, tableNumber });
   } catch (error) {
     res.status(500).send(error);
   }
@@ -640,8 +711,9 @@ put('/orders/:id/quick-notes', requireStaffAuth, async (req, res) => {
   const id = req.params.id as string;
   const { quickNotes } = req.body;
   try {
-    await db.collection('orders').doc(id).update({ quickNotes });
-    res.json({ id, quickNotes });
+    const orderRef = await resolveOrderDocRef(db, id);
+    await orderRef.update({ quickNotes });
+    res.json({ id: orderRef.id, quickNotes });
   } catch (error) {
     res.status(500).send(error);
   }
@@ -653,8 +725,9 @@ put('/orders/:id/flag', requireStaffAuth, async (req, res) => {
   const id = req.params.id as string;
   const { isFlagged, flagReason } = req.body;
   try {
-    await db.collection('orders').doc(id).update({ isFlagged, flagReason });
-    res.json({ id, isFlagged, flagReason });
+    const orderRef = await resolveOrderDocRef(db, id);
+    await orderRef.update({ isFlagged, flagReason });
+    res.json({ id: orderRef.id, isFlagged, flagReason });
   } catch (error) {
     res.status(500).send(error);
   }
@@ -743,9 +816,22 @@ put('/orders/:id/checkout', requireStaffAuth, async (req, res) => {
       
       const orderData = orderDoc.data();
       const currentStatus = orderData?.status;
-      resolvedStatus = (currentStatus === 'completed' || currentStatus === 'cancelled') ? currentStatus : 'paid';
+      const nowIso = new Date().toISOString();
+      const items = Array.isArray(orderData?.items) ? orderData.items : [];
+      const allItemsDone = items.length > 0 && items.every((it: any) => Boolean(it?.isCompleted));
+      const isKdsDone =
+        currentStatus === 'completed' ||
+        orderData?.kdsStatus === 'completed' ||
+        orderData?.kdsCompleted === true ||
+        Boolean(orderData?.completedAt) ||
+        allItemsDone;
+      resolvedStatus = currentStatus === 'cancelled'
+        ? 'cancelled'
+        : isKdsDone
+          ? 'completed'
+          : 'paid';
 
-      if (orderData?.isPaid || currentStatus === 'paid') {
+      if (orderData?.isPaid || currentStatus === 'paid' || orderData?.paymentStatus === 'paid') {
         return; // Idempotent: already paid, exit transaction early without throwing
       }
 
@@ -762,8 +848,16 @@ put('/orders/:id/checkout', requireStaffAuth, async (req, res) => {
         cashTendered: cashTendered || 0,
         changeAmount: changeAmount || 0,
         isPaid: true,
+        paymentStatus: 'paid',
+        paidAt: orderData?.paidAt || nowIso,
         status: resolvedStatus,
-        updatedAt: new Date().toISOString()
+        kdsStatus: resolvedStatus === 'completed' ? 'completed' : (orderData?.kdsStatus || 'preparing'),
+        kdsCompleted: resolvedStatus === 'completed',
+        ...(resolvedStatus === 'completed' ? {
+          kdsCompletedAt: orderData?.kdsCompletedAt || nowIso,
+          completedAt: orderData?.completedAt || nowIso,
+        } : {}),
+        updatedAt: nowIso
       });
 
       if (tableRef && tableSnap && tableSnap.exists) {
@@ -880,10 +974,23 @@ post('/orders/bulk-checkout', requireStaffAuth, async (req, res) => {
         const orderRef = orderDoc.ref;
         const orderData = orderDoc.data();
         const currentStatus = orderData?.status;
-        const resolvedStatus = (currentStatus === 'completed' || currentStatus === 'cancelled') ? currentStatus : 'paid';
+        const nowIso = new Date().toISOString();
+        const items = Array.isArray(orderData?.items) ? orderData.items : [];
+        const allItemsDone = items.length > 0 && items.every((it: any) => Boolean(it?.isCompleted));
+        const isKdsDone =
+          currentStatus === 'completed' ||
+          orderData?.kdsStatus === 'completed' ||
+          orderData?.kdsCompleted === true ||
+          Boolean(orderData?.completedAt) ||
+          allItemsDone;
+        const resolvedStatus = currentStatus === 'cancelled'
+          ? 'cancelled'
+          : isKdsDone
+            ? 'completed'
+            : 'paid';
         resolvedOrderStatuses[id] = resolvedStatus;
 
-        if (orderData?.isPaid || currentStatus === 'paid') {
+        if (orderData?.isPaid || currentStatus === 'paid' || orderData?.paymentStatus === 'paid') {
           continue; // Idempotent: already paid, skip updating this order
         }
 
@@ -892,8 +999,16 @@ post('/orders/bulk-checkout', requireStaffAuth, async (req, res) => {
           cashTendered: cashTendered || 0,
           changeAmount: changeAmount || 0,
           isPaid: true,
+          paymentStatus: 'paid',
+          paidAt: orderData?.paidAt || nowIso,
           status: resolvedStatus,
-          updatedAt: new Date().toISOString()
+          kdsStatus: resolvedStatus === 'completed' ? 'completed' : (orderData?.kdsStatus || 'preparing'),
+          kdsCompleted: resolvedStatus === 'completed',
+          ...(resolvedStatus === 'completed' ? {
+            kdsCompletedAt: orderData?.kdsCompletedAt || nowIso,
+            completedAt: orderData?.completedAt || nowIso,
+          } : {}),
+          updatedAt: nowIso
         });
       }
 
@@ -941,17 +1056,35 @@ post('/orders/bulk-checkout', requireStaffAuth, async (req, res) => {
 put('/orders/:id/complete', requireStaffAuth, async (req, res) => {
   const id = req.params.id as string;
   try {
+    let resolvedId = id;
+    let resolvedPayload: Record<string, any> = { id, status: 'completed' };
     await db.runTransaction(async (t) => {
-      const orderRef = db.collection('orders').doc(id);
-      const doc = await t.get(orderRef);
+      const { orderRef, doc } = await resolveOrderDocInTransaction(t, db, id);
       if (!doc.exists) throw new Error('Order not found');
+      resolvedId = doc.id;
       const data = doc.data();
-      if (data?.status === 'paid' || data?.status === 'cancelled') {
-        throw new Error(`TRANSITION_REJECTED:訂單已結帳或已取消 (${data?.status})，不可變更為 completed`);
+      if (data?.status === 'cancelled') {
+        throw new Error(`TRANSITION_REJECTED:訂單已取消 (${data?.status})，不可變更為 completed`);
       }
-      t.update(orderRef, { status: 'completed' });
+      const nowIso = new Date().toISOString();
+      const wasPaid = Boolean(data?.isPaid || data?.status === 'paid' || data?.paymentStatus === 'paid' || data?.paidAt);
+      const updatePayload: Record<string, any> = {
+        status: 'completed',
+        kdsStatus: 'completed',
+        kdsCompleted: true,
+        kdsCompletedAt: data?.kdsCompletedAt || nowIso,
+        completedAt: data?.completedAt || nowIso,
+        updatedAt: nowIso,
+      };
+      if (wasPaid) {
+        updatePayload.isPaid = true;
+        updatePayload.paymentStatus = 'paid';
+        updatePayload.paidAt = data?.paidAt || nowIso;
+      }
+      t.update(orderRef, updatePayload);
+      resolvedPayload = { id: resolvedId, ...updatePayload };
     });
-    res.json({ id, status: 'completed' });
+    res.json(resolvedPayload);
   } catch (error: any) {
     if (error?.message?.startsWith('TRANSITION_REJECTED:')) {
       return res.status(409).json({ error: error.message.replace('TRANSITION_REJECTED:', '') });
@@ -971,9 +1104,8 @@ put('/orders/:id/items/:itemId/complete', requireStaffAuth, async (req, res) => 
   const { isCompleted, isPrepared, expectedVersion, modifier } = req.body;
 
   try {
-    const docRef = db.collection('orders').doc(id);
     const updatedOrder = await db.runTransaction(async (t) => {
-      const docSnap = await t.get(docRef);
+      const { orderRef: docRef, doc: docSnap } = await resolveOrderDocInTransaction(t, db, id);
       if (!docSnap.exists) {
         throw new Error('Order not found');
       }
@@ -1006,22 +1138,40 @@ put('/orders/:id/items/:itemId/complete', requireStaffAuth, async (req, res) => 
         item.isPrepared = !!isPrepared;
       }
 
-      const allCompleted = order.items.every((it: any) => it.isCompleted);
-      if (allCompleted && order.status !== 'paid' && order.status !== 'cancelled') {
-        order.status = 'completed';
-      } else if (!allCompleted && order.status === 'completed') {
-        order.status = 'preparing';
-      }
-
       const newVersion = currentVersion + 1;
       const nowIso = new Date().toISOString();
+      const wasPaid = Boolean(order.isPaid || order.status === 'paid' || order.paymentStatus === 'paid' || order.paidAt);
+
+      const allCompleted = order.items.every((it: any) => it.isCompleted);
+      if (allCompleted && order.status !== 'cancelled') {
+        order.status = 'completed';
+        order.kdsStatus = 'completed';
+        order.kdsCompleted = true;
+        order.kdsCompletedAt = order.kdsCompletedAt || nowIso;
+        order.completedAt = order.completedAt || nowIso;
+      } else if (!allCompleted && (order.status === 'completed' || order.kdsCompleted)) {
+        order.status = wasPaid ? 'paid' : 'preparing';
+        order.kdsStatus = 'preparing';
+        order.kdsCompleted = false;
+        order.kdsCompletedAt = null;
+        order.completedAt = null;
+      }
 
       const updateData: Record<string, any> = {
         items: order.items,
         status: order.status,
+        kdsStatus: order.kdsStatus || (allCompleted ? 'completed' : 'preparing'),
+        kdsCompleted: Boolean(order.kdsCompleted),
+        kdsCompletedAt: order.kdsCompletedAt ?? null,
+        completedAt: order.completedAt ?? null,
         updatedAt: nowIso,
         version: newVersion
       };
+      if (wasPaid) {
+        updateData.isPaid = true;
+        updateData.paymentStatus = 'paid';
+        updateData.paidAt = order.paidAt || nowIso;
+      }
 
       if (modifier && typeof modifier === 'object') {
         updateData.lastUpdatedBy = {
@@ -1032,7 +1182,7 @@ put('/orders/:id/items/:itemId/complete', requireStaffAuth, async (req, res) => 
       }
 
       t.update(docRef, updateData);
-      return { ...order, ...updateData };
+      return { id: docSnap.id, ...order, ...updateData };
     });
     return res.json(updatedOrder);
   } catch (error: any) {

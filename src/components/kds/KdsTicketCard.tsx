@@ -784,7 +784,7 @@ export const KdsTicketCard: React.FC<KdsTicketCardProps> = React.memo(({
                     ) : (
                       <>
                         <Mic size={10} />
-                        <span>🎙️ 語音語音</span>
+                        <span>🎙️ 語音輸入</span>
                       </>
                     )}
                   </button>
@@ -953,20 +953,14 @@ export const KdsTicketCard: React.FC<KdsTicketCardProps> = React.memo(({
                 )}
 
                 {order.status === 'paid' && (
-                  <>
-                    <button
-                      id={`kds-paid-complete-btn-${order.id}`}
-                      onClick={() => handleStatusChange(order.id, 'completed')}
-                      className="bg-[#00C300] hover:bg-emerald-500 text-[#0F0F0F] px-4 py-1.5 rounded-lg font-black text-xs flex items-center space-x-1.5 transition cursor-pointer animate-pulse ring-2 ring-emerald-400/60 shadow-lg shadow-emerald-500/20"
-                    >
-                      <Check size={13} className="stroke-[3]" />
-                      <span>出餐完成</span>
-                    </button>
-
-                    <span className="text-emerald-400 text-[10px] font-bold flex items-center space-x-0.5 bg-emerald-500/10 border border-emerald-500/30 px-2 py-1 rounded-lg">
-                      <span>💳 已結帳</span>
-                    </span>
-                  </>
+                  <button
+                    id={`kds-paid-complete-btn-${order.id}`}
+                    onClick={() => handleStatusChange(order.id, 'completed')}
+                    className="bg-[#00C300] hover:bg-emerald-500 text-[#0F0F0F] px-4 py-1.5 rounded-lg font-black text-xs flex items-center space-x-1.5 transition cursor-pointer animate-pulse ring-2 ring-emerald-400/60 shadow-lg shadow-emerald-500/20"
+                  >
+                    <Check size={13} className="stroke-[3]" />
+                    <span>出餐完成</span>
+                  </button>
                 )}
 
                 {order.status === 'completed' && (

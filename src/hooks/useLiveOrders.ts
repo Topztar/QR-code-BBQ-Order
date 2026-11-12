@@ -39,8 +39,14 @@ export const broadcastOrderEvent = (payload: Omit<OrderBroadcastPayload, 'timest
   } catch (_) {}
 };
 
-interface RecentOrderTransition {
+export interface RecentOrderTransition {
   status?: OrderStatus;
+  kdsStatus?: Order['kdsStatus'];
+  kdsCompleted?: boolean;
+  kdsCompletedAt?: string | null;
+  completedAt?: string | null;
+  paymentStatus?: Order['paymentStatus'];
+  paidAt?: string | null;
   items?: any[];
   tableNumber?: string;
   quickNotes?: string;
@@ -48,6 +54,117 @@ interface RecentOrderTransition {
   flagReason?: string;
   isPaid?: boolean;
   timestamp: number;
+}
+
+const MUTATION_LOCK_TTL_MS = 10_000;
+const TRANSITION_TTL_MS = 30_000;
+
+/**
+ * Pure reconciler preventing stale Firestore onSnapshot payloads from rolling back
+ * optimistic KDS/cashier state transitions while mutations are in-flight or settling.
+ */
+export function reconcileIncomingOrders(
+  incomingOrders: Order[],
+  recentTransitions: Map<string, RecentOrderTransition>,
+  deletedIds: { has(id: string): boolean },
+  pendingMutations?: Map<string, number>,
+  nowMs: number = Date.now()
+): Order[] {
+  if (!Array.isArray(incomingOrders)) return [];
+
+  for (const [tId, tRecord] of recentTransitions.entries()) {
+    if (nowMs - tRecord.timestamp > TRANSITION_TTL_MS) {
+      recentTransitions.delete(tId);
+    }
+  }
+  if (pendingMutations) {
+    for (const [mId, lockTs] of pendingMutations.entries()) {
+      if (nowMs - lockTs > MUTATION_LOCK_TTL_MS) {
+        pendingMutations.delete(mId);
+      }
+    }
+  }
+
+  return incomingOrders
+    .filter((ord) => !deletedIds.has(ord.id))
+    .map((ord: Order) => {
+      const transition = recentTransitions.get(ord.id);
+      if (!transition) return ord;
+
+      const isLocked = Boolean(
+        pendingMutations &&
+        pendingMutations.has(ord.id) &&
+        nowMs - (pendingMutations.get(ord.id) || 0) <= MUTATION_LOCK_TTL_MS
+      );
+
+      let reconciled: Order = { ...ord };
+
+      if (transition.status) {
+        const statusConverged = ord.status === transition.status;
+        const kdsConverged =
+          transition.kdsCompleted === undefined || ord.kdsCompleted === transition.kdsCompleted;
+        const paidConverged =
+          transition.isPaid === undefined || ord.isPaid === transition.isPaid;
+
+        if (!isLocked && statusConverged && kdsConverged && paidConverged) {
+          recentTransitions.delete(ord.id);
+        } else {
+          reconciled.status = transition.status;
+        }
+      }
+
+      if (transition.kdsStatus !== undefined) {
+        reconciled.kdsStatus = transition.kdsStatus;
+      }
+      if (transition.kdsCompleted !== undefined) {
+        reconciled.kdsCompleted = transition.kdsCompleted;
+      }
+      if (transition.kdsCompletedAt !== undefined) {
+        reconciled.kdsCompletedAt = transition.kdsCompletedAt;
+      }
+      if (transition.completedAt !== undefined) {
+        reconciled.completedAt = transition.completedAt;
+      }
+      if (transition.isPaid !== undefined) {
+        reconciled.isPaid = transition.isPaid;
+      }
+      if (transition.paymentStatus !== undefined) {
+        reconciled.paymentStatus = transition.paymentStatus;
+      }
+      if (transition.paidAt !== undefined) {
+        reconciled.paidAt = transition.paidAt;
+      }
+
+      if (transition.tableNumber !== undefined && ord.tableNumber !== transition.tableNumber) {
+        reconciled.tableNumber = transition.tableNumber;
+      }
+
+      if (transition.quickNotes !== undefined && ord.quickNotes !== transition.quickNotes) {
+        reconciled.quickNotes = transition.quickNotes;
+      }
+
+      if (transition.isFlagged !== undefined) {
+        reconciled.isFlagged = transition.isFlagged;
+        if (transition.flagReason !== undefined) reconciled.flagReason = transition.flagReason;
+      }
+
+      if (transition.items && Array.isArray(transition.items)) {
+        const itemMap = new Map((transition.items as any[]).map((it: any) => [it.id, it]));
+        reconciled.items = ord.items.map(it => {
+          const transIt: any = itemMap.get(it.id);
+          if (transIt) {
+            return {
+              ...it,
+              isCompleted: transIt.isCompleted !== undefined ? transIt.isCompleted : it.isCompleted,
+              isPrepared: transIt.isPrepared !== undefined ? transIt.isPrepared : it.isPrepared
+            };
+          }
+          return it;
+        });
+      }
+
+      return reconciled;
+    });
 }
 
 // Bounded FIFO Set for memory leak prevention (max 1000 items)
@@ -91,6 +208,7 @@ export function useLiveOrders(
     ordersRef.current = orders;
   }, [orders]);
   const recentStatusTransitionsRef = useRef<Map<string, RecentOrderTransition>>(new Map());
+  const pendingMutationsRef = useRef<Map<string, number>>(new Map());
   const deletedOrderIdsRef = useRef<BoundedSet<string>>(new BoundedSet(1000));
   const isStaffView = activeTab !== 'customer';
   const [isStaffAuthenticated, setIsStaffAuthenticated] = useState<boolean>(() => sessionAuth.isAuthenticated());
@@ -114,66 +232,12 @@ export function useLiveOrders(
       return incomingOrders.filter((ord) => !deletedOrderIdsRef.current.has(ord.id));
     }
 
-    const nowMs = Date.now();
-
-    for (const [tId, tRecord] of recentStatusTransitionsRef.current.entries()) {
-      if (nowMs - tRecord.timestamp > 30000) {
-        recentStatusTransitionsRef.current.delete(tId);
-      }
-    }
-
-    return incomingOrders
-      .filter((ord) => !deletedOrderIdsRef.current.has(ord.id))
-      .map((ord: Order) => {
-      const transition = recentStatusTransitionsRef.current.get(ord.id);
-      if (!transition) return ord;
-
-      let reconciled = { ...ord };
-
-      if (transition.status) {
-        if (ord.status === transition.status) {
-          
-          recentStatusTransitionsRef.current.delete(ord.id);
-        } else {
-          reconciled.status = transition.status;
-          
-        }
-      }
-
-      if (transition.isPaid !== undefined) {
-        reconciled.isPaid = transition.isPaid;
-      }
-
-      if (transition.tableNumber !== undefined && ord.tableNumber !== transition.tableNumber) {
-        reconciled.tableNumber = transition.tableNumber;
-      }
-
-      if (transition.quickNotes !== undefined && ord.quickNotes !== transition.quickNotes) {
-        reconciled.quickNotes = transition.quickNotes;
-      }
-
-      if (transition.isFlagged !== undefined) {
-        reconciled.isFlagged = transition.isFlagged;
-        if (transition.flagReason !== undefined) reconciled.flagReason = transition.flagReason;
-      }
-
-      if (transition.items && Array.isArray(transition.items)) {
-        const itemMap = new Map((transition.items as any[]).map((it: any) => [it.id, it]));
-        reconciled.items = ord.items.map(it => {
-          const transIt: any = itemMap.get(it.id);
-          if (transIt) {
-            return {
-              ...it,
-              isCompleted: transIt.isCompleted !== undefined ? transIt.isCompleted : it.isCompleted,
-              isPrepared: transIt.isPrepared !== undefined ? transIt.isPrepared : it.isPrepared
-            };
-          }
-          return it;
-        });
-      }
-
-      return reconciled;
-    });
+    return reconcileIncomingOrders(
+      incomingOrders,
+      recentStatusTransitionsRef.current,
+      deletedOrderIdsRef.current,
+      pendingMutationsRef.current
+    );
   }, []);
 
   useEffect(() => {
@@ -411,24 +475,57 @@ export function useLiveOrders(
   const handleUpdateOrderStatus = async (orderId: string, status: OrderStatus) => {
     const description = `?�新 ?�� 訂單 #${orderId.replace('offline_temp_', '?��?')} ?�?�至??{status}?�`;
     const isOnline = getIsOnline();
-    
-    broadcastOrderEvent({ type: 'ORDER_UPDATED', orderId, updates: { status } });
+    const nowIso = new Date().toISOString();
+    const currentOrder = ordersRef.current.find(o => o.id === orderId);
+    const wasPaid = Boolean(
+      currentOrder?.isPaid ||
+      currentOrder?.status === 'paid' ||
+      currentOrder?.paymentStatus === 'paid' ||
+      currentOrder?.paidAt
+    );
+
+    const statusUpdates: Partial<Order> = { status, updatedAt: nowIso };
+    if (status === 'completed') {
+      statusUpdates.kdsStatus = 'completed';
+      statusUpdates.kdsCompleted = true;
+      statusUpdates.kdsCompletedAt = currentOrder?.kdsCompletedAt || nowIso;
+      statusUpdates.completedAt = currentOrder?.completedAt || nowIso;
+    } else if (status === 'cancelled') {
+      statusUpdates.kdsStatus = 'cancelled';
+      statusUpdates.kdsCompleted = false;
+    } else if (status === 'preparing' || status === 'delivering') {
+      statusUpdates.kdsStatus = 'preparing';
+      statusUpdates.kdsCompleted = false;
+      statusUpdates.kdsCompletedAt = null;
+      statusUpdates.completedAt = null;
+    } else if (status === 'pending' || status === 'confirmed' || status === 'pending_kitchen_verification') {
+      statusUpdates.kdsStatus = 'pending';
+      statusUpdates.kdsCompleted = false;
+    }
+    if (wasPaid) {
+      statusUpdates.isPaid = true;
+      statusUpdates.paymentStatus = 'paid';
+      statusUpdates.paidAt = currentOrder?.paidAt || nowIso;
+    }
+
+    broadcastOrderEvent({ type: 'ORDER_UPDATED', orderId, updates: statusUpdates });
 
     if (!isOnline || orderId.startsWith('offline_temp_')) {
       addRequestToQueue(`/api/orders/${orderId}/status`, 'PUT', { status }, description);
-      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status } : o));
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, ...statusUpdates } : o));
       return;
     }
 
     removeOrderRequestsFromQueue(orderId);
+    pendingMutationsRef.current.set(orderId, Date.now());
 
     recentStatusTransitionsRef.current.set(orderId, {
       ...recentStatusTransitionsRef.current.get(orderId),
-      status,
+      ...statusUpdates,
       timestamp: Date.now()
     });
 
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status } : o));
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, ...statusUpdates } : o));
 
     try {
       const res = await apiFetch(`/api/orders/${orderId}/status`, {
@@ -439,7 +536,9 @@ export function useLiveOrders(
       if (!res.ok) {
         console.warn(`[KDS Sync] Server returned status ${res.status}, marking syncFailed`);
         setOrders(prev => prev.map(o => o.id === orderId ? { ...o, syncFailed: true } : o));
-        addRequestToQueue(`/api/orders/${orderId}/status`, 'PUT', { status }, description);
+        if (res.status >= 500 || res.status === 408 || res.status === 429) {
+          addRequestToQueue(`/api/orders/${orderId}/status`, 'PUT', { status }, description);
+        }
       } else {
         setOrders(prev => prev.map(o => o.id === orderId ? { ...o, syncFailed: false } : o));
       }
@@ -447,6 +546,8 @@ export function useLiveOrders(
       console.warn('[KDS Sync Error]', err);
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, syncFailed: true } : o));
       addRequestToQueue(`/api/orders/${orderId}/status`, 'PUT', { status }, description);
+    } finally {
+      pendingMutationsRef.current.delete(orderId);
     }
 
     if (getOfflineQueue().length > 0) {
@@ -457,8 +558,11 @@ export function useLiveOrders(
   const handleToggleOrderItemComplete = async (orderId: string, itemId: string, isCompleted: boolean, isPrepared?: boolean) => {
     const description = `?�新 ?�� 訂單 #${orderId.replace('offline_temp_', '?��?')} ?�單一?��??�?�`;
     const isOnline = getIsOnline();
+    const nowIso = new Date().toISOString();
+    const targetOrder = ordersRef.current.find(o => o.id === orderId);
+    const expectedVersion = targetOrder?.version;
     
-    let nextStatus: OrderStatus | undefined;
+    let nextUpdates: Partial<Order> = {};
     let nextItems: any[] = [];
 
     setOrders(prev => prev.map(o => {
@@ -471,15 +575,44 @@ export function useLiveOrders(
           return it;
         });
         nextItems = updatedItems;
+        const wasPaid = Boolean(o.isPaid || o.status === 'paid' || o.paymentStatus === 'paid' || o.paidAt);
         const allCompleted = updatedItems.every(item => item.isCompleted);
-        const status = allCompleted && o.status !== 'paid' ? 'completed' : (o.status === 'completed' ? 'preparing' : o.status);
-        nextStatus = status;
-        return { ...o, items: updatedItems, status };
+
+        let nextStatus = o.status;
+        let nextKdsStatus = o.kdsStatus;
+        let nextKdsCompleted = o.kdsCompleted;
+        let nextKdsCompletedAt = o.kdsCompletedAt;
+        let nextCompletedAt = o.completedAt;
+
+        if (allCompleted && o.status !== 'cancelled') {
+          nextStatus = 'completed';
+          nextKdsStatus = 'completed';
+          nextKdsCompleted = true;
+          nextKdsCompletedAt = o.kdsCompletedAt || nowIso;
+          nextCompletedAt = o.completedAt || nowIso;
+        } else if (!allCompleted && (o.status === 'completed' || o.kdsCompleted)) {
+          nextStatus = wasPaid ? 'paid' : 'preparing';
+          nextKdsStatus = 'preparing';
+          nextKdsCompleted = false;
+          nextKdsCompletedAt = null;
+          nextCompletedAt = null;
+        }
+
+        nextUpdates = {
+          items: updatedItems,
+          status: nextStatus,
+          kdsStatus: nextKdsStatus,
+          kdsCompleted: nextKdsCompleted,
+          kdsCompletedAt: nextKdsCompletedAt,
+          completedAt: nextCompletedAt,
+          ...(wasPaid ? { isPaid: true, paymentStatus: 'paid', paidAt: o.paidAt || nowIso } : {}),
+        };
+        return { ...o, ...nextUpdates };
       }
       return o;
     }));
 
-    broadcastOrderEvent({ type: 'ORDER_UPDATED', orderId, updates: { items: nextItems, status: nextStatus } });
+    broadcastOrderEvent({ type: 'ORDER_UPDATED', orderId, updates: nextUpdates });
 
     if (!isOnline || orderId.startsWith('offline_temp_')) {
       addRequestToQueue(`/api/orders/${orderId}/items/${itemId}/complete`, 'PUT', { isCompleted, isPrepared }, description);
@@ -487,19 +620,18 @@ export function useLiveOrders(
     }
 
     removeOrderRequestsFromQueue(orderId);
+    pendingMutationsRef.current.set(orderId, Date.now());
     recentStatusTransitionsRef.current.set(orderId, {
       ...recentStatusTransitionsRef.current.get(orderId),
+      ...nextUpdates,
       items: nextItems,
-      status: nextStatus,
       timestamp: Date.now()
     });
 
-    const targetOrder = orders.find(o => o.id === orderId);
-    const expectedVersion = targetOrder?.version;
     const modifier = {
       role: (activeTab === 'kitchen' ? 'kitchen' : 'staff') as 'kitchen' | 'staff',
       deviceId: currentDeviceId,
-      timestamp: new Date().toISOString()
+      timestamp: nowIso
     };
 
     try {
@@ -522,6 +654,8 @@ export function useLiveOrders(
       }
     } catch (err) {
       addRequestToQueue(`/api/orders/${orderId}/items/${itemId}/complete`, 'PUT', { isCompleted, isPrepared, expectedVersion, modifier }, description);
+    } finally {
+      pendingMutationsRef.current.delete(orderId);
     }
 
     if (getOfflineQueue().length > 0) {
@@ -699,14 +833,42 @@ export function useLiveOrders(
     const isOnline = getIsOnline();
     const description = `結帳 ?�� 訂單 #${orderId.replace('offline_temp_', '?��?')}`;
     
+    const nowIso = new Date().toISOString();
     const targetOrder = ordersRef.current.find(o => o.id === orderId);
-    const resolvedStatus: OrderStatus = (targetOrder?.status === 'completed' || targetOrder?.status === 'cancelled')
-      ? targetOrder.status
-      : 'paid';
+    const allItemsDone = Boolean(
+      targetOrder?.items?.length && targetOrder.items.every(it => Boolean(it.isCompleted))
+    );
+    const isKdsDone =
+      targetOrder?.status === 'completed' ||
+      targetOrder?.kdsStatus === 'completed' ||
+      targetOrder?.kdsCompleted === true ||
+      Boolean(targetOrder?.completedAt) ||
+      allItemsDone;
+    const resolvedStatus: OrderStatus =
+      targetOrder?.status === 'cancelled'
+        ? 'cancelled'
+        : isKdsDone
+          ? 'completed'
+          : 'paid';
 
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, isPaid: true, status: resolvedStatus } : o));
+    const payUpdates: Partial<Order> = {
+      isPaid: true,
+      paymentStatus: 'paid',
+      paidAt: targetOrder?.paidAt || nowIso,
+      status: resolvedStatus,
+      kdsStatus: resolvedStatus === 'completed' ? 'completed' : (targetOrder?.kdsStatus || 'preparing'),
+      kdsCompleted: resolvedStatus === 'completed',
+      ...(resolvedStatus === 'completed'
+        ? {
+            kdsCompletedAt: targetOrder?.kdsCompletedAt || nowIso,
+            completedAt: targetOrder?.completedAt || nowIso,
+          }
+        : {}),
+    };
 
-    broadcastOrderEvent({ type: 'ORDER_UPDATED', orderId, updates: { isPaid: true, status: resolvedStatus, ...(checkoutData || {}) } });
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, ...payUpdates } : o));
+
+    broadcastOrderEvent({ type: 'ORDER_UPDATED', orderId, updates: { ...payUpdates, ...(checkoutData || {}) } });
 
     if (targetOrder) {
       if (targetOrder.tableNumber && targetOrder.tableNumber !== '外帶' && targetOrder.tableNumber !== 'takeout') {
@@ -728,8 +890,7 @@ export function useLiveOrders(
     removeOrderRequestsFromQueue(orderId);
     recentStatusTransitionsRef.current.set(orderId, {
       ...recentStatusTransitionsRef.current.get(orderId),
-      isPaid: true,
-      status: resolvedStatus,
+      ...payUpdates,
       timestamp: Date.now()
     });
 
@@ -765,29 +926,46 @@ export function useLiveOrders(
     const isOnline = getIsOnline();
     const description = `?�次結帳 ?�� ${orderIds.length} 筆�??�`;
 
-    setOrders(prev => prev.map(o => {
-      if (orderIds.includes(o.id)) {
-        const resolvedStatus: OrderStatus = (o.status === 'completed' || o.status === 'cancelled') ? o.status : 'paid';
-        return {
-          ...o,
-          isPaid: true,
-          status: resolvedStatus,
-          
-        };
-      }
-      return o;
-    }));
+    const bulkNowIso = new Date().toISOString();
+    const resolveOrderPayUpdates = (o: Order): Partial<Order> => {
+      const allItemsDone = Boolean(o.items?.length && o.items.every(it => Boolean(it.isCompleted)));
+      const isKdsDone =
+        o.status === 'completed' ||
+        o.kdsStatus === 'completed' ||
+        o.kdsCompleted === true ||
+        Boolean(o.completedAt) ||
+        allItemsDone;
+      const resolvedStatus: OrderStatus =
+        o.status === 'cancelled' ? 'cancelled' : isKdsDone ? 'completed' : 'paid';
+      return {
+        isPaid: true,
+        paymentStatus: 'paid',
+        paidAt: o.paidAt || bulkNowIso,
+        status: resolvedStatus,
+        kdsStatus: resolvedStatus === 'completed' ? 'completed' : (o.kdsStatus || 'preparing'),
+        kdsCompleted: resolvedStatus === 'completed',
+        ...(resolvedStatus === 'completed'
+          ? {
+              kdsCompletedAt: o.kdsCompletedAt || bulkNowIso,
+              completedAt: o.completedAt || bulkNowIso,
+            }
+          : {}),
+      };
+    };
+
+    setOrders(prev => prev.map(o => (orderIds.includes(o.id) ? { ...o, ...resolveOrderPayUpdates(o) } : o)));
 
     orderIds.forEach(orderId => {
       const targetOrder = ordersRef.current.find(o => o.id === orderId);
-      const resolvedStatus: OrderStatus = (targetOrder?.status === 'completed' || targetOrder?.status === 'cancelled') ? targetOrder.status : 'paid';
+      const updates = targetOrder
+        ? resolveOrderPayUpdates(targetOrder)
+        : { isPaid: true, paymentStatus: 'paid' as const, paidAt: bulkNowIso, status: 'paid' as OrderStatus };
 
-      broadcastOrderEvent({ type: 'ORDER_UPDATED', orderId, updates: { isPaid: true, status: resolvedStatus } });
+      broadcastOrderEvent({ type: 'ORDER_UPDATED', orderId, updates });
 
       recentStatusTransitionsRef.current.set(orderId, {
         ...recentStatusTransitionsRef.current.get(orderId),
-        isPaid: true,
-        status: resolvedStatus,
+        ...updates,
         timestamp: Date.now()
       });
       removeOrderRequestsFromQueue(orderId);

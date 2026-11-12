@@ -102,6 +102,13 @@ export interface Order {
   serviceCharge: number; // 10% for dine-in if credit card, or 10% standard fee
   total: number;
   status: OrderStatus;
+  kdsStatus?: 'pending' | 'preparing' | 'completed' | 'cancelled';
+  kdsCompleted?: boolean;
+  kdsCompletedAt?: string | null;
+  completedAt?: string | null;
+  paymentStatus?: 'unpaid' | 'paid' | 'refunded';
+  paidAt?: string | null;
+  orderNumber?: string;
   createdAt: string;
   customerName?: string;
   customerPhone?: string;

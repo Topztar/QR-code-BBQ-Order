@@ -1,6 +1,11 @@
 import React, { useState } from 'react';
 import { MenuItem, Category, Ingredient, Language } from '../../types';
 import { getLocalizedText } from '../../utils/i18n';
+import {
+  isVirtualAccountingCategory,
+  isVirtualAccountingMenuItem,
+  isPrintLogFailure,
+} from '@sabay/shared';
 import { InlineRetryMessage } from '../InlineRetryMessage';
 import {
   Settings,
@@ -71,6 +76,7 @@ export const KdsStationSummary: React.FC<KdsStationSummaryProps> = React.memo(({
   const [printerError, setPrinterError] = useState<string | null>(null);
   const [printerSuccess, setPrinterSuccess] = useState<string | null>(null);
   const [testLoading, setTestLoading] = useState(false);
+  const [showAllPrintLogs, setShowAllPrintLogs] = useState(false);
 
   return (
     <div className="space-y-4 font-sans">
@@ -191,7 +197,9 @@ export const KdsStationSummary: React.FC<KdsStationSummaryProps> = React.memo(({
                 >
                   全部品項
                 </button>
-                {categories.map((cat) => (
+                {categories
+                  .filter((cat) => !isVirtualAccountingCategory(cat))
+                  .map((cat) => (
                   <button
                     key={cat.id}
                     type="button"
@@ -229,6 +237,7 @@ export const KdsStationSummary: React.FC<KdsStationSummaryProps> = React.memo(({
             <div className="space-y-1.5 max-h-[300px] overflow-y-auto pr-1">
               {menuItems
                 .filter((item) => {
+                  if (isVirtualAccountingMenuItem(item, categories)) return false;
                   const matchesCategory =
                     kdsSelectedCategory === 'all' || item.category === kdsSelectedCategory;
                   const matchesSearch =
@@ -719,26 +728,57 @@ export const KdsStationSummary: React.FC<KdsStationSummaryProps> = React.memo(({
               </p>
             </div>
           ) : (
-            printLogs.map((log, index) => (
-              <div
-                key={log.id || `${log.timestamp}-${index}`}
-                className="bg-[#1C1C1C] text-white p-3.5 rounded-lg border border-white/10 shadow-sm relative overflow-hidden"
-              >
-                <div className="absolute top-0 right-0 bg-[#E5B453] text-[#0F0F0F] text-[8px] font-black px-1.5 py-0.5 rounded-bl uppercase tracking-wider">
-                  {log.type === 'kitchen' ? 'KITCHEN_TKT' : 'CLIENT_BILL'}
-                </div>
-                <div className="text-white/40 text-[9px] mb-2 font-sans flex justify-between">
-                  <span>時間: {log.timestamp}</span>
-                </div>
-                <pre className="whitespace-pre font-mono leading-relaxed overflow-x-auto text-[9px] text-white/90">
-                  {log.content}
-                </pre>
-                <div className="mt-3 border-t border-dashed border-white/10 pt-1 flex justify-between text-[8px] text-white/30 font-sans">
-                  <span>sabay_boca_v1.2</span>
-                  <span className="text-[#00C300]">100% 傳送正常</span>
-                </div>
-              </div>
-            ))
+            (() => {
+              const reversedLogs = [...printLogs].reverse();
+              const visibleLogs = showAllPrintLogs ? reversedLogs : reversedLogs.slice(0, 5);
+              return (
+                <>
+                  {printLogs.length > 5 && (
+                    <div className="flex items-center justify-between text-[10px] font-sans text-white/50 pb-1 border-b border-white/10">
+                      <span>
+                        顯示最新 {visibleLogs.length} / 共 {printLogs.length} 筆列印紀錄
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setShowAllPrintLogs((prev) => !prev)}
+                        className="text-[#E5B453] hover:text-[#f2c66d] font-bold cursor-pointer"
+                      >
+                        {showAllPrintLogs ? '收合歷史紀錄 (僅看最新 5 筆)' : `顯示全部 (${printLogs.length})`}
+                      </button>
+                    </div>
+                  )}
+                  {visibleLogs.map((log, index) => {
+                    const failed = isPrintLogFailure(log);
+                    return (
+                      <div
+                        key={log.id || `${log.timestamp}-${index}`}
+                        className={`bg-[#1C1C1C] text-white p-3.5 rounded-lg border shadow-sm relative overflow-hidden ${
+                          failed ? 'border-rose-500/40' : 'border-white/10'
+                        }`}
+                      >
+                        <div className="absolute top-0 right-0 bg-[#E5B453] text-[#0F0F0F] text-[8px] font-black px-1.5 py-0.5 rounded-bl uppercase tracking-wider">
+                          {log.type === 'kitchen' ? 'KITCHEN_TKT' : 'CLIENT_BILL'}
+                        </div>
+                        <div className="text-white/40 text-[9px] mb-2 font-sans flex justify-between">
+                          <span>時間: {log.timestamp}</span>
+                        </div>
+                        <pre className="whitespace-pre font-mono leading-relaxed overflow-x-auto text-[9px] text-white/90">
+                          {log.content}
+                        </pre>
+                        <div className="mt-3 border-t border-dashed border-white/10 pt-1 flex justify-between text-[8px] text-white/30 font-sans">
+                          <span>sabay_boca_v1.2</span>
+                          {failed ? (
+                            <span className="text-rose-400 font-bold">❌ 傳送失敗 (逾時/離線)</span>
+                          ) : (
+                            <span className="text-[#00C300]">100% 傳送正常</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </>
+              );
+            })()
           )}
         </div>
       </div>

@@ -104,7 +104,7 @@ export function PrinterDataProvider({ children, activeTab }: ProviderProps) {
       const kitchenConn = kitchenConfig.connectionType || 'IP';
 
       const billPort = normalizePort(billConfig.usbPort || 'LPT1:');
-      const billIp = billConfig.ip || '192.168.1.102';
+      const billIp = billConfig.ip || '192.168.123.102';
       const billConn = billConfig.connectionType || 'LPT';
 
       const bridgeSuccesses: string[] = [];

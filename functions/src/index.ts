@@ -489,8 +489,22 @@ export const onOrderCompleted = onDocumentUpdated(
     const afterData = event.data?.after.exists ? event.data.after.data() : null;
     if (!afterData) return;
 
-    const wasPaidOrServed = beforeData ? (beforeData.status === 'paid' || beforeData.status === 'served') : false;
-    const isPaidOrServed = afterData.status === 'paid' || afterData.status === 'served';
+    const wasPaidOrServed = beforeData
+      ? Boolean(
+          beforeData.isPaid ||
+          beforeData.paymentStatus === 'paid' ||
+          beforeData.status === 'paid' ||
+          beforeData.status === 'served' ||
+          beforeData.status === 'completed'
+        )
+      : false;
+    const isPaidOrServed = Boolean(
+      afterData.isPaid ||
+      afterData.paymentStatus === 'paid' ||
+      afterData.status === 'paid' ||
+      afterData.status === 'served' ||
+      afterData.status === 'completed'
+    );
 
     // 僅在狀態首次轉為 paid 或 served 時執行寫入計算
     if (isPaidOrServed && !wasPaidOrServed) {
