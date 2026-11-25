@@ -57,10 +57,3 @@ export const saveMenuItem = async (itemId: string, payload: any) => {
     throw error;
   }
 };
-
-/**
- * Standardized dish mutation helper conforming to Phase 1 Zero-Trust admin API design
- */
-export const updateDishData = async (dishId: string, payload: any) => {
-  return saveMenuItem(dishId, payload);
-};

@@ -28,6 +28,8 @@ pnpm-debug.log*
 # 建置輸出
 build/
 out/
+functions/lib/
+emulator-data/
 
 # VS Code 設定
 .vscode/

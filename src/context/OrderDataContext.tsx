@@ -7,14 +7,7 @@ import { useLiveOrders } from '../hooks/useLiveOrders';
 import { useOfflineSync } from '../hooks/useOfflineSync';
 import { useKdsMutexSession } from '../hooks/useKdsMutexSession';
 
-
-export interface OrderDataContextType {
-  orders: Order[];
-
-  offlineQueue: QueuedRequest[];
-  isSyncing: boolean;
-  syncProgressMsg: string;
-  isNetworkOnline: boolean;
+export interface OrderActionsContextType {
   handlePlaceOrder: (orderData: {
     tableNumber: string;
     items: OrderItem[];
@@ -34,10 +27,19 @@ export interface OrderDataContextType {
     };
   }) => Promise<Order | null>;
   handleUpdateOrderStatus: (orderId: string, status: OrderStatus) => Promise<void>;
-  handleToggleOrderItemComplete: (orderId: string, itemId: string, isCompleted: boolean, isPrepared?: boolean) => Promise<void>;
+  handleToggleOrderItemComplete: (
+    orderId: string,
+    itemId: string,
+    isCompleted: boolean,
+    isPrepared?: boolean
+  ) => Promise<void>;
   handleUpdateTableNumber: (orderId: string, tableNumber: string) => Promise<{ success: boolean }>;
   handleUpdateQuickNotes: (orderId: string, quickNotes: string) => Promise<{ success: boolean }>;
-  handleToggleOrderFlag: (orderId: string, isFlagged: boolean, flagReason: string) => Promise<{ success: boolean }>;
+  handleToggleOrderFlag: (
+    orderId: string,
+    isFlagged: boolean,
+    flagReason: string
+  ) => Promise<{ success: boolean }>;
   handleUpdateOrderItems: (orderId: string, items: any[], refundLogs?: any[]) => Promise<void>;
   handlePayOrder: (
     orderId: string,
@@ -69,23 +71,35 @@ export interface OrderDataContextType {
   ) => Promise<{ success: boolean }>;
   handleDeleteOrder: (orderId: string) => Promise<{ success: boolean }>;
   handleForceSync: () => Promise<void>;
-
-  kdsSession: KdsSession | null;
-  currentDeviceId: string;
-  isKitchenPreempted: boolean;
-  handleClaimKitchenRole: (force?: boolean) => Promise<{ success: boolean; conflict?: boolean; activeKitchenDeviceId?: string }>;
+  handleClaimKitchenRole: (
+    force?: boolean
+  ) => Promise<{ success: boolean; conflict?: boolean; activeKitchenDeviceId?: string }>;
   handleReleaseKitchenRole: () => Promise<void>;
   dismissPreemptedAlert: () => void;
 }
 
+export interface OrderDataContextType extends OrderActionsContextType {
+  orders: Order[];
+  offlineQueue: QueuedRequest[];
+  isSyncing: boolean;
+  syncProgressMsg: string;
+  isNetworkOnline: boolean;
+  kdsSession: KdsSession | null;
+  currentDeviceId: string;
+  isKitchenPreempted: boolean;
+}
+
+const OrderActionsContext = createContext<OrderActionsContextType | undefined>(undefined);
 const OrderDataContext = createContext<OrderDataContextType | undefined>(undefined);
 
 interface ProviderProps {
   children: ReactNode;
   activeTab: 'customer' | 'kitchen' | 'admin' | 'cashier';
-
   menuItems?: MenuItem[];
-  handleUpdateTableStatus: (id: string, updates: Partial<Omit<TableConfig, 'id' | 'qrCodeUrl'>>) => Promise<{ success: boolean }>;
+  handleUpdateTableStatus: (
+    id: string,
+    updates: Partial<Omit<TableConfig, 'id' | 'qrCodeUrl'>>
+  ) => Promise<{ success: boolean }>;
   onRefreshData?: () => Promise<void>;
   syncActive: boolean;
 }
@@ -93,19 +107,17 @@ interface ProviderProps {
 export function OrderDataProvider({
   children,
   activeTab,
-
   menuItems = [],
   handleUpdateTableStatus,
   onRefreshData,
   syncActive,
 }: ProviderProps) {
-
   const {
     offlineQueue,
     isSyncing,
     syncProgressMsg,
     isNetworkOnline,
-    handleForceSync
+    handleForceSync,
   } = useOfflineSync(onRefreshData);
 
   const {
@@ -114,7 +126,7 @@ export function OrderDataProvider({
     isKitchenPreempted,
     handleClaimKitchenRole,
     handleReleaseKitchenRole,
-    dismissPreemptedAlert
+    dismissPreemptedAlert,
   } = useKdsMutexSession(activeTab, isNetworkOnline, syncActive);
 
   const {
@@ -128,7 +140,7 @@ export function OrderDataProvider({
     handleUpdateOrderItems,
     handlePayOrder,
     handleBulkPayOrders,
-    handleDeleteOrder
+    handleDeleteOrder,
   } = useLiveOrders(
     activeTab,
     currentDeviceId,
@@ -138,43 +150,79 @@ export function OrderDataProvider({
   );
   const { handlePlaceOrder } = useOrderSubmit(setOrders, menuItems);
 
-  const value = useMemo<OrderDataContextType>(() => ({
-    orders,
+  const actionsValue = useMemo<OrderActionsContextType>(
+    () => ({
+      handlePlaceOrder,
+      handleUpdateOrderStatus,
+      handleToggleOrderItemComplete,
+      handleUpdateTableNumber,
+      handleUpdateQuickNotes,
+      handleToggleOrderFlag,
+      handleUpdateOrderItems,
+      handlePayOrder,
+      handleBulkPayOrders,
+      handleDeleteOrder,
+      handleForceSync,
+      handleClaimKitchenRole,
+      handleReleaseKitchenRole,
+      dismissPreemptedAlert,
+    }),
+    [
+      handlePlaceOrder,
+      handleUpdateOrderStatus,
+      handleToggleOrderItemComplete,
+      handleUpdateTableNumber,
+      handleUpdateQuickNotes,
+      handleToggleOrderFlag,
+      handleUpdateOrderItems,
+      handlePayOrder,
+      handleBulkPayOrders,
+      handleDeleteOrder,
+      handleForceSync,
+      handleClaimKitchenRole,
+      handleReleaseKitchenRole,
+      dismissPreemptedAlert,
+    ]
+  );
 
-    offlineQueue,
-    isSyncing,
-    syncProgressMsg,
-    isNetworkOnline,
-    handlePlaceOrder,
-    handleUpdateOrderStatus,
-    handleToggleOrderItemComplete,
-    handleUpdateTableNumber,
-    handleUpdateQuickNotes,
-    handleToggleOrderFlag,
-    handleUpdateOrderItems,
-    handlePayOrder,
-    handleBulkPayOrders,
-    handleDeleteOrder,
-    handleForceSync,
-
-    kdsSession,
-    currentDeviceId,
-    isKitchenPreempted,
-    handleClaimKitchenRole,
-    handleReleaseKitchenRole,
-    dismissPreemptedAlert,
-  }), [
-    orders, offlineQueue, isSyncing, syncProgressMsg, isNetworkOnline,
-    kdsSession, currentDeviceId, isKitchenPreempted, handleClaimKitchenRole, handleReleaseKitchenRole, dismissPreemptedAlert,
-    handlePlaceOrder, handleUpdateOrderStatus, handleToggleOrderItemComplete, handleUpdateTableNumber, handleUpdateQuickNotes,
-    handleToggleOrderFlag, handleUpdateOrderItems, handlePayOrder, handleBulkPayOrders, handleDeleteOrder, handleForceSync
-  ]);
+  const value = useMemo<OrderDataContextType>(
+    () => ({
+      ...actionsValue,
+      orders,
+      offlineQueue,
+      isSyncing,
+      syncProgressMsg,
+      isNetworkOnline,
+      kdsSession,
+      currentDeviceId,
+      isKitchenPreempted,
+    }),
+    [
+      actionsValue,
+      orders,
+      offlineQueue,
+      isSyncing,
+      syncProgressMsg,
+      isNetworkOnline,
+      kdsSession,
+      currentDeviceId,
+      isKitchenPreempted,
+    ]
+  );
 
   return (
-    <OrderDataContext.Provider value={value}>
-      {children}
-    </OrderDataContext.Provider>
+    <OrderActionsContext.Provider value={actionsValue}>
+      <OrderDataContext.Provider value={value}>{children}</OrderDataContext.Provider>
+    </OrderActionsContext.Provider>
   );
+}
+
+export function useOrderActions(): OrderActionsContextType {
+  const context = useContext(OrderActionsContext);
+  if (!context) {
+    throw new Error('useOrderActions must be used within an OrderDataProvider');
+  }
+  return context;
 }
 
 export function useOrderData(): OrderDataContextType {

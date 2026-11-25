@@ -65,8 +65,19 @@ try {
   const storageRulesPath = path.resolve(__dirname, '../storage.rules');
   const storageRules = fs.readFileSync(storageRulesPath, 'utf8');
 
+  const dishesBlockMatch = storageRules.match(/match \/dishes\/\{allPaths=\*\*\} \{([\s\S]*?)\n    \}/);
+  const dishesBlock = dishesBlockMatch ? dishesBlockMatch[1] : '';
+  const rootBlockMatch = storageRules.match(/match \/\{allPaths=\*\*\} \{([\s\S]*?)\n    \}/);
+  const rootBlock = rootBlockMatch ? rootBlockMatch[1] : '';
+  const hasUnscopedAuthWrite = /allow\s+write\s*:\s*if\s+request\.auth\s*!=\s*null\s*;/.test(storageRules);
+
   assert(storageRules.includes("rules_version = '2'"), "Storage 規則版本為 rules_version = '2'");
-  assert(storageRules.includes('allow write: if false'), "Storage 禁止前端直接上傳檔案 (必須經由後端二進位驗證處理)");
+  assert(
+    rootBlock.includes('allow write: if false') &&
+    !hasUnscopedAuthWrite &&
+    (dishesBlock === '' || (dishesBlock.includes('request.auth.token.staff == true') && dishesBlock.includes('request.auth.token.admin == true'))),
+    "Storage 禁止未授權與一般顧客前端直接上傳檔案 (僅限後端 Admin SDK 或具 staff/admin 權限憑證)"
+  );
   assert(storageRules.includes('allow read: if true'), "Storage 允許公開讀取合法靜態圖檔");
 } catch (err) {
   assert(false, `無法讀取 storage.rules: ${err.message}`);

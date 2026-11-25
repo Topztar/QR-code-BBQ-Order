@@ -7,7 +7,7 @@ interface VersionInputProps {
   onVersionUpdated?: (newVersion: string) => void;
 }
 
-export const VersionInput: React.FC<VersionInputProps> = ({ className = '', onVersionUpdated }) => {
+const VersionInput: React.FC<VersionInputProps> = ({ className = '', onVersionUpdated }) => {
   const { systemVersion, handleUpdateSystemVersion, fetchData } = useRestaurantData();
   const [inputVersion, setInputVersion] = useState<string>(systemVersion || '');
   const [refreshing, setRefreshing] = useState<boolean>(false);

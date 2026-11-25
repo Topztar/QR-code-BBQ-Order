@@ -1,19 +1,11 @@
 import { PRINTER_CONSTANTS } from '@sabay/shared';
-import { apiFetch } from "../lib/api";
 import { ErrorBoundary } from './ErrorBoundary';
 import { ChunkErrorBoundary } from './ChunkErrorBoundary';
 import React, { useState, useEffect, useCallback, Suspense } from 'react';
 import { resilientLazy } from '../App';
-import { Ingredient, Language, Category, TableConfig, Order, OrderStatus, Reservation, SoldOutType, PrinterConfig } from '../types';
-import { safeStorage } from '../lib/safeStorage';
+import { Ingredient, Language, Category, TableConfig, Order, OrderStatus, Reservation, SoldOutType } from '../types';
 import { useDashboardStore } from '../stores/dashboard/useDashboardStore';
 import { useShallow } from 'zustand/react/shallow';
-import {
-  checkPOSBridgeHealth,
-  openCashDrawerViaBridge,
-  printViaBridge,
-  DEFAULT_POS_BRIDGE_URL
-} from '../lib/posBridgeClient';
 
 const ManagerStatsTab = resilientLazy(() => import('./manager/ManagerStatsTab').then(m => ({ default: m.ManagerStatsTab })));
 const ManagerOrdersTab = resilientLazy(() => import('./manager/ManagerOrdersTab').then(m => ({ default: m.ManagerOrdersTab })));
@@ -37,17 +29,12 @@ const TabSuspenseFallback = () => (
 import { ManagerModalContainer } from './manager/ManagerModalContainer';
 import { PaidOrderModificationModal } from './manager/modals/PaidOrderModificationModal';
 import { OrderDetailDrilldownModal } from './manager/modals/OrderDetailDrilldownModal';
-
-const localStorage = safeStorage;
-
-import {
-  getMaskedEmail,
-} from './manager/ManagerDashboardUtils';
 import { useManagerCheckout } from '../hooks/manager/useManagerCheckout';
 import { useManagerMenuEditor } from '../hooks/manager/useManagerMenuEditor';
 import { useManagerInventoryAndRules } from '../hooks/manager/useManagerInventoryAndRules';
 import { useManagerAnalyticsAndExport } from '../hooks/manager/useManagerAnalyticsAndExport';
-import { memberService } from '../services/memberService';
+import { useManagerPrinterAndBridge } from '../hooks/manager/useManagerPrinterAndBridge';
+import { useManagerPopularAndMembers } from '../hooks/manager/useManagerPopularAndMembers';
 import { unlockAudio, playOrderChimeSound } from '../utils/kdsAudio';
 
 
@@ -301,7 +288,6 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
       setTableSuccess: state.setTableSuccess
     }))
   );
-  const [takeoutStatus, setTakeoutStatus] = useState({ sequence: 0, lastResetDate: '' });
   const [selectedQrPreviewId, setSelectedQrPreviewId] = useState<string>('1');
   const [copiedTableId, setCopiedTableId] = useState<string | null>(null);
   const { setShowBulkDeleteOrdersModal } = useDashboardStore(
@@ -463,294 +449,57 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     dbInventoryLogs,
   });
 
-  const handleManualOpenDrawer = async () => {
-    try {
-      const isLpt = billPrinter.connectionType === 'LPT' || (billPrinter.usbPort && billPrinter.usbPort.toUpperCase().startsWith('LPT'));
-      const port = isLpt ? (billPrinter.usbPort?.includes(':') ? billPrinter.usbPort.toUpperCase() : `${billPrinter.usbPort?.toUpperCase() || 'LPT1'}:`) : (billPrinter.usbPort || 'USB002');
-      
-      // Step 1: Direct Local POS Bridge Call (http://127.0.0.1:8060)
-      const bridgeRes = await openCashDrawerViaBridge(port, posBridgeUrl);
+  // Printer hardware, print logs & local POS bridge hooks
+  const {
+    kitchenPrinter,
+    setKitchenPrinter,
+    billPrinter,
+    setBillPrinter,
+    printerSaveSuccess,
+    printLogs,
+    fetchPrintLogs,
+    setPrintConfirmData,
+    posBridgeUrl,
+    setPosBridgeUrl,
+    posBridgeStatus,
+    posBridgeTesting,
+    posBridgeTestResult,
+    checkBridgeStatus,
+    handleManualOpenDrawer,
+    handleTestBridgeOpenDrawer,
+    handleTestBridgePrintLPT1,
+    handleSavePrinters,
+  } = useManagerPrinterAndBridge({ activeSubTab });
 
-      if (bridgeRes.success) {
-        alert(`✓ 🔓 實體收銀箱抽屜已成功彈開！\n\n【本機橋接器通訊】: ${bridgeRes.message} (埠口: ${bridgeRes.port || port})`);
-        return;
-      }
-
-      // Step 2: Fallback to Server API Call ONLY if Local Bridge was unavailable
-      console.warn('[Cash Drawer] Local POS bridge failed, initiating server fallback pulse...');
-      let serverData: any = null;
-      try {
-        const res = await apiFetch('/api/printer/open-drawer', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ settings: { ...billPrinter, usbPort: port } })
-        });
-        if (res.ok) {
-          serverData = await res.json();
-        }
-      } catch (err) {
-        console.warn('[Server Drawer Trigger Warning]', err);
-      }
-
-      if (serverData && serverData.success) {
-        alert(`✓ 🔓 實體收銀箱抽屜已成功彈開！(伺服器驅動備援)\n\n【伺服器驅動日誌】:\n${serverData.log}`);
-      } else {
-        alert(`⚠️ 開啟收銀箱失敗:\n本機橋接: ${bridgeRes.message}\n伺服器備援: ${serverData?.error || '無法連線至印表機'}\n\n💡 提示: 請確認 LOCAL-PRINTER-POS-BRIDGE 正在 127.0.0.1:8060 運作或印表機 USB 連線正常。`);
-      }
-    } catch (e: any) {
-      console.error('[Manual open cash drawer error]', e);
-      alert(`❌ 連線或操作錯誤: ${e?.message || String(e)}`);
-    }
-  };
-
-  // Today's Bestsellers Management States
-  const [localPopularIds, setLocalPopularIds] = useState<string[]>(popularItemIds);
-  const [isSavingPopular, setIsSavingPopular] = useState(false);
-  const [popularItemToRemoveId, setPopularItemToRemoveId] = useState<string | null>(null);
-  const [showClearAllPopularConfirm, setShowClearAllPopularConfirm] = useState(false);
-  const [popularSaveStatus, setPopularSaveStatus] = useState<{ type: 'success' | 'error' | null; message: string }>({ type: null, message: '' });
-  const [, setPrintConfirmData] = useState<any>(null);
-
-  // Synchronized Print Logs for Manager Exporting
-  const [printLogs, setPrintLogs] = useState<any[]>([]);
-  const fetchPrintLogs = async () => {
-    try {
-      const res = await apiFetch('/api/print-logs');
-      if (res.ok) {
-        const data = await res.json();
-        setPrintLogs(data);
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  const popularItemIdsStr = JSON.stringify(popularItemIds);
-  useEffect(() => {
-    setLocalPopularIds(popularItemIds);
-  }, [popularItemIdsStr]);
-
-  // Google Members state and points database
-  const [membersList, setMembersList] = useState<any[]>([]);
-
-  // Printer Configuration States
-  const [kitchenPrinter, setKitchenPrinter] = useState<PrinterConfig>({
-    connectionType: 'IP',
-    ip: '192.168.123.100',
-    usbPort: 'USB001',
-    width: '80mm',
-    fontSizeFactor: 1.0,
-    restaurantName: '沙貝燒烤 泰式廚房',
-    printTelephone: '02-1234-5678',
-    printAddress: '台北市信義區泰式一番街8號',
-    printTimeEnabled: true,
-    headerPrefix: '★★★ 廚房工作備餐單 ★★★',
-    footerSuffix: '請主廚盡速配餐出餐！'
-  });
-  const [billPrinter, setBillPrinter] = useState<PrinterConfig>({
-    connectionType: 'LPT',
-    ip: '192.168.123.102',
-    usbPort: 'LPT1:',
-    width: '58mm',
-    fontSizeFactor: 0.8,
-    restaurantName: '沙貝燒烤 SABAY BBQ',
-    printTelephone: '0966626408',
-    printAddress: '桃園市大園區高鐵北路二段198號1樓',
-    printTimeEnabled: true,
-    headerPrefix: '★★★ 顧客結帳明細單 ★★★',
-    footerSuffix: '謝謝光臨，歡迎再度光臨！',
-    cashDrawerEnabled: true,
-    cashDrawerDriver: 'ESC_POS_RAW',
-    cashDrawerEscPosCommand: '1B700119FA'
+  // Today's bestsellers, takeout sequence status & Google member points hooks
+  const {
+    takeoutStatus,
+    localPopularIds,
+    setLocalPopularIds,
+    isSavingPopular,
+    setIsSavingPopular,
+    popularItemToRemoveId,
+    setPopularItemToRemoveId,
+    showClearAllPopularConfirm,
+    setShowClearAllPopularConfirm,
+    popularSaveStatus,
+    setPopularSaveStatus,
+    membersList,
+    loadMembers,
+    handleAdjustPoints,
+    handleSavePointsAdjustment,
+    handleDeleteMember,
+  } = useManagerPopularAndMembers({
+    activeSubTab,
+    popularItemIds,
+    setAdjustPointsModal,
+    setConfirmActionModal,
   });
 
-  const [printerSaveSuccess, setPrinterSaveSuccess] = useState<string | null>(null);
-
-  // LOCAL-PRINTER-POS-BRIDGE (http://127.0.0.1:8060) State
-  const [posBridgeUrl, setPosBridgeUrl] = useState<string>(() => {
-    return localStorage.getItem('pos-bridge-url') || DEFAULT_POS_BRIDGE_URL;
-  });
-  const [posBridgeStatus, setPosBridgeStatus] = useState<{
-    online: boolean;
-    checking: boolean;
-    lastChecked?: string;
-    details?: any;
-    error?: string;
-  }>({ online: false, checking: false });
-  const [posBridgeTesting, setPosBridgeTesting] = useState<boolean>(false);
-  const [posBridgeTestResult, setPosBridgeTestResult] = useState<string | null>(null);
-
-  const checkBridgeStatus = useCallback(async () => {
-    setPosBridgeStatus(prev => ({ ...prev, checking: true }));
-    const result = await checkPOSBridgeHealth(posBridgeUrl, 1200);
-    setPosBridgeStatus({
-      online: result.online,
-      checking: false,
-      lastChecked: new Date().toLocaleTimeString(),
-      details: result.data,
-      error: result.error
-    });
-  }, [posBridgeUrl]);
-
-  useEffect(() => {
-    if (activeSubTab !== 'printer' && activeSubTab !== 'terminal') return;
-    checkBridgeStatus();
-    const interval = setInterval(checkBridgeStatus, 15000);
-    return () => clearInterval(interval);
-  }, [checkBridgeStatus, activeSubTab]);
-
-  const handleTestBridgeOpenDrawer = async () => {
-    setPosBridgeTesting(true);
-    setPosBridgeTestResult(null);
-    try {
-      const port = billPrinter.usbPort || 'LPT1:';
-      const res = await openCashDrawerViaBridge(port, posBridgeUrl);
-      if (res.success) {
-        setPosBridgeTestResult(`✓ 成功觸發實體開錢箱脈衝 (${res.port || port})！`);
-      } else {
-        setPosBridgeTestResult(`⚠️ 觸發失敗: ${res.message}`);
-      }
-    } catch (e: any) {
-      setPosBridgeTestResult(`⚠️ 錯誤: ${e?.message || e}`);
-    } finally {
-      setPosBridgeTesting(false);
-    }
-  };
-
-  const handleTestBridgePrintLPT1 = async () => {
-    setPosBridgeTesting(true);
-    setPosBridgeTestResult(null);
-    try {
-      const port = billPrinter.usbPort || 'LPT1:';
-      const sampleText = `================================\n   SABAY BBQ 本機橋接測試單\n================================\n時間: ${new Date().toLocaleString()}\n連接埠: ${port}\n狀態: LOCAL-PRINTER-POS-BRIDGE 正常\n================================\n`;
-      const res = await printViaBridge({
-        text: sampleText,
-        port: port,
-        autoOpenDrawer: false
-      }, posBridgeUrl);
-
-      if (res.success) {
-        setPosBridgeTestResult(`✓ 成功發送測試列印指令至 ${res.port || port}！`);
-      } else {
-        setPosBridgeTestResult(`⚠️ 列印失敗: ${res.message}`);
-      }
-    } catch (e: any) {
-      setPosBridgeTestResult(`⚠️ 錯誤: ${e?.message || e}`);
-    } finally {
-      setPosBridgeTesting(false);
-    }
-  };
-
-  const fetchPrinterSettings = async () => {
-    try {
-      const res = await apiFetch('/api/printer/settings');
-      if (res.ok) {
-        const data = await res.json();
-        if (data.kitchen) setKitchenPrinter(data.kitchen);
-        if (data.bill) setBillPrinter(data.bill);
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  const handleSavePrinters = async () => {
-    try {
-      const res = await apiFetch('/api/printer/settings', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kitchen: kitchenPrinter, bill: billPrinter })
-      });
-      if (res.ok) {
-        setPrinterSaveSuccess('✅ 印表機與硬體設定儲存成功！');
-        setTimeout(() => setPrinterSaveSuccess(null), 3000);
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  // Fetch global rules and printer settings once on initial mount
+  // Fetch global option rules once on initial mount
   useEffect(() => {
     fetchGlobalRules();
-    fetchPrinterSettings();
   }, [fetchGlobalRules]);
-
-  // Fetch print logs only when entering printer or stats tabs
-  useEffect(() => {
-    if (activeSubTab === 'printer' || activeSubTab === 'stats') {
-      fetchPrintLogs();
-    }
-  }, [activeSubTab]);
-
-  // Fetch takeout status on-demand (only needed for stats tab display, 5s interval eliminated)
-  useEffect(() => {
-    if (activeSubTab !== 'stats') return;
-    const fetchTakeoutStatus = async () => {
-      try {
-        const res = await apiFetch('/api/takeout/status');
-        if (res.ok) {
-          const d = await res.json();
-          setTakeoutStatus(d);
-        }
-      } catch (e) {
-        console.warn('[Takeout Polling Warning]:', e);
-      }
-    };
-    fetchTakeoutStatus();
-  }, [activeSubTab]);
-
-  // Load Google members statistics
-  const loadMembers = () => {
-    const list = memberService.getMembers();
-    setMembersList(list);
-  };
-
-  useEffect(() => {
-    loadMembers();
-    window.addEventListener('storage', loadMembers);
-    window.addEventListener('local-points-updated', loadMembers);
-    return () => {
-      window.removeEventListener('storage', loadMembers);
-      window.removeEventListener('local-points-updated', loadMembers);
-    };
-  }, []);
-
-  // Members points modification rules
-  const handleAdjustPoints = (email: string) => {
-    const member = membersList.find(m => m.email === email);
-    if (!member) return;
-    setAdjustPointsModal({
-      isOpen: true,
-      email: member.email,
-      name: member.name,
-      currentPoints: member.points || 0,
-    });
-  };
-
-  const handleSavePointsAdjustment = (amount: number) => {
-    const currentAdjustModal = useDashboardStore.getState().adjustPointsModal;
-    if (!currentAdjustModal) return { success: false, error: '未選擇會員！' };
-    const res = memberService.updateMemberPoints(currentAdjustModal.email, amount);
-    if (res.success) {
-      setAdjustPointsModal(null);
-      return { success: true };
-    }
-    return { success: false, error: res.error || '儲存點數時發生資料處理錯誤！' };
-  };
-
-  const handleDeleteMember = (email: string) => {
-    const masked = getMaskedEmail(email);
-    setConfirmActionModal({
-      isOpen: true,
-      title: '🚨 會員資料永久刪除確認',
-      message: `您確定要永久刪除會員帳戶 [${masked}] 嗎？此操作將同時清空其全部點數與儲值紀錄，且無法復原。`,
-      actionLabel: '確定刪除 Delete',
-      onConfirm: () => {
-        memberService.deleteMember(email);
-      },
-    });
-  };
 
   // Modals triggers utilizing reactive Zustand hook dispatchers
   const triggerAddMenuItemMode = useCallback(() => { setEditingItem(null); setIsDishFormOpen(true); }, [setEditingItem, setIsDishFormOpen]);

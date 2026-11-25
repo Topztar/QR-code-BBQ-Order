@@ -165,25 +165,6 @@ if (typeof window !== 'undefined' && !isEmulatorMode) {
   }, 100);
 }
 
-let rtdbInstance: any = null;
-export const getLazyRtdb = async () => {
-  if (rtdbInstance) return rtdbInstance;
-  const rtdbUrl = (firebaseConfig as any).databaseURL || (import.meta as any).env?.VITE_FIREBASE_DATABASE_URL;
-  if (!rtdbUrl) return null;
-  
-  try {
-    const { getDatabase, connectDatabaseEmulator } = await import('firebase/database');
-    rtdbInstance = getDatabase(app, rtdbUrl);
-    const isEmulatorMode = (import.meta as any).env?.VITE_USE_FIREBASE_EMULATOR === 'true';
-    if (isEmulatorMode) {
-      connectDatabaseEmulator(rtdbInstance, 'localhost', 9000);
-    }
-  } catch (err) {
-    console.warn('[Firebase] Realtime Database init warning:', err);
-  }
-  return rtdbInstance;
-};
-
 if (isEmulatorMode) {
   // Auth emulator will be connected lazily when auth is requested
   console.log('[Firebase] Running in emulator mode.');

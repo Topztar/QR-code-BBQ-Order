@@ -41,6 +41,21 @@ jobs:
             npm install --no-audit --no-fund
           fi
 
+      - name: Verify Git Build-Artifact Hygiene (No Tracked functions/lib JS)
+        run: |
+          tracked_lib=$(git ls-files functions/lib)
+          if [ -n "$tracked_lib" ]; then
+            echo "Error: Compiled JS build artifacts under functions/lib/ must not be tracked in Git:"
+            echo "$tracked_lib"
+            exit 1
+          fi
+          echo "✅ Zero compiled functions/lib JS artifacts tracked in Git"
+
+      - name: Build Shared & Cloud Functions Gen 2 Packages
+        run: |
+          npm --prefix shared run build
+          npm --prefix functions run build
+
       - name: Run Custom Quality Gate Audits (Security, Perf, Cost)
         run: |
           npm run audit:security

@@ -1,6 +1,6 @@
 import express from 'express';
 import { MenuItem, Category, SoldOutType } from '../../types';
-import { resolveCategoryId, resolveCategoryMultilingualNames } from '../../../functions/src/validators';
+import { resolveCategoryId, resolveCategoryMultilingualNames } from '@sabay/shared';
 
 export interface MenuRouteContext {
   getLiveMenu: () => MenuItem[];

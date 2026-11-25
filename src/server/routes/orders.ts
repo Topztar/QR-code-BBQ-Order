@@ -1,7 +1,17 @@
 import express from 'express';
 import { doc, deleteDoc } from 'firebase/firestore';
 import { Order, OrderItem, MenuItem, TableConfig, Reservation } from '../../types';
-import { orderCalculationService, checkItemCompleteConcurrency, checkRefundLogsGate, computeDishDeductions } from '@sabay/shared';
+import {
+  orderCalculationService,
+  checkItemCompleteConcurrency,
+  checkRefundLogsGate,
+  computeDishDeductions,
+  VALID_ORDER_STATUSES,
+  isOrderStatusTransitionRejected,
+  computeOrderStatusUpdates,
+  computeOrderCheckoutUpdates,
+  computeOrderItemCompletionUpdates,
+} from '@sabay/shared';
 import { validateOrderPayload, validateCheckoutPayload, validateRatingPayload } from '../../../functions/src/validators';
 
 export interface OrderRouteContext {
@@ -31,8 +41,6 @@ export { getMappedTableId };
 
 const localIdempotencyKeys = new Map<string, { orderId: string, expiresAt: number }>();
 let lastCashDrawerOpenTime = 0; // G-12: Cash drawer debounce flag
-
-const VALID_ORDER_STATUSES = ['pending', 'confirmed', 'pending_kitchen_verification', 'preparing', 'delivering', 'paid', 'completed', 'cancelled'];
 
 export function registerOrdersRoutes(app: express.Express, ctx: OrderRouteContext) {
   const {
@@ -103,6 +111,17 @@ export function registerOrdersRoutes(app: express.Express, ctx: OrderRouteContex
     const includeDeleted = req.query?.includeDeleted === 'true';
     const liveOrders = getLiveOrders();
     res.json(includeDeleted ? liveOrders : liveOrders.filter((o: any) => !o?.isDeleted));
+  });
+
+  // 2.5 Export Historical Completed Orders (Local Dev Parity with Cloud Functions)
+  app.get('/api/orders/export', (req, res) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+    const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 90);
+    const thresholdIso = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+    const exported = getLiveOrders()
+      .filter((o) => o && !o.isDeleted && o.status === 'completed' && (o.createdAt || '') >= thresholdIso)
+      .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+    res.json({ orders: exported, count: exported.length, days });
   });
 
   // 3. Place New Order
@@ -206,6 +225,10 @@ export function registerOrdersRoutes(app: express.Express, ctx: OrderRouteContex
             isAvailable = true;
           }
         } else if (dish.available === false) {
+          isAvailable = false;
+        }
+
+        if (dish.trackInventory && typeof dish.inventoryCount === 'number' && dish.inventoryCount <= 0) {
           isAvailable = false;
         }
 
@@ -334,10 +357,14 @@ export function registerOrdersRoutes(app: express.Express, ctx: OrderRouteContex
     }
 
     // Interlock table status: when order is successfully placed, transition table status to in_use
+    const clientSubmittedTotal =
+      typeof req.body?.total === 'number' && Number.isFinite(req.body.total)
+        ? req.body.total
+        : safePayload.total;
     let priceReconciliation = undefined;
-    if (safePayload.total !== undefined && Math.abs(safePayload.total - verifiedPricing.total) > 0.01) {
+    if (clientSubmittedTotal !== undefined && Math.abs(clientSubmittedTotal - verifiedPricing.total) > 0.01) {
       priceReconciliation = {
-        clientTotal: safePayload.total,
+        clientTotal: clientSubmittedTotal,
         serverTotal: verifiedPricing.total,
         reason: 'Menu prices or discounts have been updated. The client will adopt server totals.'
       };
@@ -397,11 +424,7 @@ export function registerOrdersRoutes(app: express.Express, ctx: OrderRouteContex
     }
 
     // Only block reviving cancelled orders or rolling paid orders backward to unconfirmed intake states.
-    const isAlreadyCancelled = order.status === 'cancelled';
-    const isPaidRevertingToIntake =
-      (order.status === 'paid' || order.isPaid === true) &&
-      (status === 'pending' || status === 'confirmed' || status === 'pending_kitchen_verification');
-    if ((isAlreadyCancelled && status !== 'cancelled') || isPaidRevertingToIntake) {
+    if (isOrderStatusTransitionRejected(order, status)) {
       return res.status(409).json({ error: `訂單已結帳或已取消 (${order.status})，不可變更為 ${status}` });
     }
 
@@ -501,31 +524,7 @@ ${customerDetails}
     }
 
     const nowIso = new Date().toISOString();
-    const wasPaid = Boolean(order.isPaid || order.status === 'paid' || order.paymentStatus === 'paid' || order.paidAt);
-    order.status = status;
-    order.updatedAt = nowIso;
-    if (status === 'completed') {
-      order.kdsStatus = 'completed';
-      order.kdsCompleted = true;
-      order.kdsCompletedAt = order.kdsCompletedAt || nowIso;
-      order.completedAt = order.completedAt || nowIso;
-    } else if (status === 'cancelled') {
-      order.kdsStatus = 'cancelled';
-      order.kdsCompleted = false;
-    } else if (status === 'preparing' || status === 'delivering') {
-      order.kdsStatus = 'preparing';
-      order.kdsCompleted = false;
-      order.kdsCompletedAt = null;
-      order.completedAt = null;
-    } else if (status === 'pending' || status === 'confirmed' || status === 'pending_kitchen_verification') {
-      order.kdsStatus = 'pending';
-      order.kdsCompleted = false;
-    }
-    if (wasPaid) {
-      order.isPaid = true;
-      order.paymentStatus = 'paid';
-      order.paidAt = order.paidAt || nowIso;
-    }
+    Object.assign(order, computeOrderStatusUpdates(order, status, nowIso));
 
     // Interlock status: if order starts cooking (preparing), automatically set table status to in_use
     if (status === 'preparing' && order.tableNumber) {
@@ -694,36 +693,13 @@ ${customerDetails}
     order.total = pricing.total;
     
     const nowIso = new Date().toISOString();
-    order.isPaid = isPaid !== undefined ? !!isPaid : true;
-    order.paymentStatus = order.isPaid ? 'paid' : 'unpaid';
-    if (order.isPaid) {
-      order.paidAt = order.paidAt || nowIso;
-    }
-
-    const items = Array.isArray(order.items) ? order.items : [];
-    const allItemsDone = items.length > 0 && items.every(it => Boolean(it?.isCompleted));
-    const isKdsDone =
-      order.status === 'completed' ||
-      order.kdsStatus === 'completed' ||
-      order.kdsCompleted === true ||
-      Boolean(order.completedAt) ||
-      allItemsDone;
-
-    // Preserve completed status if kitchen already finished, otherwise mark paid while keeping in KDS
-    if (order.isPaid && order.status !== 'cancelled') {
-      if (isKdsDone) {
-        order.status = 'completed';
-        order.kdsStatus = 'completed';
-        order.kdsCompleted = true;
-        order.kdsCompletedAt = order.kdsCompletedAt || nowIso;
-        order.completedAt = order.completedAt || nowIso;
-      } else {
-        order.status = 'paid';
-        order.kdsStatus = order.kdsStatus || 'preparing';
-        order.kdsCompleted = false;
-      }
-    }
-    order.updatedAt = nowIso;
+    const markPaid = isPaid !== undefined ? !!isPaid : true;
+    const { updates: checkoutUpdates } = computeOrderCheckoutUpdates(
+      order,
+      { paymentMethod: order.paymentMethod, isPaid: markPaid },
+      nowIso
+    );
+    Object.assign(order, checkoutUpdates);
 
     // Update table status and reservations automatically based on whether the order is checked out and paid
     if (order.tableNumber) {
@@ -840,46 +816,19 @@ ${customerDetails}
       const bulkNowIso = new Date().toISOString();
       for (const order of ordersToCheckout) {
         const id = order.id;
-        const currentStatus = order.status;
-        const items = Array.isArray(order.items) ? order.items : [];
-        const allItemsDone = items.length > 0 && items.every(it => Boolean(it?.isCompleted));
-        const isKdsDone =
-          currentStatus === 'completed' ||
-          order.kdsStatus === 'completed' ||
-          order.kdsCompleted === true ||
-          Boolean(order.completedAt) ||
-          allItemsDone;
-        const resolvedStatus = currentStatus === 'cancelled'
-          ? 'cancelled'
-          : isKdsDone
-            ? 'completed'
-            : 'paid';
+        const { resolvedStatus, updates: checkoutUpdates } = computeOrderCheckoutUpdates(
+          order,
+          { paymentMethod, cashTendered, changeAmount, isPaid: true },
+          bulkNowIso
+        );
         resolvedOrderStatuses[id] = resolvedStatus;
+        Object.assign(order, checkoutUpdates);
 
-        order.paymentMethod = paymentMethod || order.paymentMethod || 'cash';
-        (order as any).cashTendered = cashTendered || 0;
-        (order as any).changeAmount = changeAmount || 0;
-        order.isPaid = true;
-        order.paymentStatus = 'paid';
-        order.paidAt = order.paidAt || bulkNowIso;
-        order.status = resolvedStatus;
-        if (resolvedStatus === 'completed') {
-          order.kdsStatus = 'completed';
-          order.kdsCompleted = true;
-          order.kdsCompletedAt = order.kdsCompletedAt || bulkNowIso;
-          order.completedAt = order.completedAt || bulkNowIso;
-        } else if (resolvedStatus !== 'cancelled') {
-          order.kdsStatus = order.kdsStatus || 'preparing';
-          order.kdsCompleted = false;
-        }
-        
         const pricing = orderCalculationService.calculateOrderPricing(order as any, getLiveMenu());
         order.subtotal = pricing.subtotal;
         order.serviceCharge = pricing.serviceCharge;
         (order as any).discount = pricing.discount;
         order.total = pricing.total;
-        
-        order.updatedAt = bulkNowIso;
 
         if (order.tableNumber && !isTakeoutTable(String(order.tableNumber))) {
           tableSet.add(String(order.tableNumber).trim());
@@ -975,18 +924,7 @@ ${customerDetails}
     }
 
     const nowIso = new Date().toISOString();
-    const wasPaid = Boolean(order.isPaid || order.status === 'paid' || order.paymentStatus === 'paid' || order.paidAt);
-    order.status = 'completed';
-    order.kdsStatus = 'completed';
-    order.kdsCompleted = true;
-    order.kdsCompletedAt = order.kdsCompletedAt || nowIso;
-    order.completedAt = order.completedAt || nowIso;
-    order.updatedAt = nowIso;
-    if (wasPaid) {
-      order.isPaid = true;
-      order.paymentStatus = 'paid';
-      order.paidAt = order.paidAt || nowIso;
-    }
+    Object.assign(order, computeOrderStatusUpdates(order, 'completed', nowIso));
     saveStateToDisk();
     res.json(order);
   });
@@ -1013,53 +951,20 @@ ${customerDetails}
       });
     }
 
-    const item = order.items.find(it => it.id === itemId);
-    if (!item) {
+    const nowIso = new Date().toISOString();
+    const completion = computeOrderItemCompletionUpdates(
+      order,
+      itemId,
+      isCompleted,
+      isPrepared,
+      nowIso,
+      modifier
+    );
+    if (!completion) {
       return res.status(404).json({ error: 'Item not found' });
     }
 
-    if (typeof isCompleted !== 'undefined') {
-      item.isCompleted = !!isCompleted;
-      if (item.isCompleted) {
-        item.isPrepared = true;
-      }
-    }
-
-    if (typeof isPrepared !== 'undefined') {
-      item.isPrepared = !!isPrepared;
-    }
-
-    const nowIso = new Date().toISOString();
-    const wasPaid = Boolean(order.isPaid || order.status === 'paid' || order.paymentStatus === 'paid' || order.paidAt);
-    const allCompleted = order.items.every(it => it.isCompleted);
-    if (allCompleted && order.status !== 'cancelled') {
-      order.status = 'completed';
-      order.kdsStatus = 'completed';
-      order.kdsCompleted = true;
-      order.kdsCompletedAt = order.kdsCompletedAt || nowIso;
-      order.completedAt = order.completedAt || nowIso;
-    } else if (!allCompleted && (order.status === 'completed' || order.kdsCompleted)) {
-      order.status = wasPaid ? 'paid' : 'preparing';
-      order.kdsStatus = 'preparing';
-      order.kdsCompleted = false;
-      order.kdsCompletedAt = null;
-      order.completedAt = null;
-    }
-    if (wasPaid) {
-      order.isPaid = true;
-      order.paymentStatus = 'paid';
-      order.paidAt = order.paidAt || nowIso;
-    }
-
-    order.updatedAt = nowIso;
-    order.version = currentVersion + 1;
-    if (modifier && typeof modifier === 'object') {
-      order.lastUpdatedBy = {
-        role: modifier.role || 'staff',
-        deviceId: modifier.deviceId || 'unknown',
-        timestamp: nowIso
-      };
-    }
+    Object.assign(order, completion.updates);
 
     saveStateToDisk();
     res.json(order);

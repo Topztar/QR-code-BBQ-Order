@@ -45,7 +45,7 @@ The export API (`GET /api/orders/export`) provides a unified query layer:
 Client writes directly to `archived_orders` are forbidden. Authenticated staff may read historical archives:
 ```protobuf
 match /archived_orders/{orderId} {
-  allow read: if request.auth != null;
+  allow read: if isStaffOrAdmin();
   allow write: if false; // Cloud Functions Admin SDK bypasses rules
 }
 ```

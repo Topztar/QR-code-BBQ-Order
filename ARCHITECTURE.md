@@ -36,7 +36,7 @@ Both development modes are **formally retained**, each with non-overlapping resp
 2. **State Hygiene:**  
    `persisted_state.json` serves exclusively as the local offline state cache for `server.ts`. It is explicitly ignored in [`.gitignore:7`](file:///c:/Works/QR-code-BBQ-Order/.gitignore#L7) and protected by [`scripts/post_test_hygiene.cjs`](file:///c:/Works/QR-code-BBQ-Order/scripts/post_test_hygiene.cjs#L59) to prevent git noise or test cross-contamination.
 3. **Integration Test Protection:**  
-   [`src/server/routes/orders.ts`](file:///c:/Works/QR-code-BBQ-Order/src/server/routes/orders.ts) is strictly protected as the Vitest integration adapter, guaranteeing continuous 100% pass rates across all 32 test suites (284 tests).
+   [`src/server/routes/orders.ts`](file:///c:/Works/QR-code-BBQ-Order/src/server/routes/orders.ts) is strictly protected as the Vitest integration adapter, guaranteeing continuous 100% pass rates across all 41 test suites (373 tests) while delegating pricing, category i18n, and KDS/checkout state transitions to `@sabay/shared`.
 
 ---
 
@@ -49,7 +49,7 @@ Active dining room operations (table turnover tracking via `deriveTableStatuses`
 - **Trigger:** Cloud Scheduler trigger `archiveSettledOrdersNightly` running daily at 04:00 AM Asia/Taipei (`0 4 * * *`).
 - **Retention Grace Period:** Orders remain in `orders` for 24 hours. Only orders with terminal status (`completed`, `paid`, `cancelled`) older than the cutoff timestamp are migrated.
 - **Atomic Migration:** Chunks of $\le 400$ documents migrated atomically via `db.batch()` into `archived_orders` with server timestamp audit fields (`archivedAt`, `archivedReason`, `archivedBy`).
-- **Query Routing:** [`GET /api/orders/export`](file:///c:/Works/QR-code-BBQ-Order/functions/src/routes/orders.ts#L270-L310) queries both `orders` and `archived_orders`, deduplicating records by document ID.
+- **Query Routing:** [`GET /api/orders/export`](file:///c:/Works/QR-code-BBQ-Order/functions/src/routes/orders/orders.repository.ts#L226-L270) queries both `orders` and `archived_orders`, deduplicating records by document ID.
 - **Security Rules:** Client writes to `archived_orders` are completely denied (`allow write: if false;`), while authenticated staff are granted read access (`allow read: if isStaffOrAdmin();`).
 
 ---
@@ -60,25 +60,26 @@ Active dining room operations (table turnover tracking via `deriveTableStatuses`
 `server.ts` previously exceeded 3,250 lines with mixed responsibilities (Express router setup, hardware printer socket drivers, menu CRUD, inventory calculations, image compression, staff authentication).
 
 ### Decision: Domain-Driven Route Delegation
-`server.ts` was refactored down to 1,688 lines by delegating endpoints to specialized route modules under `src/server/routes/`:
-- `images.ts`: WebP/AVIF upload and Sharp image transformation.
+`server.ts` was refactored down to 1,672 lines by delegating endpoints to specialized route modules under `src/server/routes/`, while Cloud Functions Gen 2 (`functions/src/routes/orders.ts`) separates Express routing from [`orders.validator.ts`](file:///c:/Works/QR-code-BBQ-Order/functions/src/routes/orders/orders.validator.ts), [`orders.repository.ts`](file:///c:/Works/QR-code-BBQ-Order/functions/src/routes/orders/orders.repository.ts), and [`orders.service.ts`](file:///c:/Works/QR-code-BBQ-Order/functions/src/routes/orders/orders.service.ts):
+- `orders/`: Order submission, atomic Firestore read-before-write checkout transactions, KDS mutex leases, and historical export.
+- `images.ts`: WebP/AVIF upload and unified Sharp image transformation (`functions/src/services/imageProcessing.ts`).
 - `menu.ts`: Menu items, categories, and inventory stock tracking.
 - `tables.ts`: Table layout configurations and real-time floor statuses.
-- `staff.ts`: PIN verification and staff session management.
+- `staff.ts`: PIN verification (with 5-strike 15m lockout) and staff session management.
 - `inventory.ts`: Stock levels and ingredient depletion logs.
 - `members.ts`: VIP points, loyalty tiers, and customer reward redemption.
 - `settings.ts`: Store operating hours, printer IPs, and notification settings.
 
-All route modules export declarative registration handlers (`registerXRoutes(app, context)`), preserving exact API contracts, middleware chains, and Vitest test harnesses.
+All route modules export declarative registration handlers (`registerXRoutes(app, context)`), sharing domain logic via `@sabay/shared` (`orderCalculationService`, `orderStateMachine`, `categoryI18n`, `tableAllocation`) while preserving exact API contracts, middleware chains, and Vitest test harnesses.
 
 ---
 
 ## 4. Verification & Quality Gates
 
 The system enforces six strict quality gates (`node scripts/run_all_checks.cjs`):
-1. **Stage 1 — Security Audit:** Zero-trust security rules and payload sanitization (23 checks).
-2. **Stage 2 — Performance Audit:** Bundle budgets, zero CLS, and lazy code-splitting (24 checks).
-3. **Stage 3 — Cost Guard Audit:** Cloud Functions Gen 2 instance ceilings and cache TTLs (21 checks).
-4. **Stage 4 — Strict Typecheck:** `npx tsc -b` with 0 type errors.
-5. **Stage 5 — Automated Tests:** Vitest full suite (32 test files, 284/284 tests passed).
-6. **Stage 6 — Production Build:** Dual Gzip + Brotli pre-compression (Brotli size $\le 60\text{ KB}$).
+1. **Stage 1 — Security Audit:** Zero-trust security rules (`firestore.rules` & `storage.rules`) and payload sanitization (23 checks).
+2. **Stage 2 — Performance Audit:** Bundle budgets (`index-*.js` 115.79 KB raw / 29.01 KB Brotli), zero CLS, and lazy code-splitting (24 checks).
+3. **Stage 3 — Cost Guard Audit:** Cloud Functions Gen 2 instance ceilings and cache TTLs (23 checks).
+4. **Stage 4 — Strict Typecheck:** `npx tsc --noEmit` with 0 type errors.
+5. **Stage 5 — Automated Tests:** Vitest full suite (41 test files, 373/373 tests passed).
+6. **Stage 6 — Production Build:** Dual Gzip + Brotli pre-compression (Brotli size $\le 60\text{ KB}$; verified $29.01\text{ KB}$).

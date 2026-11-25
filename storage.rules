@@ -1,10 +1,13 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    // Menu item images: public read, restricted write
+    // Menu item images: public read, staff/admin-only write (customer & non-staff direct writes blocked)
     match /dishes/{allPaths=**} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if request.auth != null && (
+        request.auth.token.staff == true ||
+        request.auth.token.admin == true
+      );
     }
 
     match /{allPaths=**} {

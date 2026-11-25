@@ -53,7 +53,15 @@ async function seedData() {
   const defaultSystemSettings = {
     liveStaffPin: '070718',
     liveOperatingHours: [
-      { id: 'default-slot', days: ['1', '2', '3', '4', '5', '6', '0'], openTime: '17:00', closeTime: '23:30' }
+      {
+        id: 'default-slot',
+        name: '模擬器全時段營業 (Emulator All-Day)',
+        days: [0, 1, 2, 3, 4, 5, 6],
+        start: '00:00',
+        end: '23:59',
+        isActive: true,
+        isReservableOnly: false
+      }
     ],
     liveRestDays: [],
     liveCustomerNotice: '歡迎光臨沙貝泰式炭火燒烤！本地模擬環境測試中 🇹🇭',
@@ -141,7 +149,52 @@ async function seedData() {
     activeSessionToken: 'valid-staff-session',
     tokenExpiresAt: Date.now() + (24 * 3600 * 1000),
     failedAttempts: 0,
-    lockedUntil: null
+    lockedUntil: null,
+    roles: {
+      manager: staffPinHash,
+      cashier: staffPinHash,
+      kitchen: staffPinHash
+    }
+  });
+  await commitBatchIfNeeded();
+
+  // 7. Seed Deterministic Archival-Eligible Settled Order (>48h old, status='completed')
+  // Excluded from active KDS/Cashier live queues ('pending'|'confirmed'|'preparing'|'delivering'|'paid'),
+  // ready for archiveSettledOrdersNightly & GET /api/orders/export verification.
+  const archivalSeedIso = new Date(Date.now() - 48 * 3600 * 1000).toISOString();
+  const archivalSampleOrderRef = db.collection('orders').doc('ORD-SEED-ARCHIVAL-001');
+  batch.set(archivalSampleOrderRef, {
+    id: 'ORD-SEED-ARCHIVAL-001',
+    tableNumber: '2',
+    items: [
+      {
+        id: 'oi-seed-archival-1',
+        menuItemId: menu[0]?.id || 'sk-01',
+        name: menu[0]?.name || { zh: '招牌碳烤串' },
+        price: menu[0]?.price || 120,
+        qty: 2,
+        isCompleted: true,
+        isPrepared: true,
+        customization: { spiciness: 1, notes: '', selectedAddOns: [] }
+      }
+    ],
+    subtotal: (menu[0]?.price || 120) * 2,
+    discount: 0,
+    serviceCharge: 0,
+    total: (menu[0]?.price || 120) * 2,
+    status: 'completed',
+    kdsStatus: 'completed',
+    kdsCompleted: true,
+    kdsCompletedAt: archivalSeedIso,
+    completedAt: archivalSeedIso,
+    paymentStatus: 'paid',
+    isPaid: true,
+    paidAt: archivalSeedIso,
+    isDeleted: false,
+    paymentMethod: 'cash',
+    customerName: '歷史封存測試單',
+    createdAt: archivalSeedIso,
+    updatedAt: archivalSeedIso
   });
   await commitBatchIfNeeded();
 
@@ -155,8 +208,9 @@ async function seedData() {
   console.log(`  - Menu Items: ${menu.length}`);
   console.log(`  - Ingredients: ${ingredients.length}`);
   console.log(`  - Tables: ${defaultTables.length}`);
-  console.log(`  - Settings: system document created`);
+  console.log(`  - Settings: system document created (valid OperatingHourSlot schema)`);
   console.log(`  - Secrets: credentials document created (PIN: 070718, Token: valid-staff-session)`);
+  console.log(`  - Archival Fixture: ORD-SEED-ARCHIVAL-001 (>48h settled order)`);
 }
 
 seedData().catch((err) => {

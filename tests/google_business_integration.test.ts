@@ -229,9 +229,12 @@ describe('Google Business Profile Integration Tests', () => {
       expect(kdsCode).toContain('setInterval(() => triggerPrinterPing(printerIp), 30000)');
     });
 
-    it('must retain Local POS Hardware Bridge ping in ManagerDashboard.tsx', () => {
+    it('must retain Local POS Hardware Bridge ping in ManagerDashboard / useManagerPrinterAndBridge', () => {
       const mgrCode = fs.readFileSync(path.join(__dirname, '../src/components/ManagerDashboard.tsx'), 'utf-8');
-      expect(mgrCode).toContain('setInterval(checkBridgeStatus, 15000)');
+      const bridgeHookPath = path.join(__dirname, '../src/hooks/manager/useManagerPrinterAndBridge.ts');
+      const bridgeHookCode = fs.existsSync(bridgeHookPath) ? fs.readFileSync(bridgeHookPath, 'utf-8') : '';
+      expect(mgrCode).toContain('useManagerPrinterAndBridge');
+      expect(mgrCode + '\n' + bridgeHookCode).toContain('setInterval(checkBridgeStatus, 15000)');
     });
 
     it('must retain real-time Firestore Table snapshot and TableStatusSync derivation logic (Phase 3.3 S-06)', () => {

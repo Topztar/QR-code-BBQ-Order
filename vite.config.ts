@@ -10,6 +10,13 @@ export default defineConfig(({ mode }) => {
   const region = 'asia-east1';
 
   return {
+    ...(isEmulator
+      ? {
+          define: {
+            'import.meta.env.VITE_USE_FIREBASE_EMULATOR': JSON.stringify('true'),
+          },
+        }
+      : {}),
     plugins: [
     react(),
     tailwindcss(),
@@ -130,8 +137,8 @@ export default defineConfig(({ mode }) => {
           if (id.includes('node_modules/lucide-react')) {
             return 'vendor-icons';
           }
-          // 多語系翻譯字典（186KB，獨立 chunk 避免阻塞首屏）
-          if (id.includes('src/utils/i18n')) {
+          // 多語系翻譯字典（獨立 chunk 避免阻塞首屏與撐爆主入口體積）
+          if (id.includes('src/utils/i18n') || id.includes('src/constants/translations')) {
             return 'i18n';
           }
         }

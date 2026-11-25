@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useEffect, useCallback } from 'react';
 import { Order, OrderItem, MenuItem } from '../types';
 import { apiFetch } from '../lib/api';
 import { addRequestToQueue } from '../lib/offlineQueue';
@@ -44,8 +44,12 @@ export function useOrderSubmit(
     }
   };
   const activeOrderSubmissionsRef = useRef<Set<string>>(new Set());
+  const menuItemsRef = useRef<MenuItem[]>(menuItems);
+  useEffect(() => {
+    menuItemsRef.current = menuItems;
+  }, [menuItems]);
 
-  const handlePlaceOrder = async (orderData: OrderDataPayload) => {
+  const handlePlaceOrder = useCallback(async (orderData: OrderDataPayload) => {
     const clientOrderId = orderData.clientOrderId || `client_ord_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     
     if (activeOrderSubmissionsRef.current.has(clientOrderId)) {
@@ -65,7 +69,7 @@ export function useOrderSubmit(
       items: orderData.items,
       paymentMethod: orderData.paymentMethod,
       isPaid: false
-    }, menuItems);
+    }, menuItemsRef.current);
     const tempId = `ord_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     const description = `桌號 🥢 ${orderData.tableNumber || '外帶'} • 點購 ${orderData.items.length} 份餐點 (金額: $${pricing.total})`;
 
@@ -169,7 +173,7 @@ export function useOrderSubmit(
       }
       throw err;
     }
-  };
+  }, [setOrders]);
 
   return { handlePlaceOrder, activeOrderSubmissionsRef };
 }

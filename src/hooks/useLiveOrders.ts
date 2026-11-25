@@ -1,6 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Order, OrderStatus, TableConfig } from '../types';
-import { orderCalculationService } from '@sabay/shared';
+import {
+  orderCalculationService,
+  computeOrderStatusUpdates,
+  computeOrderCheckoutUpdates,
+  computeOrderItemCompletionUpdates,
+  isTakeoutTable,
+} from '@sabay/shared';
 import { apiFetch } from '../lib/api';
 import { db, isFirebaseSyncEnabled, ensureFirebaseAuthReady } from '../lib/firebase';
 import { collection, onSnapshot, query, limit, where, orderBy } from 'firebase/firestore';
@@ -9,7 +15,7 @@ import { getOfflineQueue, addRequestToQueue, removeOrderRequestsFromQueue, proce
 import { safeStorage } from '../lib/safeStorage';
 import { sessionAuth } from '../lib/sessionAuth';
 
-// ?? 0 ?�端?�本跨�??�即?�廣?�頻??(Zero-Cost Local Cross-Tab Sync)
+// ⚡ 零雲端成本跨分頁即時廣播頻道 (Zero-Cost Local Cross-Tab Sync)
 let ordersBroadcastChannel: BroadcastChannel | null = null;
 if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
   try {
@@ -207,6 +213,10 @@ export function useLiveOrders(
   useEffect(() => {
     ordersRef.current = orders;
   }, [orders]);
+  const runtimeCtxRef = useRef({ activeTab, currentDeviceId, handleUpdateTableStatus });
+  useEffect(() => {
+    runtimeCtxRef.current = { activeTab, currentDeviceId, handleUpdateTableStatus };
+  }, [activeTab, currentDeviceId, handleUpdateTableStatus]);
   const recentStatusTransitionsRef = useRef<Map<string, RecentOrderTransition>>(new Map());
   const pendingMutationsRef = useRef<Map<string, number>>(new Map());
   const deletedOrderIdsRef = useRef<BoundedSet<string>>(new BoundedSet(1000));
@@ -419,7 +429,7 @@ export function useLiveOrders(
             }, retryDelay);
           }
         });
-      } catch (e) {
+      } catch (_e) {
         fetchOrdersFromApi();
         if (!reconnectTimer && !isCancelled) {
           retryCount++;
@@ -472,41 +482,12 @@ export function useLiveOrders(
     };
   }, [isStaffView, isStaffAuthenticated, syncActive, reconcileOrders]);
 
-  const handleUpdateOrderStatus = async (orderId: string, status: OrderStatus) => {
-    const description = `?�新 ?�� 訂單 #${orderId.replace('offline_temp_', '?��?')} ?�?�至??{status}?�`;
+  const handleUpdateOrderStatus = useCallback(async (orderId: string, status: OrderStatus) => {
+    const description = `更新 離線 訂單 #${orderId.replace('offline_temp_', '臨時')} 狀態至「${status}」`;
     const isOnline = getIsOnline();
     const nowIso = new Date().toISOString();
     const currentOrder = ordersRef.current.find(o => o.id === orderId);
-    const wasPaid = Boolean(
-      currentOrder?.isPaid ||
-      currentOrder?.status === 'paid' ||
-      currentOrder?.paymentStatus === 'paid' ||
-      currentOrder?.paidAt
-    );
-
-    const statusUpdates: Partial<Order> = { status, updatedAt: nowIso };
-    if (status === 'completed') {
-      statusUpdates.kdsStatus = 'completed';
-      statusUpdates.kdsCompleted = true;
-      statusUpdates.kdsCompletedAt = currentOrder?.kdsCompletedAt || nowIso;
-      statusUpdates.completedAt = currentOrder?.completedAt || nowIso;
-    } else if (status === 'cancelled') {
-      statusUpdates.kdsStatus = 'cancelled';
-      statusUpdates.kdsCompleted = false;
-    } else if (status === 'preparing' || status === 'delivering') {
-      statusUpdates.kdsStatus = 'preparing';
-      statusUpdates.kdsCompleted = false;
-      statusUpdates.kdsCompletedAt = null;
-      statusUpdates.completedAt = null;
-    } else if (status === 'pending' || status === 'confirmed' || status === 'pending_kitchen_verification') {
-      statusUpdates.kdsStatus = 'pending';
-      statusUpdates.kdsCompleted = false;
-    }
-    if (wasPaid) {
-      statusUpdates.isPaid = true;
-      statusUpdates.paymentStatus = 'paid';
-      statusUpdates.paidAt = currentOrder?.paidAt || nowIso;
-    }
+    const statusUpdates: Partial<Order> = computeOrderStatusUpdates(currentOrder, status, nowIso);
 
     broadcastOrderEvent({ type: 'ORDER_UPDATED', orderId, updates: statusUpdates });
 
@@ -553,10 +534,10 @@ export function useLiveOrders(
     if (getOfflineQueue().length > 0) {
       processOfflineQueue().catch(() => {});
     }
-  };
+  }, []);
 
-  const handleToggleOrderItemComplete = async (orderId: string, itemId: string, isCompleted: boolean, isPrepared?: boolean) => {
-    const description = `?�新 ?�� 訂單 #${orderId.replace('offline_temp_', '?��?')} ?�單一?��??�?�`;
+  const handleToggleOrderItemComplete = useCallback(async (orderId: string, itemId: string, isCompleted: boolean, isPrepared?: boolean) => {
+    const description = `更新 離線 訂單 #${orderId.replace('offline_temp_', '臨時')} 的單一品項狀態`;
     const isOnline = getIsOnline();
     const nowIso = new Date().toISOString();
     const targetOrder = ordersRef.current.find(o => o.id === orderId);
@@ -567,47 +548,12 @@ export function useLiveOrders(
 
     setOrders(prev => prev.map(o => {
       if (o.id === orderId) {
-        const updatedItems = o.items.map(it => {
-          if (it.id === itemId) {
-            const prep = typeof isPrepared !== 'undefined' ? isPrepared : (isCompleted ? true : (it.isPrepared || false));
-            return { ...it, isCompleted, isPrepared: prep };
-          }
-          return it;
-        });
-        nextItems = updatedItems;
-        const wasPaid = Boolean(o.isPaid || o.status === 'paid' || o.paymentStatus === 'paid' || o.paidAt);
-        const allCompleted = updatedItems.every(item => item.isCompleted);
-
-        let nextStatus = o.status;
-        let nextKdsStatus = o.kdsStatus;
-        let nextKdsCompleted = o.kdsCompleted;
-        let nextKdsCompletedAt = o.kdsCompletedAt;
-        let nextCompletedAt = o.completedAt;
-
-        if (allCompleted && o.status !== 'cancelled') {
-          nextStatus = 'completed';
-          nextKdsStatus = 'completed';
-          nextKdsCompleted = true;
-          nextKdsCompletedAt = o.kdsCompletedAt || nowIso;
-          nextCompletedAt = o.completedAt || nowIso;
-        } else if (!allCompleted && (o.status === 'completed' || o.kdsCompleted)) {
-          nextStatus = wasPaid ? 'paid' : 'preparing';
-          nextKdsStatus = 'preparing';
-          nextKdsCompleted = false;
-          nextKdsCompletedAt = null;
-          nextCompletedAt = null;
-        }
-
-        nextUpdates = {
-          items: updatedItems,
-          status: nextStatus,
-          kdsStatus: nextKdsStatus,
-          kdsCompleted: nextKdsCompleted,
-          kdsCompletedAt: nextKdsCompletedAt,
-          completedAt: nextCompletedAt,
-          ...(wasPaid ? { isPaid: true, paymentStatus: 'paid', paidAt: o.paidAt || nowIso } : {}),
-        };
-        return { ...o, ...nextUpdates };
+        const completion = computeOrderItemCompletionUpdates(o, itemId, isCompleted, isPrepared, nowIso);
+        if (!completion) return o;
+        nextItems = completion.items;
+        const { version: _omitOptimisticVersion, ...optimisticUpdates } = completion.updates;
+        nextUpdates = optimisticUpdates;
+        return { ...o, ...optimisticUpdates };
       }
       return o;
     }));
@@ -629,8 +575,8 @@ export function useLiveOrders(
     });
 
     const modifier = {
-      role: (activeTab === 'kitchen' ? 'kitchen' : 'staff') as 'kitchen' | 'staff',
-      deviceId: currentDeviceId,
+      role: (runtimeCtxRef.current.activeTab === 'kitchen' ? 'kitchen' : 'staff') as 'kitchen' | 'staff',
+      deviceId: runtimeCtxRef.current.currentDeviceId,
       timestamp: nowIso
     };
 
@@ -652,7 +598,7 @@ export function useLiveOrders(
       } else {
         addRequestToQueue(`/api/orders/${orderId}/items/${itemId}/complete`, 'PUT', { isCompleted, isPrepared, expectedVersion, modifier }, description);
       }
-    } catch (err) {
+    } catch (_err) {
       addRequestToQueue(`/api/orders/${orderId}/items/${itemId}/complete`, 'PUT', { isCompleted, isPrepared, expectedVersion, modifier }, description);
     } finally {
       pendingMutationsRef.current.delete(orderId);
@@ -661,10 +607,10 @@ export function useLiveOrders(
     if (getOfflineQueue().length > 0) {
       processOfflineQueue().catch(() => {});
     }
-  };
+  }, []);
 
-  const handleUpdateTableNumber = async (orderId: string, tableNumber: string) => {
-    const description = `修改 ?�� 訂單 #${orderId.replace('offline_temp_', '?��?')} ?��??�至 ${tableNumber} 桌`;
+  const handleUpdateTableNumber = useCallback(async (orderId: string, tableNumber: string) => {
+    const description = `修改 離線 訂單 #${orderId.replace('offline_temp_', '臨時')} 桌號變更至 ${tableNumber} 桌`;
     const isOnline = getIsOnline();
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, tableNumber } : o));
     
@@ -692,14 +638,14 @@ export function useLiveOrders(
       
       addRequestToQueue(`/api/orders/${orderId}/table-number`, 'PUT', { tableNumber }, description);
       return { success: true };
-    } catch (err: any) {
+    } catch (_err: any) {
       addRequestToQueue(`/api/orders/${orderId}/table-number`, 'PUT', { tableNumber }, description);
       return { success: true };
     }
-  };
+  }, []);
 
-  const handleUpdateQuickNotes = async (orderId: string, quickNotes: string) => {
-    const description = `?�新 ?�� 訂單 #${orderId.replace('offline_temp_', '?��?')} ?�註: "${quickNotes}"`;
+  const handleUpdateQuickNotes = useCallback(async (orderId: string, quickNotes: string) => {
+    const description = `更新 離線 訂單 #${orderId.replace('offline_temp_', '臨時')} 備註: "${quickNotes}"`;
     const isOnline = getIsOnline();
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, quickNotes } : o));
 
@@ -727,14 +673,14 @@ export function useLiveOrders(
       
       addRequestToQueue(`/api/orders/${orderId}/quick-notes`, 'PUT', { quickNotes }, description);
       return { success: true };
-    } catch (err: any) {
+    } catch (_err: any) {
       addRequestToQueue(`/api/orders/${orderId}/quick-notes`, 'PUT', { quickNotes }, description);
       return { success: true };
     }
-  };
+  }, []);
 
-  const handleToggleOrderFlag = async (orderId: string, isFlagged: boolean, flagReason: string) => {
-    const description = `設�? ?�� 訂單 #${orderId.replace('offline_temp_', '?��?')} ?�注?��? ${isFlagged ? 'ON' : 'OFF'}`;
+  const handleToggleOrderFlag = useCallback(async (orderId: string, isFlagged: boolean, flagReason: string) => {
+    const description = `設定 離線 訂單 #${orderId.replace('offline_temp_', '臨時')} 關注標記 ${isFlagged ? 'ON' : 'OFF'}`;
     const isOnline = getIsOnline();
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, isFlagged, flagReason } : o));
 
@@ -763,14 +709,14 @@ export function useLiveOrders(
       
       addRequestToQueue(`/api/orders/${orderId}/flag`, 'PUT', { isFlagged, flagReason }, description);
       return { success: true };
-    } catch (err: any) {
+    } catch (_err: any) {
       addRequestToQueue(`/api/orders/${orderId}/flag`, 'PUT', { isFlagged, flagReason }, description);
       return { success: true };
     }
-  };
+  }, []);
 
-  const handleUpdateOrderItems = async (orderId: string, items: any[], refundLogs?: any[]) => {
-    const description = `調整 ?�� 訂單 #${orderId.replace('offline_temp_', '?��?')} ?��??��?`;
+  const handleUpdateOrderItems = useCallback(async (orderId: string, items: any[], refundLogs?: any[]) => {
+    const description = `調整 離線 訂單 #${orderId.replace('offline_temp_', '臨時')} 餐點明細`;
     const isOnline = getIsOnline();
     let computedPricing = { subtotal: 0, serviceCharge: 0, discount: 0, total: 0 };
     setOrders(prev => prev.map(o => {
@@ -780,7 +726,6 @@ export function useLiveOrders(
         ...o,
         items,
         ...computedPricing,
-        
       };
     }));
 
@@ -811,12 +756,12 @@ export function useLiveOrders(
       if (!res.ok) {
         addRequestToQueue(`/api/orders/${orderId}/items`, 'PUT', { items, refundLogs }, description);
       }
-    } catch (err) {
+    } catch (_err) {
       addRequestToQueue(`/api/orders/${orderId}/items`, 'PUT', { items, refundLogs }, description);
     }
-  };
+  }, []);
 
-  const handlePayOrder = async (
+  const handlePayOrder = useCallback(async (
     orderId: string,
     checkoutData?: {
       paymentMethod?: string;
@@ -831,50 +776,31 @@ export function useLiveOrders(
     },
   ) => {
     const isOnline = getIsOnline();
-    const description = `結帳 ?�� 訂單 #${orderId.replace('offline_temp_', '?��?')}`;
+    const description = `結帳 離線 訂單 #${orderId.replace('offline_temp_', '臨時')}`;
     
     const nowIso = new Date().toISOString();
     const targetOrder = ordersRef.current.find(o => o.id === orderId);
-    const allItemsDone = Boolean(
-      targetOrder?.items?.length && targetOrder.items.every(it => Boolean(it.isCompleted))
+    const { updates: computedPayUpdates } = computeOrderCheckoutUpdates(
+      targetOrder,
+      {
+        paymentMethod: checkoutData?.paymentMethod,
+        cashTendered: checkoutData?.cashTendered,
+        changeAmount: checkoutData?.changeAmount,
+        isPaid: checkoutData?.isPaid ?? true,
+      },
+      nowIso
     );
-    const isKdsDone =
-      targetOrder?.status === 'completed' ||
-      targetOrder?.kdsStatus === 'completed' ||
-      targetOrder?.kdsCompleted === true ||
-      Boolean(targetOrder?.completedAt) ||
-      allItemsDone;
-    const resolvedStatus: OrderStatus =
-      targetOrder?.status === 'cancelled'
-        ? 'cancelled'
-        : isKdsDone
-          ? 'completed'
-          : 'paid';
-
-    const payUpdates: Partial<Order> = {
-      isPaid: true,
-      paymentStatus: 'paid',
-      paidAt: targetOrder?.paidAt || nowIso,
-      status: resolvedStatus,
-      kdsStatus: resolvedStatus === 'completed' ? 'completed' : (targetOrder?.kdsStatus || 'preparing'),
-      kdsCompleted: resolvedStatus === 'completed',
-      ...(resolvedStatus === 'completed'
-        ? {
-            kdsCompletedAt: targetOrder?.kdsCompletedAt || nowIso,
-            completedAt: targetOrder?.completedAt || nowIso,
-          }
-        : {}),
-    };
+    const payUpdates: Partial<Order> = computedPayUpdates;
 
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, ...payUpdates } : o));
 
     broadcastOrderEvent({ type: 'ORDER_UPDATED', orderId, updates: { ...payUpdates, ...(checkoutData || {}) } });
 
     if (targetOrder) {
-      if (targetOrder.tableNumber && targetOrder.tableNumber !== '外帶' && targetOrder.tableNumber !== 'takeout') {
+      if (targetOrder.tableNumber && !isTakeoutTable(targetOrder.tableNumber)) {
         const remainingUnpaid = ordersRef.current.filter(o => o.tableNumber === targetOrder.tableNumber && o.id !== orderId && !o.isPaid && o.status !== 'cancelled');
         if (remainingUnpaid.length === 0) {
-          handleUpdateTableStatus(targetOrder.tableNumber, {
+          runtimeCtxRef.current.handleUpdateTableStatus(targetOrder.tableNumber, {
             status: 'cleaning',
             cleaningStartedAt: new Date().toISOString()
           });
@@ -903,12 +829,12 @@ export function useLiveOrders(
       if (!res.ok) {
         addRequestToQueue(`/api/orders/${orderId}/checkout`, 'PUT', checkoutData || { isPaid: true }, description);
       }
-    } catch (err) {
+    } catch (_err) {
       addRequestToQueue(`/api/orders/${orderId}/checkout`, 'PUT', checkoutData || { isPaid: true }, description);
     }
-  };
+  }, []);
 
-  const handleBulkPayOrders = async (
+  const handleBulkPayOrders = useCallback(async (
     orderIds: string[],
     checkoutData: {
       paymentMethod?: string;
@@ -924,33 +850,20 @@ export function useLiveOrders(
   ): Promise<{ success: boolean }> => {
     if (!orderIds || orderIds.length === 0) return { success: false };
     const isOnline = getIsOnline();
-    const description = `?�次結帳 ?�� ${orderIds.length} 筆�??�`;
+    const description = `批次結帳 共 ${orderIds.length} 筆訂單`;
 
     const bulkNowIso = new Date().toISOString();
     const resolveOrderPayUpdates = (o: Order): Partial<Order> => {
-      const allItemsDone = Boolean(o.items?.length && o.items.every(it => Boolean(it.isCompleted)));
-      const isKdsDone =
-        o.status === 'completed' ||
-        o.kdsStatus === 'completed' ||
-        o.kdsCompleted === true ||
-        Boolean(o.completedAt) ||
-        allItemsDone;
-      const resolvedStatus: OrderStatus =
-        o.status === 'cancelled' ? 'cancelled' : isKdsDone ? 'completed' : 'paid';
-      return {
-        isPaid: true,
-        paymentStatus: 'paid',
-        paidAt: o.paidAt || bulkNowIso,
-        status: resolvedStatus,
-        kdsStatus: resolvedStatus === 'completed' ? 'completed' : (o.kdsStatus || 'preparing'),
-        kdsCompleted: resolvedStatus === 'completed',
-        ...(resolvedStatus === 'completed'
-          ? {
-              kdsCompletedAt: o.kdsCompletedAt || bulkNowIso,
-              completedAt: o.completedAt || bulkNowIso,
-            }
-          : {}),
-      };
+      return computeOrderCheckoutUpdates(
+        o,
+        {
+          paymentMethod: checkoutData.paymentMethod,
+          cashTendered: checkoutData.cashTendered,
+          changeAmount: checkoutData.changeAmount,
+          isPaid: true,
+        },
+        bulkNowIso
+      ).updates;
     };
 
     setOrders(prev => prev.map(o => (orderIds.includes(o.id) ? { ...o, ...resolveOrderPayUpdates(o) } : o)));
@@ -981,12 +894,12 @@ export function useLiveOrders(
     });
 
     candidateTableNumbers.forEach(tblId => {
-      if (tblId && !tblId.includes('外帶') && tblId.toLowerCase() !== 'takeout') {
+      if (tblId && !isTakeoutTable(tblId)) {
         const remainingUnpaid = ordersRef.current.filter(
           o => o.tableNumber === tblId && !orderIds.includes(o.id) && !o.isPaid && o.status !== 'cancelled'
         );
         if (remainingUnpaid.length === 0) {
-          handleUpdateTableStatus(tblId, {
+          runtimeCtxRef.current.handleUpdateTableStatus(tblId, {
             status: 'cleaning',
             preservedFor: '',
             mergedWith: '',
@@ -1022,14 +935,14 @@ export function useLiveOrders(
         addRequestToQueue('/api/orders/bulk-checkout', 'POST', payload, description);
         return { success: false };
       }
-    } catch (err) {
+    } catch (_err) {
       addRequestToQueue('/api/orders/bulk-checkout', 'POST', payload, description);
       return { success: false };
     }
-  };
+  }, []);
 
-  const handleDeleteOrder = async (orderId: string) => {
-    const description = `?�除 ?�� 訂單 #${orderId.replace('offline_temp_', '?��?')}`;
+  const handleDeleteOrder = useCallback(async (orderId: string) => {
+    const description = `刪除 離線 訂單 #${orderId.replace('offline_temp_', '臨時')}`;
     const isOnline = getIsOnline();
 
     // 1. Mark as deleted in FIFO ref to prevent re-addition on polling/snapshot
@@ -1039,12 +952,12 @@ export function useLiveOrders(
 
     // 2. Check table release if this was the last unpaid order on the table
     const targetOrder = ordersRef.current.find(o => o.id === orderId);
-    if (targetOrder?.tableNumber && !targetOrder.tableNumber.includes('外帶') && targetOrder.tableNumber.toLowerCase() !== 'takeout') {
+    if (targetOrder?.tableNumber && !isTakeoutTable(targetOrder.tableNumber)) {
       const remainingUnpaid = ordersRef.current.filter(
         o => o.id !== orderId && o.tableNumber === targetOrder.tableNumber && !o.isPaid && o.status !== 'cancelled' && !o.isDeleted
       );
       if (remainingUnpaid.length === 0) {
-        handleUpdateTableStatus(targetOrder.tableNumber, {
+        runtimeCtxRef.current.handleUpdateTableStatus(targetOrder.tableNumber, {
           status: 'available',
           preservedFor: '',
           mergedWith: ''
@@ -1072,10 +985,10 @@ export function useLiveOrders(
       return { success: true };
     } catch (err: any) {
       console.error('[handleDeleteOrder] Failed to remove/cancel order:', err);
-      addRequestToQueue(`/api/orders/${orderId}`, 'DELETE', {}, `刪除 訂單 #${orderId}`);
+      addRequestToQueue(`/api/orders/${orderId}`, 'DELETE', {}, description);
       return { success: false, error: err?.message || '刪除訂單失敗 (Failed to delete order)' };
     }
-  };
+  }, []);
 
   return {
     orders,

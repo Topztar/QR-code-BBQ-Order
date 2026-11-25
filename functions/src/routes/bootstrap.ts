@@ -5,6 +5,7 @@ import { Bucket } from '@google-cloud/storage';
 import * as crypto from 'crypto';
 import { processMenuItemSoldOut, isStoreOpenFromData, setCachedMenu, setCachedCategories, sanitizePublicImageUrl, createGetCachedSettings, setCachedSettings, setCachedServicePause } from '../helpers';
 import { getStoredActiveToken } from '../auth';
+import { invalidateTablesCache } from './tables';
 
 // ============================================================
 // BOOTSTRAP 路由模組
@@ -39,6 +40,7 @@ export function invalidatePublicBootstrapCache() {
   setCachedCategories(null);
   setCachedSettings(null);
   setCachedServicePause(null);
+  invalidateTablesCache();
 }
 
 export function registerBootstrapRoutes(app: express.Application, ctx: RouteContext) {

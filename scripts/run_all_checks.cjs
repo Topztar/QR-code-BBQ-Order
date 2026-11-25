@@ -39,10 +39,10 @@ const stages = [
     expectedCount: '0 型別錯誤'
   },
   {
-    name: 'Vitest 全端自動化單元與整合測試 (360+ Tests)',
+    name: 'Vitest 全端自動化單元與整合測試 (Full Suite)',
     command: 'npx vitest run',
     badge: '🧪 [Vitest Suite]',
-    expectedCount: '361/361 通過'
+    expectedCount: '100% 通過'
   },
   {
     name: 'Vite + esbuild 生產環境雙重預壓縮建置 (Gzip & Brotli)',
@@ -73,12 +73,18 @@ for (let i = 0; i < stages.length; i++) {
     console.log(stdout.trim());
     console.log(`\n✨ ${stage.badge} 執行成功！ (耗時: ${duration}s)\n`);
 
+    const cleanOut = stdout.replace(/\x1B\[[0-9;]*m/g, '');
+    const vitestMatch = stage.command.includes('vitest')
+      ? cleanOut.match(/Tests\s+(\d+)\s+passed\s*\((\d+)\)/i)
+      : null;
+    const detailText = vitestMatch ? `${vitestMatch[1]}/${vitestMatch[2]} 通過` : stage.expectedCount;
+
     results.push({
       name: stage.name,
       badge: stage.badge,
       status: 'PASS',
       duration: `${duration}s`,
-      detail: stage.expectedCount
+      detail: detailText
     });
   } catch (error) {
     const duration = ((Date.now() - stageStart) / 1000).toFixed(2);

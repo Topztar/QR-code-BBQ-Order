@@ -521,15 +521,10 @@ export const onOrderCompleted = onDocumentUpdated(
 
       if (Array.isArray(afterData.items)) {
         for (const item of afterData.items) {
-          const qty = Number(item.quantity) || 1;
-          if (item.ingredientId) {
-            const ingRef = db.doc(`ingredients/${item.ingredientId}`);
-            batch.update(ingRef, {
-              stock: FieldValue.increment(-qty)
-            });
-          }
-          if (item.id) {
-            updates[`item_sales.${item.id}`] = FieldValue.increment(qty);
+          const qty = Math.max(1, Number(item.qty ?? item.quantity) || 1);
+          const rawDishKey = String(item.menuItemId || item.id || '').replace(/[./[\]*~]/g, '_');
+          if (rawDishKey) {
+            updates[`item_sales.${rawDishKey}`] = FieldValue.increment(qty);
           }
         }
       }

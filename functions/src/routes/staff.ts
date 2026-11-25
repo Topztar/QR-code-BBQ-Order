@@ -24,6 +24,7 @@ export interface RouteContext {
 export function registerStaffRoutes(app: express.Application, ctx: RouteContext) {
   const { db, requireStaffAuth, sendErrorResponse, createRateLimiter } = ctx;
   const pinRateLimiter = createRateLimiter(6, 60 * 1000, '員工 PIN 驗證');
+  const takeoutScanLimiter = createRateLimiter(30, 60 * 1000, '外帶掃碼領號');
 
   // 雙路徑路由包裝器
   const get: RouteRegister = (routePath, ...handlers) => app.get([`/api${routePath}`, routePath], ...handlers);
@@ -69,6 +70,8 @@ post('/staff/pin/check-path', pinRateLimiter, async (req, res) => {
       return res.status(429).json({ valid: false, locked: true, remainingMinutes });
     }
 
+    const currentFailedAttempts = (lockedUntil && now >= lockedUntil) ? 0 : (credsData.failedAttempts || 0);
+
     let storedHash = credsData.staffPinHash;
     if (!storedHash) {
       // Fallback & migrate legacy pin
@@ -78,7 +81,26 @@ post('/staff/pin/check-path', pinRateLimiter, async (req, res) => {
       await credsRef.set({ staffPinHash: storedHash }, { merge: true });
     }
     const inputHash = hashPin(pathPin);
-    return res.json({ valid: inputHash === storedHash });
+    if (inputHash === storedHash) {
+      if (currentFailedAttempts > 0 || lockedUntil) {
+        await credsRef.set({ failedAttempts: 0, lockedUntil: null }, { merge: true });
+      }
+      return res.json({ valid: true });
+    }
+
+    const failedAttempts = currentFailedAttempts + 1;
+    const updateData: Record<string, any> = {
+      failedAttempts,
+      lastFailedAt: new Date().toISOString(),
+    };
+    if (failedAttempts >= 5) {
+      const lockDuration = 15 * 60 * 1000;
+      updateData.lockedUntil = now + lockDuration;
+      await credsRef.set(updateData, { merge: true });
+      return res.status(429).json({ valid: false, locked: true, remainingMinutes: 15 });
+    }
+    await credsRef.set(updateData, { merge: true });
+    return res.json({ valid: false, remainingAttempts: 5 - failedAttempts });
   } catch (error) {
     console.error('Error checking staff path PIN:', error);
     return res.status(500).json({ valid: false, error: 'Internal server error' });
@@ -258,22 +280,27 @@ post('/send-promo-push', requireStaffAuth, async (req, res) => {
   }
 });
 
-post('/takeout/scan', async (_req, res) => {
+post('/takeout/scan', takeoutScanLimiter, async (_req, res) => {
   try {
-    const systemDoc = await db.collection('settings').doc('system').get();
-    let seq = systemDoc.data()?.liveTakeoutSeq || 0;
-    let lastDate = systemDoc.data()?.lastTakeoutDate || '';
-    const today = new Date().toDateString();
+    const systemRef = db.collection('settings').doc('system');
+    const result = await db.runTransaction(async (t) => {
+      const systemDoc = await t.get(systemRef);
+      let seq = systemDoc.data()?.liveTakeoutSeq || 0;
+      let lastDate = systemDoc.data()?.lastTakeoutDate || '';
+      const today = new Date().toDateString();
 
-    if (today !== lastDate) {
-      seq = 0;
-      lastDate = today;
-    }
-    seq++;
-    const assigned = `外帶 #${seq}`;
+      if (today !== lastDate) {
+        seq = 0;
+        lastDate = today;
+      }
+      seq++;
+      const assigned = `外帶 #${seq}`;
 
-    await db.collection('settings').doc('system').set({ liveTakeoutSeq: seq, lastTakeoutDate: lastDate }, { merge: true });
-    res.json({ success: true, tableNumber: assigned, sequence: seq });
+      t.set(systemRef, { liveTakeoutSeq: seq, lastTakeoutDate: lastDate }, { merge: true });
+      return { tableNumber: assigned, sequence: seq };
+    });
+    cachedTakeoutStatus = null;
+    res.json({ success: true, ...result });
   } catch (error) {
     sendErrorResponse(res, error);
   }
