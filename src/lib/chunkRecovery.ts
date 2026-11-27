@@ -1,3 +1,7 @@
+import { safeSessionStorage } from './safeStorage';
+
+export const CHUNK_RECOVERY_STORAGE_KEY = 'sabay_chunk_recovery_lock';
+
 /**
  * Detects dynamic chunk import errors across Chromium, Firefox, and WebKit (Safari).
  * Safari/WebKit throws "TypeError: Load failed" or "TypeError: Importing a module script failed"
@@ -29,15 +33,15 @@ export function isChunkLoadError(error: unknown): boolean {
  * Prevents continuous reload storms and unifies cache-busting keys.
  */
 export const attemptChunkRecovery = async (error: Error | any, source: string): Promise<boolean> => {
-  const key = 'sabay_chunk_recovery_lock';
-  const lastRetry = parseInt(window.sessionStorage.getItem(key) || '0', 10);
+  const key = CHUNK_RECOVERY_STORAGE_KEY;
+  const lastRetry = parseInt(safeSessionStorage.getItem(key) || '0', 10);
   const now = Date.now();
 
   console.warn(`[Sabay Chunk Recovery] Failed at ${source}:`, error);
 
   if (now - lastRetry > 10000) { // 10 seconds debounce across all subsystems
     console.warn(`[Sabay Chunk Recovery] Attempting automatic cache purge and reload...`);
-    window.sessionStorage.setItem(key, now.toString());
+    safeSessionStorage.setItem(key, now.toString());
 
     // Purge CacheStorage 
     if ('caches' in window) {

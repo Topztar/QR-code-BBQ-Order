@@ -1,5 +1,9 @@
-import { describe, it, expect } from 'vitest';
-import { isChunkLoadError } from '../src/lib/chunkRecovery';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import fs from 'fs';
+import path from 'path';
+import { isChunkLoadError, attemptChunkRecovery, CHUNK_RECOVERY_STORAGE_KEY } from '../src/lib/chunkRecovery';
+import { ChunkErrorBoundary } from '../src/components/ChunkErrorBoundary';
+import { safeSessionStorage } from '../src/lib/safeStorage';
 import { parseSafeDate, getTaiwanTimeParts, getTaiwanDateString, isValidDate } from '../src/utils/dateUtils';
 
 describe('iOS Safari / WebKit Compatibility Hardening Test Suite', () => {
@@ -94,6 +98,85 @@ describe('iOS Safari / WebKit Compatibility Hardening Test Suite', () => {
       expect(typeof persistentSingleTabManager).toBe('function');
       expect(typeof persistentMultipleTabManager).toBe('function');
       expect(typeof memoryLocalCache).toBe('function');
+    });
+  });
+
+  describe('Solution 4 (Extended): ChunkErrorBoundary & WebKit Sandbox Resilience', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+      safeSessionStorage.removeItem(CHUNK_RECOVERY_STORAGE_KEY);
+    });
+
+    it('ChunkErrorBoundary classifies Safari TypeError: Load failed as a chunk error', () => {
+      const state = ChunkErrorBoundary.getDerivedStateFromError(new TypeError('Load failed'));
+      expect(state.hasError).toBe(true);
+      expect(state.isChunkError).toBe(true);
+    });
+
+    it('ChunkErrorBoundary classifies WebKit Importing a module script failed as a chunk error', () => {
+      const state = ChunkErrorBoundary.getDerivedStateFromError(new TypeError('Importing a module script failed.'));
+      expect(state.hasError).toBe(true);
+      expect(state.isChunkError).toBe(true);
+    });
+
+    it('attemptChunkRecovery does not throw when sessionStorage raises SecurityError (iOS Private Mode)', async () => {
+      const replaceMock = vi.fn();
+      const throwingStorage = {
+        getItem: () => {
+          throw new DOMException('The operation is insecure.', 'SecurityError');
+        },
+        setItem: () => {
+          throw new DOMException('The operation is insecure.', 'SecurityError');
+        },
+        removeItem: () => {
+          throw new DOMException('The operation is insecure.', 'SecurityError');
+        },
+      };
+
+      vi.stubGlobal('window', {
+        sessionStorage: throwingStorage,
+        location: { href: 'https://sabay-bbq-order.web.app/?table=5', replace: replaceMock },
+      });
+
+      try {
+        const reloaded = await attemptChunkRecovery(new TypeError('Load failed'), 'test-webkit-private');
+        expect(reloaded).toBe(true);
+        expect(replaceMock).toHaveBeenCalledTimes(1);
+        expect(replaceMock.mock.calls[0][0]).toContain('_v=');
+
+        // Immediate second call within 10s debounce window must be suppressed (prevents infinite reload loop)
+        const reloadedAgain = await attemptChunkRecovery(new TypeError('Load failed'), 'test-webkit-private-debounce');
+        expect(reloadedAgain).toBe(false);
+        expect(replaceMock).toHaveBeenCalledTimes(1);
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+  });
+
+  describe('Solution 3 / CSP Parity: firebase.json & functions/src/index.ts', () => {
+    it('both Hosting and Functions CSP headers allow WebKit WebSocket, blob, and worker connections', () => {
+      const firebaseJson = JSON.parse(
+        fs.readFileSync(path.resolve(process.cwd(), 'firebase.json'), 'utf8')
+      );
+      const hostingHeaders = firebaseJson.hosting.headers.flatMap((h: any) => h.headers || []);
+      const hostingCsp = hostingHeaders.find((h: any) => h.key === 'Content-Security-Policy')?.value || '';
+
+      const functionsIndex = fs.readFileSync(
+        path.resolve(process.cwd(), 'functions/src/index.ts'),
+        'utf8'
+      );
+
+      for (const directive of [
+        'wss://*.firebaseio.com',
+        'https://firestore.googleapis.com',
+        'https://*.googleapis.com',
+        "worker-src 'self' blob:",
+        'blob:',
+      ]) {
+        expect(hostingCsp).toContain(directive);
+        expect(functionsIndex).toContain(directive);
+      }
     });
   });
 });

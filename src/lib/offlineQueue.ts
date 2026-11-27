@@ -189,7 +189,7 @@ export function removeOrderRequestsFromQueue(orderIdOrIds: string | string[]) {
 
 // Execute a queued request with 15s hard timeout to prevent background suspension hangs
 async function executeRequest(item: QueuedRequest): Promise<Response> {
-  const token = typeof localStorage !== 'undefined' ? localStorage.getItem('sabay_jwt_token') : null;
+  const token = safeStorage.getItem('sabay_jwt_token');
   const authHeaders = token ? { 'Authorization': `Bearer ${token}` } : {};
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 15000);

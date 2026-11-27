@@ -23,7 +23,8 @@ import {
   autoSelectOptimalTables,
 } from '../utils/reservationValidator';
 import { useCustomerCart } from '../hooks/useCustomerCart';
-import { getTaiwanTimeParts } from '../utils/dateUtils';
+import { safeStorage } from '../lib/safeStorage';
+import { evaluateStoreSchedule } from '@sabay/shared';
 import { CustomerHeader } from './customer/CustomerHeader';
 import { CustomerCategoryTabs } from './customer/CustomerCategoryTabs';
 import { CustomerMenuGrid } from './customer/CustomerMenuGrid';
@@ -117,6 +118,7 @@ interface CustomerOrderViewProps {
   memberRewards?: any[];
   autoOpenReservationModal?: boolean;
   isOrderRoute?: boolean;
+  isStaffAuthenticated?: boolean;
 }
 
 export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
@@ -138,6 +140,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
   promoCombo = { enabled: false, combos: [] } as any,
   autoOpenReservationModal = false,
   isOrderRoute = false,
+  isStaffAuthenticated = false,
   ingredients = [],
   onToggleMenuItemAvailability,
   onAdjustIngredientStock,
@@ -228,6 +231,7 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
   const [activeLightboxImg, setActiveLightboxImg] = useState<string | null>(null);
 
   const [isMerchantMode, setIsMerchantMode] = useState(false);
+  const [staffTestOrderingMode, setStaffTestOrderingMode] = useState(false);
   const [showPasscodeModal, setShowPasscodeModal] = useState(false);
   const [pincodeInput, setPincodeInput] = useState('');
   const [pincodeError, setPincodeError] = useState(false);
@@ -292,41 +296,21 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
   const [orderError, setOrderError] = useState<string | null>(null);
   const [toasts, setToasts] = useState<any[]>([]);
   const [isSimplifiedMode, setIsSimplifiedMode] = useState<boolean>(() => {
-    return localStorage.getItem('sabay_simplified_mode') === 'true';
+    return safeStorage.getItem('sabay_simplified_mode') === 'true';
   });
   const [showBackToTop, setShowBackToTop] = useState(false);
 
-  // Operating schedule checks
-  const isTaiwanRestDay = useMemo(() => {
-    if (!restDays || restDays.length === 0) return false;
-    const { dateStr } = getTaiwanTimeParts();
-    return restDays.includes(dateStr);
-  }, [restDays]);
+  // Operating schedule checks via @sabay/shared SSOT evaluator
+  const scheduleEvaluation = useMemo(() => {
+    return evaluateStoreSchedule({
+      operatingHours,
+      restDays,
+      servicePaused,
+    });
+  }, [operatingHours, restDays, servicePaused, isOpen]);
 
-  const isCurrentSlotReservableOnly = useMemo(() => {
-    if (!operatingHours || operatingHours.length === 0) return false;
-    const { dayOfWeek, hours, minutes } = getTaiwanTimeParts();
-    const currentMins = hours * 60 + minutes;
-
-    // Find if the current moment matches an active slot that isReservableOnly
-    for (const slot of operatingHours) {
-      if (!slot || !slot.isActive) continue;
-      if (slot.days && Array.isArray(slot.days) && !slot.days.includes(dayOfWeek)) continue;
-      const [startH, startM] = (slot.start || '00:00').split(':').map(Number);
-      const [endH, endM] = (slot.end || '23:59').split(':').map(Number);
-      const startTotal = startH * 60 + startM;
-      const endTotal = endH * 60 + endM;
-
-      const isCurrent = startTotal <= endTotal
-        ? currentMins >= startTotal && currentMins <= endTotal
-        : currentMins >= startTotal || currentMins <= endTotal;
-
-      if (isCurrent && slot.isReservableOnly) {
-        return true;
-      }
-    }
-    return false;
-  }, [operatingHours]);
+  const isTaiwanRestDay = scheduleEvaluation.isRestDay;
+  const isCurrentSlotReservableOnly = scheduleEvaluation.isReservableOnlyNow;
 
   const isHasReservation = !!activeCustomerReservation;
 
@@ -336,8 +320,15 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
     return true;
   }, [isOpen, isTaiwanRestDay]);
 
+  useEffect(() => {
+    if (!isStaffAuthenticated && staffTestOrderingMode) {
+      setStaffTestOrderingMode(false);
+    }
+  }, [isStaffAuthenticated, staffTestOrderingMode]);
+
   const isTakeoutMode = String(selectedTable || '').includes('外帶') || selectedTable === 'takeout' || isOrderRoute;
-  const effectiveIsStoreCurrentlyOpen = isStoreCurrentlyOpen || isTakeoutMode;
+  const isStaffTestPreviewActive = Boolean(isStaffAuthenticated && staffTestOrderingMode);
+  const effectiveIsStoreCurrentlyOpen = isStoreCurrentlyOpen || isTakeoutMode || isStaffTestPreviewActive;
 
   // Hook: useCustomerCart
   const {
@@ -826,6 +817,9 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
         isStoreCurrentlyOpen={isStoreCurrentlyOpen}
         effectiveIsStoreCurrentlyOpen={effectiveIsStoreCurrentlyOpen}
         isTakeoutMode={isTakeoutMode}
+        isStaffAuthenticated={isStaffAuthenticated}
+        staffTestOrderingMode={isStaffTestPreviewActive}
+        onToggleStaffTestOrderingMode={() => setStaffTestOrderingMode((prev) => !prev)}
         isTaiwanRestDay={isTaiwanRestDay}
         isCurrentSlotReservableOnly={isCurrentSlotReservableOnly}
         isHasReservation={isHasReservation}

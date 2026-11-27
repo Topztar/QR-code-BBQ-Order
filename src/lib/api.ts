@@ -1,5 +1,6 @@
 import { getToken } from 'firebase/app-check';
 import { appCheck } from './firebase';
+import { safeStorage, safeSessionStorage } from './safeStorage';
 
 let _cachedAppCheckToken: string | null = null;
 let _appCheckTokenExpiry: number = 0;
@@ -7,7 +8,7 @@ let _appCheckTokenExpiry: number = 0;
 export const getAuthHeader = async (opts: { skipAuth?: boolean; skipAppCheck?: boolean } = {}) => {
   const headers: Record<string, string> = {};
   if (!opts.skipAuth) {
-    const token = (typeof localStorage !== 'undefined' ? localStorage.getItem('sabay_jwt_token') : null) || (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('staff_token') : null);
+    const token = safeStorage.getItem('sabay_jwt_token') || safeSessionStorage.getItem('staff_token');
     if (token) headers['Authorization'] = `Bearer ${token}`;
   }
 
@@ -74,11 +75,11 @@ export const apiFetch = async (url: string, options: any = {}) => {
     if (response.status === 401) {
       // 401 Unauthorized: 憑證已過期或失效，徹底清除所有快取並派發登出事件
       try {
-        localStorage.removeItem('sabay_jwt_token');
-        localStorage.removeItem('sabay-staff-auth');
-        sessionStorage.removeItem('staff_token');
-        sessionStorage.removeItem('sabay_jwt_token');
-        sessionStorage.removeItem('sabay-staff-auth');
+        safeStorage.removeItem('sabay_jwt_token');
+        safeStorage.removeItem('sabay-staff-auth');
+        safeSessionStorage.removeItem('staff_token');
+        safeSessionStorage.removeItem('sabay_jwt_token');
+        safeSessionStorage.removeItem('sabay-staff-auth');
       } catch {}
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('sabay_auth_expired', { detail: { url, status: 401 } }));

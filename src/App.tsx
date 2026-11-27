@@ -725,6 +725,7 @@ function AppContent({
                   memberRewards={memberRewards}
                   autoOpenReservationModal={isReserveRoute}
                   isOrderRoute={isOrderRoute}
+                  isStaffAuthenticated={isStaff}
                 />
               </Suspense>
             </ErrorBoundary>

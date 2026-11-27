@@ -1,4 +1,5 @@
 import express from 'express';
+import { evaluateStoreSchedule } from '@sabay/shared';
 import { MenuItem, Category, TableConfig, Ingredient, Reservation, Order, OperatingHourSlot } from '../../types';
 import { toPublicMenuItem } from './menu';
 import { sendTestNotification as sendCloudTestNotification } from '../../../functions/src/services/notification';
@@ -61,17 +62,32 @@ export function registerSettingsRoutes(app: express.Express, ctx: SettingsRouteC
     ctx.syncTableStatusesWithTodayReservations();
     res.setHeader('Cache-Control', req.query.fresh ? 'private, no-cache, no-store, must-revalidate' : 'public, max-age=15, s-maxage=60, stale-while-revalidate=300');
     
+    const nowMs = Date.now();
+    const schedule = evaluateStoreSchedule(
+      {
+        operatingHours: ctx.getLiveOperatingHours(),
+        restDays: ctx.getLiveRestDays(),
+        servicePaused: ctx.getLiveServicePaused(),
+      },
+      nowMs
+    );
     const memberCfg = ctx.getLiveMemberConfig();
     res.json({
       isFirebaseSyncEnabled: ctx.isFirebaseSyncEnabled ? ctx.isFirebaseSyncEnabled() : true,
       menu: ctx.getLiveMenu().map(toPublicMenuItem),
       categories: ctx.getLiveCategories(),
       tables: ctx.getLiveTables(),
+      serverNowMs: nowMs,
+      nextTransitionAtMs: schedule.nextTransitionAtMs,
       operatingHours: {
         slots: ctx.getLiveOperatingHours(),
         restDays: ctx.getLiveRestDays(),
         isOpen: ctx.isStoreOpen(),
-        currentTime: new Date().toISOString()
+        isRestDay: schedule.isRestDay,
+        isReservableOnlyNow: schedule.isReservableOnlyNow,
+        serverNowMs: nowMs,
+        nextTransitionAtMs: schedule.nextTransitionAtMs,
+        currentTime: new Date(nowMs).toISOString()
       },
       customerNotice: { notice: ctx.getLiveCustomerNotice() },
       promoCombo: ctx.getLivePromoCombo(),
@@ -111,11 +127,24 @@ export function registerSettingsRoutes(app: express.Express, ctx: SettingsRouteC
 
   // Operating Hours Settings Endpoints
   app.get('/api/settings/operating-hours', (_req, res) => {
+    const nowMs = Date.now();
+    const schedule = evaluateStoreSchedule(
+      {
+        operatingHours: ctx.getLiveOperatingHours(),
+        restDays: ctx.getLiveRestDays(),
+        servicePaused: ctx.getLiveServicePaused(),
+      },
+      nowMs
+    );
     res.json({
       slots: ctx.getLiveOperatingHours(),
       restDays: ctx.getLiveRestDays(),
       isOpen: ctx.isStoreOpen(),
-      currentTime: new Date().toISOString()
+      isRestDay: schedule.isRestDay,
+      isReservableOnlyNow: schedule.isReservableOnlyNow,
+      serverNowMs: nowMs,
+      nextTransitionAtMs: schedule.nextTransitionAtMs,
+      currentTime: new Date(nowMs).toISOString()
     });
   });
 
@@ -138,11 +167,24 @@ export function registerSettingsRoutes(app: express.Express, ctx: SettingsRouteC
       ctx.setLiveRestDays(sanitizedRestDays);
     }
     ctx.saveStateToDisk();
+    const nowMs = Date.now();
+    const schedule = evaluateStoreSchedule(
+      {
+        operatingHours: ctx.getLiveOperatingHours(),
+        restDays: ctx.getLiveRestDays(),
+        servicePaused: ctx.getLiveServicePaused(),
+      },
+      nowMs
+    );
     return res.json({
       success: true,
       slots: ctx.getLiveOperatingHours(),
       restDays: ctx.getLiveRestDays(),
-      isOpen: ctx.isStoreOpen()
+      isOpen: ctx.isStoreOpen(),
+      isRestDay: schedule.isRestDay,
+      isReservableOnlyNow: schedule.isReservableOnlyNow,
+      serverNowMs: nowMs,
+      nextTransitionAtMs: schedule.nextTransitionAtMs
     });
   });
 
@@ -450,11 +492,27 @@ export function registerSettingsRoutes(app: express.Express, ctx: SettingsRouteC
       })
       .map(dish => dish.id);
 
+    const nowMs = Date.now();
+    const schedule = evaluateStoreSchedule(
+      {
+        operatingHours: ctx.getLiveOperatingHours(),
+        restDays: ctx.getLiveRestDays(),
+        servicePaused: ctx.getLiveServicePaused(),
+      },
+      nowMs
+    );
+
     res.json({
       isOpen: ctx.isStoreOpen(),
+      isRestDay: schedule.isRestDay,
+      isReservableOnlyNow: schedule.isReservableOnlyNow,
       servicePaused: ctx.getLiveServicePaused(),
       soldOutItemIds,
-      timestamp: Date.now()
+      operatingHours: ctx.getLiveOperatingHours(),
+      restDays: ctx.getLiveRestDays(),
+      serverNowMs: nowMs,
+      nextTransitionAtMs: schedule.nextTransitionAtMs,
+      timestamp: nowMs
     });
   });
 }

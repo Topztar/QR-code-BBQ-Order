@@ -1,9 +1,9 @@
-import { PRINTER_CONSTANTS } from '@sabay/shared';
+import { PRINTER_CONSTANTS, evaluateStoreSchedule, getTaipeiTimeComponents } from '@sabay/shared';
 import express from 'express';
 import { Firestore } from 'firebase-admin/firestore';
 import { Bucket } from '@google-cloud/storage';
 import * as crypto from 'crypto';
-import { processMenuItemSoldOut, isStoreOpenFromData, setCachedMenu, setCachedCategories, sanitizePublicImageUrl, createGetCachedSettings, setCachedSettings, setCachedServicePause } from '../helpers';
+import { processMenuItemSoldOut, evaluateStoreScheduleFromData, setCachedMenu, setCachedCategories, sanitizePublicImageUrl, createGetCachedSettings, setCachedSettings, setCachedServicePause } from '../helpers';
 import { getStoredActiveToken } from '../auth';
 import { invalidateTablesCache } from './tables';
 
@@ -21,12 +21,66 @@ export interface RouteContext {
   sendErrorResponse: (res: express.Response, error: any, ctx?: string) => void;
 }
 
-let cachedPublicBootstrap: { payload: any; etag: string; timestamp: number } | null = null;
-let cachedStaffBootstrap: { payload: any; etag: string; timestamp: number } | null = null;
+interface BootstrapCacheEntry {
+  payload: any;
+  etag: string;
+  timestamp: number;
+  isOpen: boolean;
+  isRestDay: boolean;
+  isReservableOnlyNow: boolean;
+  nextTransitionAtMs: number | null;
+}
+
+let cachedPublicBootstrap: BootstrapCacheEntry | null = null;
+let cachedStaffBootstrap: BootstrapCacheEntry | null = null;
 let cachedStoreStatusMenu: { docs: any[]; timestamp: number } | null = null;
 const BOOTSTRAP_CACHE_TTL_MS = 180 * 1000; // 3 minutes in-memory TTL to eliminate read storms
 const STAFF_BOOTSTRAP_CACHE_TTL_MS = 45 * 1000; // 45 seconds in-memory TTL for staff management portal
 export const STORE_STATUS_CACHE_TTL_MS = 15 * 1000; // 15 seconds in-memory TTL to eliminate /api/store-status read storms
+
+function computeWeakEtag(payload: any): string {
+  return `W/"${crypto.createHash('md5').update(JSON.stringify(payload)).digest('hex').substring(0, 16)}"`;
+}
+
+/**
+ * Re-evaluates schedule open/close state on a cached bootstrap entry against current `nowMs`
+ * with zero Firestore reads so crossing a boundary (e.g. 17:29 -> 17:30) never serves stale `isOpen`.
+ */
+function syncCachedBootstrapSchedule(entry: BootstrapCacheEntry, nowMs: number): BootstrapCacheEntry {
+  const liveSchedule = evaluateStoreSchedule(
+    {
+      operatingHours: entry.payload?.operatingHours?.slots || [],
+      restDays: entry.payload?.operatingHours?.restDays || [],
+      servicePaused: entry.payload?.servicePaused?.servicePaused || false,
+    },
+    nowMs
+  );
+
+  if (
+    liveSchedule.isOpen !== entry.isOpen ||
+    liveSchedule.isRestDay !== entry.isRestDay ||
+    liveSchedule.isReservableOnlyNow !== entry.isReservableOnlyNow ||
+    liveSchedule.nextTransitionAtMs !== entry.nextTransitionAtMs
+  ) {
+    entry.payload = {
+      ...entry.payload,
+      operatingHours: {
+        ...entry.payload.operatingHours,
+        isOpen: liveSchedule.isOpen,
+        isRestDay: liveSchedule.isRestDay,
+        isReservableOnlyNow: liveSchedule.isReservableOnlyNow,
+        nextTransitionAtMs: liveSchedule.nextTransitionAtMs,
+      },
+    };
+    entry.isOpen = liveSchedule.isOpen;
+    entry.isRestDay = liveSchedule.isRestDay;
+    entry.isReservableOnlyNow = liveSchedule.isReservableOnlyNow;
+    entry.nextTransitionAtMs = liveSchedule.nextTransitionAtMs;
+    entry.etag = computeWeakEtag(entry.payload);
+  }
+
+  return entry;
+}
 
 /**
  * ⚡ 主動清除公開與管理員 Bootstrap 快取
@@ -60,7 +114,8 @@ export function registerBootstrapRoutes(app: express.Application, ctx: RouteCont
       const wantsFresh = Boolean(req.query.fresh);
       res.setHeader('Vary', 'Authorization');
       res.setHeader('Cache-Control', wantsFresh ? 'private, no-cache, no-store, must-revalidate' : 'public, max-age=60, s-maxage=180, stale-while-revalidate=600');
-      const todayStr = new Date().toISOString().split('T')[0];
+      const nowMs = Date.now();
+      const todayStr = getTaipeiTimeComponents(nowMs).dateStr;
       
       let isStaffRequest = false;
       const authHeader = req.headers.authorization;
@@ -74,26 +129,43 @@ export function registerBootstrapRoutes(app: express.Application, ctx: RouteCont
         }
       }
 
-      const nowMs = Date.now();
       if (!isStaffRequest && !wantsFresh && cachedPublicBootstrap && (nowMs - cachedPublicBootstrap.timestamp < BOOTSTRAP_CACHE_TTL_MS)) {
-        res.setHeader('ETag', cachedPublicBootstrap.etag);
-        if (req.headers['if-none-match'] === cachedPublicBootstrap.etag) {
+        const synced = syncCachedBootstrapSchedule(cachedPublicBootstrap, nowMs);
+        res.setHeader('ETag', synced.etag);
+        if (req.headers['if-none-match'] === synced.etag) {
           return res.status(304).end();
         }
-        return res.json(cachedPublicBootstrap.payload);
+        return res.json({
+          ...synced.payload,
+          serverNowMs: nowMs,
+          nextTransitionAtMs: synced.nextTransitionAtMs,
+          operatingHours: {
+            ...synced.payload.operatingHours,
+            serverNowMs: nowMs,
+          },
+        });
       }
 
       // 🔄 Post-mutation read-your-writes: staff `?fresh=1` bypasses the per-instance memory cache
       // (invalidation only clears the instance that handled the write; other instances may hold stale data)
       // wantsFresh is computed at start of handler above
       if (isStaffRequest && !wantsFresh && cachedStaffBootstrap && (nowMs - cachedStaffBootstrap.timestamp < STAFF_BOOTSTRAP_CACHE_TTL_MS)) {
-        res.setHeader('ETag', cachedStaffBootstrap.etag);
+        const synced = syncCachedBootstrapSchedule(cachedStaffBootstrap, nowMs);
+        res.setHeader('ETag', synced.etag);
         res.setHeader('Vary', 'Authorization');
         res.setHeader('Cache-Control', 'private, max-age=0, no-cache');
-        if (req.headers['if-none-match'] === cachedStaffBootstrap.etag) {
+        if (req.headers['if-none-match'] === synced.etag) {
           return res.status(304).end();
         }
-        return res.json(cachedStaffBootstrap.payload);
+        return res.json({
+          ...synced.payload,
+          serverNowMs: nowMs,
+          nextTransitionAtMs: synced.nextTransitionAtMs,
+          operatingHours: {
+            ...synced.payload.operatingHours,
+            serverNowMs: nowMs,
+          },
+        });
       }
       
       const [
@@ -183,7 +255,7 @@ export function registerBootstrapRoutes(app: express.Application, ctx: RouteCont
       });
 
       const sysData = systemDoc.data() || {};
-      const isOpen = isStoreOpenFromData(sysData);
+      const schedule = evaluateStoreScheduleFromData(sysData, nowMs);
 
       const processedCategories = categoriesSnap.docs
         .map(doc => {
@@ -203,7 +275,10 @@ export function registerBootstrapRoutes(app: express.Application, ctx: RouteCont
         operatingHours: {
           slots: sysData.liveOperatingHours || [],
           restDays: sysData.liveRestDays || [],
-          isOpen
+          isOpen: schedule.isOpen,
+          isRestDay: schedule.isRestDay,
+          isReservableOnlyNow: schedule.isReservableOnlyNow,
+          nextTransitionAtMs: schedule.nextTransitionAtMs,
         },
         customerNotice: { notice: sysData.liveCustomerNotice || '' },
         promoCombo: sysData.livePromoCombo || { enabled: false, requiredQty: 0, discountAmount: 0, eligibleItemIds: [] },
@@ -225,22 +300,23 @@ export function registerBootstrapRoutes(app: express.Application, ctx: RouteCont
         isFirebaseSyncEnabled: true
       };
 
-      // 🚀 ETag 快取協商 (304 Not Modified): 減少重複序列化與頻寬消耗
-      const rawString = JSON.stringify(responsePayload);
-      const etag = `W/"${crypto.createHash('md5').update(rawString).digest('hex').substring(0, 16)}"`;
+      // 🚀 ETag 快取協商 (304 Not Modified): 減少重複序列化與頻寬消耗 (不含每毫秒變動的 serverNowMs)
+      const etag = computeWeakEtag(responsePayload);
+
+      const cacheEntry: BootstrapCacheEntry = {
+        payload: responsePayload,
+        etag,
+        timestamp: Date.now(),
+        isOpen: schedule.isOpen,
+        isRestDay: schedule.isRestDay,
+        isReservableOnlyNow: schedule.isReservableOnlyNow,
+        nextTransitionAtMs: schedule.nextTransitionAtMs,
+      };
 
       if (!isStaffRequest) {
-        cachedPublicBootstrap = {
-          payload: responsePayload,
-          etag,
-          timestamp: Date.now()
-        };
+        cachedPublicBootstrap = cacheEntry;
       } else {
-        cachedStaffBootstrap = {
-          payload: responsePayload,
-          etag,
-          timestamp: Date.now()
-        };
+        cachedStaffBootstrap = cacheEntry;
       }
 
       res.setHeader('ETag', etag);
@@ -250,15 +326,23 @@ export function registerBootstrapRoutes(app: express.Application, ctx: RouteCont
         res.setHeader('Cache-Control', 'private, max-age=0, no-cache');
       } else {
         const wantsFresh = Boolean(req.query.fresh);
-      res.setHeader('Vary', 'Authorization');
-      res.setHeader('Cache-Control', wantsFresh ? 'private, no-cache, no-store, must-revalidate' : 'public, max-age=60, s-maxage=180, stale-while-revalidate=600');
+        res.setHeader('Vary', 'Authorization');
+        res.setHeader('Cache-Control', wantsFresh ? 'private, no-cache, no-store, must-revalidate' : 'public, max-age=60, s-maxage=180, stale-while-revalidate=600');
       }
 
       if (req.headers['if-none-match'] === etag) {
         return res.status(304).end();
       }
 
-      res.json(responsePayload);
+      res.json({
+        ...responsePayload,
+        serverNowMs: nowMs,
+        nextTransitionAtMs: schedule.nextTransitionAtMs,
+        operatingHours: {
+          ...responsePayload.operatingHours,
+          serverNowMs: nowMs,
+        },
+      });
     } catch (error) {
       console.error('Error fetching bootstrap data:', error);
       sendErrorResponse(res, error);
@@ -310,8 +394,9 @@ export function registerBootstrapRoutes(app: express.Application, ctx: RouteCont
         menuItemsPromise
       ]);
 
-      const isOpen = isStoreOpenFromData(sysData);
-      const servicePaused = !!sysData.liveServicePaused;
+      const schedule = evaluateStoreScheduleFromData(sysData, nowMs);
+      const isOpen = schedule.isOpen;
+      const servicePaused = schedule.isServicePaused;
 
       // 提取目前真實售罄的品項 ID 清單
       const soldOutItemIds: string[] = [];
@@ -332,8 +417,14 @@ export function registerBootstrapRoutes(app: express.Application, ctx: RouteCont
 
       res.json({
         isOpen,
+        isRestDay: schedule.isRestDay,
+        isReservableOnlyNow: schedule.isReservableOnlyNow,
         servicePaused,
         soldOutItemIds,
+        operatingHours: sysData.liveOperatingHours || [],
+        restDays: sysData.liveRestDays || [],
+        serverNowMs: nowMs,
+        nextTransitionAtMs: schedule.nextTransitionAtMs,
         timestamp: nowMs
       });
     } catch (error) {

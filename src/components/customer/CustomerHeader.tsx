@@ -1,5 +1,6 @@
 import React from 'react';
 import { TableConfig, Order, Language, Reservation } from '../../types';
+import { formatOperatingHourSlotLabel } from '@sabay/shared';
 import { TRANSLATIONS } from '../../data';
 import { getMappedTableId } from '../../utils/tableUtils';
 import {
@@ -20,6 +21,9 @@ export interface CustomerHeaderProps {
   isStoreCurrentlyOpen: boolean;
   effectiveIsStoreCurrentlyOpen?: boolean;
   isTakeoutMode?: boolean;
+  isStaffAuthenticated?: boolean;
+  staffTestOrderingMode?: boolean;
+  onToggleStaffTestOrderingMode?: () => void;
   isTaiwanRestDay: boolean;
   isCurrentSlotReservableOnly: boolean;
   isHasReservation: boolean;
@@ -57,6 +61,9 @@ const CustomerHeaderBase: React.FC<CustomerHeaderProps> = ({
   customerNotice,
   isStoreCurrentlyOpen,
   isTakeoutMode = false,
+  isStaffAuthenticated = false,
+  staffTestOrderingMode = false,
+  onToggleStaffTestOrderingMode,
   isTaiwanRestDay,
   isCurrentSlotReservableOnly,
   isHasReservation,
@@ -185,14 +192,34 @@ const CustomerHeaderBase: React.FC<CustomerHeaderProps> = ({
                   🍳 廚房接單時段 Kitchen Order Acceptance Hours:{' '}
                   {operatingHours
                     .filter((s: any) => s.isActive)
-                    .map(
-                      (s: any) =>
-                        `${s.name}${s.isReservableOnly ? ' [預約專用]' : ''} (${s.start} - ${s.end})`
-                    )
+                    .map((s: any) => formatOperatingHourSlotLabel(s))
                     .join('、')}
                 </span>
               )}
             </p>
+            {isStaffAuthenticated && onToggleStaffTestOrderingMode && (
+              <div className="pt-2 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  id="staff-test-order-toggle"
+                  onClick={onToggleStaffTestOrderingMode}
+                  className={`px-3 py-1.5 rounded-xl text-[11px] font-extrabold border transition cursor-pointer active:scale-95 ${
+                    staffTestOrderingMode
+                      ? 'bg-amber-500 text-black border-amber-400 shadow-md shadow-amber-500/20'
+                      : 'bg-white/10 hover:bg-white/15 text-amber-300 border-amber-400/40'
+                  }`}
+                >
+                  {staffTestOrderingMode
+                    ? '🧪 員工測試點餐模式：已開啟 (點擊恢復顧客鎖定視角)'
+                    : '🧪 開啟員工測試點餐模式 (僅前端介面預覽)'}
+                </button>
+                {staffTestOrderingMode && (
+                  <span className="text-[10px] text-amber-300/90 font-semibold">
+                    僅解鎖前端購物車預覽；後端仍嚴格執行非接單時段阻擋驗證。
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}

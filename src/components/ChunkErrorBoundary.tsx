@@ -1,6 +1,7 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
-import { attemptChunkRecovery } from '../lib/chunkRecovery';
+import { attemptChunkRecovery, isChunkLoadError, CHUNK_RECOVERY_STORAGE_KEY } from '../lib/chunkRecovery';
+import { safeSessionStorage } from '../lib/safeStorage';
 
 interface Props {
   children: ReactNode;
@@ -22,25 +23,19 @@ export class ChunkErrorBoundary extends Component<Props, State> {
 
   static getDerivedStateFromError(error: Error): State {
     const isChunk =
-      error.name === 'ChunkLoadError' ||
-      error.message?.includes('Failed to fetch dynamically imported module') ||
-      error.message?.includes('dynamically imported module') ||
-      error.message?.includes('Minified React error #310') ||
-      error.message?.includes('loading chunk');
-    return { hasError: true, isChunkError: Boolean(isChunk) };
+      isChunkLoadError(error) ||
+      Boolean(error?.message?.includes('Minified React error #310'));
+    return { hasError: true, isChunkError: isChunk };
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('[ChunkErrorBoundary] Dynamic chunk load error:', error, errorInfo);
     const isChunk =
-      error.name === 'ChunkLoadError' ||
-      error.message?.includes('Failed to fetch dynamically imported module') ||
-      error.message?.includes('dynamically imported module') ||
-      error.message?.includes('Minified React error #310') ||
-      error.message?.includes('loading chunk');
+      isChunkLoadError(error) ||
+      Boolean(error?.message?.includes('Minified React error #310'));
 
     if (isChunk) {
-      attemptChunkRecovery(error, 'ChunkErrorBoundary');
+      attemptChunkRecovery(error, 'ChunkErrorBoundary').catch(() => {});
     }
   }
 
@@ -63,7 +58,8 @@ export class ChunkErrorBoundary extends Component<Props, State> {
           <button
             type="button"
             onClick={() => {
-              sessionStorage.removeItem('chunk_error_reloaded');
+              safeSessionStorage.removeItem(CHUNK_RECOVERY_STORAGE_KEY);
+              safeSessionStorage.removeItem('chunk_error_reloaded');
               window.location.reload();
             }}
             className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#E5B453] to-amber-500 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 cursor-pointer transition active:scale-95"

@@ -3,6 +3,7 @@ import { Order, Ingredient, Category, Language } from '../../types';
 import { apiFetch } from '../../lib/api';
 import { getLocalizedText } from '../../utils/i18n';
 import { getStatusMeta } from '../../utils/orderUtils';
+import { parseSafeDate } from '../../utils/dateUtils';
 import { exportToCSV } from '../../components/manager/ManagerDashboardUtils';
 
 interface UseManagerAnalyticsAndExportParams {
@@ -65,8 +66,8 @@ export function useManagerAnalyticsAndExport({
       if (candidateOrders.length === 0) {
         const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
         candidateOrders = orders.filter((order) => {
-          const orderDate = new Date(order.createdAt).getTime();
-          return order.status === 'completed' && orderDate >= thirtyDaysAgo;
+          const orderDate = parseSafeDate(order.createdAt, false).getTime();
+          return order.status === 'completed' && !isNaN(orderDate) && orderDate >= thirtyDaysAgo;
         });
       }
 
@@ -77,7 +78,7 @@ export function useManagerAnalyticsAndExport({
 
       // Sort chronological (oldest to newest)
       const sortedOrders = [...candidateOrders].sort(
-        (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+        (a, b) => parseSafeDate(a.createdAt).getTime() - parseSafeDate(b.createdAt).getTime()
       );
 
       const flatData = sortedOrders.map(order => {
@@ -114,7 +115,7 @@ export function useManagerAnalyticsAndExport({
           serviceCharge: order.serviceCharge,
           discount: order.discount || 0,
           total: order.total,
-          createdAt: new Date(order.createdAt).toISOString(),
+          createdAt: parseSafeDate(order.createdAt).toISOString(),
           itemsSummary: itemSummaries
         };
       });
@@ -182,7 +183,7 @@ export function useManagerAnalyticsAndExport({
       );
     }
 
-    return list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return list.sort((a, b) => parseSafeDate(b.createdAt).getTime() - parseSafeDate(a.createdAt).getTime());
   }, [orders, dateRangeFilter, orderQueryStartDate, orderQueryEndDate, orderQueryStatus, orderQueryKeyword]);
 
   // Aggregate stats in the filtered interval:

@@ -3,7 +3,7 @@ import { validateVersion } from '../middleware/validateVersion';
 import { Firestore, FieldValue } from 'firebase-admin/firestore';
 import { Bucket } from '@google-cloud/storage';
 import { hashPin, invalidateAuthCache } from '../auth';
-import { cachedServicePause, setCachedServicePause, CACHE_TTL_MS, createGetCachedSettings, isStoreOpenFromData, setCachedNotificationSettings, setCachedSettings } from '../helpers';
+import { cachedServicePause, setCachedServicePause, CACHE_TTL_MS, createGetCachedSettings, evaluateStoreScheduleFromData, setCachedNotificationSettings, setCachedSettings } from '../helpers';
 import { sendTestNotification } from '../services/notification';
 import { invalidatePublicBootstrapCache } from './bootstrap';
 
@@ -45,13 +45,17 @@ export function registerSettingsRoutes(app: express.Application, ctx: RouteConte
     try {
       res.setHeader('Cache-Control', 'public, max-age=120, s-maxage=600, stale-while-revalidate=1800');
       const sysData = await getCachedSettings();
-      const isOpen = sysData ? isStoreOpenFromData(sysData) : true;
+      const schedule = evaluateStoreScheduleFromData(sysData || {});
       res.json({
         minSpend: sysData?.liveMinSpendPerPerson ?? 200,
         operatingHours: {
           slots: sysData?.liveOperatingHours || [],
           restDays: sysData?.liveRestDays || [],
-          isOpen
+          isOpen: schedule.isOpen,
+          isRestDay: schedule.isRestDay,
+          isReservableOnlyNow: schedule.isReservableOnlyNow,
+          serverNowMs: schedule.serverNowMs,
+          nextTransitionAtMs: schedule.nextTransitionAtMs,
         },
         customerNotice: sysData?.liveCustomerNotice || '',
         servicePaused: sysData?.liveServicePaused || false,
@@ -105,11 +109,15 @@ export function registerSettingsRoutes(app: express.Application, ctx: RouteConte
       res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=600, stale-while-revalidate=1800');
       const sysData = await getCachedSettings();
       const data = sysData || {};
-      const isOpen = isStoreOpenFromData(data);
+      const schedule = evaluateStoreScheduleFromData(data);
       res.json({
         slots: data.liveOperatingHours || [],
         restDays: data.liveRestDays || [],
-        isOpen
+        isOpen: schedule.isOpen,
+        isRestDay: schedule.isRestDay,
+        isReservableOnlyNow: schedule.isReservableOnlyNow,
+        serverNowMs: schedule.serverNowMs,
+        nextTransitionAtMs: schedule.nextTransitionAtMs,
       });
     } catch (error) {
       sendErrorResponse(res, error);
@@ -239,8 +247,17 @@ export function registerSettingsRoutes(app: express.Application, ctx: RouteConte
       }, { merge: true });
       invalidateAllSettingsCaches();
       const systemDoc = await db.collection('settings').doc('system').get();
-      const isOpen = isStoreOpenFromData(systemDoc.data() || {});
-      res.json({ success: true, slots, restDays, isOpen });
+      const schedule = evaluateStoreScheduleFromData(systemDoc.data() || {});
+      res.json({
+        success: true,
+        slots,
+        restDays,
+        isOpen: schedule.isOpen,
+        isRestDay: schedule.isRestDay,
+        isReservableOnlyNow: schedule.isReservableOnlyNow,
+        serverNowMs: schedule.serverNowMs,
+        nextTransitionAtMs: schedule.nextTransitionAtMs,
+      });
     } catch (error) {
       sendErrorResponse(res, error);
     }

@@ -11,6 +11,7 @@ import { addRequestToQueue } from '../lib/offlineQueue';
 import { validateTableMonopoly } from '../utils/reservationValidator';
 import { getMsUntilTaiwanMidnight, getTaiwanDateString } from '../utils/dateUtils';
 import { resolveCategoryId, resolveCategoryMultilingualNames } from '../utils/i18n';
+import { evaluateStoreSchedule } from '@sabay/shared';
 
 export interface AnalyticsData {
   totalRevenue: number;
@@ -200,6 +201,7 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
   const [operatingHours, setOperatingHours] = useState<OperatingHourSlot[]>([]);
   const [isOpen, setIsOpen] = useState<boolean>(true);
   const [restDays, setRestDays] = useState<string[]>([]);
+  const [nextTransitionAtMs, setNextTransitionAtMs] = useState<number | null>(null);
   const [customerNotice, setCustomerNotice] = useState<string>('');
   const [servicePaused, setServicePaused] = useState<boolean>(false);
   const [popularItemIds, setPopularItemIds] = useState<string[]>(['ty-01', 'nd-01', 'sk-02', 'sk-01']);
@@ -231,6 +233,103 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
   const pollingCycleRef = useRef<number>(0);
   const lastFetchTimeRef = useRef<number>(0);
   const isFetchingRef = useRef<boolean>(false);
+  const serverClockOffsetMsRef = useRef<number>(0);
+  const lastStoreStatusRefreshRef = useRef<number>(0);
+  const hasLoadedScheduleRef = useRef<boolean>(false);
+  const operatingHoursRef = useRef<OperatingHourSlot[]>([]);
+  const restDaysRef = useRef<string[]>([]);
+  const servicePausedRef = useRef<boolean>(false);
+
+  operatingHoursRef.current = operatingHours;
+  restDaysRef.current = restDays;
+  servicePausedRef.current = servicePaused;
+
+  const syncServerClockOffset = (serverNowMs: unknown) => {
+    if (typeof serverNowMs === 'number' && Number.isFinite(serverNowMs) && serverNowMs > 0) {
+      serverClockOffsetMsRef.current = serverNowMs - Date.now();
+    }
+  };
+
+  const recalculateScheduleLocally = (
+    slotsOverride?: OperatingHourSlot[],
+    restDaysOverride?: string[],
+    pausedOverride?: boolean
+  ) => {
+    const slots = slotsOverride ?? operatingHoursRef.current;
+    const rDays = restDaysOverride ?? restDaysRef.current;
+    const paused = pausedOverride ?? servicePausedRef.current;
+    const effectiveNowMs = Date.now() + serverClockOffsetMsRef.current;
+    const evalResult = evaluateStoreSchedule(
+      { operatingHours: slots, restDays: rDays, servicePaused: paused },
+      effectiveNowMs
+    );
+    setIsOpen(evalResult.isOpen);
+    setNextTransitionAtMs(evalResult.nextTransitionAtMs);
+    return evalResult;
+  };
+
+  const refreshStoreStatus = async (force: boolean = false) => {
+    const now = Date.now();
+    if (!force && now - lastStoreStatusRefreshRef.current < 15000) {
+      return;
+    }
+    lastStoreStatusRefreshRef.current = now;
+    try {
+      const res = await apiFetch('/api/store-status', { forceAuth: false });
+      if (!res || !res.ok) return;
+      const contentType = res.headers?.get ? res.headers.get('content-type') : null;
+      if (contentType && !contentType.includes('application/json')) return;
+      const statusData = await res.json();
+      if (!statusData || typeof statusData !== 'object') return;
+
+      syncServerClockOffset(statusData.serverNowMs ?? statusData.timestamp);
+
+      const nextSlots = Array.isArray(statusData.operatingHours)
+        ? statusData.operatingHours
+        : operatingHoursRef.current;
+      const nextRestDays = Array.isArray(statusData.restDays)
+        ? statusData.restDays
+        : restDaysRef.current;
+      const nextPaused =
+        statusData.servicePaused !== undefined
+          ? !!statusData.servicePaused
+          : servicePausedRef.current;
+
+      if (Array.isArray(statusData.operatingHours)) {
+        setOperatingHours(statusData.operatingHours);
+      }
+      if (Array.isArray(statusData.restDays)) {
+        setRestDays(statusData.restDays);
+      }
+      if (statusData.servicePaused !== undefined) {
+        setServicePaused(nextPaused);
+      }
+
+      hasLoadedScheduleRef.current = true;
+      const localEval = evaluateStoreSchedule(
+        { operatingHours: nextSlots, restDays: nextRestDays, servicePaused: nextPaused },
+        Date.now() + serverClockOffsetMsRef.current
+      );
+      setIsOpen(statusData.isOpen !== undefined ? !!statusData.isOpen : localEval.isOpen);
+      setNextTransitionAtMs(
+        statusData.nextTransitionAtMs !== undefined
+          ? statusData.nextTransitionAtMs
+          : localEval.nextTransitionAtMs
+      );
+
+      if (Array.isArray(statusData.soldOutItemIds)) {
+        const soldOutSet = new Set(statusData.soldOutItemIds);
+        setMenuItems((prev) =>
+          prev.map((m) => ({
+            ...m,
+            available: !soldOutSet.has(m.id),
+          }))
+        );
+      }
+    } catch (err) {
+      console.warn('[Sabay Sync] Lightweight /api/store-status refresh failed:', err);
+    }
+  };
 
   const [analytics, setAnalytics] = useState<AnalyticsData>({
     totalRevenue: 0,
@@ -391,16 +490,48 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
           }
           if (bootstrapData.promoCombo) setPromoCombo(bootstrapData.promoCombo);
           if (bootstrapData.minSpend?.minSpend !== undefined) setMinSpend(bootstrapData.minSpend.minSpend);
+          if (storeStatusData) {
+            syncServerClockOffset(storeStatusData.serverNowMs ?? storeStatusData.timestamp);
+            lastStoreStatusRefreshRef.current = Date.now();
+          } else {
+            syncServerClockOffset(bootstrapData.serverNowMs ?? bootstrapData.operatingHours?.serverNowMs);
+          }
+
           if (bootstrapData.operatingHours) {
-            if (bootstrapData.operatingHours.slots) setOperatingHours(bootstrapData.operatingHours.slots);
-            if (bootstrapData.operatingHours.restDays) setRestDays(bootstrapData.operatingHours.restDays);
-            
-            // ⚡ 營業開關優先覆蓋
+            const nextSlots = Array.isArray(storeStatusData?.operatingHours)
+              ? storeStatusData.operatingHours
+              : (bootstrapData.operatingHours.slots || []);
+            const nextRestDays = Array.isArray(storeStatusData?.restDays)
+              ? storeStatusData.restDays
+              : (bootstrapData.operatingHours.restDays || []);
+            const nextPaused =
+              storeStatusData && storeStatusData.servicePaused !== undefined
+                ? !!storeStatusData.servicePaused
+                : !!bootstrapData.servicePaused?.servicePaused;
+
+            setOperatingHours(nextSlots);
+            setRestDays(nextRestDays);
+            hasLoadedScheduleRef.current = true;
+
+            const localEval = evaluateStoreSchedule(
+              { operatingHours: nextSlots, restDays: nextRestDays, servicePaused: nextPaused },
+              Date.now() + serverClockOffsetMsRef.current
+            );
+
+            // ⚡ 營業開關優先覆蓋：以即時 /api/store-status 優先，其次本地 SSOT 即時計算（避免 CDN 舊快取覆蓋）
             if (storeStatusData && storeStatusData.isOpen !== undefined) {
               setIsOpen(!!storeStatusData.isOpen);
             } else {
-              setIsOpen(bootstrapData.operatingHours.isOpen ?? true);
+              setIsOpen(localEval.isOpen);
             }
+
+            const resolvedTransition =
+              storeStatusData && storeStatusData.nextTransitionAtMs !== undefined
+                ? storeStatusData.nextTransitionAtMs
+                : (bootstrapData.nextTransitionAtMs ??
+                   bootstrapData.operatingHours.nextTransitionAtMs ??
+                   localEval.nextTransitionAtMs);
+            setNextTransitionAtMs(resolvedTransition);
           }
           if (bootstrapData.customerNotice?.notice !== undefined) setCustomerNotice(bootstrapData.customerNotice.notice);
         }
@@ -428,9 +559,18 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
           if (publicSettingsData.promoCombo) setPromoCombo(publicSettingsData.promoCombo);
           if (Array.isArray(publicSettingsData.popularItemIds)) setPopularItemIds(publicSettingsData.popularItemIds);
           if (publicSettingsData.operatingHours) {
+            const nextSlots = publicSettingsData.operatingHours.slots || operatingHoursRef.current;
+            const nextRestDays = publicSettingsData.operatingHours.restDays || restDaysRef.current;
+            const nextPaused =
+              publicSettingsData.servicePaused !== undefined
+                ? !!publicSettingsData.servicePaused
+                : servicePausedRef.current;
             if (publicSettingsData.operatingHours.slots) setOperatingHours(publicSettingsData.operatingHours.slots);
             if (publicSettingsData.operatingHours.restDays) setRestDays(publicSettingsData.operatingHours.restDays);
-            if (publicSettingsData.operatingHours.isOpen !== undefined) setIsOpen(!!publicSettingsData.operatingHours.isOpen);
+            syncServerClockOffset(publicSettingsData.operatingHours.serverNowMs);
+            hasLoadedScheduleRef.current = true;
+            // Re-evaluate locally instead of trusting CDN-cached s-maxage=600 boolean
+            recalculateScheduleLocally(nextSlots, nextRestDays, nextPaused);
           }
           if (publicSettingsData.membersConfig) {
             if (publicSettingsData.membersConfig.pointsRatio !== undefined) setMemberPointsRatio(publicSettingsData.membersConfig.pointsRatio);
@@ -441,6 +581,7 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
             if (publicSettingsData.membersConfig.rewards) setMemberRewards(publicSettingsData.membersConfig.rewards);
           }
         }
+        void refreshStoreStatus(false);
       }
     } catch (err: any) {
       console.warn('[Sabay Sync] Fetch error, attempting offline data fallback:', err);
@@ -467,14 +608,53 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
       console.log('[Sabay Sync] Network connection restored. Refreshing restaurant data...');
       fetchData(false);
     };
+    const handleVisibilityChange = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        if (hasLoadedScheduleRef.current) {
+          recalculateScheduleLocally();
+        }
+        void refreshStoreStatus(false);
+      }
+    };
     window.addEventListener('online', handleOnline);
-
-    // No polling needed; rely on realtime listeners.
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       window.removeEventListener('online', handleOnline);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [isStaffView]);
+
+  // ⏱️ Zero-extra-Firestore-read schedule boundary timer:
+  // Automatically unlocks/locks at exact nextTransitionAtMs (e.g. 17:29 -> 17:30) without polling storms.
+  useEffect(() => {
+    if (!hasLoadedScheduleRef.current || servicePaused) return;
+
+    const effectiveNowMs = Date.now() + serverClockOffsetMsRef.current;
+    const targetTransitionMs =
+      nextTransitionAtMs ??
+      evaluateStoreSchedule(
+        { operatingHours, restDays, servicePaused },
+        effectiveNowMs
+      ).nextTransitionAtMs;
+
+    if (!targetTransitionMs) return;
+
+    const MAX_TIMEOUT_MS = 24 * 60 * 60 * 1000;
+    const rawDelayMs = targetTransitionMs - effectiveNowMs + 250;
+    const delayMs = Math.min(Math.max(250, rawDelayMs), MAX_TIMEOUT_MS);
+
+    const timerId = setTimeout(() => {
+      recalculateScheduleLocally();
+      if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+        void refreshStoreStatus(false);
+      }
+    }, delayMs);
+
+    return () => {
+      clearTimeout(timerId);
+    };
+  }, [operatingHours, restDays, servicePaused, nextTransitionAtMs]);
 
   useEffect(() => {
     let unsubscribeMenu = () => {};
@@ -846,7 +1026,9 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
         body: JSON.stringify({ servicePaused: paused }),
       });
       if (res.ok) {
-        await fetchData();
+        setServicePaused(paused);
+        recalculateScheduleLocally(undefined, undefined, paused);
+        await fetchData(true, true);
       }
     } catch (err) {
       console.error('[Sabay Service Pause Toggle Error]', err);
@@ -1176,11 +1358,21 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
       if (res.ok) {
         const data = await res.json();
         if (data && data.slots) {
+          const nextRestDays = data.restDays ?? restDaysRef.current;
           setOperatingHours(data.slots);
           if (data.restDays) {
             setRestDays(data.restDays);
           }
-          setIsOpen(data.isOpen ?? true);
+          syncServerClockOffset(data.serverNowMs);
+          hasLoadedScheduleRef.current = true;
+          const evalResult = evaluateStoreSchedule(
+            { operatingHours: data.slots, restDays: nextRestDays, servicePaused: servicePausedRef.current },
+            Date.now() + serverClockOffsetMsRef.current
+          );
+          setIsOpen(data.isOpen !== undefined ? !!data.isOpen : evalResult.isOpen);
+          setNextTransitionAtMs(
+            data.nextTransitionAtMs !== undefined ? data.nextTransitionAtMs : evalResult.nextTransitionAtMs
+          );
           return { success: true };
         }
       }

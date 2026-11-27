@@ -1,4 +1,9 @@
-import { PRINTER_CONSTANTS } from '@sabay/shared';
+import {
+  PRINTER_CONSTANTS,
+  evaluateStoreSchedule,
+  isStoreOpenFromSchedule,
+  type StoreScheduleEvaluation,
+} from '@sabay/shared';
 /**
  * functions/src/helpers.ts
  *
@@ -58,60 +63,18 @@ export function createGetCachedNotificationSettings(db: Firestore) {
 }
 
 // ============================================================
-// 🕐 isStoreOpenFromData — 根據設定資料判斷是否在營業時間
+// 🕐 isStoreOpenFromData / evaluateStoreScheduleFromData — SSOT 排程判斷 (@sabay/shared)
 // ============================================================
+export function evaluateStoreScheduleFromData(
+  sysData: any,
+  timestamp?: number,
+  isReservation: boolean = false
+): StoreScheduleEvaluation {
+  return evaluateStoreSchedule(sysData, timestamp ?? Date.now(), { isReservation });
+}
+
 export function isStoreOpenFromData(sysData: any, timestamp?: number, isReservation: boolean = false): boolean {
-  if (!sysData) return true;
-  if (sysData.liveServicePaused) return false;
-
-  const restDays: string[] = sysData.liveRestDays || [];
-  const operatingHours: any[] = sysData.liveOperatingHours || [];
-
-  const date = timestamp ? new Date(timestamp) : new Date();
-  const utc = date.getTime() + (date.getTimezoneOffset() * 60000);
-  const localDate = new Date(utc + (3600000 * 8)); // Taiwan Time (UTC+8)
-
-  const year = localDate.getFullYear();
-  const month = String(localDate.getMonth() + 1).padStart(2, '0');
-  const dayOfMonth = String(localDate.getDate()).padStart(2, '0');
-  const taiwanDateString = `${year}-${month}-${dayOfMonth}`;
-
-  if (restDays.includes(taiwanDateString)) {
-    return false;
-  }
-
-  const activeSlots = operatingHours.filter((s: any) => s && s.isActive);
-  if (activeSlots.length === 0) {
-    return true;
-  }
-
-  const day = localDate.getDay(); // 0 is Sunday, ..., 6 is Saturday
-  const hour = localDate.getHours();
-  const minute = localDate.getMinutes();
-  const currentTotalMinutes = hour * 60 + minute;
-
-  for (const slot of activeSlots) {
-    if (slot.days && Array.isArray(slot.days) && !slot.days.includes(day)) continue;
-    if (slot.isReservableOnly && !isReservation) continue;
-
-    const [startH, startM] = (slot.start || '00:00').split(':').map(Number);
-    const [endH, endM] = (slot.end || '23:59').split(':').map(Number);
-
-    const startTotal = (startH || 0) * 60 + (startM || 0);
-    const endTotal = (endH || 0) * 60 + (endM || 0);
-
-    if (startTotal <= endTotal) {
-      if (currentTotalMinutes >= startTotal && currentTotalMinutes <= endTotal) {
-        return true;
-      }
-    } else {
-      if (currentTotalMinutes >= startTotal || currentTotalMinutes <= endTotal) {
-        return true;
-      }
-    }
-  }
-
-  return false;
+  return isStoreOpenFromSchedule(sysData, timestamp, isReservation);
 }
 
 // ============================================================
@@ -199,6 +162,7 @@ export function createHandleSavePrinterIp(db: Firestore): express.RequestHandler
         livePrinterIp: targetIp,
         livePrinterSettings: currentSettings
       }, { merge: true });
+      setCachedSettings(null);
 
       res.json({ success: true, ip: targetIp });
     } catch (error) {
@@ -226,6 +190,7 @@ export function createHandleSavePrinterSettings(db: Firestore): express.RequestH
         { livePrinterSettings: currentSettings },
         { merge: true }
       );
+      setCachedSettings(null);
       res.json({ success: true });
     } catch (error) {
       res.status(500).send(error);

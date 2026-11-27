@@ -1,4 +1,4 @@
-import { PRINTER_CONSTANTS, orderCalculationService, deriveTableStatuses } from '@sabay/shared';
+import { PRINTER_CONSTANTS, orderCalculationService, deriveTableStatuses, evaluateStoreSchedule } from '@sabay/shared';
 // ============================================================================
 // ⚠️ ARCHITECTURE DIRECTIVE: LOCAL DEVELOPMENT / MOCK SERVER ONLY
 // ============================================================================
@@ -623,43 +623,15 @@ function cleanupUnlistedReservationData() {
 }
 
 function isStoreOpen(timestamp?: number, isReservation: boolean = false): boolean {
-  if (liveServicePaused) return false;
-  const { dateStr: taiwanDateString, dayOfWeek: day, hours: hour, minutes: minute } = getTaiwanTimeParts(timestamp ? new Date(timestamp) : new Date());
-
-  // Check if today is a public holiday / rest day
-  if (liveRestDays.includes(taiwanDateString)) {
-    return false;
-  }
-
-  const currentTotalMinutes = hour * 60 + minute;
-
-  let open = false;
-  for (const slot of liveOperatingHours) {
-    if (!slot.isActive) continue;
-    if (slot.days && !slot.days.includes(day)) continue;
-    if (slot.isReservableOnly && !isReservation) continue;
-    
-    // Parse times
-    const [startH, startM] = slot.start.split(':').map(Number);
-    const [endH, endM] = slot.end.split(':').map(Number);
-    
-    const startTotal = startH * 60 + startM;
-    const endTotal = endH * 60 + endM;
-    
-    if (startTotal <= endTotal) {
-      if (currentTotalMinutes >= startTotal && currentTotalMinutes <= endTotal) {
-        open = true;
-        break;
-      }
-    } else {
-      // Handles overnight shifts (e.g. 17:00 to 02:00)
-      if (currentTotalMinutes >= startTotal || currentTotalMinutes <= endTotal) {
-        open = true;
-        break;
-      }
-    }
-  }
-  return open;
+  return evaluateStoreSchedule(
+    {
+      liveOperatingHours,
+      liveRestDays,
+      liveServicePaused,
+    },
+    timestamp ?? Date.now(),
+    { isReservation }
+  ).isOpen;
 }
 
 let liveOrders: Order[] = [];
