@@ -11,7 +11,7 @@ import { addRequestToQueue } from '../lib/offlineQueue';
 import { validateTableMonopoly } from '../utils/reservationValidator';
 import { getMsUntilTaiwanMidnight, getTaiwanDateString } from '../utils/dateUtils';
 import { resolveCategoryId, resolveCategoryMultilingualNames } from '../utils/i18n';
-import { evaluateStoreSchedule } from '@sabay/shared';
+import { evaluateStoreSchedule, getTaipeiTimeComponents } from '@sabay/shared';
 
 export interface AnalyticsData {
   totalRevenue: number;
@@ -37,6 +37,8 @@ export interface RestaurantDataContextType {
   promoCombo: any;
   operatingHours: OperatingHourSlot[];
   isOpen: boolean;
+  isRestDay: boolean;
+  isReservableOnlyNow: boolean;
   restDays: string[];
   customerNotice: string;
   servicePaused: boolean;
@@ -200,6 +202,8 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
   const [promoCombo, setPromoCombo] = useState<any>({ enabled: false, combos: [] });
   const [operatingHours, setOperatingHours] = useState<OperatingHourSlot[]>([]);
   const [isOpen, setIsOpen] = useState<boolean>(true);
+  const [isRestDay, setIsRestDay] = useState<boolean>(false);
+  const [isReservableOnlyNow, setIsReservableOnlyNow] = useState<boolean>(false);
   const [restDays, setRestDays] = useState<string[]>([]);
   const [nextTransitionAtMs, setNextTransitionAtMs] = useState<number | null>(null);
   const [customerNotice, setCustomerNotice] = useState<string>('');
@@ -264,6 +268,8 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
       effectiveNowMs
     );
     setIsOpen(evalResult.isOpen);
+    setIsRestDay(evalResult.isRestDay);
+    setIsReservableOnlyNow(evalResult.isReservableOnlyNow);
     setNextTransitionAtMs(evalResult.nextTransitionAtMs);
     return evalResult;
   };
@@ -311,6 +317,12 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
         Date.now() + serverClockOffsetMsRef.current
       );
       setIsOpen(statusData.isOpen !== undefined ? !!statusData.isOpen : localEval.isOpen);
+      setIsRestDay(statusData.isRestDay !== undefined ? !!statusData.isRestDay : localEval.isRestDay);
+      setIsReservableOnlyNow(
+        statusData.isReservableOnlyNow !== undefined
+          ? !!statusData.isReservableOnlyNow
+          : localEval.isReservableOnlyNow
+      );
       setNextTransitionAtMs(
         statusData.nextTransitionAtMs !== undefined
           ? statusData.nextTransitionAtMs
@@ -428,10 +440,11 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
       };
 
       if (isFullCycle) {
+        const isStaffFreshRefetch = bypassReorderLock && activeTab !== 'customer';
         const fetchPromises: Promise<Response>[] = [
           // bypassReorderLock === post-mutation refetch → request a fresh (non-cached) staff snapshot
-          safeFetch(bypassReorderLock && activeTab !== 'customer' ? '/api/bootstrap?fresh=1' : '/api/bootstrap', null),
-          safeFetch('/api/store-status', null),
+          safeFetch(isStaffFreshRefetch ? '/api/bootstrap?fresh=1' : '/api/bootstrap', null),
+          safeFetch(isStaffFreshRefetch ? '/api/store-status?fresh=1' : '/api/store-status', null),
         ];
 
         const results = await Promise.all(fetchPromises);
@@ -524,6 +537,16 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
             } else {
               setIsOpen(localEval.isOpen);
             }
+            setIsRestDay(
+              storeStatusData && storeStatusData.isRestDay !== undefined
+                ? !!storeStatusData.isRestDay
+                : localEval.isRestDay
+            );
+            setIsReservableOnlyNow(
+              storeStatusData && storeStatusData.isReservableOnlyNow !== undefined
+                ? !!storeStatusData.isReservableOnlyNow
+                : localEval.isReservableOnlyNow
+            );
 
             const resolvedTransition =
               storeStatusData && storeStatusData.nextTransitionAtMs !== undefined
@@ -534,6 +557,40 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
             setNextTransitionAtMs(resolvedTransition);
           }
           if (bootstrapData.customerNotice?.notice !== undefined) setCustomerNotice(bootstrapData.customerNotice.notice);
+        } else if (storeStatusData) {
+          // Graceful fallback: even if /api/bootstrap failed transiently, still sync live store status
+          syncServerClockOffset(storeStatusData.serverNowMs ?? storeStatusData.timestamp);
+          lastStoreStatusRefreshRef.current = Date.now();
+          const nextSlots = Array.isArray(storeStatusData.operatingHours)
+            ? storeStatusData.operatingHours
+            : operatingHoursRef.current;
+          const nextRestDays = Array.isArray(storeStatusData.restDays)
+            ? storeStatusData.restDays
+            : restDaysRef.current;
+          const nextPaused =
+            storeStatusData.servicePaused !== undefined
+              ? !!storeStatusData.servicePaused
+              : servicePausedRef.current;
+          if (Array.isArray(storeStatusData.operatingHours)) setOperatingHours(storeStatusData.operatingHours);
+          if (Array.isArray(storeStatusData.restDays)) setRestDays(storeStatusData.restDays);
+          if (storeStatusData.servicePaused !== undefined) setServicePaused(nextPaused);
+          hasLoadedScheduleRef.current = true;
+          const localEval = evaluateStoreSchedule(
+            { operatingHours: nextSlots, restDays: nextRestDays, servicePaused: nextPaused },
+            Date.now() + serverClockOffsetMsRef.current
+          );
+          setIsOpen(storeStatusData.isOpen !== undefined ? !!storeStatusData.isOpen : localEval.isOpen);
+          setIsRestDay(storeStatusData.isRestDay !== undefined ? !!storeStatusData.isRestDay : localEval.isRestDay);
+          setIsReservableOnlyNow(
+            storeStatusData.isReservableOnlyNow !== undefined
+              ? !!storeStatusData.isReservableOnlyNow
+              : localEval.isReservableOnlyNow
+          );
+          setNextTransitionAtMs(
+            storeStatusData.nextTransitionAtMs !== undefined
+              ? storeStatusData.nextTransitionAtMs
+              : localEval.nextTransitionAtMs
+          );
         }
       } else {
         const syncEnabled = isFirebaseSyncEnabled();
@@ -1149,10 +1206,10 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
     const targetDateStr = String(reservation.date).trim();
 
     // 4-Hour advance reservation rule for same-day bookings to prevent table conflicts with walk-in guests
-    const now = new Date();
-    const todayDateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const twNow = getTaipeiTimeComponents(Date.now() + serverClockOffsetMsRef.current);
+    const todayDateStr = twNow.dateStr;
     if (targetDateStr === todayDateStr && !(reservation as any).isStaffOverride) {
-      const currentMins = now.getHours() * 60 + now.getMinutes();
+      const currentMins = twNow.totalMinutes;
       if (targetMins < currentMins + 240) {
         return {
           success: false,
@@ -1370,6 +1427,10 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
             Date.now() + serverClockOffsetMsRef.current
           );
           setIsOpen(data.isOpen !== undefined ? !!data.isOpen : evalResult.isOpen);
+          setIsRestDay(data.isRestDay !== undefined ? !!data.isRestDay : evalResult.isRestDay);
+          setIsReservableOnlyNow(
+            data.isReservableOnlyNow !== undefined ? !!data.isReservableOnlyNow : evalResult.isReservableOnlyNow
+          );
           setNextTransitionAtMs(
             data.nextTransitionAtMs !== undefined ? data.nextTransitionAtMs : evalResult.nextTransitionAtMs
           );
@@ -1463,6 +1524,8 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
     promoCombo,
     operatingHours,
     isOpen,
+    isRestDay,
+    isReservableOnlyNow,
     restDays,
     customerNotice,
     servicePaused,
@@ -1506,7 +1569,7 @@ export function RestaurantDataProvider({ children, activeTab }: ProviderProps) {
     handleUpdateSystemVersion,
   }), [
     menuItems, categories, tables, ingredients, reservations, minSpend, promoCombo,
-    operatingHours, isOpen, restDays, customerNotice, servicePaused, popularItemIds,
+    operatingHours, isOpen, isRestDay, isReservableOnlyNow, restDays, customerNotice, servicePaused, popularItemIds,
     memberPointsRatio, memberVipThreshold, memberVipDiscountRate, memberEnablePointsDiscount, memberPointsRedeemRate, memberRewards, analytics, loading, systemVersion
   ]);
 

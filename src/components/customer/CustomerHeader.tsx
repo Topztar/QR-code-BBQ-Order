@@ -168,7 +168,7 @@ const CustomerHeaderBase: React.FC<CustomerHeaderProps> = ({
       )}
 
       {/* Store Closed Warning Board */}
-      {!isStoreCurrentlyOpen && !isTakeoutMode && (
+      {!isStoreCurrentlyOpen && !isTakeoutMode && !servicePaused && !validUrlReservationParams?.reservationNo && (
         <div className="bg-rose-950/20 border border-rose-500/30 text-rose-300 rounded-3xl p-4 sm:p-5 flex flex-col md:flex-row items-center gap-3.5 shadow-lg select-none font-sans">
           <div className="w-12 h-12 bg-rose-500/15 border border-rose-500/25 rounded-2xl flex items-center justify-center text-rose-400 shrink-0">
             <AlertTriangle size={24} className="animate-bounce" />
@@ -225,7 +225,7 @@ const CustomerHeaderBase: React.FC<CustomerHeaderProps> = ({
       )}
 
       {/* Off-hours Takeout Pre-order Notice Board */}
-      {!isStoreCurrentlyOpen && isTakeoutMode && (
+      {!isStoreCurrentlyOpen && isTakeoutMode && !servicePaused && (
         <div className="bg-blue-950/30 border border-blue-500/40 text-blue-200 rounded-3xl p-4 sm:p-5 flex flex-col md:flex-row items-center gap-3.5 shadow-lg select-none font-sans my-2">
           <div className="w-12 h-12 bg-blue-500/15 border border-blue-500/25 rounded-2xl flex items-center justify-center text-blue-400 shrink-0">
             <span className="text-2xl">🥡</span>
@@ -253,7 +253,7 @@ const CustomerHeaderBase: React.FC<CustomerHeaderProps> = ({
       )}
 
       {/* Kitchen Service Paused Warning Board */}
-      {isOpen && servicePaused && (
+      {servicePaused && (
         <div className="bg-amber-950/30 border border-amber-500/45 text-amber-300 rounded-3xl p-4 sm:p-5 flex flex-col md:flex-row items-center gap-3.5 shadow-lg select-none font-sans animate-pulse">
           <div className="w-12 h-12 bg-amber-500/20 border border-amber-500/35 rounded-2xl flex items-center justify-center text-amber-400 shrink-0">
             <AlertTriangle size={24} className="animate-bounce" />
@@ -268,6 +268,24 @@ const CustomerHeaderBase: React.FC<CustomerHeaderProps> = ({
                 🛒 暫停說明：您現在依然可以自由瀏覽餐點，但直到主廚消化完畢解鎖前，暫停「送出訂單」功能。造成您的不便，敬請見諒！
               </span>
             </p>
+            {isStaffAuthenticated && onToggleStaffTestOrderingMode && (
+              <div className="pt-2 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  id="staff-test-order-toggle"
+                  onClick={onToggleStaffTestOrderingMode}
+                  className={`px-3 py-1.5 rounded-xl text-[11px] font-extrabold border transition cursor-pointer active:scale-95 ${
+                    staffTestOrderingMode
+                      ? 'bg-amber-500 text-black border-amber-400 shadow-md shadow-amber-500/20'
+                      : 'bg-white/10 hover:bg-white/15 text-amber-300 border-amber-400/40'
+                  }`}
+                >
+                  {staffTestOrderingMode
+                    ? '🧪 員工測試點餐模式：已開啟 (點擊恢復顧客鎖定視角)'
+                    : '🧪 開啟員工測試點餐模式 (僅前端介面預覽)'}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

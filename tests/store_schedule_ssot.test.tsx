@@ -3,7 +3,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import React from 'react';
-import { render, act, fireEvent } from '@testing-library/react';
+import { render, act, fireEvent, cleanup } from '@testing-library/react';
 import express from 'express';
 import {
   evaluateStoreSchedule,
@@ -310,6 +310,7 @@ describe('Frontend Automatic Unlock Across 17:29 -> 17:30 Transition', () => {
   const originalFetch = global.fetch;
 
   afterEach(() => {
+    cleanup();
     vi.useRealTimers();
     global.fetch = originalFetch;
   });
@@ -448,5 +449,193 @@ describe('Frontend Automatic Unlock Across 17:29 -> 17:30 Transition', () => {
     expect(btn).not.toBeNull();
     fireEvent.click(btn!);
     expect(onToggle).toHaveBeenCalledTimes(1);
+
+    // Verify servicePaused=true renders the amber Kitchen Paused banner instead of dead-code suppression
+    rerender(
+      <CustomerHeader
+        {...baseProps}
+        isOpen={false}
+        servicePaused={true}
+        isStaffAuthenticated={false}
+        staffTestOrderingMode={false}
+      />
+    );
+    expect(queryByText(/廚房暫停接單機制啟動中/)).not.toBeNull();
+    expect(queryByText(/非廚房接單時段/)).toBeNull();
+  });
+
+  it('automatically transitions isReservableOnlyNow at 11:00 CST even while walk-in isOpen remains false', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: false });
+    vi.setSystemTime(Date.parse('2026-11-28T10:59:50+08:00'));
+
+    const buildJsonRes = (data: any) =>
+      ({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => data,
+      }) as Response;
+
+    global.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      const now = Date.now();
+      const sched = evaluateStoreSchedule({ liveOperatingHours: STANDARD_SLOTS, liveRestDays: [] }, now);
+      if (url.includes('/api/store-status')) {
+        return buildJsonRes({
+          isOpen: sched.isOpen,
+          isRestDay: sched.isRestDay,
+          isReservableOnlyNow: sched.isReservableOnlyNow,
+          servicePaused: false,
+          soldOutItemIds: [],
+          operatingHours: STANDARD_SLOTS,
+          restDays: [],
+          serverNowMs: now,
+          nextTransitionAtMs: sched.nextTransitionAtMs,
+          timestamp: now,
+        });
+      }
+      if (url.includes('/api/bootstrap')) {
+        return buildJsonRes({
+          menu: [],
+          categories: [],
+          tables: [],
+          operatingHours: {
+            slots: STANDARD_SLOTS,
+            restDays: [],
+            isOpen: sched.isOpen,
+            isRestDay: sched.isRestDay,
+            isReservableOnlyNow: sched.isReservableOnlyNow,
+            serverNowMs: now,
+            nextTransitionAtMs: sched.nextTransitionAtMs,
+          },
+          servicePaused: { servicePaused: false },
+          serverNowMs: now,
+          nextTransitionAtMs: sched.nextTransitionAtMs,
+        });
+      }
+      return buildJsonRes({});
+    }) as any;
+
+    const Probe = () => {
+      const { isOpen, isReservableOnlyNow } = useRestaurantData();
+      return (
+        <div>
+          <span data-testid="open">{String(isOpen)}</span>
+          <span data-testid="resOnly">{String(isReservableOnlyNow)}</span>
+        </div>
+      );
+    };
+
+    const { getByTestId } = render(
+      <RestaurantDataProvider activeTab="customer">
+        <Probe />
+      </RestaurantDataProvider>
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(getByTestId('open').textContent).toBe('false');
+    expect(getByTestId('resOnly').textContent).toBe('false');
+
+    await act(async () => {
+      vi.advanceTimersByTime(11000);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(getByTestId('open').textContent).toBe('false');
+    expect(getByTestId('resOnly').textContent).toBe('true');
+  });
+
+  it('re-evaluates immediately on visibilitychange when returning to a tab after 17:30 CST', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: false });
+    vi.setSystemTime(Date.parse('2026-11-28T17:20:00+08:00'));
+
+    let storeStatusCalls = 0;
+    const buildJsonRes = (data: any) =>
+      ({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => data,
+      }) as Response;
+
+    global.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      const now = Date.now();
+      const sched = evaluateStoreSchedule({ liveOperatingHours: STANDARD_SLOTS, liveRestDays: [] }, now);
+      if (url.includes('/api/store-status')) {
+        storeStatusCalls++;
+        return buildJsonRes({
+          isOpen: sched.isOpen,
+          isRestDay: sched.isRestDay,
+          isReservableOnlyNow: sched.isReservableOnlyNow,
+          servicePaused: false,
+          soldOutItemIds: [],
+          operatingHours: STANDARD_SLOTS,
+          restDays: [],
+          serverNowMs: now,
+          nextTransitionAtMs: sched.nextTransitionAtMs,
+          timestamp: now,
+        });
+      }
+      if (url.includes('/api/bootstrap')) {
+        return buildJsonRes({
+          menu: [],
+          categories: [],
+          tables: [],
+          operatingHours: {
+            slots: STANDARD_SLOTS,
+            restDays: [],
+            isOpen: sched.isOpen,
+            isRestDay: sched.isRestDay,
+            isReservableOnlyNow: sched.isReservableOnlyNow,
+            serverNowMs: now,
+            nextTransitionAtMs: sched.nextTransitionAtMs,
+          },
+          servicePaused: { servicePaused: false },
+          serverNowMs: now,
+          nextTransitionAtMs: sched.nextTransitionAtMs,
+        });
+      }
+      return buildJsonRes({});
+    }) as any;
+
+    const Probe = () => {
+      const { isOpen } = useRestaurantData();
+      return <span data-testid="vis-open">{String(isOpen)}</span>;
+    };
+
+    const { getByTestId } = render(
+      <RestaurantDataProvider activeTab="customer">
+        <Probe />
+      </RestaurantDataProvider>
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(getByTestId('vis-open').textContent).toBe('false');
+    expect(storeStatusCalls).toBe(1);
+
+    // Simulate OS sleep / backgrounded tab jumping clock past 17:30 without firing timers
+    vi.setSystemTime(Date.parse('2026-11-28T17:35:00+08:00'));
+    Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(getByTestId('vis-open').textContent).toBe('true');
+    expect(storeStatusCalls).toBe(2); // Debounced refresh fired after >15s
   });
 });

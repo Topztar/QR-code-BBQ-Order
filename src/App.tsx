@@ -96,8 +96,15 @@ function AppContent({
       safeStorage.removeItem('sabay-staff-subtab');
       setIsStaff(false);
     };
+    const handleAuthChanged = () => {
+      setIsStaff(sessionAuth.isAuthenticated());
+    };
     window.addEventListener('sabay_auth_expired', handleAuthExpired);
-    return () => window.removeEventListener('sabay_auth_expired', handleAuthExpired);
+    window.addEventListener('sabay_auth_changed', handleAuthChanged);
+    return () => {
+      window.removeEventListener('sabay_auth_expired', handleAuthExpired);
+      window.removeEventListener('sabay_auth_changed', handleAuthChanged);
+    };
   }, []);
 
   const handleStaffTabSwitch = useCallback((
@@ -248,6 +255,8 @@ function AppContent({
     promoCombo,
     operatingHours,
     isOpen,
+    isRestDay,
+    isReservableOnlyNow,
     restDays,
     customerNotice,
     servicePaused,
@@ -708,6 +717,8 @@ function AppContent({
                   inventoryWarnings={analytics.stockWarnings}
                   minSpend={minSpend}
                   isOpen={isOpen}
+                  isRestDay={isRestDay}
+                  isReservableOnlyNow={isReservableOnlyNow}
                   customerNotice={customerNotice}
                   operatingHours={operatingHours}
                   restDays={restDays}

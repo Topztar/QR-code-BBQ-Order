@@ -81,6 +81,9 @@ interface CustomerOrderViewProps {
     paymentMethod: 'cash' | 'credit' | 'member' | 'twqr';
     guestCount?: number;
     clientOrderId?: string;
+    reservationNo?: string;
+    reservationDate?: string;
+    reservationTime?: string;
     customerName?: string;
     customerPhone?: string;
     pickupTime?: string;
@@ -97,6 +100,8 @@ interface CustomerOrderViewProps {
   inventoryWarnings: any[];
   minSpend?: number;
   isOpen?: boolean;
+  isRestDay?: boolean;
+  isReservableOnlyNow?: boolean;
   customerNotice?: string;
   operatingHours?: any[];
   restDays?: string[];
@@ -134,6 +139,8 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
   inventoryWarnings,
   minSpend = 200,
   isOpen = true,
+  isRestDay: isRestDayProp,
+  isReservableOnlyNow: isReservableOnlyNowProp,
   customerNotice = '',
   operatingHours = [],
   restDays = [],
@@ -309,10 +316,11 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
     });
   }, [operatingHours, restDays, servicePaused, isOpen]);
 
-  const isTaiwanRestDay = scheduleEvaluation.isRestDay;
-  const isCurrentSlotReservableOnly = scheduleEvaluation.isReservableOnlyNow;
+  const isTaiwanRestDay = isRestDayProp !== undefined ? isRestDayProp : scheduleEvaluation.isRestDay;
+  const isCurrentSlotReservableOnly =
+    isReservableOnlyNowProp !== undefined ? isReservableOnlyNowProp : scheduleEvaluation.isReservableOnlyNow;
 
-  const isHasReservation = !!activeCustomerReservation;
+  const isHasReservation = Boolean(activeCustomerReservation || urlReservationParams?.reservationNo);
 
   const isStoreCurrentlyOpen = useMemo(() => {
     if (!isOpen) return false;
@@ -328,7 +336,11 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
 
   const isTakeoutMode = String(selectedTable || '').includes('外帶') || selectedTable === 'takeout' || isOrderRoute;
   const isStaffTestPreviewActive = Boolean(isStaffAuthenticated && staffTestOrderingMode);
-  const effectiveIsStoreCurrentlyOpen = isStoreCurrentlyOpen || isTakeoutMode || isStaffTestPreviewActive;
+  const effectiveIsStoreCurrentlyOpen =
+    isStoreCurrentlyOpen ||
+    isTakeoutMode ||
+    Boolean(urlReservationParams?.reservationNo) ||
+    isStaffTestPreviewActive;
 
   // Hook: useCustomerCart
   const {
@@ -548,7 +560,10 @@ export const CustomerOrderView: React.FC<CustomerOrderViewProps> = ({
         paymentMethod,
         guestCount,
         clientOrderId,
-        customerName: takeoutCustomerName || undefined,
+        reservationNo: urlReservationParams?.reservationNo || undefined,
+        reservationDate: urlReservationParams?.resDate || undefined,
+        reservationTime: urlReservationParams?.resTime || undefined,
+        customerName: takeoutCustomerName || urlReservationParams?.resName || undefined,
         customerPhone: takeoutPhone || undefined,
         
         source: entrySourceInfo.source,

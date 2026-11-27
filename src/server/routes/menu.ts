@@ -1,6 +1,6 @@
 import express from 'express';
 import { MenuItem, Category, SoldOutType } from '../../types';
-import { resolveCategoryId, resolveCategoryMultilingualNames } from '@sabay/shared';
+import { resolveCategoryId, resolveCategoryMultilingualNames, getTaipeiTimeComponents } from '@sabay/shared';
 
 export interface MenuRouteContext {
   getLiveMenu: () => MenuItem[];
@@ -261,27 +261,28 @@ export function registerMenuRoutes(app: express.Express, ctx: MenuRouteContext) 
 
   // Toggle item availability
   app.post('/api/menu/toggle-available', (req, res) => {
-    const { id, targetType } = req.body;
+    const { id, soldOutType, targetType, soldOutDate } = req.body;
     const liveMenu = getLiveMenu();
     const item = liveMenu.find(m => m.id === id);
     if (!item) {
       return res.status(404).json({ error: 'Item not found' });
     }
 
-    if (item.available) {
-      item.available = false;
-      item.soldOutType = targetType || 'permanent';
-      item.soldOutAt = new Date().toISOString();
-      if (item.soldOutType === 'daily') {
-        item.soldOutDate = new Date().toISOString().split('T')[0];
-      } else {
-        item.soldOutDate = undefined;
-      }
-    } else {
+    const resolvedType = (soldOutType || targetType) as SoldOutType | undefined;
+    if (resolvedType === 'none' || (!resolvedType && !item.available)) {
       item.available = true;
       item.soldOutType = 'none';
       item.soldOutAt = null;
       item.soldOutDate = undefined;
+    } else {
+      item.available = false;
+      item.soldOutType = resolvedType || 'permanent';
+      item.soldOutAt = new Date().toISOString();
+      if (item.soldOutType === 'daily') {
+        item.soldOutDate = soldOutDate || getTaipeiTimeComponents().dateStr;
+      } else {
+        item.soldOutDate = undefined;
+      }
     }
 
     saveStateToDisk();
